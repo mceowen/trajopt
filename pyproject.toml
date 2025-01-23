@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "trajopt"
+version = "0.0.1"
+description = "TrajOpt"
+requires-python = ">=3.8"
+authors = [{ name = "Skye Mceowen", email = "skye@mceowen.io" }]
+dependencies = ["setuptools"]
+
+[tool.scikit-build]
+install.components = ["python"]
+wheel.install-dir = "trajopt"
