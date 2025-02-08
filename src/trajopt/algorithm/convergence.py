@@ -13,23 +13,23 @@ def set_convergence_tolerance(params):
     """
     
     # STATE CONVERGENCE
-    n = params['nz']
-    ctcs_mult_state = params['conv']['setup']['ctcs_mult_state']
-    ctcs_mult_cnst = params['conv']['setup']['ctcs_mult_cnst']
+    n                   = params['nz']
+    ctcs_mult_state     = params['conv']['setup']['ctcs_mult_state']
+    ctcs_mult_cnst      = params['conv']['setup']['ctcs_mult_cnst']
 
     if len(params['conv']['setup']['eps_state']) == 1:
-        eps_state = params['conv']['setup']['eps_state'] * np.ones(n)
-        M_state_d2nd = np.eye(n)
+        eps_state       = params['conv']['setup']['eps_state'] * np.ones(n)
+        M_state_d2nd    = np.eye(n)
     else:
-        eps_state = params['conv']['setup']['eps_state']
-        M_state_d2nd = params['nondim']['M_state_d2nd']
+        eps_state       = params['conv']['setup']['eps_state']
+        M_state_d2nd    = params['nondim']['M_state_d2nd']
 
     if params['bools']['ctcs'] and params['n_ineq'] > 0:
         eps_state = np.concatenate([
             ctcs_mult_state * eps_state,
-            ctcs_mult_cnst * params['conv']['setup']['eps_path'],
-            ctcs_mult_cnst * params['conv']['setup']['eps_nfz'],
-            ctcs_mult_cnst * params['conv']['setup']['eps_aux']
+            ctcs_mult_cnst  * params['conv']['setup']['eps_path'],
+            ctcs_mult_cnst  * params['conv']['setup']['eps_nfz'],
+            ctcs_mult_cnst  * params['conv']['setup']['eps_aux']
         ])
         M_state_d2nd = np.diag(np.concatenate([
             np.diag(M_state_d2nd),
