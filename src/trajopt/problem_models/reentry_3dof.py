@@ -1,3 +1,6 @@
+def test_func():
+    return "Hello, World!"
+
 def reentry_3dof_dynamics(ts, zs, us, params, t_vec=None):
     """
     Nonlinear polar 3DoF hypersonic entry rotating earth dynamics
