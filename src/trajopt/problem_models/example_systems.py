@@ -27,13 +27,15 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
     mass    = params['mass']
     ge      = params['ge']
 
+
     # extract states
-    r = np.array( zs[0:3] ).reshape(-1,1)
-    v = np.array( zs[3:6] ).reshape(-1,1)
+    r = np.array( zs[0:3, 1] ).reshape(-1,1) # turn into a column vector (works if zs is already a col. or a row vec)
+    v = np.array( zs[3:6, 1] ).reshape(-1,1)
 
     # extract controls 
     if t_vec is None:
-        us2 = us
+        us2 = np.array( us )    # got an error that said us2 was an array.array for some reason
+                                # (and therefore I coudn't do element-wise operations)
     else:
         for i in range(m):
             interp = interp1d(t_vec, us[i,:]) # this doesn't work
