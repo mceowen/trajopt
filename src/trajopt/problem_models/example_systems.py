@@ -21,15 +21,15 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
     if hasattr(params, 'params'):
         params = params.params
 
-    # extract constant param values from struct
+    # extract constant param values
     m       = params['m']
     n       = params['n']
     mass    = params['mass']
     ge      = params['ge']
 
     # extract states
-    r = zs[0:3]
-    v = zs[3:6]
+    r = np.array( zs[0:3] ).reshape(-1,1)
+    v = np.array( zs[3:6] ).reshape(-1,1)
 
     # extract controls 
     if t_vec is None:
@@ -53,9 +53,8 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
     xDot[3:6] = T/mass + ge
 
     if np.issubdtype(r.dtype, np.number):
-        # set xDot = 0 if the vehicle hits the ground
-        if r[2,0] <= -1:
-            xDot = np.zeros(params['n'],1)
+        if r[2,0] <= -1: # set xDot = 0 if the vehicle hits the ground
+            xDot = np.zeros(n,1)
     elif np.issubdtype(r.dtype, np.nan) or any(np.isinf(r)):
         breakpoint()
 
