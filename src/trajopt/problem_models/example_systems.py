@@ -39,8 +39,8 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
 
     # extract controls 
     if t_vec is None:
-        us2 = np.array( us ).reshape(-1,1)  # got an error that said us2 was an array.array for some reason
-                                            # (and therefore I coudn't do element-wise operations)
+        us2 = us
+
     else:
         for i in range(m):
             interp = interp1d(t_vec, us[i,:]) # this doesn't work
@@ -81,7 +81,6 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
 #     'ge'    : np.array([0, 0, -9.81]).reshape(-1,1)
 # }
 
-
-# args to be defined by MATLAB
-# FIXME can't pass t_vec in via matlab
 # xDot = system_dynamics(ts, zs, us, params)
+
+# print(xDot)
