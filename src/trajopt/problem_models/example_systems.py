@@ -22,8 +22,8 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
         params = params.params
 
     # extract constant param values
-    m       = params['m']
-    n       = params['n']
+    m       = int( params['m'] )
+    n       = int( params['n'] )
     mass    = params['mass']
     ge      = params['ge']
 
