@@ -17,6 +17,11 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
     u1, u2: v (velocity)
     '''
 
+    # make sure all vectors are numpy column vectors
+    us = np.array( us ).reshape(-1,1)
+    zs = np.array( zs ).reshape(-1,1)
+
+
     # extracts params if "problem" parent struct is passed in
     if hasattr(params, 'params'):
         params = params.params
@@ -29,13 +34,13 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
 
 
     # extract states
-    r = np.array( zs[0:3, 0] ).reshape(-1,1) # turn into a column vector (works if zs is already a col. or a row vec)
-    v = np.array( zs[3:6, 0] ).reshape(-1,1)
+    r = zs[0:3]
+    v = zs[3:6]
 
     # extract controls 
     if t_vec is None:
-        us2 = np.array( us )    # got an error that said us2 was an array.array for some reason
-                                # (and therefore I coudn't do element-wise operations)
+        us2 = np.array( us ).reshape(-1,1)  # got an error that said us2 was an array.array for some reason
+                                            # (and therefore I coudn't do element-wise operations)
     else:
         for i in range(m):
             interp = interp1d(t_vec, us[i,:]) # this doesn't work
