@@ -40,10 +40,9 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
     # extract controls 
     if t_vec is None:
         us2 = us
-
     else:
         for i in range(m):
-            interp = interp1d(t_vec, us[i,:]) # this doesn't work
+            interp = interp1d(t_vec, us[i,:]) # does this work?
             us2[i,:] = interp(ts)
             
     # extract control
@@ -68,19 +67,25 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
     return xDot
 
 
-# ts = 0
-# us = np.array([0, 0, 3.4]).reshape(-1,1)
-# zs = np.zeros((12,1))
-# zs[2] = 0.5
-# t_vec = np.linspace(0, 5, 100).reshape(-1,1)
+def nonlinear_initial_guess():
+    pass
 
-# params = {
-#     'm'     : 3,
-#     'n'     : 6,
-#     'mass'  : 0.35,
-#     'ge'    : np.array([0, 0, -9.81]).reshape(-1,1)
-# }
 
-# xDot = system_dynamics(ts, zs, us, params)
+def init_params_struct():
+    pass
 
-# print(xDot)
+
+# Potential class structure ?
+class ocp:
+    def __init__(self, config):
+        self.config = config
+        pass
+
+    def init_params(self):
+        # make params dict
+        params = {}
+        return params
+
+    def nonlinear_initial_guess(self):
+        pass
+
