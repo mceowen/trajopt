@@ -17,9 +17,9 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
     u1, u2: v (velocity)
     '''
 
-    # make sure all vectors are numpy column vectors
-    us = np.array( us ).reshape(-1,1)
-    zs = np.array( zs ).reshape(-1,1)
+    # # make sure all vectors are numpy column vectors
+    # us = np.array( us ).reshape(-1,1)
+    # zs = np.array( zs ).reshape(-1,1)
 
 
     # extracts params if "problem" parent struct is passed in
@@ -41,16 +41,18 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
     if t_vec is None:
         us2 = us
     else:
+        us2 = np.empty(m)
         for i in range(m):
             interp = interp1d(t_vec, us[i,:]) # does this work?
-            us2[i,:] = interp(ts)
+            us2[i] = interp(ts)
             
     # extract control
     T = us2
 
     # UPDATE STATES 
     # initialize state vector
-    xDot = np.full((6, 1), np.nan)
+    # xDot = np.full((6, 1), np.nan)
+    xDot = np.empty(6)
 
     # r_dot 
     xDot[0:3] = v
@@ -59,8 +61,8 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
     xDot[3:6] = T/mass + ge
 
     if np.issubdtype(r.dtype, np.number):
-        if r[2,0] <= -1: # set xDot = 0 if the vehicle hits the ground
-            xDot = np.zeros(n,1)
+        if r[2] <= -1: # set xDot = 0 if the vehicle hits the ground
+            xDot = np.zeros(n)
     elif np.issubdtype(r.dtype, np.nan) or any(np.isinf(r)):
         breakpoint()
 
