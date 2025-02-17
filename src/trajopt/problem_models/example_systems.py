@@ -8,6 +8,7 @@ def test_func():
 
 # TODO consolidate imports 
 from scipy.interpolate import interp1d
+from scipy.integrate import solve_ivp
 import numpy as np
 
 
@@ -16,12 +17,6 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
     x1, x2: r (position)
     u1, u2: v (velocity)
     '''
-
-    # # make sure all vectors are numpy column vectors
-    # us = np.array( us ).reshape(-1,1)
-    # zs = np.array( zs ).reshape(-1,1)
-
-
     # extracts params if "problem" parent struct is passed in
     if hasattr(params, 'params'):
         params = params.params
@@ -31,7 +26,6 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
     n       = int( params['n'] )
     mass    = params['mass']
     ge      = params['ge']
-
 
     # extract states
     r = zs[0:3]
@@ -49,15 +43,9 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
     # extract control
     T = us2
 
-    # UPDATE STATES 
-    # initialize state vector
-    # xDot = np.full((6, 1), np.nan)
-    xDot = np.empty(6)
-
-    # r_dot 
+    # compute velocity and acceleration
+    xDot = np.empty(6) # initialize
     xDot[0:3] = v
-
-    # v_dot
     xDot[3:6] = T/mass + ge
 
     if np.issubdtype(r.dtype, np.number):
@@ -69,8 +57,39 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
     return xDot
 
 
-def nonlinear_initial_guess():
-    pass
+def nonlinear_initial_guess(us_range, params):
+    """
+    Generate a nonlinear initial guess for trajectory and control.
+
+    Parameters:
+    us_range (numpy.ndarray): Range of control inputs.
+    params (dict): Dictionary containing parameters.
+
+    Returns:
+    dict: Updated params with initial guesses for trajectory and control.
+    """
+    # Initialization trajectory
+    params['dt_init'] = (params['T_init'] / (params['N'] - 1)) * np.ones(params['N'] - 1)
+    params['Ts_init'] = params['T_init'] / params['nondim']['nt']
+    params['dts_init'] = params['dt_init'] / params['nondim']['nt']
+    ts_init = np.cumsum(np.concatenate(([0], params['dts_init'])))
+    
+    # Initial control
+    us_init = np.array([np.linspace(us_range[i, 0], us_range[i, 1], params['N']) for i in range(len(us_range))])
+    
+    # Propagate initial trajectory from nonlinear simulation
+    odesettings = {'atol': 1E-12, 'rtol': 1E-12}
+    # sol = solve_ivp(lambda t, x: system_dynamics(t, x, us_init, params, ts_init), [ts_init[0], ts_init[-1]], params['z0s'], t_eval=ts_init, **odesettings)
+    sol = solve_ivp(system_dynamics, [ts_init[0], ts_init[-1]], params['z0s'], args=(us_init, params, ts_init),t_eval=ts_init, **odesettings)
+
+    zs_init = sol.y
+    
+    # Create initial state and control vector
+    params['ts_init'] = ts_init
+    params['zs_init'] = zs_init
+    params['us_init'] = us_init
+    
+    return params
 
 
 def init_params_struct():
