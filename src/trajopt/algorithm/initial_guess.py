@@ -122,7 +122,9 @@ def nonlinear_initial_guess(us_range, params):
     
     # Propagate initial trajectory from nonlinear simulation
     odesettings = {'atol': 1E-12, 'rtol': 1E-12}
-    sol = solve_ivp(lambda t, x: system_dynamics(t, x, us_init, params, ts_init), [ts_init[0], ts_init[-1]], params['z0s'], t_eval=ts_init, **odesettings)
+    # sol = solve_ivp(lambda t, x: system_dynamics(t, x, us_init, params, ts_init), [ts_init[0], ts_init[-1]], params['z0s'], t_eval=ts_init, **odesettings)
+    sol = solve_ivp(system_dynamics, [ts_init[0], ts_init[-1]], params['z0s'], args=(us_init, params, ts_init),t_eval=ts_init, **odesettings)
+
     zs_init = sol.y
     
     # Create initial state and control vector
