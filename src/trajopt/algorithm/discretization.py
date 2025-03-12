@@ -129,9 +129,7 @@ def RHS_ltv(tau, lds, us_ref, dts_ref, problem):
 
     return lds_dot
 
-Here's the equivalent Python code for the provided MATLAB function:
 
-Python
 def compute_linsys_discrete(zs_ref, us_ref, dts_ref, problem):
     """
     Compute the linear system in discrete form.
