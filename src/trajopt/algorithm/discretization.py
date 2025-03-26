@@ -11,18 +11,18 @@ def set_ltv_indices(params):
     Returns:
     dict: Updated params with LTV indices and initialized arrays.
     """
-    params['z_ind'] = np.arange(1, params['nz'] + 1)
-    params['Ak_ind'] = np.arange(params['z_ind'][-1] + 1, params['z_ind'][-1] + params['nz']**2 + 1)
-    params['Bk_ind'] = np.arange(params['Ak_ind'][-1] + 1, params['Ak_ind'][-1] + params['nz'] * params['m'] + 1)
-    params['Bkp_ind'] = np.arange(params['Bk_ind'][-1] + 1, params['Bk_ind'][-1] + params['nz'] * params['m'] + 1)
-    params['Sk_ind'] = np.arange(params['Bkp_ind'][-1] + 1, params['Bkp_ind'][-1] + params['nz'] + 1)
+    params['z_ind']     = np.arange(1, params['nz'] + 1)
+    params['Ak_ind']    = np.arange(params['z_ind'][-1] + 1, params['z_ind'][-1] + params['nz']**2 + 1)
+    params['Bk_ind']    = np.arange(params['Ak_ind'][-1] + 1, params['Ak_ind'][-1] + params['nz'] * params['m'] + 1)
+    params['Bkp_ind']   = np.arange(params['Bk_ind'][-1] + 1, params['Bk_ind'][-1] + params['nz'] * params['m'] + 1)
+    params['Sk_ind']    = np.arange(params['Bkp_ind'][-1] + 1, params['Bkp_ind'][-1] + params['nz'] + 1)
 
-    params['Ak'] = np.zeros((params['nz'], params['nz'], params['N'] - 1))
-    params['Bk'] = np.zeros((params['nz'], params['m'], params['N'] - 1))
-    params['Bkp'] = np.zeros((params['nz'], params['m'], params['N'] - 1))
-    params['Sk'] = np.zeros((params['nz'], 1, params['N'] - 1))
+    params['Ak']        = np.zeros((params['nz'], params['nz'], params['N'] - 1))
+    params['Bk']        = np.zeros((params['nz'], params['m'], params['N'] - 1))
+    params['Bkp']       = np.zeros((params['nz'], params['m'], params['N'] - 1))
+    params['Sk']        = np.zeros((params['nz'], 1, params['N'] - 1))
 
-    params['lds0'] = np.zeros(params['Sk_ind'][-1])
+    params['lds0']      = np.zeros(params['Sk_ind'][-1])
     params['lds0_size'] = params['Sk_ind'][-1]
 
     params['lds0'][params['Ak_ind'] - 1] = np.reshape(np.eye(params['nz']), -1)
