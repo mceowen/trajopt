@@ -58,15 +58,18 @@ def set_convergence_tolerance(params):
         if len(params['conv']['setup']['eps_path']) == 1:
             eps_path = params['conv']['setup']['eps_path'] * np.ones(n_path)
             M_path_d2nd = np.eye(n_path)
+            eps_path_nd = M_path_d2nd @ eps_path
+            eps_min_path = np.min(eps_path_nd)
         else:
             eps_path = params['conv']['setup']['eps_path']
             M_path_d2nd = params['nondim']['M_path_d2nd']
+            eps_path_nd = M_path_d2nd @ eps_path
+            eps_min_path = np.min(eps_path_nd)
     else:
         eps_path = 0
         M_path_d2nd = np.zeros((1, n_path))
-
-    eps_path_nd = M_path_d2nd @ eps_path
-    eps_min_path = np.min(eps_path_nd)
+        eps_path_nd = M_path_d2nd * eps_path
+        eps_min_path = 0
     
     Wconv_path = np.diag(eps_min_path / eps_path_nd)
     
@@ -81,16 +84,19 @@ def set_convergence_tolerance(params):
         if len(params['conv']['setup']['eps_nfz']) == 1:
             eps_nfz = params['conv']['setup']['eps_nfz'] * np.ones(n_nfz)
             M_nfz_d2nd = np.eye(n_nfz)
+            eps_nfz_nd = M_nfz_d2nd @ eps_nfz
+            eps_min_nfz = np.min(eps_nfz_nd)
         else:
             eps_nfz = params['conv']['setup']['eps_nfz']
             M_nfz_d2nd = params['nondim']['M_nfz_d2nd']
+            eps_nfz_nd = M_nfz_d2nd @ eps_nfz
+            eps_min_nfz = np.min(eps_nfz_nd)
     else:
         eps_nfz = 0
         M_nfz_d2nd = np.zeros((1, n_nfz))
+        eps_nfz_nd = M_nfz_d2nd * eps_nfz
+        eps_min_nfz = 0
 
-    eps_nfz_nd = M_nfz_d2nd @ eps_nfz
-    eps_min_nfz = np.min(eps_nfz_nd)
-    
     Wconv_nfz = np.diag(eps_min_nfz / eps_nfz_nd)
     
     params['conv']['eps_nfz'] = eps_min_nfz 
@@ -107,13 +113,15 @@ def set_convergence_tolerance(params):
         else:
             eps_aux = params['conv']['setup']['eps_aux']
             M_aux_d2nd = params['nondim']['M_aux_d2nd']
+            
+        eps_aux_nd = M_aux_d2nd @ eps_aux
+        eps_min_aux = np.min(eps_aux_nd)
     else:
         eps_aux = 0
         M_aux_d2nd = np.zeros((1, n_aux))
+        eps_aux_nd = M_aux_d2nd * eps_aux
+        eps_min_aux = 0
 
-    eps_aux_nd = M_aux_d2nd @ eps_aux
-    eps_min_aux = np.min(eps_aux_nd)
-    
     Wconv_aux = np.diag(eps_min_aux / eps_aux_nd)
     
     params['conv']['eps_aux'] = eps_min_aux 
@@ -130,14 +138,15 @@ def set_convergence_tolerance(params):
         else:
             eps_term = params['conv']['setup']['eps_term']
             M_term_d2nd = params['nondim']['M_term_d2nd']
+        eps_term_nd = M_term_d2nd @ eps_term
+        eps_min_term = np.min(eps_term_nd)
     else:
         eps_term = 0
         M_term_d2nd = np.zeros((1, n_term))
-
-    eps_term_nd = M_term_d2nd @ eps_term
-    eps_min_term = np.min(eps_term_nd)
+        eps_term_nd = M_term_d2nd * eps_term
+        eps_min_term = 0
     
-    Wconv_term = np.diag(eps_min_term / eps_term_nd)
+    Wconv_term = np.diag(np.array([eps_min_term / eps_term_nd]))
     
     params['conv']['eps_term'] = eps_min_term 
     params['conv']['Wconv_term'] = Wconv_term
@@ -163,11 +172,12 @@ def set_convergence_tolerance(params):
     # DYNAMICS CONVERGENCE
     n_dyn = params['n_dyn']
 
+    # extract convergence tolerance with dimensional units and nondimensionalization factor
     if n_dyn > 0:
         eps_dyn = params['conv']['setup']['eps_dyn']
         M_dyn_d2nd = params['nondim']['M_dyn_d2nd']
     else:
-        eps_dyn = 0
+        eps_dyn = np.zeros((params['nz'], params['nz'])) # make sure we can mat-mult w/ M_dyn_d2nd and get a 1-by-nz
         M_dyn_d2nd = np.zeros((1, params['nz']))
 
     if params['bools']['ctcs'] and params['n_ineq'] > 0:
@@ -181,11 +191,14 @@ def set_convergence_tolerance(params):
             np.diag(M_dyn_d2nd),
             np.diag(params['nondim']['M_cnst_d2nd'])
         ]))
-
+    
     eps_dyn_nd = M_dyn_d2nd @ eps_dyn
     eps_min_dyn = np.min(eps_dyn_nd)
     
-    Wconv_dyn = np.diag(eps_min_dyn / eps_dyn_nd)
+    if np.all(eps_dyn_nd == 0):
+        Wconv_dyn = np.diag(eps_dyn_nd) # zero matrix
+    else:
+        Wconv_dyn = np.diag(eps_min_dyn / eps_dyn_nd)
     
     params['conv']['eps_dyn'] = eps_min_dyn 
     params['conv']['Wconv_dyn'] = Wconv_dyn
