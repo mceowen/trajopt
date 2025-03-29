@@ -99,7 +99,7 @@ def set_nondim_params(params): # TODO: Test
 
     nd_state = np.array([1/nd, 1/nd, 1/nd, 1/nv, 1/nv, 1/nv])
 
-    if not params['nondim']: # initialize if it doesn't already exist
+    if 'nondim' not in params: # initialize if it doesn't already exist
        params['nondim'] = {}
 
     params['nondim']['M_state_d2nd'] = np.diag(nd_state)
@@ -135,7 +135,7 @@ def set_nondim_params(params): # TODO: Test
     return params
 
 
-def config_params(config): # replacing init_params_struct TODO: Test
+def config_params(config=None): # replacing init_params_struct TODO: Test
     """
     Configures parameters dictionary for quadrotor_3dof example problem
     """
@@ -182,10 +182,10 @@ def config_params(config): # replacing init_params_struct TODO: Test
         yc = np.array([])
         rc = np.array([])
 
-    params['obs']['posc'] = np.array([xc, yc]) # xc and yc may be vectors
+    params.setdefault('obs', {})['posc'] = np.array([xc, yc]) # xc and yc may be vectors
     params['obs']['rc'] = rc
     
-    params['nfz_idx'] = np.arange(1, xc.shape[1]+1)
+    params['nfz_idx'] = np.arange(0, xc.size)
     params['n_nfz'] = len(params['nfz_idx'])
 
 
@@ -205,14 +205,14 @@ def config_params(config): # replacing init_params_struct TODO: Test
 
     # equality initial conditions
     params['zi'] = params['z0s']
-    params['zi_idx'] = np.arange(1, params['n']+1)
+    params['zi_idx'] = np.arange(0, params['n'])
 
     # inequality initial conditions
     # none
 
     # equality terminal conditions
     params['zs'] = params['nondim']['M_state_d2nd']*np.array([10,10,0.5,0,0,0])
-    params['zf_idx'] = np.arange(1,params['n']+1)
+    params['zf_idx'] = np.arange(0,params['n'])
 
 
     #==============================
@@ -220,15 +220,15 @@ def config_params(config): # replacing init_params_struct TODO: Test
     #==============================
     # no state constraints
     params['z_min'] = np.array([0, 0, 0.25])
-    params['z_min_idx'] = np.arange(1,3+1)
+    params['z_min_idx'] = np.arange(0,3)
     params['z_max'] = np.array([12, 12, 0.75])
-    params['z_max_idx'] = np.arange(1,3+1)
+    params['z_max_idx'] = np.arange(0,3)
 
     params['u_norm_min'] = 0.21 # [N]
     params['u_norm_max'] = 8.12 # [N]
 
     params['udot_max'] = 5*np.ones(3) # [N/s]
-    params['udot_max_idx'] = np.arange(1,3+1)
+    params['udot_max_idx'] = np.arange(0,3)
 
 
     ### Time of flight constraints ###
@@ -246,7 +246,7 @@ def config_params(config): # replacing init_params_struct TODO: Test
     # Initialize trajectory (initial guess)
     #======================================
     if params['bools']['free_final_time'] and not params['bools']['buff_dyn']:
-        us_range = ( -params['ge'].reshape(-1,1) * params['mass'] ) @ np.ones((1, 2)) + np.array([0.08, 0.08, 0])
+        us_range = ( -params['ge'].reshape(-1,1) * params['mass'] ) @ np.ones((1, 2)) + np.array([0.08, 0.08, 0]).reshape(-1,1)
         # need to manually set the left-hand side vector to a column vector for multiplacation to work
         params = nonlinear_initial_guess(us_range, params)
     else:
@@ -358,78 +358,118 @@ def config_params(config): # replacing init_params_struct TODO: Test
                 else:
                     raise ValueError("Either dual_term or eps_nonzero2 is not defined.")
 
-        ### ctcs convergence adjustments ###
-        ctcs_mult_state = 5e-1
-        ctcs_mult_cnst = 1e0
-        eps_ctcs = 1e-5
+    ### ctcs convergence adjustments ###
+    ctcs_mult_state = 5e-1
+    ctcs_mult_cnst = 1e0
+    eps_ctcs = 1e-5
 
-        params['conv']['setup']['ctcs_mult_state'] = ctcs_mult_state
-        params['conv']['setup']['ctcs_mult_cnst'] = ctcs_mult_cnst
+    params['conv']['setup']['ctcs_mult_state'] = ctcs_mult_state
+    params['conv']['setup']['ctcs_mult_cnst'] = ctcs_mult_cnst
 
-        params['eps_ctcs'] = eps_ctcs
+    params['eps_ctcs'] = eps_ctcs
 
-        ### State convergence ###
-        eps_d_state = 1e-1  # [m]
-        eps_v_state = 1e0   # [m/s]
-        params['conv']['setup']['eps_state'] = np.concatenate((eps_d_state * np.ones(params['n'] // 2), 
-                                                            eps_v_state * np.ones(params['n'] // 2)))
+    ### State convergence ###
+    eps_d_state = 1e-1  # [m]
+    eps_v_state = 1e0   # [m/s]
+    params['conv']['setup']['eps_state'] = np.concatenate((eps_d_state * np.ones(params['n'] // 2), 
+                                                        eps_v_state * np.ones(params['n'] // 2)))
 
-        params['conv']['setup'].setdefault('state', {})['eps_d'] = eps_d_state
-        params['conv']['setup']['state']['eps_v'] = eps_v_state
+    params['conv']['setup'].setdefault('state', {})['eps_d'] = eps_d_state
+    params['conv']['setup']['state']['eps_v'] = eps_v_state
 
 
-        
-        ### Cost convergence ###
-        eps_F_cost = 1 # N
+    
+    ### Cost convergence ###
+    eps_F_cost = 1 # N
 
-        # Assign to cost eps and store data
-        params['conv']['setup']['eps_cost'] = eps_F_cost
-        params['conv']['setup']['cost']['eps_v'] = eps_F_cost
+    # Assign to cost eps and store data
+    params['conv']['setup']['eps_cost'] = eps_F_cost
+    params['conv']['setup'].setdefault('cost', {})['eps_v'] = eps_F_cost
 
-        ### NFZ convergence values ###
-        eps_nfz_cnst = 1e-1
-        params['conv']['setup']['eps_nfz'] = eps_nfz_cnst * np.ones(params['n'])
-        params['conv']['setup']['cnst']['eps_nfz'] = eps_nfz_cnst
+    ### NFZ convergence values ###
+    eps_nfz_cnst = 1e-1
+    params['conv']['setup']['eps_nfz'] = eps_nfz_cnst * np.ones(params['n'])
+    params['conv']['setup'].setdefault('cnst', {})['eps_nfz'] = eps_nfz_cnst
 
-        ### Terminal constraint values ###
-        eps_d_term = 1e-1
-        eps_v_term = 1e-2
+    ### Terminal constraint values ###
+    eps_d_term = 1e-1
+    eps_v_term = 1e-2
 
-        # Create eps_vector for full terminal state equality, min, max constraints
-        eps_term = np.array([eps_d_term, eps_d_term, eps_d_term, eps_v_term, eps_v_term, eps_v_term])
-        eps_term_min = eps_term.copy()
-        eps_term_max = eps_term.copy()
+    # Create eps_vector for full terminal state equality, min, max constraints
+    eps_term = np.array([eps_d_term, eps_d_term, eps_d_term, eps_v_term, eps_v_term, eps_v_term])
+    eps_term_min = eps_term.copy()
+    eps_term_max = eps_term.copy()
 
-        # Extract only those terminal constraints used
-        params['conv']['setup']['eps_term'] = np.concatenate((eps_term[params['zf_idx']], 
-                                                            eps_term_min[params['zf_min_idx']], 
-                                                            eps_term_max[params['zf_max_idx']]))
+    # Extract only those terminal constraints used
+    params['conv']['setup']['eps_term'] = np.concatenate((eps_term[params['zf_idx']], 
+                                                        eps_term_min[params['zf_min_idx']], 
+                                                        eps_term_max[params['zf_max_idx']]))
 
-        # Store data
-        params['conv']['setup'].setdefault('term', {})['eps_d'] = eps_d_term
+    # Store data
+    params['conv']['setup'].setdefault('term', {})['eps_d'] = eps_d_term
 
-        #### Configure multiple shooting dynamics defect convergence values ###
-        params['conv']['setup']['eps_defect'] = 1e-2
+    #### Configure multiple shooting dynamics defect convergence values ###
+    params['conv']['setup']['eps_defect'] = np.array([1e-2])
 
-        ### Dynamics convergence ###
-        eps_d_dyn = 1e-1  # [m]
-        eps_v_dyn = 1e0   # [m/s]
-        params['conv']['setup']['eps_dyn'] = np.concatenate((eps_d_dyn * np.ones(params['n'] // 2), 
-                                                            eps_v_dyn * np.ones(params['n'] // 2)))
+    ### Dynamics convergence ###
+    eps_d_dyn = 1e-1  # [m]
+    eps_v_dyn = 1e0   # [m/s]
+    params['conv']['setup']['eps_dyn'] = np.concatenate((eps_d_dyn * np.ones(params['n'] // 2), 
+                                                        eps_v_dyn * np.ones(params['n'] // 2)))
 
-        # Store data
-        params['conv']['setup'].setdefault('dyn', {})['eps_d'] = eps_d_dyn
-        params['conv']['setup']['dyn']['eps_v'] = eps_v_dyn
+    # Store data
+    params['conv']['setup'].setdefault('dyn', {})['eps_d'] = eps_d_dyn
+    params['conv']['setup']['dyn']['eps_v'] = eps_v_dyn
 
-        ### Configure generic convergence criterion and max iterations ###
-        params = set_convergence_tolerance(params)
+    ### Configure generic convergence criterion and max iterations ###
+    params = set_convergence_tolerance(params)
 
-        # Iterations
-        params['conv']['iter_max'] = 20  # 14, 30
-        # params['conv']['num_buffers'] = 4
+    # Iterations
+    params['conv']['iter_max'] = 20  # 14, 30
+    # params['conv']['num_buffers'] = 4
 
-        # Save variable names
-        params['save_var_names'] = ['ts_opt', 'zs_opt', 'us_opt', 'params', 'O']
+    # Save variable names
+    params['save_var_names'] = ['ts_opt', 'zs_opt', 'us_opt', 'params', 'O']
 
     return params
 
+
+# # testing set_nondim_params()
+# if __name__ == "__main__":
+#     print('..:: Testing set_nondim_params() ::..')
+#     params = {
+#         'path_lim': None,
+#         'n_path': 0,
+#         'n_nfz': 6,
+#         'nfz_idx': [0,1,2,3,4,5],
+#         'zf_idx': None,
+#         'zf_min_idx': None,
+#         'zf_max_idx': None,
+#         'n': 6,
+#         'm': 3,
+#         'bools' : {
+#             'nondim': 1,
+#         },
+#     }
+#     params = set_nondim_params(params)
+#     print("params['nondim'] = ", params['nondim'])
+
+# TESTING CONFIG_PARAMS
+if __name__ == "__main__":
+    print('..:: Testing config_params() ::..')
+    # make dummy config
+    config = {
+        'params': { # config['params']
+            'N': 40,
+            'T_init': 10,
+            'bools': { # config['params']['bools']
+                'flag_nfz': 0,
+                'flag_autotune': 0,
+                'free_final_time': 1,
+                'buff_dyn': 0,
+                'ctcs': 0
+            },
+        },
+    }
+    params = config_params(config)
+    print(f"function call successful... \n\tparams['save_var_names'] = {params['save_var_names']}")
