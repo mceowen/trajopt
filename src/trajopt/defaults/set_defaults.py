@@ -5,7 +5,16 @@
 import numpy as np
 from trajopt.algorithm.discretization import set_ltv_indices
 
-def set_params_default(config=None): # TODO: Test
+def set_params_default(config=None): # TODO: Edit docstring
+    """
+    Set default problem parameters
+
+    Parameters:
+    config (dict): problem configuration data
+
+    Returns:
+    params (dict): problem parameters
+    """
     params = {}
 
     if config is None:
@@ -162,7 +171,7 @@ def set_params_constraint_default(params): # TODO: Test
     params['conv']['eps_aux'] = 0
     params['conv']['eps_term'] = 0
     params['conv']['eps_dyn'] = 0
-    params['conv']['setup']['eps_cost'] = []
+    params['conv'].setdefault('setup', {})['eps_cost'] = []
     params['conv']['setup']['eps_state'] = []
     params['conv']['setup']['eps_path'] = []
     params['conv']['setup']['eps_nfz'] = []
@@ -174,7 +183,7 @@ def set_params_constraint_default(params): # TODO: Test
     params['eps_ctcs'] = 1e-5
 
     # Terminal state nondimensionalization
-    M_state_d2nd_vec = np.diag(params['nondim']['M_state_d2nd'])
+    M_state_d2nd_vec = params['nondim']['M_state_d2nd']
     params['nondim']['M_term_d2nd'] = np.diag(np.concatenate((M_state_d2nd_vec[params['zf_idx']], 
                                                              M_state_d2nd_vec[params['zf_min_idx']], 
                                                              M_state_d2nd_vec[params['zf_max_idx']])))
@@ -190,4 +199,59 @@ def set_params_constraint_default(params): # TODO: Test
     params['conv_data']['vb_term'] = np.zeros((params['nz'], 1))
 
     return params
+
+
+# testing functions
+if __name__ == "__main__":
+    print('..:: Testing set_params_default ::..')
+
+    # call without config
+    print('no config argument passed')
+    params = set_params_default()
+    tf = 'N' in params
+    print('N in params?: ', tf)
+    print("params['bools']['flag_nfz'] = ", params['bools']['flag_nfz'])
+
+    # test config params overwriting
+    print('calling again with config argument')
+    # make dummy config w/ data to overwrite params defaults
+    config = {
+        'params': { # config['params']
+            'N': 40,
+            'T_init': 10,
+            'bools': { # config['params']['bools']
+                'flag_nfz': 2,
+                'flag_autotune': 0,
+                'free_final_time': 1,
+                'buff_dyn': 0,
+                'ctcs': 0
+            },
+        },
+    }
+    params = set_params_default(config)
+    print("params['bools']['flag_nfz'] = ", params['bools']['flag_nfz'])
+    print("params['N'] = ", params['N'])
+
+    # need to set nondim params before passing into set_params_constraint_defualt
+    from trajopt.problem_models.quadrotor_3dof import set_nondim_params
+    params = set_nondim_params(params)
+    tf = 'nondim' in params # true/false
+    print('nondim in params?: ', tf)
+    # print("params['nondim'] = ", params['nondim'])
+
+    # check if conv_data exists (it shouldn't yet)
+    tf = 'conv_data' in params # true/false
+    print('conv_data in params?: ', tf)
+
+    # Now call set_params_constraint_default with params
+    print('..:: Calling set_params_constraint_default ::..')
+    params = set_params_constraint_default(params)
+    
+    # check if conv_data exists again (it should)
+    tf = 'conv_data' in params # true/false
+    print('conv_data in params?: ', tf)
+
+
+
+
 
