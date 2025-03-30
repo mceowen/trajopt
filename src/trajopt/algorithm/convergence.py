@@ -43,7 +43,7 @@ def set_convergence_tolerance(params):
     
     params['conv']['eps_state'] = eps_min_state 
     params['conv']['Wconv_state'] = Wconv_state
-    params['conv']['Wconv_state_vec'] = np.diag(Wconv_state)
+    params['conv']['Wconv_state_vec'] = np.diag(Wconv_state).copy() # .copy() makes sure it is contiguous
 
     # COST CONVERGENCE
     eps_cost = params['conv']['setup']['eps_cost']
@@ -75,7 +75,7 @@ def set_convergence_tolerance(params):
     
     params['conv']['eps_path'] = eps_min_path 
     params['conv']['Wconv_path'] = Wconv_path
-    params['conv']['Wconv_path_vec'] = np.diag(Wconv_path)
+    params['conv']['Wconv_path_vec'] = np.diag(Wconv_path).copy()
 
     # NONCONVEX NFZ CONSTRAINT CONVERGENCE
     n_nfz = params['n_nfz']
@@ -101,7 +101,7 @@ def set_convergence_tolerance(params):
     
     params['conv']['eps_nfz'] = eps_min_nfz 
     params['conv']['Wconv_nfz'] = Wconv_nfz
-    params['conv']['Wconv_nfz_vec'] = np.diag(Wconv_nfz)
+    params['conv']['Wconv_nfz_vec'] = np.diag(Wconv_nfz).copy()
 
     # NONCONVEX AUXILIARY CONSTRAINT CONVERGENCE
     n_aux = params['n_aux']
@@ -126,7 +126,7 @@ def set_convergence_tolerance(params):
     
     params['conv']['eps_aux'] = eps_min_aux 
     params['conv']['Wconv_aux'] = Wconv_aux
-    params['conv']['Wconv_aux_vec'] = np.diag(Wconv_aux)
+    params['conv']['Wconv_aux_vec'] = np.diag(Wconv_aux).copy()
 
     # TERMINAL CONSTRAINT CONVERGENCE
     n_term = params['n_term'] + params['n_term_ineq']
@@ -150,7 +150,7 @@ def set_convergence_tolerance(params):
     
     params['conv']['eps_term'] = eps_min_term 
     params['conv']['Wconv_term'] = Wconv_term
-    params['conv']['Wconv_term_vec'] = np.diag(Wconv_term)
+    params['conv']['Wconv_term_vec'] = np.diag(Wconv_term).copy()
 
     # MULTIPLE SHOOTING DYNAMICS DEFECT CONVERGENCE
     if len(params['conv']['setup']['eps_defect']) == 1:
@@ -167,7 +167,7 @@ def set_convergence_tolerance(params):
     
     params['conv']['eps_defect'] = eps_min_defect 
     params['conv']['Wconv_defect'] = Wconv_defect
-    params['conv']['Wconv_defect_vec'] = np.diag(Wconv_defect)
+    params['conv']['Wconv_defect_vec'] = np.diag(Wconv_defect).copy()
 
     # DYNAMICS CONVERGENCE
     n_dyn = params['n_dyn']
@@ -202,7 +202,7 @@ def set_convergence_tolerance(params):
     
     params['conv']['eps_dyn'] = eps_min_dyn 
     params['conv']['Wconv_dyn'] = Wconv_dyn
-    params['conv']['Wconv_dyn_vec'] = np.diag(Wconv_dyn)
+    params['conv']['Wconv_dyn_vec'] = np.diag(Wconv_dyn).copy()
 
     return params
 
