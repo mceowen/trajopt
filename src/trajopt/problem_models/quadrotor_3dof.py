@@ -102,19 +102,19 @@ def set_nondim_params(params): # TODO: Test
     if 'nondim' not in params: # initialize if it doesn't already exist
        params['nondim'] = {}
 
-    params['nondim']['M_state_d2nd'] = np.diag(nd_state)
-    params['nondim']['M_ctrl_d2nd'] = np.diag(np.ones(m) / na)
+    params['nondim']['M_state_d2nd'] = np.diag(nd_state).copy()
+    params['nondim']['M_ctrl_d2nd'] = np.diag(np.ones(m) / na).copy()
 
     params['nondim']['M_term_d2nd'] = np.diag(np.concatenate([
         nd_state[params['zf_idx']],
         nd_state[params['zf_min_idx']],
         nd_state[params['zf_max_idx']]
-    ]))
-    params['nondim']['M_cnst_d2nd'] = np.diag(np_ineq ** -1)
-    params['nondim']['M_nfz_d2nd'] = np.diag(np_ineq[params['nfz_idx']] ** -1)
+    ])).copy()
+    params['nondim']['M_cnst_d2nd'] = np.diag(np_ineq ** -1).copy()
+    params['nondim']['M_nfz_d2nd'] = np.diag(np_ineq[params['nfz_idx']] ** -1).copy()
 
     nd_dyn = np.array([1/nv, 1/nv, 1/nv, 1/na, 1/na, 1/na])
-    params['nondim']['M_dyn_d2nd'] = np.diag(nd_dyn)
+    params['nondim']['M_dyn_d2nd'] = np.diag(nd_dyn).copy()
 
     params['nondim']['M_cost_d2nd'] = 1 / ncost
 
