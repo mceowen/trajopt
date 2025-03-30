@@ -142,10 +142,10 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     # Initialize
     params = set_params_default(config)
     params['case_flag']             = 1    # case1: bank angle only
-    params['bools.auto_jac']        = 0    # (1=symbolic jacobians for dynamics, 0=analytical)
-    params['bools.auto_jac_aero']   = 0    # (1=symbolic jacobians for aerodynamics, 0=analytical)
-    params['bools.auto_jac_cnst']   = 0    # (1=symbolic jacobians for constraints, 0=analytical)
-    params['bools.init_ctrl']       = 0
+    params['bools']['auto_jac']        = 0    # (1=symbolic jacobians for dynamics, 0=analytical)
+    params['bools']['auto_jac_aero']   = 0    # (1=symbolic jacobians for aerodynamics, 0=analytical)
+    params['bools']['auto_jac_cnst']   = 0    # (1=symbolic jacobians for constraints, 0=analytical)
+    params['bools']['init_ctrl']       = 0
 
     # Physical constants
     params['ge'] = np.array([0, 0, -9.81]) # [m/s^2], grav accel at sea lvl
