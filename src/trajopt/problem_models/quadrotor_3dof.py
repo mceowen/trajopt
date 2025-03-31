@@ -215,8 +215,8 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['zf_idx'] = np.arange(0,params['n'])
 
     # control boundary conditions
-    params['ui'] = np.zeros((params['m'],1)) - ( params['ge']*params['mass'] ).reshape(-1,1)
-    params['uf'] = np.zeros((params['m'],1)) - ( params['ge']*params['mass'] ).reshape(-1,1)
+    params['ui'] = -params['ge']*params['mass']
+    params['uf'] = -params['ge']*params['mass']
 
     #==============================
     # Control and state constraints
