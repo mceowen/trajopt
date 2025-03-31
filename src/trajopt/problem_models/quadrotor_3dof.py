@@ -211,9 +211,12 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     # none
 
     # equality terminal conditions
-    params['zs'] = params['nondim']['M_state_d2nd']*np.array([10,10,0.5,0,0,0])
+    params['zf'] = params['nondim']['M_state_d2nd'] @ np.array([10,10,0.5,0,0,0])
     params['zf_idx'] = np.arange(0,params['n'])
 
+    # control boundary conditions
+    params['ui'] = np.zeros((params['m'],1)) - ( params['ge']*params['mass'] ).reshape(-1,1)
+    params['uf'] = np.zeros((params['m'],1)) - ( params['ge']*params['mass'] ).reshape(-1,1)
 
     #==============================
     # Control and state constraints
