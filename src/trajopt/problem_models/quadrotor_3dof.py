@@ -158,7 +158,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['T_init'] = 10
 
     # Define Cost Function
-    params['cost'] = lambda t, z, u: np.dot(u, u) #equivalent to dot product...TODO this will be a method at some point
+    params['cost'] = lambda t, z, u: np.dot(np.transpose(u), u) #equivalent to dot product...TODO this will be a method at some point
 
 
     #======================
