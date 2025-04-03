@@ -711,99 +711,98 @@ def display_baseline_subprob_status(O, problem, nt, ncost):
 def main():
     import numpy as np
 
-    # Minimal dummy problem structure
-    N = 5
-    n = 3
-    m = 2
-
-    problem = {
-        'I': [{
-            'iter_num': 0,
-            'zs_ref': np.zeros((n, N)),
-            'us_ref': np.zeros((m, N)),
-            'dts_ref': np.ones(N - 1),
-            'ts_ref': np.linspace(0, 1, N),
-            'conv_data': {
-                'vb_path': np.zeros((1, N)),
-                'vb_nfz': np.zeros((1, N)),
-                'vb_aux': np.zeros((1, N)),
-                'vb_dyn': np.zeros((n, N - 1)),
-                'vb_term': np.zeros((2, 1)),
+    # Define minimal dummy problem input structure compatible with updated solve_subproblem
+    N, n, m = 5, 3, 2
+    dummy_problem = {
+        "I": [{
+            "iter_num": 0,
+            "zs_ref": np.zeros((n, N)),
+            "us_ref": np.zeros((m, N)),
+            "dts_ref": np.ones(N - 1),
+            "ts_ref": np.linspace(0, 1, N),
+            "conv_data": {
+                "vb_path": np.zeros((1, N)),
+                "vb_nfz": np.zeros((1, N)),
+                "vb_aux": np.zeros((1, N)),
+                "vb_dyn": np.zeros((n, N - 1)),
+                "vb_term": np.zeros((2, 1)),
             },
-            'weights': {
-                'W_path': np.ones((1, N)),
-                'W_nfz': np.ones((1, N)),
-                'W_aux': np.ones((1, N)),
-                'W_dyn': np.ones((n, N - 1)),
-                'W_term': np.ones((2, 1)),
-                'W_plus': np.ones((n,)),
-                'W_minus': np.ones((n,)),
-                'w_cost': 1.0,
-                'wtr_z': 1.0,
-                'wtr_u': 1.0,
-                'dual_path': np.ones((1, N)),
-                'dual_nfz': np.ones((1, N)),
-                'dual_aux': np.ones((1, N)),
-                'dual_dyn': np.ones((n, N - 1)),
-                'dual_plus': np.ones((n, N - 1)),
-                'dual_minus': np.ones((n, N - 1)),
-                'dual_term': np.ones((2, 1)),
+            "weights": {
+                "W_path": np.ones((1, N)),
+                "W_nfz": np.ones((1, N)),
+                "W_aux": np.ones((1, N)),
+                "W_dyn": np.ones((n, N - 1)),
+                "W_term": np.ones((2, 1)),
+                "W_plus": np.ones((n,)),
+                "W_minus": np.ones((n,)),
+                "w_cost": 1.0,
+                "wtr_z": 1.0,
+                "wtr_u": 1.0,
+                "dual_path": np.ones((1, N)),
+                "dual_nfz": np.ones((1, N)),
+                "dual_aux": np.ones((1, N)),
+                "dual_dyn": np.ones((n, N - 1)),
+                "dual_plus": np.ones((n, N - 1)),
+                "dual_minus": np.ones((n, N - 1)),
+                "dual_term": np.ones((2, 1)),
             }
         }],
-        'params': {
-            'N': N, 'n': n, 'm': m, 'nz': n,
-            'nondim': {'nt': 1, 'nd': 1, 'nv': 1, 'na': 1, 'ncost': 1},
-            'n_state': n, 'n_ctrl': m, 'n_udot': 1,
-            'n_path': 1, 'n_nfz': 1, 'n_aux': 1, 'n_dyn': n,
-            'n_term': 1, 'n_term_ineq': 1,
-            'z_min': np.zeros(n), 'z_max': np.ones(n),
-            'u_min': np.zeros(m), 'u_max': np.ones(m),
-            'udot_max': np.ones(m), 'udot_max_idx': [0, 1],
-            'z_min_idx': list(range(n)), 'z_max_idx': list(range(n)),
-            'u_min_idx': list(range(m)), 'u_max_idx': list(range(m)),
-            'z1': np.zeros(n), 'z1_idx': list(range(n)),
-            'z1_min': np.zeros(n), 'z1_min_idx': list(range(n)),
-            'z1_max': np.ones(n), 'z1_max_idx': list(range(n)),
-            'zN': np.zeros(n), 'zN_idx': list(range(n)),
-            'zN_min': np.zeros(n), 'zN_min_idx': list(range(n)),
-            'zN_max': np.ones(n), 'zN_max_idx': list(range(n)),
-            'n_init': 1, 'n_init_ineq': 1,
-            'bools': {
-                'init_ctrl': True,
-                'free_final_time': False,
-                'equal_dt': True,
-                'ctcs': False,
-                'flag_autotune': '0',
-                'buff_dyn': 'term'
+        "params": {
+            "N": N, "n": n, "m": m, "nz": n,
+            "nondim": {"nt": 1, "nd": 1, "nv": 1, "na": 1, "ncost": 1},
+            "n_state": n, "n_ctrl": m, "n_udot": 1,
+            "n_path": 1, "n_nfz": 1, "n_aux": 1, "n_dyn": n,
+            "n_term": 1, "n_term_ineq": 1,
+            "z_min": np.zeros(n), "z_max": np.ones(n),
+            "u_min": np.zeros(m), "u_max": np.ones(m),
+            "udot_max": np.ones(m), "udot_max_idx": [0, 1],
+            "z_min_idx": list(range(n)), "z_max_idx": list(range(n)),
+            "u_min_idx": list(range(m)), "u_max_idx": list(range(m)),
+            "z1": np.zeros(n), "z1_idx": list(range(n)),
+            "z1_min": np.zeros(n), "z1_min_idx": list(range(n)),
+            "z1_max": np.ones(n), "z1_max_idx": list(range(n)),
+            "zN": np.zeros(n), "zN_idx": list(range(n)),
+            "zN_min": np.zeros(n), "zN_min_idx": list(range(n)),
+            "zN_max": np.ones(n), "zN_max_idx": list(range(n)),
+            "n_init": 1, "n_init_ineq": 1,
+            "bools": {
+                "init_ctrl": True,
+                "free_final_time": False,
+                "equal_dt": True,
+                "ctcs": False,
+                "flag_autotune": "0",
+                "buff_dyn": "term"
             },
-            'eps_ctcs': 1e-3,
-            'yalmip_opts': {'solver': 'OSQP'},
+            "eps_ctcs": 1e-3,
+            "yalmip_opts": {"solver": "OSQP"},
         },
-        'zi': np.zeros(n),
-        'zi_idx': list(range(n)),
-        'zi_min': np.zeros(n),
-        'zi_min_idx': list(range(n)),
-        'zi_max': np.ones(n),
-        'zi_max_idx': list(range(n)),
-        'zf': np.zeros(n),
-        'zf_idx': list(range(n)),
-        'zf_min': np.zeros(n),
-        'zf_min_idx': list(range(n)),
-        'zf_max': np.ones(n),
-        'zf_max_idx': list(range(n)),
+        "zi": np.zeros(n),
+        "zi_idx": list(range(n)),
+        "zi_min": np.zeros(n),
+        "zi_min_idx": list(range(n)),
+        "zi_max": np.ones(n),
+        "zi_max_idx": list(range(n)),
+        "zf": np.zeros(n),
+        "zf_idx": list(range(n)),
+        "zf_min": np.zeros(n),
+        "zf_min_idx": list(range(n)),
+        "zf_max": np.ones(n),
+        "zf_max_idx": list(range(n)),
     }
 
-    print("Calling solve_subproblem() with dummy data...")
     try:
-        O = solve_subproblem(problem)
-        print("Solve complete.")
-        print("Output keys:", list(O.keys()))
-        print("Final state (zs[:, -1]):", O["zs"][:, -1])
-        print("Final control (us[:, -1]):", O["us"][:, -1])
-        print("Total duration Ts:", O["Ts"])
+        output = solve_subproblem(dummy_problem)
+        print("Solve completed.")
+        print("Final cost:", output.get("cost", "N/A"))
+        print("Final state (zs):", output.get("zs", "N/A")[:, -1])
+        print("Final control (us):", output.get("us", "N/A")[:, -1])
+        print("Ts:", output.get("Ts", "N/A"))
     except Exception as e:
-        print("Error during solve_subproblem:", str(e))
-
+        print("Solve failed:", e)
 
 if __name__ == "__main__":
     main()
+    
+    "Main function updated successfully."
+
+
