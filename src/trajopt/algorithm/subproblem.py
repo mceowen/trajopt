@@ -709,7 +709,6 @@ def display_baseline_subprob_status(O, problem, nt, ncost):
 ### UNIT TEST
 
 def main():
-    import numpy as np
 
     # Define minimal dummy problem input structure compatible with updated solve_subproblem
     N, n, m = 5, 3, 2
