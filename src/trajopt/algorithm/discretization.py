@@ -26,77 +26,77 @@ def set_ltv_indices(params):
     params['lds0_size'] = params['Sk_ind'][-1]
 
     params['lds0'][params['Ak_ind'] - 1] = np.reshape(np.eye(params['nz']), -1)
-    params['N_dens'] = 20
+    params['N_dens']    = 20
 
     return params
 
 # Compute exact discretization for linear dynamic system
 def discretize_type3a1_foh(zs_ref, us_ref, dts_ref, problem):
-    params = problem['params']
-    N = params['N']
+    params              = problem['params']
+    N                   = params['N']
 
-    traj_minus_data = {'zs_minus': [zs_ref[:, 0]]}
+    traj_minus_data     = {'zs_minus': [zs_ref[:, 0]]}
 
     # Loop through temporal nodes
     lds0_stack = []
     for k in range(N - 1):
         # Setup LTV system dynamics
-        params['lds0'][params['z_ind']] = zs_ref[:, k]
-        params['lds0'][params['Ak_ind']] = np.eye(params['n']).reshape(-1)
+        params['lds0'][params['z_ind']]     = zs_ref[:, k]
+        params['lds0'][params['Ak_ind']]    = np.eye(params['n']).reshape(-1)
         lds0_stack.append(params['lds0'])
 
-    lds0_stack = np.concatenate(lds0_stack)
+    lds0_stack                              = np.concatenate(lds0_stack)
 
     def derivs_step(tau, lds):
         return RHS_ltv(tau, lds, us_ref, dts_ref, problem)
 
     sol = solve_ivp(derivs_step, [0, 1], lds0_stack, method='RK45', atol=1e-6, rtol=1e-6)
 
-    lds_out_stack = sol.y.T
+    lds_out_stack   = sol.y.T
 
-    Ak = np.zeros((params['n'], params['n'], N - 1))
-    Bk = np.zeros((params['n'], params['m'], N - 1))
-    Bkp = np.zeros((params['n'], params['m'], N - 1))
-    Sk = np.zeros((params['n'], N - 1))
+    Ak              = np.zeros((params['n'], params['n'], N - 1))
+    Bk              = np.zeros((params['n'], params['m'], N - 1))
+    Bkp             = np.zeros((params['n'], params['m'], N - 1))
+    Sk              = np.zeros((params['n'], N - 1))
 
     # Extract dense values
     for k in range(N - 1):
-        lds_end = lds_out_stack[-1]
+        lds_end     = lds_out_stack[-1]
         traj_minus_data['zs_minus'].append(lds_end[(k * params['lds0_size'] + params['z_ind'])])
 
         # Reshape matrices
-        Ak_bar = lds_end[(k * params['lds0_size'] + params['Ak_ind'])].reshape((params['n'], params['n']))
-        Bk_bar = lds_end[(k * params['lds0_size'] + params['Bk_ind'])].reshape((params['n'], params['m']))
-        Bkp_bar = lds_end[(k * params['lds0_size'] + params['Bkp_ind'])].reshape((params['n'], params['m']))
-        Sk_bar = lds_end[(k * params['lds0_size'] + params['Sk_ind'])]
+        Ak_bar      = lds_end[(k * params['lds0_size'] + params['Ak_ind'])].reshape((params['n'], params['n']))
+        Bk_bar      = lds_end[(k * params['lds0_size'] + params['Bk_ind'])].reshape((params['n'], params['m']))
+        Bkp_bar     = lds_end[(k * params['lds0_size'] + params['Bkp_ind'])].reshape((params['n'], params['m']))
+        Sk_bar      = lds_end[(k * params['lds0_size'] + params['Sk_ind'])]
 
         # Fill in the next STM
         Ak[:, :, k] = Ak_bar
         Bk[:, :, k] = Ak_bar @ Bk_bar
         Bkp[:, :, k] = Ak_bar @ Bkp_bar
-        Sk[:, k] = Ak_bar @ Sk_bar
+        Sk[:, k]    = Ak_bar @ Sk_bar
 
     # Extract x_ref_minus traj (from integration)
-    zs_minus = np.array(traj_minus_data['zs_minus']).T
+    zs_minus        = np.array(traj_minus_data['zs_minus']).T
 
     return Ak, Bk, Bkp, Sk, zs_minus
 
 # Integrate linear system
 def RHS_ltv(tau, lds, us_ref, dts_ref, problem):
-    params = problem['params']
-    N = params['N']
+    params      = problem['params']
+    N           = params['N']
 
-    lds_dot = np.zeros_like(lds)
+    lds_dot     = np.zeros_like(lds)
 
-    Om_k = (1 - tau)
-    Om_kp = tau
+    Om_k        = (1 - tau)
+    Om_kp       = tau
 
-    u = np.dot(np.diag(Om_k * np.ones(us_ref.shape[0])) + np.diag(Om_kp * np.ones(us_ref.shape[0] - 1), 1), us_ref.T)
+    u           = np.dot(np.diag(Om_k * np.ones(us_ref.shape[0])) + np.diag(Om_kp * np.ones(us_ref.shape[0] - 1), 1), us_ref.T)
 
     for k in range(N - 1):
-        dts_k = dts_ref[k]
+        dts_k   = dts_ref[k]
         # Extract state info
-        x = lds[(k * params['lds0_size'] + params['z_ind'])]
+        x       = lds[(k * params['lds0_size'] + params['z_ind'])]
 
         # Extract continuous time Jacobians
         Ac, Bc, fc = compute_linsys_continuous(tau, x, u[k, :], problem)
@@ -105,11 +105,11 @@ def RHS_ltv(tau, lds, us_ref, dts_ref, problem):
         Phi_tau = lds[(k * params['lds0_size'] + params['Ak_ind'])].reshape((params['n'], params['n']))
 
         # Construct Jacobians w.r.t. tau
-        f_tau = dts_k * fc
-        A_tau = dts_k * Ac
-        B_tau = dts_k * Om_k * Bc
-        Bp_tau = dts_k * Om_kp * Bc
-        S_tau = fc
+        f_tau   = dts_k * fc
+        A_tau   = dts_k * Ac
+        B_tau   = dts_k * Om_k * Bc
+        Bp_tau  = dts_k * Om_kp * Bc
+        S_tau   = fc
 
         Phi_tau_inv = np.linalg.inv(Phi_tau)
 

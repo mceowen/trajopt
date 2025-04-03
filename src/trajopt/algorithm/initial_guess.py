@@ -20,21 +20,21 @@ def straight_line_initial_guess(params):
     dict: Updated params with initial guesses for trajectory and control.
     """
     # Initialization trajectory
-    params['dt_init'] = (params['T_init'] / (params['N'] - 1)) * np.ones(params['N'] - 1)
-    params['Ts_init'] = params['T_init'] / params['nondim']['nt']
-    params['dts_init'] = params['dt_init'] / params['nondim']['nt']
-    ts_init = np.cumsum(np.concatenate(([0], params['dts_init'])))
+    params['dt_init']   = (params['T_init'] / (params['N'] - 1)) * np.ones(params['N'] - 1)
+    params['Ts_init']   = params['T_init'] / params['nondim']['nt']
+    params['dts_init']  = params['dt_init'] / params['nondim']['nt']
+    ts_init             = np.cumsum(np.concatenate(([0], params['dts_init'])))
 
     # Initial state
-    zs_init = np.array([np.linspace(params['zi'][i], params['zf'][i], params['N']) for i in range(params['n'])])
+    zs_init             = np.array([np.linspace(params['zi'][i], params['zf'][i], params['N']) for i in range(params['n'])])
 
     # Initial control
-    us_init = np.zeros((params['m'], params['N']))
+    us_init             = np.zeros((params['m'], params['N']))
 
     # Create initial state and control vector
-    params['ts_init'] = ts_init
-    params['zs_init'] = zs_init
-    params['us_init'] = us_init
+    params['ts_init']   = ts_init
+    params['zs_init']   = zs_init
+    params['us_init']   = us_init
 
     return params
 
