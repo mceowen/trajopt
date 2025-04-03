@@ -704,8 +704,6 @@ def display_baseline_subprob_status(O, problem, nt, ncost):
         )
     )
 
-
-
 ### UNIT TEST
 
 def main():
