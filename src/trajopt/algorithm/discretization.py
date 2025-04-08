@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.integrate import solve_ivp
+import trajopt.algorithm.convexification as convexification
 
 def set_ltv_indices(params):
     """
@@ -23,7 +24,7 @@ def set_ltv_indices(params):
     params['Sk']        = np.zeros((params['nz'], 1, params['N'] - 1))
 
     params['lds0']      = np.zeros(params['Sk_ind'][-1])
-    params['lds0_size'] = params['Sk_ind'][-1]
+    params['lds0_size'] = params['Sk_ind'][-1] - 1
 
     params['lds0'][params['Ak_ind'] - 1] = np.reshape(np.eye(params['nz']), -1)
     params['N_dens']    = 20
@@ -53,6 +54,7 @@ def discretize_type3a1_foh(zs_ref, us_ref, dts_ref, problem):
     sol = solve_ivp(derivs_step, [0, 1], lds0_stack, method='RK45', atol=1e-6, rtol=1e-6)
 
     lds_out_stack   = sol.y.T
+    lds_end         = lds_out_stack[-1]
 
     Ak              = np.zeros((params['n'], params['n'], N - 1))
     Bk              = np.zeros((params['n'], params['m'], N - 1))
@@ -61,7 +63,6 @@ def discretize_type3a1_foh(zs_ref, us_ref, dts_ref, problem):
 
     # Extract dense values
     for k in range(N - 1):
-        lds_end     = lds_out_stack[-1]
         traj_minus_data['zs_minus'].append(lds_end[(k * params['lds0_size'] + params['z_ind'])])
 
         # Reshape matrices
@@ -109,7 +110,7 @@ def RHS_ltv(tau, lds, us_ref, dts_ref, problem):
         x = lds[(k - 1) * params['lds0_size'] + params['z_ind']]
 
         # Extract continuous time Jacobians
-        Ac, Bc, fc = compute_linsys_continuous(tau, x, u[k, :], problem)
+        Ac, Bc, fc = convexification.compute_linsys_continuous(tau, x, u[k, :], problem)
 
         # Extract STM
         Phi_tau = lds[(k - 1) * params['lds0_size'] + params['Ak_ind']].reshape(params['n'], params['n'])
@@ -121,7 +122,7 @@ def RHS_ltv(tau, lds, us_ref, dts_ref, problem):
         Bp_tau = dts_k * Om_kp * Bc
         S_tau = fc
 
-        Phi_tau_inv = np.linalg.inv(Phi_tau)
+        Phi_tau_inv = np.linalg.pinv(Phi_tau)
 
         # Construct derivatives
         x_dot = f_tau
@@ -281,18 +282,6 @@ def RHS_ltv_ctcs(tau, lds, us_ref, dts_ref, problem):
         lds_dot[k * params['lds0_size'] + params['Sk_ind']] = S_tau_dot
 
     return lds_dot
-
-# TESTING
-def compute_linsys_continuous(tau, x, u, problem):
-    # This function should be implemented based on the specific problem
-    # For now, returning dummy values
-
-    # TODO: Implement this function based on the specific problem
-
-    Ac = np.zeros((x.shape[0], x.shape[0]))
-    Bc = np.zeros((x.shape[0], u.shape[0]))
-    fc = np.zeros(x.shape[0])
-    return Ac, Bc, fc
 
 # Example usage
 if __name__ == "__main__":

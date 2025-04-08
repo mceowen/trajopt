@@ -8,6 +8,7 @@ import time
 # trajopt imports
 import trajopt.algorithm.hyperparameters as hp
 import trajopt.algorithm.scaling as scaling
+import trajopt.algorithm.convexification as convexification
 import trajopt.algorithm.discretization as discretization
 import trajopt.algorithm.convergence as convergence
 import trajopt.utils.tools as tools
@@ -15,18 +16,18 @@ import trajopt.utils.tools as tools
 
 def solve_subproblem(problem):
     inputs, model_data = baseline_subprob_inputs(problem)
-    problem.custom_inputs(problem, inputs)
+    #problem.custom_inputs(problem, inputs)
 
     solution_vars = baseline_subprob_variables(inputs)
 
     constraints = []
     constraints += baseline_subprob_constraints(inputs, solution_vars)
-    constraints += problem.custom_constraints(problem, inputs, solution_vars)
+    #constraints += problem.custom_constraints(problem, inputs, solution_vars)
 
-    PTR_COST = baseline_subprob_cost(inputs, solution_vars)
+    PTR_COST    = baseline_subprob_cost(inputs, solution_vars)
 
-    objective = cp.Minimize(PTR_COST)
-    prob = cp.Problem(objective, constraints)
+    objective   = cp.Minimize(PTR_COST)
+    prob        = cp.Problem(objective, constraints)
     solve_stats = prob.solve(**inputs["cvxpy_opts"])
 
     soln_stats = {
@@ -43,8 +44,11 @@ def solve_subproblem(problem):
     )
 
     problem.custom_outputs(problem, inputs, solution_vars, O)
+
     O = convergence.check_convergence_tolerance(O, problem)
+
     baseline_autotune(problem, O)
+    
     display_baseline_subprob_status(O, problem, nt=inputs["params"]["nt"], ncost=inputs["params"]["ncost"])
 
     return O
@@ -59,9 +63,9 @@ def baseline_subprob_inputs(problem):
     start = time.time()
     Ak, Bk, Bkp, Sk, zs_minus = discretization.compute_linsys_discrete(I['zs_ref'], I['us_ref'], I['dts_ref'], problem)
     prop_time = time.time() - start
-    
-    dcostdz, dcostdu, cost = problem.compute_cost(I['ts_ref'], I['zs_ref'], I['us_ref'], problem)
-    dgdz, dgdu, g = problem.problem.compute_path_constraints(I['ts_ref'], I['zs_ref'], I['us_ref'], problem)
+
+    dcostdz, dcostdu, cost  = convexification.compute_cost(I['ts_ref'], I['zs_ref'], I['us_ref'], problem)
+    dgdz, dgdu, g           = convexification.compute_path_constraints(I['ts_ref'], I['zs_ref'], I['us_ref'], problem)
 
     # Reference trajectories
     ts_ref = I['ts_ref']
