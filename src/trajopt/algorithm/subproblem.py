@@ -51,7 +51,7 @@ def solve_subproblem(problem):
 
 
 def baseline_subprob_inputs(problem):
-    I = problem['I'][-1][0]
+    I = problem['I'][-1]
     iter_num = I['iter_num']
     case_flag = problem['params']['case_flag']
 
@@ -59,7 +59,7 @@ def baseline_subprob_inputs(problem):
     start = time.time()
     Ak, Bk, Bkp, Sk, zs_minus = discretization.compute_linsys_discrete(I['zs_ref'], I['us_ref'], I['dts_ref'], problem)
     prop_time = time.time() - start
-
+    
     dcostdz, dcostdu, cost = problem.compute_cost(I['ts_ref'], I['zs_ref'], I['us_ref'], problem)
     dgdz, dgdu, g = problem.problem.compute_path_constraints(I['ts_ref'], I['zs_ref'], I['us_ref'], problem)
 
@@ -706,8 +706,7 @@ def display_baseline_subprob_status(O, problem, nt, ncost):
 
 ### UNIT TEST
 
-def main():
-
+if __name__ == "__main__":
     # Define minimal dummy problem input structure compatible with updated solve_subproblem
     N, n, m = 5, 3, 2
     dummy_problem = {
@@ -772,6 +771,7 @@ def main():
             },
             "eps_ctcs": 1e-3,
             "yalmip_opts": {"solver": "OSQP"},
+            "case_flag": 1,
         },
         "zi": np.zeros(n),
         "zi_idx": list(range(n)),
@@ -787,18 +787,15 @@ def main():
         "zf_max_idx": list(range(n)),
     }
 
-    try:
-        output = solve_subproblem(dummy_problem)
-        print("Solve completed.")
-        print("Final cost:", output.get("cost", "N/A"))
-        print("Final state (zs):", output.get("zs", "N/A")[:, -1])
-        print("Final control (us):", output.get("us", "N/A")[:, -1])
-        print("Ts:", output.get("Ts", "N/A"))
-    except Exception as e:
-        print("Solve failed:", e)
+    dummy_problem['params'] = discretization.set_ltv_indices(dummy_problem['params'])
 
-if __name__ == "__main__":
-    main()
+    output = solve_subproblem(dummy_problem)
+    breakpoint()
+    print("Solve completed.")
+    print("Final cost:", output.get("cost", "N/A"))
+    print("Final state (zs):", output.get("zs", "N/A")[:, -1])
+    print("Final control (us):", output.get("us", "N/A")[:, -1])
+    print("Ts:", output.get("Ts", "N/A"))
     
     "Main function updated successfully."
 

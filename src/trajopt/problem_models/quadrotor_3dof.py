@@ -1,4 +1,4 @@
-from trajopt.defaults.set_defaults import set_params_default, set_params_constraint_default
+from trajopt.utils.set_defaults import set_params_default, set_params_constraint_default
 from trajopt.algorithm.initial_guess import nonlinear_initial_guess, ctcs_initial_guess, waypoint_initial_guess
 from trajopt.algorithm.convergence import set_convergence_tolerance
 
@@ -23,7 +23,7 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
     """
     # extracts params if "problem" parent struct is passed in
     if hasattr(params, 'params'):
-        params = params.params
+        params = params['params']
 
     # extract constant param values
     m       = int( params['m'] )

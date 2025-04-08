@@ -83,49 +83,59 @@ def discretize_type3a1_foh(zs_ref, us_ref, dts_ref, problem):
 
 # Integrate linear system
 def RHS_ltv(tau, lds, us_ref, dts_ref, problem):
-    params      = problem['params']
-    N           = params['N']
 
-    lds_dot     = np.zeros_like(lds)
+    # Initialize
+    lds_dot = np.zeros_like(lds)
+    params = problem['params']
+    N = params['N']
 
-    Om_k        = (1 - tau)
-    Om_kp       = tau
+    # Extract times and FOH control input
+    Om_k = 1 - tau
+    Om_kp = tau
 
-    u           = np.dot(np.diag(Om_k * np.ones(us_ref.shape[0])) + np.diag(Om_kp * np.ones(us_ref.shape[0] - 1), 1), us_ref.T)
+    nrows, ncols = us_ref.shape
+    rows = nrows if nrows > ncols else ncols
+
+    v_1 = Om_k * np.ones((rows, 1))
+    v_2 = Om_kp * np.ones((rows - 1, 1))
+    Om = np.diagflat(v_1) + np.diagflat(v_2, 1)
+
+    u = Om @ us_ref.T
 
     for k in range(N - 1):
-        dts_k   = dts_ref[k]
+        dts_k = dts_ref[k]
+
         # Extract state info
-        x       = lds[(k * params['lds0_size'] + params['z_ind'])]
+        x = lds[(k - 1) * params['lds0_size'] + params['z_ind']]
 
         # Extract continuous time Jacobians
         Ac, Bc, fc = compute_linsys_continuous(tau, x, u[k, :], problem)
 
         # Extract STM
-        Phi_tau = lds[(k * params['lds0_size'] + params['Ak_ind'])].reshape((params['n'], params['n']))
+        Phi_tau = lds[(k - 1) * params['lds0_size'] + params['Ak_ind']].reshape(params['n'], params['n'])
 
         # Construct Jacobians w.r.t. tau
-        f_tau   = dts_k * fc
-        A_tau   = dts_k * Ac
-        B_tau   = dts_k * Om_k * Bc
-        Bp_tau  = dts_k * Om_kp * Bc
-        S_tau   = fc
+        f_tau = dts_k * fc
+        A_tau = dts_k * Ac
+        B_tau = dts_k * Om_k * Bc
+        Bp_tau = dts_k * Om_kp * Bc
+        S_tau = fc
 
         Phi_tau_inv = np.linalg.inv(Phi_tau)
 
         # Construct derivatives
         x_dot = f_tau
-        A_tau_dot = np.dot(A_tau, Phi_tau)
-        B_tau_dot = np.dot(Phi_tau_inv, B_tau)
-        Bp_tau_dot = np.dot(Phi_tau_inv, Bp_tau)
-        S_tau_dot = np.dot(Phi_tau_inv, S_tau)
+        A_tau_dot = A_tau @ Phi_tau
+        B_tau_dot = Phi_tau_inv @ B_tau
+        Bp_tau_dot = Phi_tau_inv @ Bp_tau
+        S_tau_dot = Phi_tau_inv @ S_tau
 
         # Setup linear system properly
-        lds_dot[(k * params['lds0_size'] + params['z_ind'])] = x_dot
-        lds_dot[(k * params['lds0_size'] + params['Ak_ind'])] = A_tau_dot.reshape(-1)
-        lds_dot[(k * params['lds0_size'] + params['Bk_ind'])] = B_tau_dot.reshape(-1)
-        lds_dot[(k * params['lds0_size'] + params['Bkp_ind'])] = Bp_tau_dot.reshape(-1)
-        lds_dot[(k * params['lds0_size'] + params['Sk_ind'])] = S_tau_dot
+        lds_dot[(k - 1) * params['lds0_size'] + params['z_ind']] = x_dot
+        lds_dot[(k - 1) * params['lds0_size'] + params['Ak_ind']] = A_tau_dot.flatten()
+        lds_dot[(k - 1) * params['lds0_size'] + params['Bk_ind']] = B_tau_dot.flatten()
+        lds_dot[(k - 1) * params['lds0_size'] + params['Bkp_ind']] = Bp_tau_dot.flatten()
+        lds_dot[(k - 1) * params['lds0_size'] + params['Sk_ind']] = S_tau_dot
 
     return lds_dot
 
