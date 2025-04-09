@@ -186,7 +186,7 @@ def set_params_constraint_default(params): # TODO: Test
     M_state_d2nd_vec = params['nondim']['M_state_d2nd']
     params['nondim']['M_term_d2nd'] = np.diag(np.concatenate((M_state_d2nd_vec[params['zf_idx']], 
                                                              M_state_d2nd_vec[params['zf_min_idx']], 
-                                                             M_state_d2nd_vec[params['zf_max_idx']])))
+                                                             M_state_d2nd_vec[params['zf_max_idx']]))).copy()
 
     # Discrete LTV matrix data
     params = set_ltv_indices(params)
@@ -246,7 +246,7 @@ if __name__ == "__main__":
     # Now call set_params_constraint_default with params
     print('..:: Calling set_params_constraint_default ::..')
     params = set_params_constraint_default(params)
-    
+
     # check if conv_data exists again (it should)
     tf = 'conv_data' in params # true/false
     print('conv_data in params?: ', tf)

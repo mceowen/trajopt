@@ -17,7 +17,7 @@ def set_convergence_tolerance(params):
     ctcs_mult_state     = params['conv']['setup']['ctcs_mult_state']
     ctcs_mult_cnst      = params['conv']['setup']['ctcs_mult_cnst']
 
-    if len(params['conv']['setup']['eps_state']) == 1:
+    if type(params['conv']['setup']['eps_state']) == float:
         eps_state       = params['conv']['setup']['eps_state'] * np.ones(n)
         M_state_d2nd    = np.eye(n)
     else:
@@ -55,7 +55,7 @@ def set_convergence_tolerance(params):
     n_path = params['n_path']
 
     if n_path > 0:
-        if len(params['conv']['setup']['eps_path']) == 1:
+        if type(params['conv']['setup']['eps_path']) == float:
             eps_path = params['conv']['setup']['eps_path'] * np.ones(n_path)
             M_path_d2nd = np.eye(n_path)
             eps_path_nd = M_path_d2nd @ eps_path
@@ -81,7 +81,7 @@ def set_convergence_tolerance(params):
     n_nfz = params['n_nfz']
 
     if n_nfz > 0:
-        if len(params['conv']['setup']['eps_nfz']) == 1:
+        if type(params['conv']['setup']['eps_nfz']) == float:
             eps_nfz = params['conv']['setup']['eps_nfz'] * np.ones(n_nfz)
             M_nfz_d2nd = np.eye(n_nfz)
             eps_nfz_nd = M_nfz_d2nd @ eps_nfz
@@ -107,7 +107,7 @@ def set_convergence_tolerance(params):
     n_aux = params['n_aux']
 
     if n_aux > 0:
-        if len(params['conv']['setup']['eps_aux']) == 1:
+        if type(params['conv']['setup']['eps_aux']) == float:
             eps_aux = params['conv']['setup']['eps_aux'] * np.ones(n_aux)
             M_aux_d2nd = np.eye(n_aux)
         else:
@@ -132,7 +132,7 @@ def set_convergence_tolerance(params):
     n_term = params['n_term'] + params['n_term_ineq']
 
     if n_term > 0:
-        if len(params['conv']['setup']['eps_term']) == 1 and (params['n_term'] + params['n_term_ineq']) != 1:
+        if type(params['conv']['setup']['eps_term']) == float and (params['n_term'] + params['n_term_ineq']) != 1:
             eps_term = params['conv']['setup']['eps_term'] * np.ones(n_term)
             M_term_d2nd = np.eye(n_term)
         else:
@@ -153,7 +153,7 @@ def set_convergence_tolerance(params):
     params['conv']['Wconv_term_vec'] = np.diag(Wconv_term).copy()
 
     # MULTIPLE SHOOTING DYNAMICS DEFECT CONVERGENCE
-    if len(params['conv']['setup']['eps_defect']) == 1:
+    if type(params['conv']['setup']['eps_defect']) == float:
         eps_defect = params['conv']['setup']['eps_defect'] * np.ones(n)
         M_defect_d2nd = np.eye(n)
     else:
@@ -192,7 +192,10 @@ def set_convergence_tolerance(params):
             np.diag(params['nondim']['M_cnst_d2nd'])
         ]))
     
-    eps_dyn_nd = M_dyn_d2nd @ eps_dyn
+    if type(eps_dyn) == np.ndarray: 
+        eps_dyn_nd = M_dyn_d2nd @ eps_dyn
+    elif type(eps_dyn) == float:
+        eps_dyn_nd = M_dyn_d2nd * eps_dyn
     eps_min_dyn = np.min(eps_dyn_nd)
     
     if np.all(eps_dyn_nd == 0):
@@ -380,7 +383,7 @@ if __name__ == "__main__":
             }
         },
         'bools': {
-            'ctcs': True
+            'ctcs': False
         },
         'nondim': {
             'M_state_d2nd': np.eye(3),
