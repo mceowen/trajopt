@@ -86,7 +86,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     """
     # Initialize
     params = defaults.set_params_default(config)
-    params['case_flag']             = 1    # case1: bank angle only
+    params['case_flag']                = 1    # case1: bank angle only
     params['bools']['auto_jac']        = 0    # (1=symbolic jacobians for dynamics, 0=analytical)
     params['bools']['auto_jac_aero']   = 0    # (1=symbolic jacobians for aerodynamics, 0=analytical)
     params['bools']['auto_jac_cnst']   = 0    # (1=symbolic jacobians for constraints, 0=analytical)
@@ -103,7 +103,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['T_init'] = 10
 
     # Define Cost Function
-    params['cost'] = lambda t, z, u: np.dot(np.transpose(u), u) #equivalent to dot product...TODO this will be a method at some point
+    params['cost'] = lambda t, z, u, problem: np.dot(np.transpose(u), u) 
 
 
     #======================
@@ -376,6 +376,50 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['save_var_names'] = ['ts_opt', 'zs_opt', 'us_opt', 'params', 'O']
 
     return params
+
+def system_dynamics(ts,zs,us,params,t_vec=None):
+    """
+    x1, x2: r (position)
+    u1, u2: v (velocity)
+    """
+    # extracts params if "problem" parent struct is passed in
+    if hasattr(params, 'params'):
+        params = params['params']
+
+    # extract constant param values
+    m       = int( params['m'] )
+    n       = int( params['n'] )
+    mass    = params['mass']
+    ge      = params['ge']
+
+    # extract states
+    r = zs[0:3]
+    v = zs[3:6]
+
+    # extract controls 
+    if t_vec is None:
+        us2 = us
+    else:
+        us2 = np.empty(m)
+        for i in range(m):
+            interp = interp1d(t_vec, us[i,:]) # does this work?
+            us2[i] = interp(ts)
+            
+    # extract control
+    T = us2
+
+    # compute velocity and acceleration
+    xDot = np.empty(6) # initialize
+    xDot[0:3] = v
+    xDot[3:6] = T/mass + ge
+
+    if np.issubdtype(r.dtype, np.number):
+        if r[2] <= -1: # set xDot = 0 if the vehicle hits the ground
+            xDot = np.zeros(n)
+    elif np.issubdtype(r.dtype, np.nan) or any(np.isinf(r)):
+        breakpoint()
+        
+    return xDot
 
 def analytical_linsys(ts, zs, us, problem):
     
@@ -650,51 +694,6 @@ def set_nondim_params(params): # TODO: Test
     params['nondim']['ncost'] = ncost
 
     return params
-
-
-def system_dynamics(ts,zs,us,params,t_vec=None):
-    """
-    x1, x2: r (position)
-    u1, u2: v (velocity)
-    """
-    # extracts params if "problem" parent struct is passed in
-    if hasattr(params, 'params'):
-        params = params['params']
-
-    # extract constant param values
-    m       = int( params['m'] )
-    n       = int( params['n'] )
-    mass    = params['mass']
-    ge      = params['ge']
-
-    # extract states
-    r = zs[0:3]
-    v = zs[3:6]
-
-    # extract controls 
-    if t_vec is None:
-        us2 = us
-    else:
-        us2 = np.empty(m)
-        for i in range(m):
-            interp = interp1d(t_vec, us[i,:]) # does this work?
-            us2[i] = interp(ts)
-            
-    # extract control
-    T = us2
-
-    # compute velocity and acceleration
-    xDot = np.empty(6) # initialize
-    xDot[0:3] = v
-    xDot[3:6] = T/mass + ge
-
-    if np.issubdtype(r.dtype, np.number):
-        if r[2] <= -1: # set xDot = 0 if the vehicle hits the ground
-            xDot = np.zeros(n)
-    elif np.issubdtype(r.dtype, np.nan) or any(np.isinf(r)):
-        breakpoint()
-        
-    return xDot
 
 
 # # testing defaults.set_nondim_params()

@@ -718,7 +718,7 @@ if __name__ == "__main__":
             'N': 40,
             'T_init': 10,
             'bools': {
-                'flag_nfz': 1,
+                'flag_nfz': 2,
                 'flag_autotune': 0,
                 'free_final_time': 1,
                 'buff_dyn': 0,
