@@ -2,14 +2,6 @@ from trajopt.utils.set_defaults import set_params_default, set_params_constraint
 from trajopt.algorithm.initial_guess import nonlinear_initial_guess, ctcs_initial_guess, waypoint_initial_guess
 from trajopt.algorithm.convergence import set_convergence_tolerance
 
-def test_func():
-    return "Hello, World!"
-
-# Skye Mceowen
-# Feb. 17th, 2024
-# 2D circular NFZ
-# Single integrator linear dynamics
-
 # TODO consolidate imports 
 from scipy.interpolate import interp1d
 from scipy.integrate import solve_ivp
@@ -59,80 +51,6 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
         breakpoint()
         
     return xDot
-
-
-def set_nondim_params(params): # TODO: Test
-    """
-    Initializes all nondimensional parameters
-    """
-    # Extract dimension constants
-    path_lim = params['path_lim']
-    n_path = params['n_path']
-    n_nfz = params['n_nfz']
-    n = params['n']
-    m = params['m']
-
-    if params['bools']['nondim']:
-        # set nondim params
-        nd = 10
-        nv = 10
-        nt = nd / nv
-        nt_inv = 1 / nt
-        na = nv / nt
-        nm = 1
-        nm_dot = 1
-        nf = 1
-        np_ineq = np.ones(n_nfz) * nd
-        ncost = nv
-    else:
-        # set dim params
-        nt = 1
-        nt_inv = 1
-        nd = 1
-        nv = 1
-        na = 1
-        nm = 1
-        nm_dot = 1
-        nf = 1
-        np_ineq = np.ones(n_path + n_nfz)
-        ncost = 1
-
-    nd_state = np.array([1/nd, 1/nd, 1/nd, 1/nv, 1/nv, 1/nv])
-
-    if 'nondim' not in params: # initialize if it doesn't already exist
-       params['nondim'] = {}
-
-    params['nondim']['M_state_d2nd'] = np.diag(nd_state).copy()
-    params['nondim']['M_ctrl_d2nd'] = np.diag(np.ones(m) / na).copy()
-
-    params['nondim']['M_term_d2nd'] = np.diag(np.concatenate([
-        nd_state[params['zf_idx']],
-        nd_state[params['zf_min_idx']],
-        nd_state[params['zf_max_idx']]
-    ])).copy()
-    params['nondim']['M_cnst_d2nd'] = np.diag(np_ineq ** -1).copy()
-    params['nondim']['M_nfz_d2nd'] = np.diag(np_ineq[params['nfz_idx']] ** -1).copy()
-
-    nd_dyn = np.array([1/nv, 1/nv, 1/nv, 1/na, 1/na, 1/na])
-    params['nondim']['M_dyn_d2nd'] = np.diag(nd_dyn).copy()
-
-    params['nondim']['M_cost_d2nd'] = 1 / ncost
-
-    params['nondim']['nu_rad_ind'] = []
-
-    # add scalar nondim variables to nondim substruct
-    params['nondim']['nd'] = nd
-    params['nondim']['na'] = na
-    params['nondim']['nt'] = nt
-    params['nondim']['nt_inv'] = nt_inv
-    params['nondim']['nv'] = nv
-    params['nondim']['nm'] = nm
-    params['nondim']['nm_dot'] = nm_dot
-    params['nondim']['nf'] = nf
-    params['nondim']['np_ineq'] = np_ineq
-    params['nondim']['ncost'] = ncost
-
-    return params
 
 
 def config_params(config=None): # replacing init_params_struct TODO: Test
@@ -436,6 +354,79 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
 
     return params
 
+
+def set_nondim_params(params): # TODO: Test
+    """
+    Initializes all nondimensional parameters
+    """
+    # Extract dimension constants
+    path_lim = params['path_lim']
+    n_path = params['n_path']
+    n_nfz = params['n_nfz']
+    n = params['n']
+    m = params['m']
+
+    if params['bools']['nondim']:
+        # set nondim params
+        nd = 10
+        nv = 10
+        nt = nd / nv
+        nt_inv = 1 / nt
+        na = nv / nt
+        nm = 1
+        nm_dot = 1
+        nf = 1
+        np_ineq = np.ones(n_nfz) * nd
+        ncost = nv
+    else:
+        # set dim params
+        nt = 1
+        nt_inv = 1
+        nd = 1
+        nv = 1
+        na = 1
+        nm = 1
+        nm_dot = 1
+        nf = 1
+        np_ineq = np.ones(n_path + n_nfz)
+        ncost = 1
+
+    nd_state = np.array([1/nd, 1/nd, 1/nd, 1/nv, 1/nv, 1/nv])
+
+    if 'nondim' not in params: # initialize if it doesn't already exist
+       params['nondim'] = {}
+
+    params['nondim']['M_state_d2nd'] = np.diag(nd_state).copy()
+    params['nondim']['M_ctrl_d2nd'] = np.diag(np.ones(m) / na).copy()
+
+    params['nondim']['M_term_d2nd'] = np.diag(np.concatenate([
+        nd_state[params['zf_idx']],
+        nd_state[params['zf_min_idx']],
+        nd_state[params['zf_max_idx']]
+    ])).copy()
+    params['nondim']['M_cnst_d2nd'] = np.diag(np_ineq ** -1).copy()
+    params['nondim']['M_nfz_d2nd'] = np.diag(np_ineq[params['nfz_idx']] ** -1).copy()
+
+    nd_dyn = np.array([1/nv, 1/nv, 1/nv, 1/na, 1/na, 1/na])
+    params['nondim']['M_dyn_d2nd'] = np.diag(nd_dyn).copy()
+
+    params['nondim']['M_cost_d2nd'] = 1 / ncost
+
+    params['nondim']['nu_rad_ind'] = []
+
+    # add scalar nondim variables to nondim substruct
+    params['nondim']['nd'] = nd
+    params['nondim']['na'] = na
+    params['nondim']['nt'] = nt
+    params['nondim']['nt_inv'] = nt_inv
+    params['nondim']['nv'] = nv
+    params['nondim']['nm'] = nm
+    params['nondim']['nm_dot'] = nm_dot
+    params['nondim']['nf'] = nf
+    params['nondim']['np_ineq'] = np_ineq
+    params['nondim']['ncost'] = ncost
+
+    return params
 
 # # testing set_nondim_params()
 # if __name__ == "__main__":
