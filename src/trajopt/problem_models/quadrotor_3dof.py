@@ -110,14 +110,10 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     # Path /NFZ constraints
     #======================
     # no fly zones, specified by position and radius [rad]
-    if params['bools']['flag_nfz'] == 0:
-        xc = np.array([])
-        yc = np.array([])
-        rc = np.array([])
-    elif params['bools']['flag_nfz'] == 1:
-        xc = 5
-        yc = 4
-        rc = 2
+    if params['bools']['flag_nfz'] == 1:
+        xc = np.array([5])
+        yc = np.array([4])
+        rc = np.array([2])
     elif params['bools']['flag_nfz'] == 2:
         xc = np.array([2.5, 5,  2.5, 5.5,  8,  5.5])  # 5
         yc = np.array([2,   2.5,  5, 5.25, 5.5, 8])   # 4
@@ -129,7 +125,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
 
     params.setdefault('obs', {})['posc'] = np.array([xc, yc]) # xc and yc may be vectors
     params['obs']['rc'] = rc
-    
+
     params['nfz_idx'] = np.arange(0, xc.size)
     params['n_nfz'] = len(params['nfz_idx'])
 
@@ -140,7 +136,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
 
     ### Set dim/nondim params based on flag ###
     # scaling values for nondim
-    params = defaults.set_nondim_params(params)
+    params = set_nondim_params(params)
 
     #====================
     # Boundary Conditions
@@ -422,21 +418,7 @@ def analytical_linsys(ts, zs, us, problem):
     return linsys
 
 def nonlinear_inequality_constraints(ts, zs, us, params):
-    """
-    Compute nonlinear inequality constraints: path constraints and no-fly zones.
 
-    Parameters:
-        ts     : (N,) time array
-        zs     : (n, N) state array
-        us     : (m, N) control array (unused in current logic)
-        params : dict with fields:
-                 - n_nfz
-                 - obs["posc"], obs["rc"]
-                 - path constraints (placeholder, unused)
-
-    Returns:
-        P : (n_ineq, N) constraint matrix, where each column is P[:, k]
-    """
     # Extract nested params if needed
     if "params" in params:
         params = params["params"]
@@ -744,7 +726,7 @@ if __name__ == "__main__":
             'N': 40,
             'T_init': 10,
             'bools': { # config['params']['bools']
-                'flag_nfz': 0,
+                'flag_nfz': 2,
                 'flag_autotune': 0,
                 'free_final_time': 1,
                 'buff_dyn': 0,
