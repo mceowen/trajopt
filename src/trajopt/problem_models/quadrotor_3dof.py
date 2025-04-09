@@ -1,56 +1,83 @@
-from trajopt.utils.set_defaults import set_params_default, set_params_constraint_default
-from trajopt.algorithm.initial_guess import nonlinear_initial_guess, ctcs_initial_guess, waypoint_initial_guess
-from trajopt.algorithm.convergence import set_convergence_tolerance
+import trajopt.utils.set_defaults           as defaults
+import trajopt.algorithm.initial_guess      as guess
+import trajopt.algorithm.convergence        as convergence
+import trajopt.algorithm.convexification    as convexify
+import trajopt.algorithm.discretization     as discretize
 
 # TODO consolidate imports 
-from scipy.interpolate import interp1d
-from scipy.integrate import solve_ivp
+from scipy.interpolate  import interp1d
+from scipy.integrate    import solve_ivp
 import numpy as np
 
 
-def system_dynamics(ts,zs,us,params,t_vec=None):
+def ocp(config):
     """
-    x1, x2: r (position)
-    u1, u2: v (velocity)
+    Define the optimal control problem (OCP):
+    - cost
+    - constraints
+    - dynamics
+
+    Parameters:
+        config : configuration dictionary or object
+
+    Returns:
+        problem : dictionary describing the OCP
     """
-    # extracts params if "problem" parent struct is passed in
-    if hasattr(params, 'params'):
-        params = params['params']
+    problem = {}
 
-    # extract constant param values
-    m       = int( params['m'] )
-    n       = int( params['n'] )
-    mass    = params['mass']
-    ge      = params['ge']
+    problem["name"] = "3DoF Quadrotor"
 
-    # extract states
-    r = zs[0:3]
-    v = zs[3:6]
+    # Ingest parameters
+    problem["config"]   = config
+    params              = config_params(config)
+    problem["params"]   = params
+    problem["ts_init"]  = params["ts_init"]
+    problem["zs_init"]  = params["zs_init"]
+    problem["us_init"]  = params["us_init"]
 
-    # extract controls 
-    if t_vec is None:
-        us2 = us
+    # Default state/control bounds
+    problem             = defaults.set_problem_default(problem)
+
+    # Cost function
+    problem["cost"]     = params["cost"]
+    problem["cost_init"] = problem["cost"](params["ts_init"], params["zs_init"], params["us_init"], problem)
+
+    if params["bools"]["auto_jac"]:
+        problem["lin_cost"] = convexify.generate_jacobians(
+            lambda ts, zs, us: problem["cost"](ts, zs, us, problem),
+            problem
+        )
     else:
-        us2 = np.empty(m)
-        for i in range(m):
-            interp = interp1d(t_vec, us[i,:]) # does this work?
-            us2[i] = interp(ts)
-            
-    # extract control
-    T = us2
+        problem["lin_cost"] = lambda ts, zs, us: analytical_cost(ts, zs, us, problem)
 
-    # compute velocity and acceleration
-    xDot = np.empty(6) # initialize
-    xDot[0:3] = v
-    xDot[3:6] = T/mass + ge
+    # Dynamics
+    problem["xdot"] = lambda ts, zs, us, t_vec: system_dynamics(ts, zs, us, problem, t_vec)
 
-    if np.issubdtype(r.dtype, np.number):
-        if r[2] <= -1: # set xDot = 0 if the vehicle hits the ground
-            xDot = np.zeros(n)
-    elif np.issubdtype(r.dtype, np.nan) or any(np.isinf(r)):
-        breakpoint()
-        
-    return xDot
+    if params["bools"]["auto_jac"]:
+        problem["lin_dyn"] = convexify.generate_jacobians(
+            lambda ts, zs, us: system_dynamics(ts, zs, us, problem),
+            problem
+        )
+    else:
+        problem["lin_dyn"] = lambda ts, zs, us: analytical_linsys(ts, zs, us, problem)
+
+    # Nonconvex inequality constraints
+    problem["path_lim"] = params["path_lim"]
+    problem["P"] = lambda ts, zs, us, t_vec: nonlinear_inequality_constraints(ts, zs, us, problem)
+
+    if params["bools"]["auto_jac_cnst"]:
+        problem["lin_constr"] = convexify.generate_jacobians(
+            lambda ts, zs, us: nonlinear_inequality_constraints(ts, zs, us, problem),
+            problem
+        )
+    else:
+        problem["lin_constr"] = lambda ts, zs, us: analytical_inequality_constraints(ts, zs, us, problem)
+
+    # Plotting
+    # TODO
+    # problem["plots"] = lambda prob: init_plot_struct(prob)
+
+    return problem
 
 
 def config_params(config=None): # replacing init_params_struct TODO: Test
@@ -58,7 +85,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     Configures parameters dictionary for quadrotor_3dof example problem
     """
     # Initialize
-    params = set_params_default(config)
+    params = defaults.set_params_default(config)
     params['case_flag']             = 1    # case1: bank angle only
     params['bools']['auto_jac']        = 0    # (1=symbolic jacobians for dynamics, 0=analytical)
     params['bools']['auto_jac_aero']   = 0    # (1=symbolic jacobians for aerodynamics, 0=analytical)
@@ -113,7 +140,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
 
     ### Set dim/nondim params based on flag ###
     # scaling values for nondim
-    params = set_nondim_params(params)
+    params = defaults.set_nondim_params(params)
 
     #====================
     # Boundary Conditions
@@ -160,7 +187,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['dts_max'] = Ts_max / (params['N'] - 1)
 
     ### Set default constraint data ###
-    params = set_params_constraint_default(params)
+    params = defaults.set_params_constraint_default(params)
 
 
     #======================================
@@ -169,13 +196,13 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     if params['bools']['free_final_time'] and not params['bools']['buff_dyn']:
         us_range = ( -params['ge'].reshape(-1,1) * params['mass'] ) @ np.ones((1, 2)) + np.array([0.08, 0.08, 0]).reshape(-1,1)
         # need to manually set the left-hand side vector to a column vector for multiplacation to work
-        params = nonlinear_initial_guess(us_range, params)
+        params = guess.nonlinear_initial_guess(us_range, params)
     else:
-        params = waypoint_initial_guess(params)  # waypoint_initial_guess(params) # straight_line_initial_guess
+        params = guess.waypoint_initial_guess(params) 
         params['us_init'] = ( -params['ge'].reshape(-1,1) * params['mass'] ) @ np.ones((1, params['N']))
 
     if params['bools']['ctcs']:
-        params = ctcs_initial_guess(params)
+        params = guess.ctcs_initial_guess(params)
 
     #============================================
     # Optimization parameters and hyperparameters
@@ -343,7 +370,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['conv']['setup']['dyn']['eps_v'] = eps_v_dyn
 
     ### Configure generic convergence criterion and max iterations ###
-    params = set_convergence_tolerance(params)
+    params = convergence.set_convergence_tolerance(params)
 
     # Iterations
     params['conv']['iter_max'] = 20  # 14, 30
@@ -353,6 +380,220 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['save_var_names'] = ['ts_opt', 'zs_opt', 'us_opt', 'params', 'O']
 
     return params
+
+def analytical_linsys(ts, zs, us, problem):
+    
+    # Extract parameters
+    params = problem.get("params", problem)
+    n = params["n"]
+    m = params["m"]
+    mass = params["mass"]
+
+    # Sanity check for vector shapes
+    zs = np.asarray(zs).flatten()
+    us = np.asarray(us).flatten()
+
+    assert len(zs) == n, f"Expected state vector of length {n}, got {len(zs)}"
+    assert len(us) == m, f"Expected control vector of length {m}, got {len(us)}"
+
+    # Compute A matrix (Jacobian w.r.t. state)
+    n2 = n // 2
+    Ac = np.block([
+        [np.zeros((n2, n2)), np.eye(n2)],
+        [np.zeros((n2, n))]
+    ])
+
+    # Compute B matrix (Jacobian w.r.t. control)
+    Bc = np.vstack([
+        np.zeros((n2, m)),
+        np.eye(m)
+    ]) * (1.0 / mass)
+
+    # Evaluate nonlinear dynamics
+    fc = system_dynamics(ts, zs, us, params)
+
+    # Return in dictionary format
+    linsys = {
+        "dfcn_dz": Ac,
+        "dfcn_du": Bc,
+        "fcn":     fc
+    }
+
+    return linsys
+
+def nonlinear_inequality_constraints(ts, zs, us, params):
+    """
+    Compute nonlinear inequality constraints: path constraints and no-fly zones.
+
+    Parameters:
+        ts     : (N,) time array
+        zs     : (n, N) state array
+        us     : (m, N) control array (unused in current logic)
+        params : dict with fields:
+                 - n_nfz
+                 - obs["posc"], obs["rc"]
+                 - path constraints (placeholder, unused)
+
+    Returns:
+        P : (n_ineq, N) constraint matrix, where each column is P[:, k]
+    """
+    # Extract nested params if needed
+    if "params" in params:
+        params = params["params"]
+
+    N = zs.shape[1]
+    n_nfz = params["n_nfz"]
+    n_path = params.get("n_path", 0)  # currently unused
+
+    P_path = []  # placeholder for path constraints
+    P_nfz = []
+
+    for k in range(N):
+        rx_k = zs[0, k]
+        ry_k = zs[1, k]
+
+        # --- No Fly Zone constraints ---
+        P_nfz_k = []
+        if n_nfz > 0:
+            for i in range(n_nfz):
+                xc = params["obs"]["posc"][0, i]
+                yc = params["obs"]["posc"][1, i]
+                Rc = params["obs"]["rc"][i]
+
+                val = Rc**2 - (rx_k - xc)**2 - (ry_k - yc)**2
+                P_nfz_k.append(val)
+
+        P_nfz.append(P_nfz_k)
+
+    P_nfz = np.array(P_nfz).T if P_nfz else np.empty((0, N))
+    P_path = np.empty((0, N))  # not implemented
+
+    # Stack all inequality constraints
+    P = np.vstack([P_path, P_nfz])
+    return P
+
+
+def analytical_cost(ts, zs, us, problem):
+
+    # Extract params
+    params = problem.get("params", problem)
+    n = params["n"]
+    m = params["m"]
+    N = params["N"]
+
+    ts = np.asarray(ts).flatten()
+    zs = np.asarray(zs)
+    us = np.asarray(us)
+    dt = np.diff(ts)
+
+    # Preallocate outputs
+    dcostdz = np.zeros((1, n, N))
+    dcostdu = np.zeros((1, m, N))
+    cost    = np.zeros((1, 1, N))
+
+    for k in range(N - 1):
+        tk   = ts[k]
+        zk   = zs[:, k]
+        uk   = us[:, k]
+
+        tkp  = ts[k + 1]
+        zkp  = zs[:, k + 1]
+        ukp  = us[:, k + 1]
+
+        dcostdu[:, :, k] = 2 * ((uk + ukp) / 2).reshape(1, m)
+        avg_cost = 0.5 * (problem["cost"](tk, zk, uk) + problem["cost"](tkp, zkp, ukp))
+        cost[:, :, k] = avg_cost * dt[k]
+
+    # Last step (N)
+    dcostdz[:, :, N - 1] = 0
+    dcostdu[:, :, N - 1] = 0
+    cost[:, :, N - 1]    = 0
+
+    # Package into output dict
+    lincost = {
+        "dfcn_dz": dcostdz,
+        "dfcn_du": dcostdu,
+        "fcn":     cost
+    }
+
+    return lincost
+
+def analytical_inequality_constraints(ts, zs, us, problem):
+
+    params = problem.get("params", problem)
+
+    N = zs.shape[1]
+    n = params["n"]
+    m = params["m"]
+    n_path = params["n_path"]
+    n_nfz = params["n_nfz"]
+
+    path_idx = params["path_idx"]
+    path_lim_diag = np.diag(params["nondim"]["np_ineq"][:n_path])
+    path_lim_scaled = np.linalg.solve(path_lim_diag, params["path_lim"])
+
+    # Preallocate storage
+    path_cnst = {"P": [], "Praw": [], "dPdz": [], "dPdu": []}
+    nfz_cnst = {"P": [], "dPdz": [], "dPdu": []}
+
+    for k in range(N):
+        tk = ts[k]
+        zk = zs[:, k]
+        uk = us[:, k]
+        rx_k, ry_k = zk[0], zk[1]
+
+        # Evaluate full constraint vector
+        P_full = nonlinear_inequality_constraints(tk, zk, uk, params)
+
+        # ---- Path constraints ----
+        if n_path > 0:
+            P_path = P_full[path_idx]
+            path_cnst["P"].append(P_path - path_lim_scaled)
+            path_cnst["Praw"].append(P_path)
+
+            # Use zero Jacobians as placeholders (same as original MATLAB)
+            dPdz_path = np.zeros((n_path, n))
+            dPdu_path = np.zeros((n_path, m))
+            path_cnst["dPdz"].append(dPdz_path)
+            path_cnst["dPdu"].append(dPdu_path)
+
+        # ---- No-fly zone constraints ----
+        if n_nfz > 0:
+            P_nfz = P_full[n_path:n_path + n_nfz]
+            dPdz_nfz = []
+            dPdu_nfz = []
+
+            for i in range(n_nfz):
+                xc = params["obs"]["posc"][0, i]
+                yc = params["obs"]["posc"][1, i]
+                rc = params["obs"]["rc"][i]
+
+                row_dz = np.zeros(n)
+                row_dz[0] = 2 * (rx_k - xc)
+                row_dz[1] = 2 * (ry_k - yc)
+                dPdz_nfz.append(row_dz)
+
+                dPdu_nfz.append(np.zeros(m))
+
+            nfz_cnst["P"].append(P_nfz)
+            nfz_cnst["dPdz"].append(np.vstack(dPdz_nfz))
+            nfz_cnst["dPdu"].append(np.vstack(dPdu_nfz))
+
+    # Stack outputs across time
+    path_out = {
+        "dfcn_dz": np.stack(path_cnst["dPdz"] + nfz_cnst["dPdz"], axis=2)
+                   if n_path + n_nfz > 0 else np.array([]),
+        "dfcn_du": np.stack(path_cnst["dPdu"] + nfz_cnst["dPdu"], axis=2)
+                   if n_path + n_nfz > 0 else np.array([]),
+        "fcn":     np.stack(path_cnst["P"] + nfz_cnst["P"], axis=1)
+                   if n_path + n_nfz > 0 else np.array([]),
+        "data": {
+            "path": path_cnst,
+            "nfz": nfz_cnst
+        }
+    }
+
+    return path_out
 
 
 def set_nondim_params(params): # TODO: Test
@@ -428,9 +669,55 @@ def set_nondim_params(params): # TODO: Test
 
     return params
 
-# # testing set_nondim_params()
+
+def system_dynamics(ts,zs,us,params,t_vec=None):
+    """
+    x1, x2: r (position)
+    u1, u2: v (velocity)
+    """
+    # extracts params if "problem" parent struct is passed in
+    if hasattr(params, 'params'):
+        params = params['params']
+
+    # extract constant param values
+    m       = int( params['m'] )
+    n       = int( params['n'] )
+    mass    = params['mass']
+    ge      = params['ge']
+
+    # extract states
+    r = zs[0:3]
+    v = zs[3:6]
+
+    # extract controls 
+    if t_vec is None:
+        us2 = us
+    else:
+        us2 = np.empty(m)
+        for i in range(m):
+            interp = interp1d(t_vec, us[i,:]) # does this work?
+            us2[i] = interp(ts)
+            
+    # extract control
+    T = us2
+
+    # compute velocity and acceleration
+    xDot = np.empty(6) # initialize
+    xDot[0:3] = v
+    xDot[3:6] = T/mass + ge
+
+    if np.issubdtype(r.dtype, np.number):
+        if r[2] <= -1: # set xDot = 0 if the vehicle hits the ground
+            xDot = np.zeros(n)
+    elif np.issubdtype(r.dtype, np.nan) or any(np.isinf(r)):
+        breakpoint()
+        
+    return xDot
+
+
+# # testing defaults.set_nondim_params()
 # if __name__ == "__main__":
-#     print('..:: Testing set_nondim_params() ::..')
+#     print('..:: Testing defaults.set_nondim_params() ::..')
 #     params = {
 #         'path_lim': None,
 #         'n_path': 0,
@@ -445,7 +732,7 @@ def set_nondim_params(params): # TODO: Test
 #             'nondim': 1,
 #         },
 #     }
-#     params = set_nondim_params(params)
+#     params = defaults.set_nondim_params(params)
 #     print("params['nondim'] = ", params['nondim'])
 
 # TESTING CONFIG_PARAMS

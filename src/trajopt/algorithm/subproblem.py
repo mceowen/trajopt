@@ -8,7 +8,7 @@ import time
 # trajopt imports
 import trajopt.algorithm.hyperparameters as hp
 import trajopt.algorithm.scaling as scaling
-import trajopt.algorithm.convexification as convexification
+import trajopt.algorithm.convexification as convexify
 import trajopt.algorithm.discretization as discretization
 import trajopt.algorithm.convergence as convergence
 import trajopt.utils.tools as tools
@@ -64,8 +64,8 @@ def baseline_subprob_inputs(problem):
     Ak, Bk, Bkp, Sk, zs_minus = discretization.compute_linsys_discrete(I['zs_ref'], I['us_ref'], I['dts_ref'], problem)
     prop_time = time.time() - start
 
-    dcostdz, dcostdu, cost  = convexification.compute_cost(I['ts_ref'], I['zs_ref'], I['us_ref'], problem)
-    dgdz, dgdu, g           = convexification.compute_path_constraints(I['ts_ref'], I['zs_ref'], I['us_ref'], problem)
+    dcostdz, dcostdu, cost  = convexify.compute_cost(I['ts_ref'], I['zs_ref'], I['us_ref'], problem)
+    dgdz, dgdu, g           = convexify.compute_path_constraints(I['ts_ref'], I['zs_ref'], I['us_ref'], problem)
 
     # Reference trajectories
     ts_ref = I['ts_ref']

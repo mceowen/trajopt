@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.integrate import solve_ivp
-import trajopt.algorithm.convexification as convexification
+import trajopt.algorithm.convexification as convexify
 
 def set_ltv_indices(params):
     """
@@ -110,7 +110,7 @@ def RHS_ltv(tau, lds, us_ref, dts_ref, problem):
         x = lds[(k - 1) * params['lds0_size'] + params['z_ind']]
 
         # Extract continuous time Jacobians
-        Ac, Bc, fc = convexification.compute_linsys_continuous(tau, x, u[k, :], problem)
+        Ac, Bc, fc = convexify.compute_linsys_continuous(tau, x, u[k, :], problem)
 
         # Extract STM
         Phi_tau = lds[(k - 1) * params['lds0_size'] + params['Ak_ind']].reshape(params['n'], params['n'])

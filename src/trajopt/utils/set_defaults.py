@@ -201,6 +201,65 @@ def set_params_constraint_default(params): # TODO: Test
     return params
 
 
+def set_problem_default(problem):
+    """
+    Populate default state/control bounds and boundary conditions
+    from problem.params into top-level problem fields.
+
+    Parameters:
+        problem : dict with nested 'params' dict
+
+    Returns:
+        problem : updated dict
+    """
+    params = problem["params"]
+
+    #
+    # BOUNDARY CONDITIONS
+    #
+    # Initial conditions
+    problem["zi"]           = params["zi"]
+    problem["zi_idx"]       = params["zi_idx"]
+    problem["zi_min"]       = params["zi_min"]
+    problem["zi_min_idx"]   = params["zi_min_idx"]
+    problem["zi_max"]       = params["zi_max"]
+    problem["zi_max_idx"]   = params["zi_max_idx"]
+    problem["n_init"]       = params["n_init"]
+    problem["n_init_ineq"]  = params["n_init_ineq"]
+
+    # Terminal conditions
+    problem["zf"]           = params["zf"]
+    problem["zf_idx"]       = params["zf_idx"]
+    problem["zf_min"]       = params["zf_min"]
+    problem["zf_min_idx"]   = params["zf_min_idx"]
+    problem["zf_max"]       = params["zf_max"]
+    problem["zf_max_idx"]   = params["zf_max_idx"]
+    problem["n_term"]       = params["n_term"]
+    problem["n_term_ineq"]  = params["n_term_ineq"]
+
+    #
+    # STATE CONSTRAINTS
+    #
+    problem["z_min"]        = params["z_min"]
+    problem["z_min_idx"]    = params["z_min_idx"]
+    problem["z_max"]        = params["z_max"]
+    problem["z_max_idx"]    = params["z_max_idx"]
+
+    #
+    # CONTROL CONSTRAINTS
+    #
+    problem["u_min"]        = params["u_min"]
+    problem["u_min_idx"]    = params["u_min_idx"]
+    problem["u_max"]        = params["u_max"]
+    problem["u_max_idx"]    = params["u_max_idx"]
+    problem["n_ctrl"]       = params["n_ctrl"]
+    problem["udot_max"]     = params["udot_max"]
+    problem["udot_max_idx"] = params["udot_max_idx"]
+    problem["n_udot"]       = params["n_udot"]
+
+    return problem
+
+
 # testing functions
 if __name__ == "__main__":
     print('..:: Testing set_params_default ::..')
