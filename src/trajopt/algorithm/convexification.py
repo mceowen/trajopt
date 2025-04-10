@@ -7,33 +7,33 @@ import jax.numpy as jnp
 
 
 def compute_cost(ts, zs, us, problem):
-    dcostdz = problem['lin_cost']['dfcn_dz'](ts, zs, us)
-    dcostdu = problem['lin_cost']['dfcn_du'](ts, zs, us)
-    cost    = problem['lin_cost']['fcn'](ts, zs, us)
+    dcostdz = problem['lin_cost'](ts, zs, us)['dfcn_dz']
+    dcostdu = problem['lin_cost'](ts, zs, us)['dfcn_du']
+    cost    = problem['lin_cost'](ts, zs, us)['fcn']
 
     return dcostdz, dcostdu, cost
 
 
 def compute_aero(ts, zs, us, problem):
-    daero_dx = problem['lin_aero']['dfcn_dz'](ts, zs, us)
-    daero_du = problem['lin_aero']['dfcn_du'](ts, zs, us)
-    aero     = problem['lin_aero']['fcn'](ts, zs, us)
+    daero_dx = problem['lin_aero'](ts, zs, us)['dfcn_dz']
+    daero_du = problem['lin_aero'](ts, zs, us)['dfcn_du']
+    aero     = problem['lin_aero'](ts, zs, us)['fcn']
 
     return daero_dx, daero_du, aero
 
 
 def compute_path_constraints(ts, zs, us, problem):
-    dPdz = problem['lin_constr']['dfcn_dz'](ts, zs, us)
-    dPdu = problem['lin_constr']['dfcn_du'](ts, zs, us)
-    P    = problem['lin_constr']['fcn'](ts, zs, us)
+    dPdz = problem['lin_constr'](ts, zs, us)['dfcn_dz']
+    dPdu = problem['lin_constr'](ts, zs, us)['dfcn_du']
+    P    = problem['lin_constr'](ts, zs, us)['fcn']
 
     return dPdz, dPdu, P
 
 
 def compute_linsys_continuous(ts, zs, us, problem):
-    Ac = problem['lin_dyn']['dfcn_dz'](ts, zs, us)
-    Bc = problem['lin_dyn']['dfcn_du'](ts, zs, us)
-    fc = problem['lin_dyn']['fcn'](ts, zs, us)
+    Ac = problem['lin_dyn'](ts, zs, us)['dfcn_dz']
+    Bc = problem['lin_dyn'](ts, zs, us)['dfcn_du']
+    fc = problem['lin_dyn'](ts, zs, us)['fcn']
 
     return Ac, Bc, fc
 

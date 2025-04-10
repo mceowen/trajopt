@@ -1,4 +1,5 @@
 import trajopt.utils.set_defaults           as defaults
+import trajopt.utils.tools                  as tools
 import trajopt.algorithm.initial_guess      as guess
 import trajopt.algorithm.convergence        as convergence
 import trajopt.algorithm.convexification    as convexify
@@ -8,7 +9,88 @@ import trajopt.algorithm.discretization     as discretize
 from scipy.interpolate  import interp1d
 from scipy.integrate    import solve_ivp
 import numpy as np
+import os
+from pathlib import Path
 
+def config_main():
+
+    config = {}
+
+    # --- Paths ---
+    config['paths'] = {
+        'home': os.path.expanduser('~/ACL/sandbox/scp_sandbox/'),
+        'shim': ''
+    }
+
+    # NOTE: cd and addpath are MATLAB-specific and not used in Python.
+    # Instead, assume working directory is already set or handled externally.
+
+    # --- Set base defaults ---
+    config['model_type'] = 'quadrotor_3dof'
+    config['case_flag'] = 1  # 1: single integrator
+
+    config['bools'] = {
+        'opt': 1,
+        'plot': 1,
+        'multiplot': 0,
+        'it_plots': 1,
+        'save': 0,
+        'save_fig': 0,
+        'setfig_paper': 1,
+        'dock_fig': 1
+    }
+
+    config['dataset_id'] = ''
+
+    # --- Plot settings (placeholder) --- TODO
+    if config['bools']['setfig_paper']:
+        # In Python, you would use matplotlib.rcParams or seaborn.set_context()
+        pass
+
+    # --- User problem setup ---
+    config['params'] = {}
+    config['params']['N'] = 40
+    config['params']['T_init'] = 10
+
+    config['params']['bools'] = {
+        'flag_nfz': 2,
+        'flag_autotune': '3',
+        'free_final_time': 1,
+        'equal_dt': 0,
+        'buff_dyn': 'quad-2',
+        'buff_dyn_dual': 'l1',
+        'ctcs': 0,
+        'ode_fixed_dt': 1,
+    }
+
+    # --- Solver options - TODO:expand ---
+    config['params']['solver_opts'] = {
+        'solver': 'qoco',
+    }
+
+    # --- Paths for problem-specific model and data ---
+    model_path = Path(f"test_problems/{config['model_type']}/")
+    config['paths']['model_path'] = str(model_path)
+
+    if config['case_flag'] == 1:
+        case_path = 'case1'
+    elif config['case_flag'] == 2:
+        case_path = 'case2'
+    else:
+        raise ValueError("Undefined case_flag!")
+
+    config['paths']['problem_path'] = str(model_path / case_path)
+    config['paths']['data_path'] = f"data/{config['model_type']}/"
+
+    if config['bools']['multiplot']:
+        dataset_path = Path(config['paths']['data_path']) / f"dataset{config['dataset_id']}/iterations/"
+    else:
+        dataset_path = Path(config['paths']['data_path']) / f"dataset{config['dataset_id']}/standalone/"
+
+    config['paths']['dataset_path'] = str(dataset_path)
+    config['paths']['dataset_file'] = str(dataset_path / f"case{config['case_flag']}_standalone.mat")
+
+    return config
 
 def ocp(config):
     """
@@ -40,7 +122,7 @@ def ocp(config):
 
     # Cost function
     problem["cost"]     = params["cost"]
-    problem["cost_init"] = problem["cost"](params["ts_init"], params["zs_init"], params["us_init"], problem)
+    problem["cost_init"] = problem["cost"](params["ts_init"], params["zs_init"], params["us_init"])
 
     if params["bools"]["auto_jac"]:
         problem["lin_cost"] = convexify.generate_jacobians(
@@ -103,7 +185,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['T_init'] = 10
 
     # Define Cost Function
-    params['cost'] = lambda t, z, u, problem: np.dot(np.transpose(u), u) 
+    params['cost'] = lambda t, z, u: np.dot(np.transpose(u), u) 
 
 
     #======================
@@ -209,98 +291,77 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
         # w_path: weight for path constraint buffer cost
         # w_nfz: weight for path constraint buffer cost
 
+    # === Baseline cost + trust region weights ===
     params['weights']['w_cost'] = 0
     params['weights']['eps_nonzero1'] = 2e-1
     params['weights']['eps_nonzero2'] = 1e-10
 
-    # trust region
-    if 'alpha_z' not in params['weights']:
-        params['weights']['alpha_z'] = 5e-1  # 1e0, 1e-1, 5e-1
-        params['weights']['alpha_u'] = np.inf  # 1e1, 1e0, 1e1
+    # === Trust region weights ===
+    params['weights'].setdefault('alpha_z', 0.5)
+    params['weights'].setdefault('alpha_u', np.inf)
 
     params['weights']['wtr_z'] = 1 / (2 * params['weights']['alpha_z'])
+    params['weights']['wtr_u'] = 0 if np.isinf(params['weights']['alpha_u']) else 1 / (2 * params['weights']['alpha_u'])
 
-    # Handle division by infinity for wtr_u
-    if params['weights']['alpha_u'] == np.inf:
-        params['weights']['wtr_u'] = 0
-    else:
-        params['weights']['wtr_u'] = 1 / (2 * params['weights']['alpha_u'])
+    # === Autotune modes (flag_autotune ∈ {0,2,3,al-scvx}) ===
+    if str(params['bools']['flag_autotune']) in {'0', '2', '3', 'al-scvx'}:
 
+        params['weights'].setdefault('beta', 1)
+        params['weights'].setdefault('gamma', 1e-1)
 
-    # no autotuning, Skye1/autotune2, Skye-Behcet3/autotune3
-    if params['bools']['flag_autotune'] in [0, 2, 3]:
-        
-        # Autotuning meta-tuning dual variable trust region weights
-            # beta-dual eq, gamma-dual ineq
-        if 'beta' not in params['weights']:
-            params['weights']['beta'] = 1
-        if 'gamma' not in params['weights']:
-            params['weights']['gamma'] = 1e-1  # 5e-3, 1e-2, 1e-1
-
-        # Buffer variables penalty weights
-        if 'wbuff' not in params['weights']:
-            if params['bools']['flag_autotune'] == 0:
+        # --- Buffer weights ---
+        if str(params['bools']['flag_autotune']) in {'0', 'al-scvx'}:
+            if 'wbuff' not in params['weights']:
                 wbuff = 1e2
+                if str(params['bools']['flag_autotune']) == '0':
+                    w_nfz = wbuff / params['weights']['w_fac_N']
+                    w_dyn = 1e5 * wbuff / params['weights']['w_fac_Nm1']
+                    w_term = 1e2 * wbuff
+                else:
+                    w_nfz = wbuff / params['weights']['w_fac_N']
+                    w_dyn = wbuff / params['weights']['w_fac_Nm1']
+                    w_term = wbuff
             else:
-                wbuff = 1
-            w_nfz = wbuff / params['weights']['w_fac_N']  # NFZ
-            w_dyn = 1e5 * wbuff  # DYNAMICS (CONTROL)
-            w_term = 1e2 * wbuff  # TERMINAL
-            if 'W_nfz' in params['weights']:
-                params['weights']['W_nfz'] += w_nfz
-            else:
-                params['weights']['W_nfz'] = w_nfz
+                wbuff = params['weights']['wbuff']
+                w_nfz = wbuff / params['weights']['w_fac_N']
+                w_dyn = wbuff / params['weights']['w_fac_Nm1']
+                w_term = wbuff
         else:
             wbuff = 1
-            w_nfz = wbuff / params['weights']['w_fac_N']  # NFZ
-            w_dyn = 1e6 * wbuff  # DYNAMICS (CONTROL)
-            w_term = 1e2 * wbuff  # TERMINAL
+            w_nfz = wbuff / params['weights']['w_fac_N']
+            w_dyn = wbuff / params['weights']['w_fac_Nm1']
+            w_term = wbuff
+
+        params['weights']['W_nfz'] += w_nfz
 
         if params['bools']['free_final_time']:
-            if params['bools']['buff_dyn']:
-                if 'W_dyn' in params['weights']:
-                    params['weights']['W_dyn'] += w_dyn
-                else:
-                    params['weights']['W_dyn'] = w_dyn
+            buff_dyn = str(params['bools'].get('buff_dyn', ''))
+            if buff_dyn in {'l1', 'l2'}:
+                params['weights']['W_dyn'] += w_dyn
+            elif buff_dyn in {'quad-1', 'quad-2', 'quad-3'}:
+                params['weights']['W_plus'] += w_dyn
+                params['weights']['W_minus'] += w_dyn
             else:
-                if 'W_term' in params['weights']:
-                    params['weights']['W_term'] += w_term
-                else:
-                    params['weights']['W_term'] = w_term
+                params['weights']['W_term'] += w_term
 
-    if params['bools']['flag_autotune'] in [1,3]:
+    # === Autotune mode: {1,3,al-scvx} ===
+    if str(params['bools']['flag_autotune']) in {'1', '3', 'al-scvx'}:
 
-        # autotuning meta-tuning dual variable trust region weights
-            # beta-dual eq, gamma-dual ineq
-        if 'beta' not in params['weights']:
-            params['weights']['beta'] = 1
-        if 'gamma' not in params['weights']:
-            params['weights']['gamma'] = 1e-1 # 5e-3, 1e-2, 1e-1
+        params['weights'].setdefault('beta', 1)
+        params['weights'].setdefault('gamma', 1e-1)
 
-        # Update dual_nfz
-        if 'dual_nfz' in params['weights']:
-            if 'eps_nonzero2' in params['weights']:
-                params['weights']['dual_nfz'] += params['weights']['eps_nonzero2']
+        params['weights']['dual_nfz'] += params['weights']['eps_nonzero1']
+
+        if params['bools']['free_final_time']:
+            buff_dyn = str(params['bools'].get('buff_dyn', ''))
+            if buff_dyn == 'term':
+                params['weights']['dual_term'] += params['weights']['eps_nonzero1']
             else:
-                raise ValueError("eps_nonzero2 is not defined.")
-        else:
-            if 'eps_nonzero2' in params['weights']:
-                params['weights']['dual_nfz'] = params['weights']['eps_nonzero2']
-            else:
-                raise ValueError("Both dual_nfz and eps_nonzero2 are not defined.")
+                params['weights']['dual_dyn'] += params['weights']['eps_nonzero1']
 
-        if params['bools']['free_final_time']: 
-            # Update dual_dyn or dual_term depending on buff_dyn bool
-            if params['bools']['buff_dyn']:
-                if 'dual_dyn' in params['weights'] and 'eps_nonzero2' in params['weights']:
-                    params['weights']['dual_dyn'] += params['weights']['eps_nonzero2']
-                else:
-                    raise ValueError("Either dual_dyn or eps_nonzero2 is not defined.")
-            else:
-                if 'dual_term' in params['weights'] and 'eps_nonzero2' in params['weights']:
-                    params['weights']['dual_term'] += params['weights']['eps_nonzero2']
-                else:
-                    raise ValueError("Either dual_term or eps_nonzero2 is not defined.")
+                if str(params['bools'].get('buff_dyn_dual', '')) == 'l1':
+                    params['weights']['dual_plus'] += params['weights']['eps_nonzero1']
+                    params['weights']['dual_minus'] += params['weights']['eps_nonzero1']
 
     ### ctcs convergence adjustments ###
     ctcs_mult_state = 5e-1
@@ -321,8 +382,6 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['conv']['setup'].setdefault('state', {})['eps_d'] = eps_d_state
     params['conv']['setup']['state']['eps_v'] = eps_v_state
 
-
-    
     ### Cost convergence ###
     eps_F_cost = 1 # N
 
@@ -467,12 +526,13 @@ def nonlinear_inequality_constraints(ts, zs, us, params):
     if "params" in params:
         params = params["params"]
 
-    N = zs.shape[1]
-    n_nfz = params["n_nfz"]
-    n_path = params.get("n_path", 0)  # currently unused
+    zs      = zs.reshape(-1, 1) if zs.ndim == 1 else zs
+    N       = tools.num_timesteps(zs)
+    n_nfz   = params["n_nfz"]
+    n_path  = params.get("n_path", 0)  # currently unused
 
-    P_path = []  # placeholder for path constraints
-    P_nfz = []
+    P_path  = []  # placeholder for path constraints
+    P_nfz   = []
 
     for k in range(N):
         rx_k = zs[0, k]
@@ -548,7 +608,7 @@ def analytical_inequality_constraints(ts, zs, us, problem):
 
     params = problem.get("params", problem)
 
-    N = zs.shape[1]
+    N = tools.num_timesteps(zs)
     n = params["n"]
     m = params["m"]
     n_path = params["n_path"]
@@ -720,18 +780,6 @@ def set_nondim_params(params): # TODO: Test
 if __name__ == "__main__":
     print('..:: Testing config_params() ::..')
     # make dummy config
-    config = {
-        'params': { # config['params']
-            'N': 40,
-            'T_init': 10,
-            'bools': { # config['params']['bools']
-                'flag_nfz': 2,
-                'flag_autotune': 0,
-                'free_final_time': 1,
-                'buff_dyn': 0,
-                'ctcs': 0
-            },
-        },
-    }
+    config = config_main()
     params = config_params(config)
     print(f"function call successful... \n\tparams['save_var_names'] = {params['save_var_names']}")

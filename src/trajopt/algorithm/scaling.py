@@ -66,9 +66,10 @@ def dim_vars(ts, xs, us, params):
     
     return t, x, u
 
-def subproblem_variable_scaling(problem):
+def subprob_variable_scaling(problem, inputs):
+
     # Extract input struct
-    I = problem['I'][-1]
+    I = inputs['I']
 
     # Extract params
     n = problem['params']['nz']
@@ -133,11 +134,8 @@ def subproblem_variable_scaling(problem):
         else:
             raise ValueError('Undefined var_scl_flag!')
 
-        dz = np.zeros((n, N))
-        du = np.zeros((m, N))
-        for k in range(N):
-            dz[:, k] = M_x[:, :, k] @ dzhat[:, k].value + b_x[:, k]
-            du[:, k] = M_u[:, :, k] @ duhat[:, k].value + b_u[:, k]
+        dz = [M_x[:, :, k] @ dzhat[:, k] + b_x[:, k] for k in range(N)]
+        du = [M_u[:, :, k] @ duhat[:, k] + b_u[:, k] for k in range(N)]
 
     # FULL STATE VARIABLES
     else:
