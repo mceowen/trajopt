@@ -87,7 +87,7 @@ def waypoint_initial_guess(params):
             i_term = np.where(params['zf_idx'] == i_state)[0][0]
 
             zs_init[i_state, idx1-1] = np.linspace(params['zi'][i_init], params['z_waypt'][i_state], N1)
-            zs_init[i_state, idx2] = np.linspace(params['z_waypt'][i_state], params['zf'][i_term], N2 + 1)
+            zs_init[i_state, idx2] = np.linspace(params['z_waypt'][i_state], params['zf'][i_term], N2)
 
     # Initial control
     us_init = np.zeros((params['m'], params['N']))

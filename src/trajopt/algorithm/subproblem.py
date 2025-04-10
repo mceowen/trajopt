@@ -6,66 +6,61 @@ import numpy as np
 import time
 
 # trajopt imports
+import trajopt.problem_models.quadrotor_3dof as quad3dof
 import trajopt.algorithm.hyperparameters as hp
 import trajopt.algorithm.scaling as scaling
-import trajopt.algorithm.convexification as convexification
-import trajopt.algorithm.discretization as discretization
+import trajopt.algorithm.convexification as convexify
+import trajopt.algorithm.discretization as discretize
 import trajopt.algorithm.convergence as convergence
 import trajopt.utils.tools as tools
 
 
 def solve_subproblem(problem):
-    inputs, model_data = baseline_subprob_inputs(problem)
+    inputs = baseline_subprob_inputs(problem)
     #problem.custom_inputs(problem, inputs)
 
-    solution_vars = baseline_subprob_variables(inputs)
+    inputs = baseline_subprob_variables(problem,inputs)
 
     constraints = []
-    constraints += baseline_subprob_constraints(inputs, solution_vars)
-    #constraints += problem.custom_constraints(problem, inputs, solution_vars)
+    constraints += baseline_subprob_constraints(problem, inputs)
+    #constraints += problem.custom_constraints(problem, inputs, inputs['sol_vars'])
 
-    PTR_COST    = baseline_subprob_cost(inputs, solution_vars)
+    PTR_COST    = baseline_subprob_cost(problem, inputs)
 
     objective   = cp.Minimize(PTR_COST)
-    prob        = cp.Problem(objective, constraints)
-    solve_stats = prob.solve(**inputs["cvxpy_opts"])
-
-    soln_stats = {
-        "solntime": prob.solver_stats.solve_time,
-        "parse_time": prob.solver_stats.setup_time,
-        "soln_object": prob
-    }
+    subprob     = cp.Problem(objective, constraints)
 
     O = baseline_subprob_outputs(
-        soln_obj=prob,
-        inputs=inputs,
-        solution_vars=solution_vars,
-        model_data=model_data
+        problem,
+        inputs,
+        subprob,
     )
 
-    problem.custom_outputs(problem, inputs, solution_vars, O)
+    # TODO: Add custom outputs
+    # problem.custom_outputs(problem, inputs, O)
 
-    O = convergence.check_convergence_tolerance(O, problem)
+    O = convergence.check_convergence_tolerance(problem, O)
 
     baseline_autotune(problem, O)
     
-    display_baseline_subprob_status(O, problem, nt=inputs["params"]["nt"], ncost=inputs["params"]["ncost"])
+    display_baseline_subprob_status(problem, inputs, O)
 
     return O
 
 
 def baseline_subprob_inputs(problem):
+
     I = problem['I'][-1]
     iter_num = I['iter_num']
     case_flag = problem['params']['case_flag']
 
     # Dynamics and cost
     start = time.time()
-    Ak, Bk, Bkp, Sk, zs_minus = discretization.compute_linsys_discrete(I['zs_ref'], I['us_ref'], I['dts_ref'], problem)
+    Ak, Bk, Bkp, Sk, zs_minus = discretize.compute_linsys_discrete(I['zs_ref'], I['us_ref'], I['dts_ref'], problem)
     prop_time = time.time() - start
 
-    dcostdz, dcostdu, cost  = convexification.compute_cost(I['ts_ref'], I['zs_ref'], I['us_ref'], problem)
-    dgdz, dgdu, g           = convexification.compute_path_constraints(I['ts_ref'], I['zs_ref'], I['us_ref'], problem)
+    dcostdz, dcostdu, cost  = convexify.compute_cost(I['ts_ref'], I['zs_ref'], I['us_ref'], problem)
+    dgdz, dgdu, g           = convexify.compute_path_constraints(I['ts_ref'], I['zs_ref'], I['us_ref'], problem)
 
     # Reference trajectories
     ts_ref = I['ts_ref']
@@ -180,18 +175,20 @@ def baseline_subprob_inputs(problem):
     dual_minus = weights['dual_minus']
     dual_term = weights['dual_term']
 
-    opts = params['yalmip_opts']
+    opts = params['solver_opts']
 
-    return locals()
+    inputs = dict(locals())
+
+    return inputs
 
 
-def baseline_subprob_variables(problem):
+def baseline_subprob_variables(problem, inputs):
     params = problem['params']
     bools = params['bools']
     N = params['N']
 
     # Variation in state and control
-    dz, du = scaling.subprob_variable_scaling(problem)
+    dz, du = scaling.subprob_variable_scaling(problem, inputs)
 
     # Time-step or time-horizon dilation
     if bools['free_final_time']:
@@ -204,21 +201,25 @@ def baseline_subprob_variables(problem):
         dt = np.zeros(N - 1)         # Fixed timestep (not a variable)
 
     # Virtual buffer and virtual control variables
-    vb_path, vb_nfz, vb_aux, vb_dyn, vb_term = subprob_virtual_variables(problem)
+    vb_path,vb_nfz,vb_aux,vb_term,vb_dyn_plus,vb_dyn_minus,vb_plus,vb_minus = subprob_virtual_variables(problem, inputs)
 
-    return {
+    inputs['sol_vars'] = {
         'dz': dz,
         'du': du,
         'dt': dt,
         'vb_path': vb_path,
         'vb_nfz': vb_nfz,
         'vb_aux': vb_aux,
-        'vb_dyn': vb_dyn,
         'vb_term': vb_term,
-        # 't_l1': t_l1,
+        'vb_dyn_plus': vb_dyn_plus,
+        'vb_dyn_minus': vb_dyn_minus,
+        'vb_plus': vb_plus,
+        'vb_minus': vb_minus,
     }
 
-def subprob_virtual_variables(problem):
+    return inputs
+
+def subprob_virtual_variables(problem, inputs):
     """
     Determines which virtual variables (virtual buffer and virtual control) to
     create for subproblem constraints. If the weight associated with each
@@ -303,18 +304,18 @@ def subprob_virtual_variables(problem):
     )
 
 
-def baseline_subprob_constraints(inputs, solution_vars):
-    dz = solution_vars["dz"]
-    du = solution_vars["du"]
-    dt = solution_vars["dt"]
-    vb_path = solution_vars["vb_path"]
-    vb_nfz = solution_vars["vb_nfz"]
-    vb_aux = solution_vars["vb_aux"]
-    vb_term = solution_vars["vb_term"]
-    vb_dyn_plus = solution_vars["vb_dyn_plus"]
-    vb_dyn_minus = solution_vars["vb_dyn_minus"]
-    vb_plus = solution_vars["vb_plus"]
-    vb_minus = solution_vars["vb_minus"]
+def baseline_subprob_constraints(problem,inputs):
+    dz = inputs['sol_vars']["dz"]
+    du = inputs['sol_vars']["du"]
+    dt = inputs['sol_vars']["dt"]
+    vb_path = inputs['sol_vars']["vb_path"]
+    vb_nfz = inputs['sol_vars']["vb_nfz"]
+    vb_aux = inputs['sol_vars']["vb_aux"]
+    vb_term = inputs['sol_vars']["vb_term"]
+    vb_dyn_plus = inputs['sol_vars']["vb_dyn_plus"]
+    vb_dyn_minus = inputs['sol_vars']["vb_dyn_minus"]
+    vb_plus = inputs['sol_vars']["vb_plus"]
+    vb_minus = inputs['sol_vars']["vb_minus"]
 
     I = inputs["I"]
     params = inputs["params"]
@@ -333,37 +334,37 @@ def baseline_subprob_constraints(inputs, solution_vars):
     buff_dyn = bools['buff_dyn']
 
     # Extract dimensions and references
-    N = params['N']
-    n = params['n']
-    m = params['m']
-    nz = params['nz']
-    n_state = params['n_state']
-    n_ctrl = params['n_ctrl']
-    n_udot = params['n_udot']
-    n_ineq = params['n_path'] + params['n_nfz'] + params['n_aux']
+    N = inputs['N']
+    n = inputs['n']
+    m = inputs['m']
+    nz = inputs['nz']
+    n_state = inputs['n_state']
+    n_ctrl = inputs['n_ctrl']
+    n_udot = inputs['n_udot']
+    n_ineq = inputs['n_path'] + inputs['n_nfz'] + inputs['n_aux']
 
-    z1, z1_idx = params['z1'], params['z1_idx']
-    z1_min, z1_min_idx = params['z1_min'], params['z1_min_idx']
-    z1_max, z1_max_idx = params['z1_max'], params['z1_max_idx']
-    zN, zN_idx = params['zN'], params['zN_idx']
-    zN_min, zN_min_idx = params['zN_min'], params['zN_min_idx']
-    zN_max, zN_max_idx = params['zN_max'], params['zN_max_idx']
+    z1, z1_idx = inputs['z1'], inputs['z1_idx']
+    z1_min, z1_min_idx = inputs['z1_min'], inputs['z1_min_idx']
+    z1_max, z1_max_idx = inputs['z1_max'], inputs['z1_max_idx']
+    zN, zN_idx = inputs['zN'], inputs['zN_idx']
+    zN_min, zN_min_idx = inputs['zN_min'], inputs['zN_min_idx']
+    zN_max, zN_max_idx = inputs['zN_max'], inputs['zN_max_idx']
 
     vb_N_idx = list(range(params['n_term']))
     vb_N_ineq_idx = list(range(params['n_term'], params['n_term'] + params['n_term_ineq']))
 
-    z_min, z_min_idx = params['z_min'], params['z_min_idx']
-    z_max, z_max_idx = params['z_max'], params['z_max_idx']
-    u_min, u_min_idx = params['u_min'], params['u_min_idx']
-    u_max, u_max_idx = params['u_max'], params['u_max_idx']
+    z_min, z_min_idx = inputs['z_min'], inputs['z_min_idx']
+    z_max, z_max_idx = inputs['z_max'], inputs['z_max_idx']
+    u_min, u_min_idx = inputs['u_min'], inputs['u_min_idx']
+    u_max, u_max_idx = inputs['u_max'], inputs['u_max_idx']
 
-    udot_max, udot_max_idx = params['udot_max'], params['udot_max_idx']
+    udot_max, udot_max_idx = inputs['udot_max'], inputs['udot_max_idx']
     dts_ref = I['dts_ref']
     zs_ref = I['zs_ref']
     us_ref = I['us_ref']
 
-    eps_ctcs = params['eps_ctcs']
-    dts_min, dts_max, ddts_max = params['dts_min'], params['dts_max'], params['ddts_max']
+    eps_ctcs = inputs['eps_ctcs']
+    dts_min, dts_max, ddts_max = inputs['dts_min'], inputs['dts_max'], inputs['ddts_max']
 
     # Initial control
     if bools['init_ctrl']:
@@ -445,16 +446,16 @@ def baseline_subprob_constraints(inputs, solution_vars):
 
 
 
-def baseline_subprob_cost(inputs, solution_vars):
-    dz = solution_vars["dz"]
-    du = solution_vars["du"]
-    dt = solution_vars["dt"]
-    vb_path = solution_vars["vb_path"]
-    vb_nfz = solution_vars["vb_nfz"]
-    vb_aux = solution_vars["vb_aux"]
-    vb_term = solution_vars["vb_term"]
-    vb_dyn_plus = solution_vars["vb_dyn_plus"]
-    vb_dyn_minus = solution_vars["vb_dyn_minus"]
+def baseline_subprob_cost(problem,inputs):
+    dz = inputs['sol_vars']["dz"]
+    du = inputs['sol_vars']["du"]
+    dt = inputs['sol_vars']["dt"]
+    vb_path = inputs['sol_vars']["vb_path"]
+    vb_nfz = inputs['sol_vars']["vb_nfz"]
+    vb_aux = inputs['sol_vars']["vb_aux"]
+    vb_term = inputs['sol_vars']["vb_term"]
+    vb_dyn_plus = inputs['sol_vars']["vb_dyn_plus"]
+    vb_dyn_minus = inputs['sol_vars']["vb_dyn_minus"]
 
     dual_vars = inputs["dual_vars"]
     cost_terms = inputs["cost_terms"]
@@ -572,43 +573,51 @@ def baseline_autotune(flag_autotune):
             hp.autotune3()
 
 
-def baseline_subprob_outputs(solution, inputs, solution_vars, model_data):
-    dz = solution_vars['dz']
-    du = solution_vars['du']
-    dt = solution_vars['dt']
-    vb_path = solution_vars['vb_path']
-    vb_nfz = solution_vars['vb_nfz']
-    vb_aux = solution_vars['vb_aux']
-    vb_dyn_plus = solution_vars['vb_dyn_plus']
-    vb_dyn_minus = solution_vars['vb_dyn_minus']
-    vb_term = solution_vars['vb_term']
-    vb_plus = solution_vars['vb_plus']
-    vb_minus = solution_vars['vb_minus']
+def baseline_subprob_outputs(problem, inputs, subprob):
+    dz = inputs['sol_vars']['dz']
+    du = inputs['sol_vars']['du']
+    dt = inputs['sol_vars']['dt']
+    vb_path = inputs['sol_vars']['vb_path']
+    vb_nfz = inputs['sol_vars']['vb_nfz']
+    vb_aux = inputs['sol_vars']['vb_aux']
+    vb_dyn_plus = inputs['sol_vars']['vb_dyn_plus']
+    vb_dyn_minus = inputs['sol_vars']['vb_dyn_minus']
+    vb_term = inputs['sol_vars']['vb_term']
+    vb_plus = inputs['sol_vars']['vb_plus']
+    vb_minus = inputs['sol_vars']['vb_minus']
 
     zs_ref = inputs['reference_data']['zs_ref']
     us_ref = inputs['reference_data']['us_ref']
     dts_ref = inputs['reference_data']['dts_ref']
     ts_ref = inputs['reference_data']['ts_ref']
 
-    wtr_z = model_data['wtr_z']
-    wtr_u = model_data['wtr_u']
-    zs_minus = model_data['zs_minus']
+    wtr_z       = inputs['model_data']['wtr_z']
+    wtr_u       = inputs['model_data']['wtr_u']
+    zs_minus    = inputs['model_data']['zs_minus']
 
     # Extract primal variables
     dz_val = dz.value
     du_val = du.value
     dt_val = dt.value
 
+    model_data = inputs['model_data']
+
+    soln_stats = {
+        "solntime": subprob.solver_stats.solve_time,
+        "parse_time": subprob.solver_stats.setup_time,
+        "soln_object": subprob
+    }
+
     O = {}
 
     # Primal recovered solution
-    O["dz_s"] = dz_val
-    O["du_s"] = du_val
-    O["zs"] = dz_val + zs_ref
-    O["us"] = du_val + us_ref
-    O["dts"] = dt_val + dts_ref
-    O["ts"] = np.concatenate(([0], np.cumsum(O["dts"])))
-    O["Ts"] = np.sum(O["dts"])
+    O["dz_s"]   = dz_val
+    O["du_s"]   = du_val
+    O["zs"]     = dz_val + zs_ref
+    O["us"]     = du_val + us_ref
+    O["dts"]    = dt_val + dts_ref
+    O["ts"]     = np.concatenate(([0], np.cumsum(O["dts"])))
+    O["Ts"]     = np.sum(O["dts"])
 
     # Reference data
     O["zs_ref"] = zs_ref
@@ -658,16 +667,9 @@ def baseline_subprob_outputs(solution, inputs, solution_vars, model_data):
 
     return O
 
-def display_baseline_subprob_status(O, problem, nt, ncost):
-    """
-    Print formatted diagnostic summary for a subproblem solve.
 
-    Args:
-        O: dict containing subproblem output data
-        problem: an object containing at least I (iteration info)
-        nt: multiplier for time of flight (e.g., number of time steps)
-        ncost: scaling factor for total cost
-    """
+
+def display_baseline_subprob_status(problem, inputs, O):
 
     conv = O["conv_data"]
 
@@ -688,6 +690,8 @@ def display_baseline_subprob_status(O, problem, nt, ncost):
 
     solve_stat = conv.get("status", "UNKNOWN")
     iter_num = len(getattr(problem, "I", []))
+    nt = inputs['nt']
+    ncost = inputs['ncost']
 
     Ts = O.get("Ts", 0.0)
     cost = O.get("cost", 0.0)
@@ -711,96 +715,41 @@ def display_baseline_subprob_status(O, problem, nt, ncost):
 ### UNIT TEST
 
 if __name__ == "__main__":
-    # Define minimal dummy problem input structure compatible with updated solve_subproblem
-    N, n, m = 5, 3, 2
-    dummy_problem = {
-        "I": [{
-            "iter_num": 0,
-            "zs_ref": np.zeros((n, N)),
-            "us_ref": np.zeros((m, N)),
-            "dts_ref": np.ones(N - 1),
-            "ts_ref": np.linspace(0, 1, N),
-            "conv_data": {
-                "vb_path": np.zeros((1, N)),
-                "vb_nfz": np.zeros((1, N)),
-                "vb_aux": np.zeros((1, N)),
-                "vb_dyn": np.zeros((n, N - 1)),
-                "vb_term": np.zeros((2, 1)),
-            },
-            "weights": {
-                "W_path": np.ones((1, N)),
-                "W_nfz": np.ones((1, N)),
-                "W_aux": np.ones((1, N)),
-                "W_dyn": np.ones((n, N - 1)),
-                "W_term": np.ones((2, 1)),
-                "W_plus": np.ones((n,)),
-                "W_minus": np.ones((n,)),
-                "w_cost": 1.0,
-                "wtr_z": 1.0,
-                "wtr_u": 1.0,
-                "dual_path": np.ones((1, N)),
-                "dual_nfz": np.ones((1, N)),
-                "dual_aux": np.ones((1, N)),
-                "dual_dyn": np.ones((n, N - 1)),
-                "dual_plus": np.ones((n, N - 1)),
-                "dual_minus": np.ones((n, N - 1)),
-                "dual_term": np.ones((2, 1)),
-            }
-        }],
-        "params": {
-            "N": N, "n": n, "m": m, "nz": n,
-            "nondim": {"nt": 1, "nd": 1, "nv": 1, "na": 1, "ncost": 1},
-            "n_state": n, "n_ctrl": m, "n_udot": 1,
-            "n_path": 1, "n_nfz": 1, "n_aux": 1, "n_dyn": n,
-            "n_term": 1, "n_term_ineq": 1,
-            "z_min": np.zeros(n), "z_max": np.ones(n),
-            "u_min": np.zeros(m), "u_max": np.ones(m),
-            "udot_max": np.ones(m), "udot_max_idx": [0, 1],
-            "z_min_idx": list(range(n)), "z_max_idx": list(range(n)),
-            "u_min_idx": list(range(m)), "u_max_idx": list(range(m)),
-            "z1": np.zeros(n), "z1_idx": list(range(n)),
-            "z1_min": np.zeros(n), "z1_min_idx": list(range(n)),
-            "z1_max": np.ones(n), "z1_max_idx": list(range(n)),
-            "zN": np.zeros(n), "zN_idx": list(range(n)),
-            "zN_min": np.zeros(n), "zN_min_idx": list(range(n)),
-            "zN_max": np.ones(n), "zN_max_idx": list(range(n)),
-            "n_init": 1, "n_init_ineq": 1,
-            "bools": {
-                "init_ctrl": True,
-                "free_final_time": False,
-                "equal_dt": True,
-                "ctcs": False,
-                "flag_autotune": "0",
-                "buff_dyn": "term"
-            },
-            "eps_ctcs": 1e-3,
-            "yalmip_opts": {"solver": "OSQP"},
-            "case_flag": 1,
+    # Step 1: Define configuration
+    config = quad3dof.config_main()
+
+    # Step 2: Create the full problem dictionary using ocp()
+    problem = quad3dof.ocp(config)
+
+    # Step 3: Inject the first SCvx iteration into problem['I']
+    N = problem['params']['N']
+    n = problem['params']['n']
+    m = problem['params']['m']
+
+    problem["I"] = [{
+        "iter_num": 0,
+        "zs_ref": problem["params"]["zs_init"],
+        "us_ref": problem["params"]["us_init"],
+        "dts_ref": np.full(N - 1, problem["params"]["T_init"] / (N - 1)),
+        "ts_ref": np.linspace(0, problem["params"]["T_init"], N),
+        "conv_data": {
+            "vb_path": np.zeros((problem["params"]["n_path"], N)),
+            "vb_nfz": np.zeros((problem["params"]["n_nfz"], N)),
+            "vb_aux": np.zeros((problem["params"].get("n_aux", 0), N)),
+            "vb_dyn": np.zeros((problem["params"]["nz"], N - 1)),
+            "vb_term": np.zeros((problem["params"]["n_term"] + problem["params"]["n_term_ineq"], 1)),
         },
-        "zi": np.zeros(n),
-        "zi_idx": list(range(n)),
-        "zi_min": np.zeros(n),
-        "zi_min_idx": list(range(n)),
-        "zi_max": np.ones(n),
-        "zi_max_idx": list(range(n)),
-        "zf": np.zeros(n),
-        "zf_idx": list(range(n)),
-        "zf_min": np.zeros(n),
-        "zf_min_idx": list(range(n)),
-        "zf_max": np.ones(n),
-        "zf_max_idx": list(range(n)),
-    }
+        "weights": problem["params"]["weights"]
+    }]
 
-    dummy_problem['params'] = discretization.set_ltv_indices(dummy_problem['params'])
+    # Step 5: Solve
+    output = solve_subproblem(problem)
 
-    output = solve_subproblem(dummy_problem)
-    breakpoint()
+    # Step 6: Print summary
     print("Solve completed.")
     print("Final cost:", output.get("cost", "N/A"))
     print("Final state (zs):", output.get("zs", "N/A")[:, -1])
     print("Final control (us):", output.get("us", "N/A")[:, -1])
     print("Ts:", output.get("Ts", "N/A"))
-    
-    "Main function updated successfully."
 
 

@@ -5,200 +5,291 @@
 import numpy as np
 from trajopt.algorithm.discretization import set_ltv_indices
 
-def set_params_default(config=None): # TODO: Edit docstring
-    """
-    Set default problem parameters
-
-    Parameters:
-    config (dict): problem configuration data
-
-    Returns:
-    params (dict): problem parameters
-    """
+def set_params_default(config=None):
+    # --- Initialize empty params dict ---
     params = {}
 
-    if config is None:
-        config = {}
-
-    # booleans
+    # --- Default booleans ---
     params['bools'] = {
-        'auto_jac': 1,               # (1=symbolic jacobians for dynamics, 0=analytical)
-        'auto_jac_aero': 1,          # (1=symbolic jacobians for aerodynamics, 0=analytical)
-        'auto_jac_cnst': 1,          # (1=symbolic jacobians for constraints, 0=analytical)
-        'dev_var': 1,                # (1=deviation variables, 0=full-state)
-        'nondim': 0,                 # (1=nondimensionalization, 0=dimensional)
-        'var_scl_flag': 0,           # (2=linear scaling, 1=affine, 0=no scaling)
-        'free_final_time': 0,        # final time of trajectory is a variable
-        'equal_dt': 0,               # all time intervals are equal
-        'flag_nfz': 0,               # no fly zone constraints 
+        'auto_jac': 1,
+        'auto_jac_aero': 1,
+        'auto_jac_cnst': 1,
+        'dev_var': 1,
+        'nondim': 0,
+        'var_scl_flag': 0,
+        'free_final_time': 0,
+        'equal_dt': 0,
+        'flag_nfz': 0,
         'flag_autotune': 3,
         'flag_Wauto_memory': 0,
         'weight_zero': 0,
         'stepsize_auto_primal': 0,
         'stepsize_auto_dual': 0,
-        'flag_conv': 0,              # 0-both, 1-dx/violation, 2-cost/violation
-        'buff_dyn': 0,
+        'flag_conv': 0,
+        'buff_dyn': 'l2',
+        'buff_dyn_dual': 'l1',
         'ctcs': 0,
-        'ode_fixed_dt': 0
+        'ode_fixed_dt': 0,
+        'aoa_vb': 0,
+        'earth_rot': 0,
+        'init_ctrl': 1
     }
 
-    # state and control
+    # --- Basic structure ---
     params['n'] = 1
     params['m'] = 1
 
-    # constraints
-    params['path_lim'] = np.array([])
-    params['path_idx'] = np.array([], dtype=int)
-    params['n_path'] = params['path_idx'].size
-    params['nfz_idx'] = np.array([], dtype=int)
-    params['n_nfz'] = params['nfz_idx'].size
-    params['aux_idx'] = np.array([], dtype=int)
-    params['n_aux'] = params['aux_idx'].size
-    params['n_ineq'] = params['n_path'] + params['n_nfz'] + params['n_aux']
+    # --- Constraint structure ---
+    params['path_lim'] = []
+    params['path_idx'] = []
+    params['n_path'] = 0
+    params['nfz_idx'] = []
+    params['n_nfz'] = 0
+    params['aux_idx'] = []
+    params['n_aux'] = 0
+    params['n_ineq'] = 0
     params['n_eq'] = 0
 
-    # initial boundary conditions
-    params['zi'] = np.array([])
-    params['zi_idx'] = np.array([], dtype=int)
-    params['zi_min'] = np.array([])
-    params['zi_min_idx'] = np.array([], dtype=int)
-    params['zi_max'] = np.array([])
-    params['zi_max_idx'] = np.array([], dtype=int)
-    params['n_init'] = params['zi_idx'].size
-    params['n_init_ineq'] = params['zi_min_idx'].size + params['zi_max_idx'].size
+    # --- Cost label ---
+    params['cost_name'] = 'Cost'
 
-    # terminal boundary conditions
-    params['zf'] = np.array([])
-    params['zf_idx'] = np.array([], dtype=int)
-    params['zf_min'] = np.array([])
-    params['zf_min_idx'] = np.array([], dtype=int)
-    params['zf_max'] = np.array([])
-    params['zf_max_idx'] = np.array([], dtype=int)
-    params['n_term'] = params['zf_idx'].size
-    params['n_term_ineq'] = params['zf_min_idx'].size + params['zf_max_idx'].size
+    # --- Initial boundary conditions ---
+    params['zi'] = []
+    params['zi_idx'] = []
+    params['zi_min'] = []
+    params['zi_min_idx'] = []
+    params['zi_max'] = []
+    params['zi_max_idx'] = []
+    params['n_init'] = 0
+    params['n_init_ineq'] = 0
 
-    # state constraints
-    params['z_min'] = np.array([])
-    params['z_min_idx'] = np.array([], dtype=int)
-    params['z_max'] = np.array([])
-    params['z_max_idx'] = np.array([], dtype=int)
-    params['n_state'] = params['z_min_idx'].size + params['z_max_idx'].size
+    # --- Terminal boundary conditions ---
+    params['zf'] = []
+    params['zf_idx'] = []
+    params['zf_min'] = []
+    params['zf_min_idx'] = []
+    params['zf_max'] = []
+    params['zf_max_idx'] = []
+    params['n_term'] = 0
+    params['n_term_ineq'] = 0
 
-    # control constraints
-    params['bools']['init_ctrl'] = 1
-    params['u_min'] = np.array([])
-    params['u_min_idx'] = np.array([], dtype=int)
-    params['u_max'] = np.array([])
-    params['u_max_idx'] = np.array([], dtype=int)
-    params['n_ctrl'] = params['u_min_idx'].size + params['u_max_idx'].size
-    params['udot_max'] = np.array([])
-    params['udot_max_idx'] = np.array([], dtype=int)
-    params['n_udot'] = params['udot_max_idx'].size
+    # --- State constraints ---
+    params['z_min'] = []
+    params['z_min_idx'] = []
+    params['z_max'] = []
+    params['z_max_idx'] = []
+    params['n_state'] = 0
 
-    # weights
+    # --- Control constraints ---
+    params['u_min'] = []
+    params['u_min_idx'] = []
+    params['u_max'] = []
+    params['u_max_idx'] = []
+    params['udot_max'] = []
+    params['udot_max_idx'] = []
+    params['n_ctrl'] = 0
+    params['n_udot'] = 0
+
+    # --- Weight structure ---
     params['weights'] = {}
     params['n_dyn'] = 0
 
-    # convergence
+    # --- Convergence settings ---
     params['conv'] = {
         'eps_feas_conv': 1e-1,
         'eps_conv': 1e-1,
         'eps_cost_conv': 1e-1
     }
 
-    # overwrite fields with config
-    if 'params' in config:
-        for key, value in config['params'].items():
-            if key == 'bools':
-                for subkey, subvalue in value.items():
-                    params['bools'][subkey] = subvalue
-            else:
-                params[key] = value
+    # --- Overwrite with config ---
+    if config is not None:
+        params['mission'] = config.get('mission', None)
+        if 'params' in config:
+            for key, value in config['params'].items():
+                if key == 'bools':
+                    params['bools'].update(value)
+                else:
+                    params[key] = value
 
-    if params['bools']['ctcs']:
-        params['bools']['buff_dyn'] = 1
+    # --- CTCS-specific adjustment ---
+    if params['bools'].get('ctcs') and params['bools'].get('buff_dyn') == 'term':
+        params['bools']['buff_dyn'] = 'l1'
 
     return params
 
 
-def set_params_constraint_default(params): # TODO: Test
-    # Constraint bookkeeping
-    params['n_init'] = len(params['zi_idx'])
-    params['n_init_ineq'] = len(params['zi_min_idx'] + params['zi_max_idx'])
-    params['n_term'] = len(params['zf_idx'])
-    params['n_term_ineq'] = len(params['zf_min_idx'] + params['zf_max_idx'])
-    params['n_ctrl'] = len(params['u_min_idx'] + params['u_max_idx'])
-    params['n_state'] = len(params['z_min_idx'] + params['z_max_idx'])
-    params['n_udot'] = len(params['udot_max'])
+def set_params_constraint_default(params):
+    """
+    Set default constraint dimensions, duals, weights, and convergence criteria
+    for SCvx-style trajectory optimization.
+    """
 
-    params['n_path'] = len(params['path_idx'])  # Number of path constraints
-    params['n_nfz'] = len(params['nfz_idx'])  # Number of NFZs
-    params['n_aux'] = len(params['aux_idx'])  # Number of auxiliary constraints
-    params['n_ineq'] = params['n_nfz'] + params['n_path'] + params['n_aux']
+    # --- Constraint bookkeeping ---
+    params['n_init']       = len(params.get('zi_idx', []))
+    params['n_init_ineq']  = len(params.get('zi_min_idx', [])) + len(params.get('zi_max_idx', []))
+    params['n_term']       = len(params.get('zf_idx', []))
+    params['n_term_ineq']  = len(params.get('zf_min_idx', [])) + len(params.get('zf_max_idx', []))
+    params['n_ctrl']       = len(params.get('u_min_idx', [])) + len(params.get('u_max_idx', []))
+    params['n_state']      = len(params.get('z_min_idx', [])) + len(params.get('z_max_idx', []))
+    params['n_udot']       = len(params.get('udot_max', []))
 
-    # CTCS
-    if params['bools']['ctcs']:
+    params['n_path']       = len(params.get('path_idx', []))
+    params['n_nfz']        = len(params.get('nfz_idx', []))
+    params['n_aux']        = len(params.get('aux_idx', []))
+    params['n_ineq']       = params['n_path'] + params['n_nfz'] + params['n_aux']
+
+    # --- State vector size (ctcs mode) ---
+    if params['bools'].get('ctcs', False):
         params['nz'] = params['n'] + params['n_ineq']
     else:
         params['nz'] = params['n']
 
-    # Buffering dynamics
-    params['n_dyn'] = params['bools']['buff_dyn'] * params['nz']
+    params['n_dyn'] = params['nz']
 
-    params['weights']['w_fac_N'] = params['N']
-    params['weights']['w_fac_Nm1'] = params['N'] - 1
+    buff_dyn = str(params['bools'].get('buff_dyn', 'term'))
 
-    # All autotuning schemes - true cost and dual initialization
-    params['weights']['w_cost'] = 1e0
-    params['weights']['dual_path'] = np.zeros((params['n_path'], params['N']))
-    params['weights']['dual_nfz'] = np.zeros((params['n_nfz'], params['N']))
-    params['weights']['dual_aux'] = np.zeros((params['n_aux'], params['N']))
-    params['weights']['dual_dyn'] = np.zeros((params['nz'], params['N'] - 1))
-    params['weights']['dual_term'] = np.zeros((params['n_term'] + params['n_term_ineq'], 1))
+    if buff_dyn in {'term', 'l1', 'l2'}:
+        params['n_plus'] = 0
+        params['n_minus'] = 0
+        params['Npm'] = 0
+    elif buff_dyn == 'quad-1':
+        params['n_plus'] = 1
+        params['n_minus'] = 1
+        params['Npm'] = 1
+    elif buff_dyn == 'quad-2':
+        params['n_plus'] = 1
+        params['n_minus'] = 1
+        params['Npm'] = params['N'] - 1
+    elif buff_dyn == 'quad-3':
+        params['n_plus'] = params['nz']
+        params['n_minus'] = params['nz']
+        params['Npm'] = 1
+    else:
+        raise ValueError("Invalid buff_dyn flag.")
 
-    # Buffer variables penalty weights initialization
-    params['weights']['W_path'] = np.zeros((params['n_path'], params['N']))
-    params['weights']['W_nfz'] = np.zeros((params['n_nfz'], params['N']))
-    params['weights']['W_aux'] = np.zeros((params['n_aux'], params['N']))
-    params['weights']['W_dyn'] = np.zeros((1, params['N'] - 1))
-    params['weights']['W_term'] = np.zeros((params['n_term'] + params['n_term_ineq'], 1))
+    # --- Default weights ---
+    weights = params.setdefault('weights', {})
+    weights['w_fac_N'] = params['N']
+    weights['w_fac_Nm1'] = params['N'] - 1
+    weights['w_cost'] = 1.0
 
-    # Convergence criteria
-    params['conv']['eps_cost'] = 0
-    params['conv']['eps_state'] = 0
-    params['conv']['eps_path'] = 0
-    params['conv']['eps_nfz'] = 0
-    params['conv']['eps_aux'] = 0
-    params['conv']['eps_term'] = 0
-    params['conv']['eps_dyn'] = 0
-    params['conv'].setdefault('setup', {})['eps_cost'] = []
-    params['conv']['setup']['eps_state'] = []
-    params['conv']['setup']['eps_path'] = []
-    params['conv']['setup']['eps_nfz'] = []
-    params['conv']['setup']['eps_aux'] = []
-    params['conv']['setup']['eps_term'] = []
-    params['conv']['setup']['eps_dyn'] = []
-    params['conv']['setup']['ctcs_mult_state'] = 1
-    params['conv']['setup']['ctcs_mult_cnst'] = 1
+    weights['dual_path']   = np.zeros((params['n_path'], params['N']))
+    weights['dual_nfz']    = np.zeros((params['n_nfz'], params['N']))
+    weights['dual_aux']    = np.zeros((params['n_aux'], params['N']))
+    weights['dual_term']   = np.zeros((params['n_term'] + params['n_term_ineq'], 1))
+    weights['dual_dyn']    = np.zeros((params['n_dyn'], params['N'] - 1))
+    weights['dual_plus']   = np.zeros((params['n_dyn'], params['N'] - 1))
+    weights['dual_minus']  = np.zeros((params['n_dyn'], params['N'] - 1))
+
+    weights['W_path']  = np.zeros((params['n_path'], params['N']))
+    weights['W_nfz']   = np.zeros((params['n_nfz'], params['N']))
+    weights['W_aux']   = np.zeros((params['n_aux'], params['N']))
+    weights['W_term']  = np.zeros((params['n_term'] + params['n_term_ineq'], 1))
+    weights['W_dyn']   = np.zeros((params['n_dyn'], params['N'] - 1))
+    weights['W_plus']  = np.zeros((params['n_plus'], params['Npm']))
+    weights['W_minus'] = np.zeros((params['n_minus'], params['Npm']))
+
+    # --- Convergence tolerances ---
+    conv = params.setdefault('conv', {})
+    conv['eps_cost'] = 0
+    conv['eps_state'] = 0
+    conv['eps_path'] = 0
+    conv['eps_nfz'] = 0
+    conv['eps_aux'] = 0
+    conv['eps_term'] = 0
+    conv['eps_dyn'] = 0
+
+    setup = conv.setdefault('setup', {})
+    for key in ['eps_cost', 'eps_state', 'eps_path', 'eps_nfz', 'eps_aux', 'eps_term', 'eps_dyn']:
+        setup[key] = []
+
+    setup['ctcs_mult_state'] = 1.0
+    setup['ctcs_mult_cnst'] = 1.0
+
     params['eps_ctcs'] = 1e-5
 
-    # Terminal state nondimensionalization
-    M_state_d2nd_vec = params['nondim']['M_state_d2nd']
-    params['nondim']['M_term_d2nd'] = np.diag(np.concatenate((M_state_d2nd_vec[params['zf_idx']], 
-                                                             M_state_d2nd_vec[params['zf_min_idx']], 
-                                                             M_state_d2nd_vec[params['zf_max_idx']]))).copy()
+    # --- Terminal nondimensionalization matrix ---
+    M_state_vec = np.diag(params['nondim']['M_state_d2nd'])
+    zf_idx = params.get('zf_idx', [])
+    zf_min_idx = params.get('zf_min_idx', [])
+    zf_max_idx = params.get('zf_max_idx', [])
+    M_term_diag = np.concatenate([M_state_vec[zf_idx],
+                                  M_state_vec[zf_min_idx],
+                                  M_state_vec[zf_max_idx]])
+    params['nondim']['M_term_d2nd'] = np.diag(M_term_diag)
 
-    # Discrete LTV matrix data
+    # --- LTV indexing ---
+    from trajopt.algorithm.discretization import set_ltv_indices
     params = set_ltv_indices(params)
 
-    # Initial virtual buffers
-    params.setdefault('conv_data', {})['vb_path'] = np.zeros((params['n_path'], params['N']))
-    params['conv_data']['vb_nfz'] = np.zeros((params['n_nfz'], params['N']))
-    params['conv_data']['vb_aux'] = np.zeros((params['n_aux'], params['N']))
-    params['conv_data']['vb_dyn'] = np.zeros((params['nz'], params['N'] - 1))
-    params['conv_data']['vb_term'] = np.zeros((params['nz'], 1))
+    # --- Initialize virtual buffers ---
+    conv_data = params.setdefault('conv_data', {})
+    conv_data['vb_path'] = np.zeros((params['n_path'], params['N']))
+    conv_data['vb_nfz']  = np.zeros((params['n_nfz'], params['N']))
+    conv_data['vb_aux']  = np.zeros((params['n_aux'], params['N']))
+    conv_data['vb_dyn']  = np.zeros((params['nz'], params['N'] - 1))
+    conv_data['vb_term'] = np.zeros((params['nz'], 1))
 
     return params
+
+
+def set_problem_default(problem):
+    """
+    Populate default state/control bounds and boundary conditions
+    from problem.params into top-level problem fields.
+
+    Parameters:
+        problem : dict with nested 'params' dict
+
+    Returns:
+        problem : updated dict
+    """
+    params = problem["params"]
+
+    #
+    # BOUNDARY CONDITIONS
+    #
+    # Initial conditions
+    problem["zi"]           = params["zi"]
+    problem["zi_idx"]       = params["zi_idx"]
+    problem["zi_min"]       = params["zi_min"]
+    problem["zi_min_idx"]   = params["zi_min_idx"]
+    problem["zi_max"]       = params["zi_max"]
+    problem["zi_max_idx"]   = params["zi_max_idx"]
+    problem["n_init"]       = params["n_init"]
+    problem["n_init_ineq"]  = params["n_init_ineq"]
+
+    # Terminal conditions
+    problem["zf"]           = params["zf"]
+    problem["zf_idx"]       = params["zf_idx"]
+    problem["zf_min"]       = params["zf_min"]
+    problem["zf_min_idx"]   = params["zf_min_idx"]
+    problem["zf_max"]       = params["zf_max"]
+    problem["zf_max_idx"]   = params["zf_max_idx"]
+    problem["n_term"]       = params["n_term"]
+    problem["n_term_ineq"]  = params["n_term_ineq"]
+
+    #
+    # STATE CONSTRAINTS
+    #
+    problem["z_min"]        = params["z_min"]
+    problem["z_min_idx"]    = params["z_min_idx"]
+    problem["z_max"]        = params["z_max"]
+    problem["z_max_idx"]    = params["z_max_idx"]
+
+    #
+    # CONTROL CONSTRAINTS
+    #
+    problem["u_min"]        = params["u_min"]
+    problem["u_min_idx"]    = params["u_min_idx"]
+    problem["u_max"]        = params["u_max"]
+    problem["u_max_idx"]    = params["u_max_idx"]
+    problem["n_ctrl"]       = params["n_ctrl"]
+    problem["udot_max"]     = params["udot_max"]
+    problem["udot_max_idx"] = params["udot_max_idx"]
+    problem["n_udot"]       = params["n_udot"]
+
+    return problem
 
 
 # testing functions
