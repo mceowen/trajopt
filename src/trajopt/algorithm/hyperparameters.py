@@ -115,9 +115,9 @@ def autotune2(O, problem, N, vb_path, vb_nfz, vb_aux, vb_dyn, vb_term, W_path, W
 
     # Autotune matrices via dual variables and feasibility tolerance
     for k in range(N):
-        dual_path_buff.append(np.diag(W_path[:, k]) @ vb_path[:, k])
-        dual_nfz_buff.append(np.diag(W_nfz[:, k]) @ vb_nfz[:, k])
-        dual_aux_buff.append(np.diag(W_aux[:, k]) @ vb_aux[:, k])
+        dual_path_buff.append(np.diag(W_path[:, k]) @ vb_path[:, k].flatten())
+        dual_nfz_buff.append(np.diag(W_nfz[:, k]) @ vb_nfz[:, k].flatten())
+        dual_aux_buff.append(np.diag(W_aux[:, k]) @ vb_aux[:, k].flatten())
 
         if problem['params']['n_ineq'] > 0:
             if problem['params']['n_path'] > 0:
@@ -132,14 +132,14 @@ def autotune2(O, problem, N, vb_path, vb_nfz, vb_aux, vb_dyn, vb_term, W_path, W
             Wh_aux.append(np.abs(dual_aux_buff[-1]))
 
         if k < N - 1:
-            dual_dyn_buff.append(np.diag(W_dyn[:, k]) @ vb_dyn[:, k])
+            dual_dyn_buff.append(np.diag(W_dyn[:, k].flatten()) @ vb_dyn[:, k])
             if buff_dyn:
                 Wh_dyn.append(np.sum(np.abs(dual_dyn_buff[-1]) / eps_feas_dyn))
             else:
                 Wh_dyn.append(np.sum(np.abs(dual_dyn_buff[-1])))
 
     if (problem['params']['n_term'] + problem['params']['n_term_ineq']) > 0:
-        dual_term_buff = np.diag(W_term) @ vb_term
+        dual_term_buff = np.diag(W_term.flatten()) @ vb_term
         Wh_term = np.abs(dual_term_buff / eps_feas_term)
 
     # Extract field names and create buffer nametags
@@ -181,26 +181,26 @@ def autotune2(O, problem, N, vb_path, vb_nfz, vb_aux, vb_dyn, vb_term, W_path, W
     O['weights']['data'] = {}
 
     O['weights']['data']['term'] = {
-        'Wxq': np.diag(W_term) @ vb_term,
+        'Wxq': np.diag(W_term.flatten()) @ vb_term,
         'dual': dual_term_buff
     }
 
     for k in range(N):
         O['weights']['data']['path'] = {
-            'Wxq': np.diag(W_path[:, k]) @ vb_path[:, k],
+            'Wxq': np.diag(W_path[:, k].flatten()) @ vb_path[:, k],
             'dual': dual_path_buff[k]
         }
         O['weights']['data']['nfz'] = {
-            'Wxq': np.diag(W_nfz[:, k]) @ vb_nfz[:, k],
+            'Wxq': np.diag(W_nfz[:, k].flatten()) @ vb_nfz[:, k],
             'dual': dual_nfz_buff[k]
         }
         O['weights']['data']['aux'] = {
-            'Wxq': np.diag(W_aux[:, k]) @ vb_aux[:, k],
+            'Wxq': np.diag(W_aux[:, k].flatten()) @ vb_aux[:, k],
             'dual': dual_aux_buff[k]
         }
         # if k < N - 1:
         #     O['weights']['data']['dyn'] = {
-        #         'Wxq': np.diag(W_dyn[:, k]) @ vb_dyn[:, k],
+        #         'Wxq': np.diag(W_dyn[:, k].flatten()) @ vb_dyn[:, k],
         #         'dual': dual_dyn_buff[k]
         #     }
 

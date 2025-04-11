@@ -134,8 +134,17 @@ def subprob_variable_scaling(problem, inputs):
         else:
             raise ValueError('Undefined var_scl_flag!')
 
-        dz = [M_x[:, :, k] @ dzhat[:, k] + b_x[:, k] for k in range(N)]
-        du = [M_u[:, :, k] @ duhat[:, k] + b_u[:, k] for k in range(N)]
+        dz_cols = [
+                cp.reshape(M_x[:, :, k] @ dzhat[:, k] + b_x[:, k], (n, 1))
+                for k in range(N)
+            ]
+        dz = cp.hstack(dz_cols)    
+        
+        du_cols = [
+            cp.reshape(M_u[:, :, k] @ duhat[:, k] + b_u[:, k], (m, 1))
+            for k in range(N)
+        ]
+        du = cp.hstack(du_cols)
 
     # FULL STATE VARIABLES
     else:
