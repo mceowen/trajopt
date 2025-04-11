@@ -337,7 +337,7 @@ if __name__ == "__main__":
     # Now call set_params_constraint_default with params
     print('..:: Calling set_params_constraint_default ::..')
     params = set_params_constraint_default(params)
-    
+
     # check if conv_data exists again (it should)
     tf = 'conv_data' in params # true/false
     print('conv_data in params?: ', tf)
