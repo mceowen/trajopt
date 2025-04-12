@@ -53,14 +53,14 @@ def config_main():
     config['params']['T_init'] = 10
 
     config['params']['bools'] = {
-        'flag_nfz': 2,
-        'flag_autotune': '3',
-        'free_final_time': 1,
-        'equal_dt': 0,
-        'buff_dyn': 'quad-2',
-        'buff_dyn_dual': 'l1',
-        'ctcs': 0,
-        'ode_fixed_dt': 1,
+        'flag_nfz': 1,          # 0, 1, 2
+        'flag_autotune': '3',   # '0', '1', '2', '3', 'al-scvx'
+        'free_final_time': 1,   # 0, 1
+        'equal_dt': 0,          # 0, 1
+        'buff_dyn': 'quad-2',   # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
+        'buff_dyn_dual': 'l1',  # 'l1', 'none'
+        'ctcs': 0,              # 0, 1
+        'ode_fixed_dt': 1,      # 0, 1 
     }
 
     # --- Solver options - TODO:expand ---
@@ -214,7 +214,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
 
     ### Vehicle Parameters ###
     params['mass'] = 0.35;                  # [kg], quadrotor mass
-git s    params['theta_max'] = np.deg2rad(100);  # [rad], maximum tilt angle
+    params['theta_max'] = np.deg2rad(100);  # [rad], maximum tilt angle
 
     ### Set dim/nondim params based on flag ###
     # scaling values for nondim
@@ -391,7 +391,7 @@ git s    params['theta_max'] = np.deg2rad(100);  # [rad], maximum tilt angle
 
     ### NFZ convergence values ###
     eps_nfz_cnst = 1e-1
-    params['conv']['setup']['eps_nfz'] = eps_nfz_cnst * np.ones(params['n'])
+    params['conv']['setup']['eps_nfz'] = eps_nfz_cnst * np.ones(params['n_nfz'])
     params['conv']['setup'].setdefault('cnst', {})['eps_nfz'] = eps_nfz_cnst
 
     ### Terminal constraint values ###
