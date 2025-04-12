@@ -83,7 +83,6 @@ def compute_ctcs_jacobians(ts, zs, us, problem):
     return Ac, Bc, fc
 
 
-
 def generate_jacobians(fcn_hdl, problem):
 
     # Extract params
