@@ -39,9 +39,9 @@ def solve_subproblem(problem):
     # TODO: Add custom outputs
     # problem.custom_outputs(problem, inputs, O)
 
-    O = convergence.check_convergence_tolerance(problem, O)
+    O = convergence.check_convergence_tolerance(problem, inputs, O)
 
-    baseline_autotune(problem, O)
+    O = baseline_autotune(problem, inputs, O)
     
     display_baseline_subprob_status(problem, inputs, O)
 
@@ -566,14 +566,15 @@ def baseline_subprob_cost(problem,inputs):
 
     return PTR_COST
 
-def baseline_autotune(flag_autotune):
-    match flag_autotune:
+def baseline_autotune(problem, inputs, O):
+    match problem['params']['bools']['flag_autotune']:
         case 1:
-            hp.autotune1()
+            O = hp.autotune1(problem, inputs, O)
         case 2:
-            hp.autotune2()
+            O = hp.autotune2(problem, inputs, O)
         case 3:
-            hp.autotune3()
+            O = hp.autotune3(problem, inputs, O)
+    return O
 
 
 def baseline_subprob_outputs(problem, inputs, subprob):

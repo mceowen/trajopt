@@ -1,6 +1,6 @@
 import numpy as np
 
-def autotune1(O, problem, inputs):
+def autotune1(problem, inputs, O):
     """
     Autotuning type 1.
     
@@ -81,7 +81,7 @@ def autotune1(O, problem, inputs):
     return O
 
 
-def autotune2(O, problem, inputs):
+def autotune2(problem, inputs, O):
     """
     Autotuning type 2.
 
@@ -237,9 +237,9 @@ def autotune2(O, problem, inputs):
     return O
 
 
-def autotune3(O, problem, inputs):
-    O = autotune1(O, problem, inputs)
-    O = autotune2(O, problem, inputs)
+def autotune3(problem, inputs, O):
+    O = autotune1(problem, inputs, O)
+    O = autotune2(problem, inputs, O)
 
     return O
 
