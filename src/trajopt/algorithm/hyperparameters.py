@@ -1,92 +1,113 @@
 import numpy as np
 
-def autotune1(O, problem, iter_num, vb_path, vb_nfz, vb_aux, vb_dyn, vb_term, dual_path, dual_nfz, dual_aux, dual_dyn, dual_term):
+def autotune1(O, problem, inputs):
     """
-    Autotuning type 4.
+    Autotuning type 1.
     
     Parameters:
-    O (dict): Dictionary containing weights and data.
-    problem (dict): Dictionary containing problem parameters.
-    iter_num (int): Current iteration number.
-    vb_path, vb_nfz, vb_aux, vb_dyn, vb_term (numpy.ndarray): Value buffers.
-    dual_path, dual_nfz, dual_aux, dual_dyn, dual_term (numpy.ndarray): Dual variables.
+    O (dict): Dictionary containing weights and data
+    problem (dict): Dictionary containing problem parameters
+    inputs (dict): Dictionary containing all solver inputs/variables
     
     Returns:
-    dict: Updated dictionary O with tuned weights and data.
+    dict: Updated dictionary O with tuned weights and data
     """
-    # Extract hyperparameters
+    # Access iter_num from inputs
+    iter_num = inputs['iter_num']
+
+    # Extract variables from inputs dict
+    sol_vars = inputs['sol_vars']
+    vb_path = np.array(sol_vars['vb_path'])
+    vb_nfz = np.array(sol_vars['vb_nfz'])
+    vb_aux = np.array(sol_vars['vb_aux'])
+    vb_term = np.array(sol_vars['vb_term'])
+    vb_dyn = np.array(O['conv_data']['vb_dyn'])  # From O since not in sol_vars
+
+    dual_path = inputs['dual_path']
+    dual_nfz = inputs['dual_nfz']
+    dual_aux = inputs['dual_aux']
+    dual_dyn = inputs['dual_dyn']
+    dual_term = inputs['dual_term']
+
+    # Hyperparameters
     if problem['params']['bools']['stepsize_auto_dual']:
-        beta = 1 / iter_num
-        gamma = 1 / iter_num
+        beta = gamma = 1 / iter_num
     else:
         beta = problem['params']['weights']['beta']
         gamma = problem['params']['weights']['gamma']
 
-    # Convert value buffers to numpy arrays if they are not already
-    vb_path = np.array(vb_path)
-    vb_nfz = np.array(vb_nfz)
-    vb_aux = np.array(vb_aux)
-    vb_dyn = np.array(vb_dyn)
-    vb_term = np.array(vb_term)
-
-    eps_feas_path = problem['params']['conv']['eps_path']
-    eps_feas_nfz = problem['params']['conv']['eps_nfz']
-    eps_feas_aux = problem['params']['conv']['eps_aux']
-    eps_feas_term = problem['params']['conv']['eps_term']
-    eps_feas_dyn = problem['params']['conv']['eps_dyn']
-
-    # Inequality
+    # Inequality updates
     dual_path_plus = np.maximum(0, gamma * vb_path + dual_path)
     dual_nfz_plus = np.maximum(0, gamma * vb_nfz + dual_nfz)
     dual_aux_plus = np.maximum(0, gamma * vb_aux + dual_aux)
-    dmu_ineq = np.concatenate([dual_path_plus, dual_nfz_plus, dual_aux_plus]) - np.concatenate([dual_path, dual_nfz, dual_aux])
-
-    # Saturate
-    n_path = len(vb_path)
-    n_nfz = len(vb_nfz)
-    n_aux = len(vb_aux)
-
-    if n_path > 0:
-        dual_path_plus[vb_path <= eps_feas_path] = dual_path[vb_path <= eps_feas_path]
-    if n_nfz > 0:
-        dual_nfz_plus[vb_nfz <= eps_feas_nfz] = dual_nfz[vb_nfz <= eps_feas_nfz]
-    if n_aux > 0:
-        dual_aux_plus[vb_aux <= eps_feas_aux] = dual_aux[vb_aux <= eps_feas_aux]
-
-    O['weights']['dual_path'] = dual_path_plus
-    O['weights']['dual_nfz'] = dual_nfz_plus
-    O['weights']['dual_aux'] = dual_aux_plus
-    O['weights']['data']['dmu_ineq'] = dmu_ineq
-
-    # Equality
+    
+    # Equality updates
     dual_dyn_plus = beta * vb_dyn + dual_dyn
     dual_term_plus = beta * vb_term + dual_term
-    dmu_eq = dual_term_plus - dual_term
 
-    # Saturate
-    dual_dyn_plus[np.abs(vb_dyn) <= eps_feas_dyn] = dual_dyn[np.abs(vb_dyn) <= eps_feas_dyn]
-    dual_term_plus[np.abs(vb_term) <= eps_feas_term] = dual_term[np.abs(vb_term) <= eps_feas_term]
+    # Constraint feasibility thresholds
+    conv = problem['params']['conv']
+    eps_path = conv['eps_path']
+    eps_nfz = conv['eps_nfz']
+    eps_aux = conv['eps_aux']
+    eps_term = conv['eps_term']
+    eps_dyn = conv['eps_dyn']
 
-    O['weights']['dual_dyn'] = dual_dyn_plus
-    O['weights']['dual_term'] = dual_term_plus
-    O['weights']['data']['dmu_eq'] = dmu_eq
+    # Apply saturation logic
+    for var, eps in zip([vb_path, vb_nfz, vb_aux], [eps_path, eps_nfz, eps_aux]):
+        mask = var <= eps
+        if var is vb_path: dual_path_plus[mask] = dual_path[mask]
+        if var is vb_nfz: dual_nfz_plus[mask] = dual_nfz[mask] 
+        if var is vb_aux: dual_aux_plus[mask] = dual_aux[mask]
+
+    dual_dyn_plus[np.abs(vb_dyn) <= eps_dyn] = dual_dyn[np.abs(vb_dyn) <= eps_dyn]
+    dual_term_plus[np.abs(vb_term) <= eps_term] = dual_term[np.abs(vb_term) <= eps_term]
+
+    # Update output dictionary
+    weights = O['weights']
+    weights.update({
+        'dual_path': dual_path_plus,
+        'dual_nfz': dual_nfz_plus,
+        'dual_aux': dual_aux_plus,
+        'dual_dyn': dual_dyn_plus,
+        'dual_term': dual_term_plus,
+        'data': {
+            'dmu_ineq': np.concatenate([dual_path_plus, dual_nfz_plus, dual_aux_plus]) - 
+                       np.concatenate([dual_path, dual_nfz, dual_aux]),
+            'dmu_eq': dual_term_plus - dual_term
+        }
+    })
 
     return O
 
-def autotune2(O, problem, N, vb_path, vb_nfz, vb_aux, vb_dyn, vb_term, W_path, W_nfz, W_aux, W_dyn, W_term):
+
+def autotune2(O, problem, inputs):
     """
     Autotuning type 2.
 
     Parameters:
     O (dict): Dictionary containing weights and data.
     problem (dict): Dictionary containing problem parameters.
-    N (int): Number of iterations.
-    vb_path, vb_nfz, vb_aux, vb_dyn, vb_term (numpy.ndarray): Value buffers.
-    W_path, W_nfz, W_aux, W_dyn, W_term (numpy.ndarray): Weight matrices.
+    inputs (dict): Dictionary containing all solver inputs/variables.
 
     Returns:
     dict: Updated dictionary O with tuned weights and data.
     """
+    # Extract variables from inputs
+    N = inputs['N']
+    sol_vars = inputs['sol_vars']
+    vb_path = np.array(sol_vars['vb_path'])
+    vb_nfz = np.array(sol_vars['vb_nfz'])
+    vb_aux = np.array(sol_vars['vb_aux'])
+    vb_dyn = np.array(sol_vars['vb_dyn_plus'])  # Assuming vb_dyn_plus is in sol_vars
+    vb_term = np.array(sol_vars['vb_term'])
+
+    W_path = inputs['W_path']
+    W_nfz = inputs['W_nfz']
+    W_aux = inputs['W_aux']
+    W_dyn = inputs['W_dyn']
+    W_term = inputs['W_term']
+
     # Extract parameters for autotuning
     eps_feas_path = problem['params']['conv']['eps_path']
     eps_feas_nfz = problem['params']['conv']['eps_nfz']
@@ -102,15 +123,18 @@ def autotune2(O, problem, N, vb_path, vb_nfz, vb_aux, vb_dyn, vb_term, W_path, W
     path_idx = problem['params']['path_idx']
     nfz_idx = problem['params']['nfz_idx']
     aux_idx = problem['params']['aux_idx']
+    
     dual_ineq = []
     dual_path_buff = []
     dual_nfz_buff = []
     dual_aux_buff = []
     dual_dyn_buff = []
+    
     Wh_path = []
     Wh_nfz = []
     Wh_aux = []
     Wh_dyn = []
+    
     Wh_term = []
 
     # Autotune matrices via dual variables and feasibility tolerance
@@ -213,9 +237,9 @@ def autotune2(O, problem, N, vb_path, vb_nfz, vb_aux, vb_dyn, vb_term, W_path, W
     return O
 
 
-def autotune3(O, problem, iter_num, vb_path, vb_nfz, vb_aux, vb_dyn, vb_term, dual_path, dual_nfz, dual_aux, dual_dyn, dual_term):
-    O = autotune1(O, problem, N, vb_path, vb_nfz, vb_aux, vb_dyn, vb_term, W_path, W_nfz, W_aux, W_dyn, W_term)
-    O = autotune2(O, problem, N, vb_path, vb_nfz, vb_aux, vb_dyn, vb_term, W_path, W_nfz, W_aux, W_dyn, W_term)
+def autotune3(O, problem, inputs):
+    O = autotune1(O, problem, inputs)
+    O = autotune2(O, problem, inputs)
 
     return O
 

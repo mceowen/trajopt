@@ -214,7 +214,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
 
     ### Vehicle Parameters ###
     params['mass'] = 0.35;                  # [kg], quadrotor mass
-    params['theta_max'] = np.deg2rad(100);  # [rad], maximum tilt angle
+git s    params['theta_max'] = np.deg2rad(100);  # [rad], maximum tilt angle
 
     ### Set dim/nondim params based on flag ###
     # scaling values for nondim
