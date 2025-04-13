@@ -1,19 +1,7 @@
 import numpy as np
 
 def autotune1(O, problem, iter_num, vb_path, vb_nfz, vb_aux, vb_dyn, vb_term, dual_path, dual_nfz, dual_aux, dual_dyn, dual_term):
-    """
-    Autotuning type 4.
-    
-    Parameters:
-    O (dict): Dictionary containing weights and data.
-    problem (dict): Dictionary containing problem parameters.
-    iter_num (int): Current iteration number.
-    vb_path, vb_nfz, vb_aux, vb_dyn, vb_term (numpy.ndarray): Value buffers.
-    dual_path, dual_nfz, dual_aux, dual_dyn, dual_term (numpy.ndarray): Dual variables.
-    
-    Returns:
-    dict: Updated dictionary O with tuned weights and data.
-    """
+
     # Extract hyperparameters
     if problem['params']['bools']['stepsize_auto_dual']:
         beta = 1 / iter_num
@@ -74,19 +62,7 @@ def autotune1(O, problem, iter_num, vb_path, vb_nfz, vb_aux, vb_dyn, vb_term, du
     return O
 
 def autotune2(O, problem, N, vb_path, vb_nfz, vb_aux, vb_dyn, vb_term, W_path, W_nfz, W_aux, W_dyn, W_term):
-    """
-    Autotuning type 2.
 
-    Parameters:
-    O (dict): Dictionary containing weights and data.
-    problem (dict): Dictionary containing problem parameters.
-    N (int): Number of iterations.
-    vb_path, vb_nfz, vb_aux, vb_dyn, vb_term (numpy.ndarray): Value buffers.
-    W_path, W_nfz, W_aux, W_dyn, W_term (numpy.ndarray): Weight matrices.
-
-    Returns:
-    dict: Updated dictionary O with tuned weights and data.
-    """
     # Extract parameters for autotuning
     eps_feas_path = problem['params']['conv']['eps_path']
     eps_feas_nfz = problem['params']['conv']['eps_nfz']

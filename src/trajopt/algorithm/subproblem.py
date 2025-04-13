@@ -41,7 +41,7 @@ def solve_subproblem(problem):
 
     O = convergence.check_convergence_tolerance(problem, O)
 
-    baseline_autotune(problem, O)
+    baseline_autotune(problem, inputs, O)
     
     display_baseline_subprob_status(problem, inputs, O)
 
@@ -603,11 +603,18 @@ def baseline_subprob_outputs(problem, inputs, subprob):
     du_val = du.value
     dt_val = dt.value
 
-    soln_stats = {
-        "solntime":     subprob.solver_stats.solve_time,
-        "parse_time":   subprob.solver_stats.setup_time,
-        "soln_object":  subprob
-    }
+    if subprob.solver_stats is not None:
+        soln_stats = {
+            "solntime":     subprob.solver_stats.solve_time,
+            "parse_time":   subprob.solver_stats.setup_time,
+            "soln_object":  subprob
+        }
+    else:
+        soln_stats = {
+            "solntime":     None,
+            "parse_time":   None,
+            "soln_object":  subprob
+        }
 
     O = {}
 
