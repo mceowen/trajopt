@@ -16,34 +16,34 @@ import trajopt.utils.tools as tools
 
 
 def solve_subproblem(problem):
-    inputs = baseline_subprob_inputs(problem)
-    #problem.custom_inputs(problem, inputs)
+    local_vars = baseline_subprob_inputs(problem)
+    #problem.custom_inputs(problem, local_vars)
 
-    inputs = baseline_subprob_variables(problem,inputs)
+    local_vars = baseline_subprob_variables(problem,local_vars)
 
     constraints = []
-    constraints += baseline_subprob_constraints(problem, inputs)
-    #constraints += problem.custom_constraints(problem, inputs, inputs['sol_vars'])
+    constraints += baseline_subprob_constraints(problem, local_vars)
+    #constraints += problem.custom_constraints(problem, local_vars, local_vars['sol_vars'])
 
-    PTR_COST    = baseline_subprob_cost(problem, inputs)
+    PTR_COST    = baseline_subprob_cost(problem, local_vars)
 
     objective   = cp.Minimize(PTR_COST)
     subprob     = cp.Problem(objective, constraints)
 
     O = baseline_subprob_outputs(
         problem,
-        inputs,
+        local_vars,
         subprob,
     )
 
     # TODO: Add custom outputs
-    # problem.custom_outputs(problem, inputs, O)
+    # problem.custom_outputs(problem, local_vars, O)
 
-    O = convergence.check_convergence_tolerance(problem, inputs, O)
+    O = convergence.check_convergence_tolerance(problem, local_vars, O)
 
-    O = baseline_autotune(problem, inputs, O)
+    O = baseline_autotune(problem, local_vars, O)
     
-    display_baseline_subprob_status(problem, inputs, O)
+    display_baseline_subprob_status(problem, local_vars, O)
 
     return O
 
@@ -51,143 +51,143 @@ def solve_subproblem(problem):
 def baseline_subprob_inputs(problem):
 
     I = problem['I'][-1]
-    iter_num = I['iter_num']
-    case_flag = problem['params']['case_flag']
+    iter_num        = I['iter_num']
+    case_flag       = problem['params']['case_flag']
 
     # Dynamics and cost
-    start = time.time()
+    start                   = time.time()
     Ak, Bk, Bkp, Sk, zs_minus = discretize.compute_linsys_discrete(I['zs_ref'], I['us_ref'], I['dts_ref'], problem)
-    prop_time = time.time() - start
+    prop_time               = time.time() - start
 
     dcostdz, dcostdu, cost  = convexify.compute_cost(I['ts_ref'], I['zs_ref'], I['us_ref'], problem)
     dgdz, dgdu, g           = convexify.compute_path_constraints(I['ts_ref'], I['zs_ref'], I['us_ref'], problem)
 
     # Reference trajectories
-    ts_ref = I['ts_ref']
-    dts_ref = I['dts_ref']
-    zs_ref = I['zs_ref']
-    us_ref = I['us_ref']
+    ts_ref          = I['ts_ref']
+    dts_ref         = I['dts_ref']
+    zs_ref          = I['zs_ref']
+    us_ref          = I['us_ref']
 
-    vb_path_ref = I['conv_data']['vb_path']
-    vb_nfz_ref = I['conv_data']['vb_nfz']
-    vb_aux_ref = I['conv_data']['vb_aux']
-    vb_dyn_ref = I['conv_data']['vb_dyn']
-    vb_term_ref = I['conv_data']['vb_term']
+    vb_path_ref     = I['conv_data']['vb_path']
+    vb_nfz_ref      = I['conv_data']['vb_nfz']
+    vb_aux_ref      = I['conv_data']['vb_aux']
+    vb_dyn_ref      = I['conv_data']['vb_dyn']
+    vb_term_ref     = I['conv_data']['vb_term']
 
     # Dimensions and problem parameters
-    params = problem['params']
-    N = params['N']
-    n = params['n']
-    m = params['m']
-    nz = params['nz']
+    params          = problem['params']
+    N               = params['N']
+    n               = params['n']
+    m               = params['m']
+    nz              = params['nz']
 
-    nt = params['nondim']['nt']
-    nd = params['nondim']['nd']
-    nv = params['nondim']['nv']
-    na = params['nondim']['na']
-    ncost = params['nondim']['ncost']
+    nt              = params['nondim']['nt']
+    nd              = params['nondim']['nd']
+    nv              = params['nondim']['nv']
+    na              = params['nondim']['na']
+    ncost           = params['nondim']['ncost']
 
     # Boundary conditions
-    z1 = problem['zi']
-    z1_idx = problem['zi_idx']
-    z1_min = problem['zi_min']
-    z1_min_idx = problem['zi_min_idx']
-    z1_max = problem['zi_max']
-    z1_max_idx = problem['zi_max_idx']
-    n_init = problem['n_init']
-    n_init_ineq = problem['n_init_ineq']
+    z1              = problem['zi']
+    z1_idx          = problem['zi_idx']
+    z1_min          = problem['zi_min']
+    z1_min_idx      = problem['zi_min_idx']
+    z1_max          = problem['zi_max']
+    z1_max_idx      = problem['zi_max_idx']
+    n_init          = problem['n_init']
+    n_init_ineq     = problem['n_init_ineq']
 
-    zN = problem['zf']
-    zN_idx = problem['zf_idx']
-    zN_min = problem['zf_min']
-    zN_min_idx = problem['zf_min_idx']
-    zN_max = problem['zf_max']
-    zN_max_idx = problem['zf_max_idx']
-    n_term = problem['n_term']
-    n_term_ineq = problem['n_term_ineq']
+    zN              = problem['zf']
+    zN_idx          = problem['zf_idx']
+    zN_min          = problem['zf_min']
+    zN_min_idx      = problem['zf_min_idx']
+    zN_max          = problem['zf_max']
+    zN_max_idx      = problem['zf_max_idx']
+    n_term          = problem['n_term']
+    n_term_ineq     = problem['n_term_ineq']
 
     vb_N_idx = list(range(n_term))
-    vb_N_ineq_idx = list(range(n_term, n_term + n_term_ineq))
+    vb_N_ineq_idx   = list(range(n_term, n_term + n_term_ineq))
 
     # State and control constraints
-    z_min = problem['z_min']
-    z_min_idx = problem['z_min_idx']
-    z_max = problem['z_max']
-    z_max_idx = problem['z_max_idx']
-    n_state = params['n_state']
+    z_min           = problem['z_min']
+    z_min_idx       = problem['z_min_idx']
+    z_max           = problem['z_max']
+    z_max_idx       = problem['z_max_idx']
+    n_state         = params['n_state']
 
-    u_min = problem['u_min']
-    u_min_idx = problem['u_min_idx']
-    u_max = problem['u_max']
-    u_max_idx = problem['u_max_idx']
-    n_ctrl = problem['n_ctrl']
-    udot_max = problem['udot_max']
-    udot_max_idx = problem['udot_max_idx']
-    n_udot = problem['n_udot']
-    bool_init_ctrl = params['bools']['init_ctrl']
+    u_min           = problem['u_min']
+    u_min_idx       = problem['u_min_idx']
+    u_max           = problem['u_max']
+    u_max_idx       = problem['u_max_idx']
+    n_ctrl          = problem['n_ctrl']
+    udot_max        = problem['udot_max']
+    udot_max_idx    = problem['udot_max_idx']
+    n_udot          = problem['n_udot']
+    bool_init_ctrl  = params['bools']['init_ctrl']
 
     # Time settings
-    bools = params['bools']
+    bools           = params['bools']
     free_final_time = bools['free_final_time']
-    equal_dt_bool = bools['equal_dt']
+    equal_dt_bool   = bools['equal_dt']
 
     dts_min = dts_max = ddts_max = None
     if free_final_time:
-        dts_min = params['dts_min']
-        dts_max = params['dts_max']
-        ddts_max = params['ddts_max']
+        dts_min     = params['dts_min']
+        dts_max     = params['dts_max']
+        ddts_max    = params['ddts_max']
 
     # Contact constraints
-    ctcs = bools['ctcs']
-    eps_ctcs = params['eps_ctcs']
+    ctcs            = bools['ctcs']
+    eps_ctcs        = params['eps_ctcs']
 
     # Constraint structure
-    n_path = params['n_path']
-    n_nfz = params['n_nfz']
-    n_aux = params['n_aux']
-    n_ineq = n_path + n_nfz + n_aux
-    n_dyn = params['n_dyn']
-    n_eq = n_dyn
+    n_path          = params['n_path']
+    n_nfz           = params['n_nfz']
+    n_aux           = params['n_aux']
+    n_ineq          = n_path + n_nfz + n_aux
+    n_dyn           = params['n_dyn']
+    n_eq            = n_dyn
 
     # Weighting and duals
-    flag_autotune = bools['flag_autotune']
-    buff_dyn = bools['buff_dyn']
-    buff_dyn_dual = bools.get('buff_dyn_dual', None)
+    flag_autotune   = bools['flag_autotune']
+    buff_dyn        = bools['buff_dyn']
+    buff_dyn_dual   = bools.get('buff_dyn_dual', None)
 
-    weights = I['weights']
-    W_path = weights['W_path']
-    W_nfz = weights['W_nfz']
-    W_aux = weights['W_aux']
-    W_dyn = weights['W_dyn']
-    W_term = weights['W_term']
-    W_plus = weights['W_plus']
-    W_minus = weights['W_minus']
+    weights         = I['weights']
+    W_path          = weights['W_path']
+    W_nfz           = weights['W_nfz']
+    W_aux           = weights['W_aux']
+    W_dyn           = weights['W_dyn']
+    W_term          = weights['W_term']
+    W_plus          = weights['W_plus']
+    W_minus         = weights['W_minus']
 
-    w_cost = weights['w_cost']
-    wtr_z = weights['wtr_z']
-    wtr_u = weights['wtr_u']
+    w_cost          = weights['w_cost']
+    wtr_z           = weights['wtr_z']
+    wtr_u           = weights['wtr_u']
 
-    dual_path = weights['dual_path']
-    dual_nfz = weights['dual_nfz']
-    dual_aux = weights['dual_aux']
-    dual_dyn = weights['dual_dyn']
-    dual_plus = weights['dual_plus']
-    dual_minus = weights['dual_minus']
-    dual_term = weights['dual_term']
+    dual_path       = weights['dual_path']
+    dual_nfz        = weights['dual_nfz']
+    dual_aux        = weights['dual_aux']
+    dual_dyn        = weights['dual_dyn']
+    dual_plus       = weights['dual_plus']
+    dual_minus      = weights['dual_minus']
+    dual_term       = weights['dual_term']
 
-    opts = params['solver_opts']
+    opts            = params['solver_opts']
 
-    inputs = dict(locals())
+    local_vars = dict(locals())
 
-    return inputs
+    return local_vars
 
 
-def baseline_subprob_variables(problem, inputs):
-    bools   = inputs['bools']
-    N       = inputs['N']
+def baseline_subprob_variables(problem, local_vars):
+    bools   = local_vars['bools']
+    N       = local_vars['N']
 
     # Variation in state and control
-    dz, du = scaling.subprob_variable_scaling(problem, inputs)
+    dz, du = scaling.subprob_variable_scaling(problem, local_vars)
 
     # Time-step or time-horizon dilation
     if bools['free_final_time']:
@@ -200,9 +200,9 @@ def baseline_subprob_variables(problem, inputs):
         dt = np.zeros(1, N - 1)         # Fixed timestep (not a variable)
 
     # Virtual buffer and virtual control variables
-    vb_path,vb_nfz,vb_aux,vb_term,vb_dyn_plus,vb_dyn_minus,vb_plus,vb_minus = subprob_virtual_variables(problem, inputs)
+    vb_path,vb_nfz,vb_aux,vb_term,vb_dyn_plus,vb_dyn_minus,vb_plus,vb_minus = subprob_virtual_variables(problem, local_vars)
 
-    inputs['sol_vars'] = {
+    local_vars['sol_vars'] = {
         'dz': dz,
         'du': du,
         'dt': dt,
@@ -216,9 +216,9 @@ def baseline_subprob_variables(problem, inputs):
         'vb_minus': vb_minus,
     }
 
-    return inputs
+    return local_vars
 
-def subprob_virtual_variables(problem, inputs):
+def subprob_virtual_variables(problem, local_vars):
     """
     Determines which virtual variables (virtual buffer and virtual control) to
     create for subproblem constraints. If the weight associated with each
@@ -303,29 +303,29 @@ def subprob_virtual_variables(problem, inputs):
     )
 
 
-def baseline_subprob_constraints(problem,inputs):
-    dz = inputs['sol_vars']["dz"]
-    du = inputs['sol_vars']["du"]
-    dt = inputs['sol_vars']["dt"]
-    vb_path = inputs['sol_vars']["vb_path"]
-    vb_nfz = inputs['sol_vars']["vb_nfz"]
-    vb_aux = inputs['sol_vars']["vb_aux"]
-    vb_term = inputs['sol_vars']["vb_term"]
-    vb_dyn_plus = inputs['sol_vars']["vb_dyn_plus"]
-    vb_dyn_minus = inputs['sol_vars']["vb_dyn_minus"]
-    vb_plus = inputs['sol_vars']["vb_plus"]
-    vb_minus = inputs['sol_vars']["vb_minus"]
+def baseline_subprob_constraints(problem,local_vars):
+    dz = local_vars['sol_vars']["dz"]
+    du = local_vars['sol_vars']["du"]
+    dt = local_vars['sol_vars']["dt"]
+    vb_path = local_vars['sol_vars']["vb_path"]
+    vb_nfz = local_vars['sol_vars']["vb_nfz"]
+    vb_aux = local_vars['sol_vars']["vb_aux"]
+    vb_term = local_vars['sol_vars']["vb_term"]
+    vb_dyn_plus = local_vars['sol_vars']["vb_dyn_plus"]
+    vb_dyn_minus = local_vars['sol_vars']["vb_dyn_minus"]
+    vb_plus = local_vars['sol_vars']["vb_plus"]
+    vb_minus = local_vars['sol_vars']["vb_minus"]
 
-    I = inputs["I"]
-    params = inputs["params"]
-    Ak = inputs["Ak"]
-    Bk = inputs["Bk"]
-    Bkp = inputs["Bkp"]
-    Sk = inputs["Sk"]
-    zs_minus = inputs["zs_minus"]
-    dgdz = inputs["dgdz"]
-    dgdu = inputs["dgdu"]
-    g = inputs["g"]
+    I = local_vars["I"]
+    params = local_vars["params"]
+    Ak = local_vars["Ak"]
+    Bk = local_vars["Bk"]
+    Bkp = local_vars["Bkp"]
+    Sk = local_vars["Sk"]
+    zs_minus = local_vars["zs_minus"]
+    dgdz = local_vars["dgdz"]
+    dgdu = local_vars["dgdu"]
+    g = local_vars["g"]
 
     CNST = []
     bools = params['bools']
@@ -333,37 +333,37 @@ def baseline_subprob_constraints(problem,inputs):
     buff_dyn = bools['buff_dyn']
 
     # Extract dimensions and references
-    N = inputs['N']
-    n = inputs['n']
-    m = inputs['m']
-    nz = inputs['nz']
-    n_state = inputs['n_state']
-    n_ctrl = inputs['n_ctrl']
-    n_udot = inputs['n_udot']
-    n_ineq = inputs['n_path'] + inputs['n_nfz'] + inputs['n_aux']
+    N = local_vars['N']
+    n = local_vars['n']
+    m = local_vars['m']
+    nz = local_vars['nz']
+    n_state = local_vars['n_state']
+    n_ctrl = local_vars['n_ctrl']
+    n_udot = local_vars['n_udot']
+    n_ineq = local_vars['n_path'] + local_vars['n_nfz'] + local_vars['n_aux']
 
-    z1, z1_idx = inputs['z1'], inputs['z1_idx']
-    z1_min, z1_min_idx = inputs['z1_min'], inputs['z1_min_idx']
-    z1_max, z1_max_idx = inputs['z1_max'], inputs['z1_max_idx']
-    zN, zN_idx = inputs['zN'], inputs['zN_idx']
-    zN_min, zN_min_idx = inputs['zN_min'], inputs['zN_min_idx']
-    zN_max, zN_max_idx = inputs['zN_max'], inputs['zN_max_idx']
+    z1, z1_idx = local_vars['z1'], local_vars['z1_idx']
+    z1_min, z1_min_idx = local_vars['z1_min'], local_vars['z1_min_idx']
+    z1_max, z1_max_idx = local_vars['z1_max'], local_vars['z1_max_idx']
+    zN, zN_idx = local_vars['zN'], local_vars['zN_idx']
+    zN_min, zN_min_idx = local_vars['zN_min'], local_vars['zN_min_idx']
+    zN_max, zN_max_idx = local_vars['zN_max'], local_vars['zN_max_idx']
 
     vb_N_idx = list(range(params['n_term']))
     vb_N_ineq_idx = list(range(params['n_term'], params['n_term'] + params['n_term_ineq']))
 
-    z_min, z_min_idx = inputs['z_min'], inputs['z_min_idx']
-    z_max, z_max_idx = inputs['z_max'], inputs['z_max_idx']
-    u_min, u_min_idx = inputs['u_min'], inputs['u_min_idx']
-    u_max, u_max_idx = inputs['u_max'], inputs['u_max_idx']
+    z_min, z_min_idx = local_vars['z_min'], local_vars['z_min_idx']
+    z_max, z_max_idx = local_vars['z_max'], local_vars['z_max_idx']
+    u_min, u_min_idx = local_vars['u_min'], local_vars['u_min_idx']
+    u_max, u_max_idx = local_vars['u_max'], local_vars['u_max_idx']
 
-    udot_max, udot_max_idx = inputs['udot_max'], inputs['udot_max_idx']
+    udot_max, udot_max_idx = local_vars['udot_max'], local_vars['udot_max_idx']
     dts_ref = I['dts_ref']
     zs_ref = I['zs_ref']
     us_ref = I['us_ref']
 
-    eps_ctcs = inputs['eps_ctcs']
-    dts_min, dts_max, ddts_max = inputs['dts_min'], inputs['dts_max'], inputs['ddts_max']
+    eps_ctcs = local_vars['eps_ctcs']
+    dts_min, dts_max, ddts_max = local_vars['dts_min'], local_vars['dts_max'], local_vars['ddts_max']
 
     # Initial control
     if bools['init_ctrl']:
@@ -448,40 +448,40 @@ def baseline_subprob_constraints(problem,inputs):
 
 
 
-def baseline_subprob_cost(problem,inputs):
-    dz              = inputs['sol_vars']["dz"]
-    du              = inputs['sol_vars']["du"]
-    dt              = inputs['sol_vars']["dt"]
-    vb_path         = inputs['sol_vars']["vb_path"]
-    vb_nfz          = inputs['sol_vars']["vb_nfz"]
-    vb_aux          = inputs['sol_vars']["vb_aux"]
-    vb_term         = inputs['sol_vars']["vb_term"]
-    vb_plus         = inputs['sol_vars']["vb_plus"]
-    vb_minus        = inputs['sol_vars']["vb_minus"]
+def baseline_subprob_cost(problem,local_vars):
+    dz              = local_vars['sol_vars']["dz"]
+    du              = local_vars['sol_vars']["du"]
+    dt              = local_vars['sol_vars']["dt"]
+    vb_path         = local_vars['sol_vars']["vb_path"]
+    vb_nfz          = local_vars['sol_vars']["vb_nfz"]
+    vb_aux          = local_vars['sol_vars']["vb_aux"]
+    vb_term         = local_vars['sol_vars']["vb_term"]
+    vb_plus         = local_vars['sol_vars']["vb_plus"]
+    vb_minus        = local_vars['sol_vars']["vb_minus"]
 
-    params          = inputs["params"]
+    params          = local_vars["params"]
 
 
     N               = params["N"]
     n               = params["n"]
     solver_type     = params.get("solver_type", "osqp")
-    flag_autotune   = inputs['bools']["flag_autotune"]
-    buff_dyn        = inputs['bools']["buff_dyn"]
+    flag_autotune   = local_vars['bools']["flag_autotune"]
+    buff_dyn        = local_vars['bools']["buff_dyn"]
     
     # --- TRUE COST ---
     TRUE_COST = 0
     for k in range(N):
-        TRUE_COST += inputs["w_cost"] * (
-            inputs["dcostdz"][:, :, k] @ dz[:n, k]+
-            inputs["dcostdu"][:, :, k] @ du[:, k] +
-            inputs["cost"][:, :, k]
+        TRUE_COST += local_vars["w_cost"] * (
+            local_vars["dcostdz"][:, :, k] @ dz[:n, k]+
+            local_vars["dcostdu"][:, :, k] @ du[:, k] +
+            local_vars["cost"][:, :, k]
         )
 
     # --- TRUST REGION COST ---
     if solver_type == 'osqp':
         TR_COST = (
-            inputs["wtr_z"] * cp.sum_squares(cp.vec(dz)) +
-            inputs["wtr_u"] * cp.sum_squares(cp.vec(du))
+            local_vars["wtr_z"] * cp.sum_squares(cp.vec(dz)) +
+            local_vars["wtr_u"] * cp.sum_squares(cp.vec(du))
         )
     else:
         dz_slacks = cp.Variable((1, N))
@@ -490,31 +490,31 @@ def baseline_subprob_cost(problem,inputs):
         for k in range(N):
             slack_constraints.append(cp.norm(dz[:, k], 2) ** 2 <= dz_slacks[0, k])
             slack_constraints.append(cp.norm(du[:, k], 2) ** 2 <= du_slacks[0, k])
-        TR_COST = inputs["wtr_z"] * cp.norm(dz_slacks, 1) + inputs["wtr_u"] * cp.norm(du_slacks, 1)
+        TR_COST = local_vars["wtr_z"] * cp.norm(dz_slacks, 1) + local_vars["wtr_u"] * cp.norm(du_slacks, 1)
 
     # --- VIRTUAL BUFFER COST ---
     VIRTUAL_COST = 0
     if flag_autotune in {'0', '2', '3', 'al-scvx'}:
-        VIRTUAL_COST += cp.quad_form(vb_term, np.diag(inputs["W_term"].flatten()))
+        VIRTUAL_COST += cp.quad_form(vb_term, np.diag(local_vars["W_term"].flatten()))
 
         for k in range(N):
             if buff_dyn == 'l1':
                 for vb, w in zip(
                     [vb_path[:, k], vb_nfz[:, k], vb_aux[:, k]],
-                    [inputs["W_path"][:, k], inputs["W_nfz"][:, k], inputs["W_aux"][:, k]]
+                    [local_vars["W_path"][:, k], local_vars["W_nfz"][:, k], local_vars["W_aux"][:, k]]
                 ):
                     if vb.shape[0] > 0:
                         VIRTUAL_COST += np.max(w) * cp.norm(vb, 1)
 
                 if k < N - 1 and vb_dyn_plus.shape[0] > 0:
-                    VIRTUAL_COST += np.max(inputs["W_dyn"][:, k]) * cp.norm(vb_dyn_plus[:, k] - vb_dyn_minus[:, k], 1)
+                    VIRTUAL_COST += np.max(local_vars["W_dyn"][:, k]) * cp.norm(vb_dyn_plus[:, k] - vb_dyn_minus[:, k], 1)
 
             else:  # Quadratic buffer penalties
                 VIRTUAL_COST += sum(
                     cp.quad_form(v, np.diag(w.flatten()))
                     for v, w in zip(
                         [vb_path[:, k], vb_nfz[:, k], vb_aux[:, k]],
-                        [inputs["W_path"][:, k], inputs["W_nfz"][:, k], inputs["W_aux"][:, k]]
+                        [local_vars["W_path"][:, k], local_vars["W_nfz"][:, k], local_vars["W_aux"][:, k]]
                     )
                     if v.shape[0] > 0
                 )
@@ -523,18 +523,18 @@ def baseline_subprob_cost(problem,inputs):
                     if buff_dyn == 'l2' and vb_dyn_plus.shape[0] > 0:
                         VIRTUAL_COST += cp.quad_form(
                             vb_dyn_plus[:, k] - vb_dyn_minus[:, k],
-                            np.diag(inputs["W_dyn"][:, k].flatten())
+                            np.diag(local_vars["W_dyn"][:, k].flatten())
                         )
                     elif buff_dyn == 'quad-1' and k == 0:
                         if vb_plus.shape[0] > 0:
-                            VIRTUAL_COST += cp.quad_form(vb_plus[:, 0], np.diag(inputs["W_plus"].flatten()))
+                            VIRTUAL_COST += cp.quad_form(vb_plus[:, 0], np.diag(local_vars["W_plus"].flatten()))
                         if vb_minus.shape[0] > 0:
-                            VIRTUAL_COST += cp.quad_form(vb_minus[:, 0], np.diag(inputs["W_minus"].flatten()))
+                            VIRTUAL_COST += cp.quad_form(vb_minus[:, 0], np.diag(local_vars["W_minus"].flatten()))
                     elif buff_dyn == 'quad-2':
                         if vb_plus.shape[0] > 0:
-                            VIRTUAL_COST += cp.quad_form(vb_plus[:, k], np.diag(inputs["W_plus"][:, k].flatten()))
+                            VIRTUAL_COST += cp.quad_form(vb_plus[:, k], np.diag(local_vars["W_plus"][:, k].flatten()))
                         if vb_minus.shape[0] > 0:
-                            VIRTUAL_COST += cp.quad_form(vb_minus[:, k], np.diag(inputs["W_minus"][:, k].flatten()))
+                            VIRTUAL_COST += cp.quad_form(vb_minus[:, k], np.diag(local_vars["W_minus"][:, k].flatten()))
 
     # --- DUAL COST ---
     DUAL_COST = 0
@@ -544,65 +544,72 @@ def baseline_subprob_cost(problem,inputs):
                 DUAL_COST += cp.sum(cp.multiply(
                     cp.hstack([v for v in [vb_path[:, k], vb_nfz[:, k], vb_aux[:, k]] if v.shape[0] > 0]),
                     cp.hstack([d for v, d in zip([vb_path[:, k], vb_nfz[:, k], vb_aux[:, k]],
-                                                [inputs["dual_path"][:, k], inputs["dual_nfz"][:, k], inputs["dual_aux"][:, k]])
+                                                [local_vars["dual_path"][:, k], local_vars["dual_nfz"][:, k], local_vars["dual_aux"][:, k]])
                             if v.shape[0] > 0])
                 )) if any(v.shape[0] > 0 for v in [vb_path[:, k], vb_nfz[:, k], vb_aux[:, k]]) else 0
 
             if params["n_eq"] > 0 and k < N - 1:
                 DUAL_COST += cp.sum(cp.multiply(
                     vb_dyn_plus[:, k] - vb_dyn_minus[:, k],
-                    inputs["dual_dyn"][:, k]
+                    local_vars["dual_dyn"][:, k]
                 ))
                 DUAL_COST += (
-                    inputs["dual_plus"][:, k] @ vb_plus[:, k] +
-                    inputs["dual_minus"][:, k] @ vb_minus[:, k]
+                    local_vars["dual_plus"][:, k] @ vb_plus[:, k] +
+                    local_vars["dual_minus"][:, k] @ vb_minus[:, k]
                 )
 
         if params["n_term"] > 0:
-            DUAL_COST += inputs["dual_term"].T @ vb_term
+            DUAL_COST += local_vars["dual_term"].T @ vb_term
 
     # --- TOTAL COST ---
     PTR_COST = TRUE_COST + 0.5 * VIRTUAL_COST + DUAL_COST + TR_COST
 
     return PTR_COST
 
-def baseline_autotune(problem, inputs, O):
+def baseline_autotune(problem, local_vars, O):
     match problem['params']['bools']['flag_autotune']:
         case 1:
-            O = hp.autotune1(problem, inputs, O)
+            O = hp.autotune1(problem, local_vars, O)
         case 2:
-            O = hp.autotune2(problem, inputs, O)
+            O = hp.autotune2(problem, local_vars, O)
         case 3:
-            O = hp.autotune3(problem, inputs, O)
+            O = hp.autotune3(problem, local_vars, O)
     return O
 
 
-def baseline_subprob_outputs(problem, inputs, subprob):
-    dz = inputs['sol_vars']['dz']
-    du = inputs['sol_vars']['du']
-    dt = inputs['sol_vars']['dt']
-    vb_path = inputs['sol_vars']['vb_path']
-    vb_nfz = inputs['sol_vars']['vb_nfz']
-    vb_aux = inputs['sol_vars']['vb_aux']
-    vb_dyn_plus = inputs['sol_vars']['vb_dyn_plus']
-    vb_dyn_minus = inputs['sol_vars']['vb_dyn_minus']
-    vb_term = inputs['sol_vars']['vb_term']
-    vb_plus = inputs['sol_vars']['vb_plus']
-    vb_minus = inputs['sol_vars']['vb_minus']
+def baseline_subprob_outputs(problem, local_vars, subprob):
+    dz          = local_vars['sol_vars']['dz']
+    du          = local_vars['sol_vars']['du']
+    dt          = local_vars['sol_vars']['dt']
+    vb_path     = local_vars['sol_vars']['vb_path']
+    vb_nfz      = local_vars['sol_vars']['vb_nfz']
+    vb_aux      = local_vars['sol_vars']['vb_aux']
+    vb_dyn_plus = local_vars['sol_vars']['vb_dyn_plus']
+    vb_dyn_minus= local_vars['sol_vars']['vb_dyn_minus']
+    vb_term     = local_vars['sol_vars']['vb_term']
+    vb_plus     = local_vars['sol_vars']['vb_plus']
+    vb_minus    = local_vars['sol_vars']['vb_minus']
 
-    zs_ref  = inputs['zs_ref']
-    us_ref  = inputs['us_ref']
-    dts_ref = inputs['dts_ref']
-    ts_ref  = inputs['ts_ref']
+    zs_ref      = local_vars['zs_ref']
+    us_ref      = local_vars['us_ref']
+    dts_ref     = local_vars['dts_ref']
+    ts_ref      = local_vars['ts_ref']
 
-    wtr_z       = inputs['wtr_z']
-    wtr_u       = inputs['wtr_u']
-    zs_minus    = inputs['zs_minus']
+    wtr_z       = local_vars['wtr_z']
+    wtr_u       = local_vars['wtr_u']
+    zs_minus    = local_vars['zs_minus']
+
+    # dimensions
+    n_path = local_vars["n_path"]
+    n_nfz  = local_vars["n_nfz"]
+    n_aux  = local_vars["n_aux"]
+    n_term = local_vars["n_term"]
+    n_dyn  = local_vars["n_dyn"]
 
     # Extract primal variables
-    dz_val = dz.value
-    du_val = du.value
-    dt_val = dt.value
+    dz_val      = dz.value
+    du_val      = du.value
+    dt_val      = dt.value
 
     if subprob.solver_stats is not None:
         soln_stats = {
@@ -620,90 +627,89 @@ def baseline_subprob_outputs(problem, inputs, subprob):
     O = {}
 
     # Primal recovered solution
-    O["dz_s"]   = dz_val
-    O["du_s"]   = du_val
-    O["zs"]     = dz_val + zs_ref
-    O["us"]     = du_val + us_ref
-    O["dts"]    = dt_val + dts_ref
-    O["ts"]     = np.concatenate(([0], np.cumsum(O["dts"])))
-    O["Ts"]     = np.sum(O["dts"])
+    O["dz_s"]           = dz_val
+    O["du_s"]           = du_val
+    O["zs"]             = tools.safe_val(dz, rows=n, cols=N) + zs_ref
+    O["us"]             = tools.safe_val(du, rows=m, cols=N) + us_ref
+    O["dts"]            = tools.safe_val(dt) + dts_ref
+    O["ts"]             = np.concatenate(([0], np.cumsum(O["dts"])))
+    O["Ts"]             = np.sum(O["dts"])
 
     # Reference data
-    O["zs_ref"] = zs_ref
-    O["us_ref"] = us_ref
-    O["dts_ref"] = dts_ref
-    O["ts_ref"] = ts_ref
+    O["zs_ref"]         = zs_ref
+    O["us_ref"]         = us_ref
+    O["dts_ref"]        = dts_ref
+    O["ts_ref"]         = ts_ref
 
     # Hyperparameter weights
     O["weights"]        = problem['params']["weights"]
     O["weights_ref"]    = problem['params']["weights"]
 
     # Convergence data
-    conv = {}
-    conv["soln"] = soln_stats["soln_object"]
+    conv                = {}
+    conv["soln"]        = soln_stats["soln_object"]
 
-    conv["vb_path"] = vb_path.value
-    conv["vb_nfz"] = vb_nfz.value
-    conv["vb_aux"] = vb_aux.value
-    conv["vb_term"] = vb_term.value
-    conv["vb_dyn"] = vb_dyn_plus.value - vb_dyn_minus.value
+    conv["vb_path"]     = tools.get_val(vb_path, rows=n_path, cols=N) 
+    conv["vb_nfz"]      = tools.get_val(vb_nfz, rows=n_nfz, cols=N) 
+    conv["vb_aux"]      = tools.get_val(vb_aux, rows=n_aux, cols=N) 
+    conv["vb_term"]     = tools.get_val(vb_term, rows=n_term, cols=1) 
+    conv["vb_dyn"]      = tools.get_val(vb_dyn_plus, rows=n_dyn, cols=N)  - tools.get_val(vb_dyn_minus, rows=n_dyn, cols=N) 
 
-    conv["defect"] = dz_val + zs_ref - zs_minus
+    conv["defect"]      = tools.safe_val(dz, rows=n, cols=N) + zs_ref - zs_minus
 
-    conv["Jtr"] = (wtr_z * np.sum(dz_val**2) + wtr_u * np.sum(du_val**2))
+    conv["Jtr"]         = (wtr_z * np.sum(tools.safe_val(dz, rows=n, cols=N)**2) + wtr_u * np.sum(tools.safe_val(du, rows=m, cols=N)**2))
 
-    O["conv_data"] = conv
+    O["conv_data"]      = conv
 
     # Solve timing
-    O["solve_time"] = soln_stats["solntime"] * 1000
-    O["parse_time"] = soln_stats["parse_time"] * 1000
-    O["prop_time"] = model_data["prop_time"] * 1000
+    O["solve_time"]     = tools.safe_val(soln_stats["solntime"]) * 1000
+    O["parse_time"]     = tools.safe_val(soln_stats["parse_time"]) * 1000
+    O["prop_time"]      = local_vars["prop_time"] * 1000
 
     # Discretization model
-    O["zs_minus"] = zs_minus
-    O["Ak"] = model_data["Ak"]
-    O["Bk"] = model_data["Bk"]
-    O["Bkp"] = model_data["Bkp"]
-    O["Sk"] = model_data["Sk"]
+    O["zs_minus"]       = zs_minus
+    O["Ak"]             = local_vars["Ak"]
+    O["Bk"]             = local_vars["Bk"]
+    O["Bkp"]            = local_vars["Bkp"]
+    O["Sk"]             = local_vars["Sk"]
 
     # Path constraint residuals
-    _, _, O["cnst_path"] = problem.compute_path_constraints_fn(O["ts"], O["zs"], O["us"])
+    _, _, O["cnst_path"]                = convexify.compute_path_constraints(O["ts"], O["zs"], O["us"], problem)
 
     # Total cost via user-defined cost function (if available)
-    if hasattr(problem, 'cost_fn'):
-        O["cost"] = problem.cost_fn(O["ts"], O["zs"], O["us"])
-        O["conv_data"]["cost_ref"] = problem.cost_fn(ts_ref, zs_ref, us_ref)
+    _, _, O["cost"]                     = convexify.compute_cost(O["ts"], O["zs"], O["us"],problem)
+    _, _, O["conv_data"]["cost_ref"]    = convexify.compute_cost(ts_ref, zs_ref, us_ref, problem)
 
     return O
 
 
 
-def display_baseline_subprob_status(problem, inputs, O):
+def display_baseline_subprob_status(problem, local_vars, O):
 
-    conv = O["conv_data"]
+    conv            = O["conv_data"]
 
     # Determine inequality feasibility measure
-    chk_feas_path = conv.get("chk_feas_path", 0.0)
-    chk_feas_nfz = conv.get("chk_feas_nfz", 0.0)
-    ineq_vb = chk_feas_path + chk_feas_nfz if chk_feas_nfz != 0 else chk_feas_path
+    chk_feas_path   = conv.get("chk_feas_path", 0.0)
+    chk_feas_nfz    = conv.get("chk_feas_nfz", 0.0)
+    ineq_vb         = chk_feas_path + chk_feas_nfz if chk_feas_nfz != 0 else chk_feas_path
 
     # Extract values with safe fallback
-    chk_dz = conv.get("chk_dz", 1e-12)
-    chk_feas_term = conv.get("chk_feas_term", 1e-12)
-    chk_feas_dyn = conv.get("chk_feas_dyn", 1e-12)
+    chk_dz          = conv.get("chk_dz", 1e-12)
+    chk_feas_term   = conv.get("chk_feas_term", 1e-12)
+    chk_feas_dyn    = conv.get("chk_feas_dyn", 1e-12)
 
-    log_dz = np.log10(max(chk_dz, 1e-12))
-    log_vb_ineq = np.log10(max(ineq_vb, 1e-12))
-    log_vb_term = np.log10(max(chk_feas_term, 1e-12))
-    log_vb_dyn = np.log10(max(chk_feas_dyn, 1e-12))
+    log_dz          = np.log10(max(chk_dz, 1e-12))
+    log_vb_ineq     = np.log10(max(ineq_vb, 1e-12))
+    log_vb_term     = np.log10(max(chk_feas_term, 1e-12))
+    log_vb_dyn      = np.log10(max(chk_feas_dyn, 1e-12))
 
-    solve_stat = conv.get("status", "UNKNOWN")
-    iter_num = len(getattr(problem, "I", []))
-    nt = inputs['nt']
-    ncost = inputs['ncost']
+    solve_stat      = conv.get("status", "UNKNOWN")
+    iter_num        = len(getattr(problem, "I", []))
+    nt              = local_vars['nt']
+    ncost           = local_vars['ncost']
 
-    Ts = O.get("Ts", 0.0)
-    cost = O.get("cost", 0.0)
+    Ts              = O.get("Ts", 0.0)
+    cost            = O.get("cost", 0.0)
 
     print(
         "     {:02d}     |    {:07.1f}   |   {:06.1f}  |   {:06.1f}   |   {:+04.1f}    |      {:+05.1f}      |    {:+05.1f}    |     {:+05.1f}   |    {:s}    |   {:4.2f}   |  {:4.1f}".format(

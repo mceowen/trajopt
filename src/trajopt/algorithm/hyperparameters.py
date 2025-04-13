@@ -1,23 +1,23 @@
 import numpy as np
 
-def autotune1(problem, inputs, O):
+def autotune1(problem, local_vars, O):
     
-    # Access iter_num from inputs
-    iter_num = inputs['iter_num']
+    # Access iter_num from local_vars
+    iter_num = local_vars['iter_num']
 
-    # Extract variables from inputs dict
-    sol_vars = inputs['sol_vars']
+    # Extract variables from local_vars dict
+    sol_vars = local_vars['sol_vars']
     vb_path = np.array(sol_vars['vb_path'])
     vb_nfz = np.array(sol_vars['vb_nfz'])
     vb_aux = np.array(sol_vars['vb_aux'])
     vb_term = np.array(sol_vars['vb_term'])
     vb_dyn = np.array(O['conv_data']['vb_dyn'])  # From O since not in sol_vars
 
-    dual_path = inputs['dual_path']
-    dual_nfz = inputs['dual_nfz']
-    dual_aux = inputs['dual_aux']
-    dual_dyn = inputs['dual_dyn']
-    dual_term = inputs['dual_term']
+    dual_path = local_vars['dual_path']
+    dual_nfz = local_vars['dual_nfz']
+    dual_aux = local_vars['dual_aux']
+    dual_dyn = local_vars['dual_dyn']
+    dual_term = local_vars['dual_term']
 
     # Hyperparameters
     if problem['params']['bools']['stepsize_auto_dual']:
@@ -71,22 +71,22 @@ def autotune1(problem, inputs, O):
     return O
 
 
-def autotune2(problem, inputs, O):
+def autotune2(problem, local_vars, O):
     
-    # Extract variables from inputs
-    N = inputs['N']
-    sol_vars = inputs['sol_vars']
+    # Extract variables from local_vars
+    N = local_vars['N']
+    sol_vars = local_vars['sol_vars']
     vb_path = np.array(sol_vars['vb_path'])
     vb_nfz = np.array(sol_vars['vb_nfz'])
     vb_aux = np.array(sol_vars['vb_aux'])
     vb_dyn = np.array(sol_vars['vb_dyn_plus'])  # Assuming vb_dyn_plus is in sol_vars
     vb_term = np.array(sol_vars['vb_term'])
 
-    W_path = inputs['W_path']
-    W_nfz = inputs['W_nfz']
-    W_aux = inputs['W_aux']
-    W_dyn = inputs['W_dyn']
-    W_term = inputs['W_term']
+    W_path = local_vars['W_path']
+    W_nfz = local_vars['W_nfz']
+    W_aux = local_vars['W_aux']
+    W_dyn = local_vars['W_dyn']
+    W_term = local_vars['W_term']
 
     # Extract parameters for autotuning
     eps_feas_path = problem['params']['conv']['eps_path']
@@ -217,9 +217,9 @@ def autotune2(problem, inputs, O):
     return O
 
 
-def autotune3(problem, inputs, O):
-    O = autotune1(problem, inputs, O)
-    O = autotune2(problem, inputs, O)
+def autotune3(problem, local_vars, O):
+    O = autotune1(problem, local_vars, O)
+    O = autotune2(problem, local_vars, O)
 
     return O
 
