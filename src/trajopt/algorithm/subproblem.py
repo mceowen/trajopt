@@ -6,13 +6,13 @@ import numpy as np
 import time
 
 # trajopt imports
-import trajopt.problem_models.quadrotor_3dof as quad3dof
-import trajopt.algorithm.hyperparameters as hp
-import trajopt.algorithm.scaling as scaling
-import trajopt.algorithm.convexification as convexify
-import trajopt.algorithm.discretization as discretize
-import trajopt.algorithm.convergence as convergence
-import trajopt.utils.tools as tools
+import trajopt.problem_models.quadrotor_3dof    as quad3dof
+import trajopt.algorithm.hyperparameters        as hp
+import trajopt.algorithm.scaling                as scaling
+import trajopt.algorithm.convexification        as convexify
+import trajopt.algorithm.discretization         as discretize
+import trajopt.algorithm.convergence            as convergence
+import trajopt.utils.tools                      as tools
 
 
 def solve_subproblem(problem):
