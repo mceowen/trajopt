@@ -206,7 +206,7 @@ def set_convergence_tolerance(params):
 
     return params
 
-def check_convergence_tolerance(O, problem):
+def check_convergence_tolerance(problem, inputs, O):
     """
     Function that takes in dimensional convergence criterion and associated scaling factors.
     Outputs unified epsilon and associated scaling of each state.
