@@ -1,9 +1,18 @@
 import numpy as np
+import cvxpy as cp 
 
 def safe_val(var, rows=1, cols=1, fallback=0.0):
-    if var is not None and var.value is not None:
-        return var.value
+    if not isinstance(var, cp.Expression):
+        # pass value through if it is not a cvxpy object
+        if var is not None:
+            return var
+    else:
+        # use the value or fallback if it is a cvxpy object
+        if var.value is not None:
+            return var.value
+    # fallback if var or var.value is None
     return fallback if (rows == 1 and cols == 1) else np.full((rows, cols), fallback)
+    
  
 def get_val(var, rows=1, cols=1, fallback=0.0):
     if hasattr(var, "value"):

@@ -609,7 +609,7 @@ def baseline_subprob_outputs(problem, local_vars, subprob):
     # Extract primal variables
     dz_val      = dz.value
     du_val      = du.value
-    dt_val      = dt.value
+    dt_val      = dt.value if local_vars['bools']['free_final_time'] else dt
 
     if subprob.solver_stats is not None:
         soln_stats = {
@@ -629,6 +629,7 @@ def baseline_subprob_outputs(problem, local_vars, subprob):
     # Primal recovered solution
     O["dz_s"]           = dz_val
     O["du_s"]           = du_val
+    O['dt_val']         = dt_val
     O["zs"]             = tools.safe_val(dz, rows=n, cols=N) + zs_ref
     O["us"]             = tools.safe_val(du, rows=m, cols=N) + us_ref
     O["dts"]            = tools.safe_val(dt) + dts_ref
