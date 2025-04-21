@@ -195,7 +195,7 @@ def baseline_subprob_variables(problem, local_vars):
             dt = cp.Variable((1, N-1))  # Variable timestep
         else:
             dT = cp.Variable()       # Time horizon scalar
-            dt = (1 / (N - 1)) * dT * np.ones(1, N - 1)
+            dt = (1 / (N - 1)) * dT * np.ones((1, N - 1))
     else:
         dt = np.zeros(1, N - 1)         # Fixed timestep (not a variable)
 
