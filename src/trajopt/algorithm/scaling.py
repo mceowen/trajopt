@@ -66,10 +66,10 @@ def dim_vars(ts, xs, us, params):
     
     return t, x, u
 
-def subprob_variable_scaling(problem, inputs):
+def subprob_variable_scaling(problem, local_vars):
 
     # Extract input struct
-    I = inputs['I']
+    I = local_vars['I']
 
     # Extract params
     n = problem['params']['nz']
