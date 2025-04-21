@@ -197,7 +197,7 @@ def baseline_subprob_variables(problem, local_vars):
             dT = cp.Variable()       # Time horizon scalar
             dt = (1 / (N - 1)) * dT * np.ones((1, N - 1))
     else:
-        dt = np.zeros(1, N - 1)         # Fixed timestep (not a variable)
+        dt = np.zeros((1, N - 1))         # Fixed timestep (not a variable)
 
     # Virtual buffer and virtual control variables
     vb_path,vb_nfz,vb_aux,vb_term,vb_dyn_plus,vb_dyn_minus,vb_plus,vb_minus = subprob_virtual_variables(problem, local_vars)
