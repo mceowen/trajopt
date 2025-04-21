@@ -29,6 +29,7 @@ def solve_subproblem(problem):
 
     objective   = cp.Minimize(PTR_COST)
     subprob     = cp.Problem(objective, constraints)
+    subprob.solve()
 
     O = baseline_subprob_outputs(
         problem,
@@ -369,9 +370,9 @@ def baseline_subprob_constraints(problem,local_vars):
     if bools['init_ctrl']:
         CNST.append(du[:, 0] == 0)
 
-    # Initial state
+    # Initial state 
     if params['n_init'] > 0:
-        CNST.append(dz[0][z1_idx] + zs_ref[z1_idx, 0] == z1)
+        CNST.append(dz[z1_idx, 0] + zs_ref[z1_idx, 0] == z1)
 
     if params['n_init_ineq'] > 0:
         M_sel = tools.constraint_index_selector(z1_min_idx, z1_max_idx, n)
@@ -379,11 +380,11 @@ def baseline_subprob_constraints(problem,local_vars):
 
     # Terminal state
     if params['n_term'] > 0:
-        CNST.append(dz[-1][zN_idx] + zs_ref[zN_idx, -1] - vb_term[vb_N_idx, 0] == zN)
+        CNST.append(dz[zN_idx, -1] + zs_ref[zN_idx, -1] - vb_term[vb_N_idx, 0] == zN)
 
     if params['n_term_ineq'] > 0:
         M_sel = tools.constraint_index_selector(zN_min_idx, zN_max_idx, n)
-        CNST.append(M_sel @ (dz[-1][:n] + zs_ref[:n, -1]) - vb_term[vb_N_ineq_idx, 0] <= np.concatenate([-zN_min, zN_max]))
+        CNST.append(M_sel @ (dz[:n, -1] + zs_ref[:n, -1]) - vb_term[vb_N_ineq_idx, 0] <= np.concatenate([-zN_min, zN_max]))
 
     if buff_dyn == 'quad-1':
         CNST.append(cp.sum(cp.vec(vb_dyn_plus)) == vb_plus)
@@ -443,7 +444,7 @@ def baseline_subprob_constraints(problem,local_vars):
 
             if str(flag_autotune) in {'1', '3', 'al-scvx'}:
                 CNST.append(vb_combined >= 0)
-
+    
     return CNST
 
 
@@ -625,6 +626,9 @@ def baseline_subprob_outputs(problem, local_vars, subprob):
         }
 
     O = {}
+
+    # solver status
+    O["subprob"]         = subprob
 
     # Primal recovered solution
     O["dz_s"]           = dz_val

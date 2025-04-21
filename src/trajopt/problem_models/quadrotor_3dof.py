@@ -49,7 +49,7 @@ def config_main():
 
     # --- User problem setup ---
     config['params'] = {}
-    config['params']['N'] = 40
+    config['params']['N'] = 5
     config['params']['T_init'] = 10
 
     config['params']['bools'] = {
