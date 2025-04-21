@@ -311,26 +311,7 @@ def check_convergence_tolerance(problem, local_vars, O):
     conv_data['chk_feas_aux']   = chk_vb_aux
     conv_data['chk_feas_dyn']   = chk_vb_dyn
     conv_data['chk_feas']       = max(np.max(chk_feas[0]), np.max(chk_feas[1]))
-    conv_data['solverflag']     = soln['problem']
-
-    # CHECK STATUS
-    status_map = {
-        0: 'Solved',
-        1: 'Infeasible',
-        2: 'Infeasible',
-        12: 'Infeasible',
-        15: 'Infeasible',
-        -1: 'Error',
-        3: 'Max iters',
-        4: 'Numerical',
-        5: 'No progr.',
-        -4: 'Solver not applicable.'
-    }
-
-    conv_data['status'] = status_map.get(soln['problem'], f"Yalmip error flag. See: https://yalmip.github.io/command/yalmiperror/")
-
-    if soln['problem'] in {1, 2, 12, 15}:
-        raise ValueError('Sub-problem is infeasible or unbounded!')
+    conv_data['status']         = O['subprob'].status
 
     # Populate output struct with convergence data
     O['converged'] = bool_conv

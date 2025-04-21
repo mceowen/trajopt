@@ -718,17 +718,17 @@ def display_baseline_subprob_status(problem, local_vars, O):
 
     print(
         "     {:02d}     |    {:07.1f}   |   {:06.1f}  |   {:06.1f}   |   {:+04.1f}    |      {:+05.1f}      |    {:+05.1f}    |     {:+05.1f}   |    {:s}    |   {:4.2f}   |  {:4.1f}".format(
-            iter_num,
-            O["prop_time"],
-            O["solve_time"],
-            O["parse_time"],
-            log_dz,
-            log_vb_ineq,
-            log_vb_term,
-            log_vb_dyn,
-            solve_stat,
-            Ts * nt,
-            cost * ncost
+            int(iter_num),
+            float(O["prop_time"]),
+            float(O["solve_time"]),
+            float(O["parse_time"]),
+            float(log_dz),
+            float(log_vb_ineq),
+            float(log_vb_term),
+            float(log_vb_dyn),
+            str(solve_stat),
+            float(Ts * nt),
+            float(np.max(cost) * ncost)
         )
     )
 
