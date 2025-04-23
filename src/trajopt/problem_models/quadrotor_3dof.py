@@ -155,6 +155,12 @@ def ocp(config):
     else:
         problem["lin_constr"] = lambda ts, zs, us: analytical_inequality_constraints(ts, zs, us, problem)
 
+    # Algorithm - custom formulation
+    problem["custom_inputs"]                = lambda problem,   local_vars:     custom_inputs(problem, local_vars)
+    problem["custom_subprob_variables"]     = lambda problem,   local_vars:     custom_subprob_variables(problem, local_vars)
+    problem["custom_subprob_constraints"]   = lambda CNST,      local_vars:     custom_subprob_constraints(CNST, local_vars)
+    problem["custom_subprob_cost"]          = lambda PTR_COST,  local_vars:     custom_subprob_cost(PTR_COST, local_vars)
+
     # Plotting
     # TODO
     # problem["plots"] = lambda prob: init_plot_struct(prob)
@@ -597,9 +603,9 @@ def analytical_cost(ts, zs, us, problem):
 
     # Package into output dict
     lincost = {
-        "dfcn_dz": dcostdz,
-        "dfcn_du": dcostdu,
-        "fcn":     cost
+        "dfcn_dz": np.squeeze(dcostdz, axis=0),
+        "dfcn_du": np.squeeze(dcostdu, axis=0),
+        "fcn":     np.squeeze(cost, axis=0)
     }
 
     return lincost
@@ -682,6 +688,86 @@ def analytical_inequality_constraints(ts, zs, us, problem):
     return path_out
 
 
+####### ALGORITHM 
+
+def custom_inputs(problem,local_vars):
+    u_norm_min = problem["params"]["u_norm_min"]
+    u_norm_max = problem["params"]["u_norm_max"]
+    theta_max  = problem["params"]["theta_max"]
+    mass       = problem["params"]["mass"]
+    ehat_u     = np.eye(m)
+    u1         = problem["params"]["ui"]
+    uN         = problem["params"]["uf"]
+
+    local_vars.update(locals())
+
+    return local_vars 
+
+def custom_subprob_variables(problem,local_vars): 
+    
+    u_slack = cp.Variable((1, N))  # 1×N variable
+    w_jerk = 1e-1
+
+    local_vars.update(locals())
+
+    return local_vars 
+
+def custom_subprob_constraints(CNST,local_vars):
+
+    us_ref     = local_vars["us_ref"]
+    du         = local_vars["du"]
+    u1         = local_vars["u1"]
+    uN         = local_vars["uN"]
+    u_slack    = local_vars["u_slack"]
+    u_norm_min = local_vars["u_norm_min"]
+    u_norm_max = local_vars["u_norm_max"]
+    theta_max  = local_vars["theta_max"]
+    mass       = local_vars["mass"]
+    ehat_u     = local_vars["ehat_u"]
+    N          = local_vars["N"]
+
+    # Boundary constraints
+    CNST += [us_ref[:, 0] + du[:, 0] == u1]
+    CNST += [us_ref[:, N-1] + du[:, N-1] == uN]
+
+    for k in range(N):
+        u_k = us_ref[:, k] + du[:, k]
+        slack_k = u_slack[:, k]
+        
+        CNST += [cp.norm(u_k) <= slack_k]
+        CNST += [slack_k >= u_norm_min]
+        CNST += [slack_k <= u_norm_max]
+        CNST += [cp.cos(theta_max) * slack_k - (1 / mass) * ehat_u[:, 2].T @ u_k <= 0]
+
+    return CNST
+
+def custom_subprob_cost(PTR_COST,local_vars):
+
+    # Extract variables from local_vars
+    ts_ref    = local_vars["ts_ref"]
+    N         = local_vars["N"]
+    u_slack   = local_vars["u_slack"]
+    us_ref    = local_vars["us_ref"]
+    du        = local_vars["du"]
+    # w_jerk  = local_vars["w_jerk"]  # Uncomment if you include JERK_COST term
+
+    # Compute dts_ref (time step differences)
+    dts_ref = np.diff(ts_ref)  # shape: (N-1,)
+
+    TRUE_COST = 0
+    JERK_COST = 0
+
+    for k in range(N - 1):
+        TRUE_COST += cp.square(u_slack[:, k + 1]) * dts_ref[k]
+
+        jerk = (us_ref[:, k + 1] + du[:, k + 1] - us_ref[:, k] - du[:, k]) / dts_ref[k]
+        # JERK_COST += w_jerk * cp.sum_squares(jerk)
+
+    PTR_COST = PTR_COST + TRUE_COST + JERK_COST
+
+    return PTR_COST
+
+
 def set_nondim_params(params): # TODO: Test
     """
     Initializes all nondimensional parameters
@@ -754,27 +840,6 @@ def set_nondim_params(params): # TODO: Test
     params['nondim']['ncost'] = ncost
 
     return params
-
-
-# # testing defaults.set_nondim_params()
-# if __name__ == "__main__":
-#     print('..:: Testing defaults.set_nondim_params() ::..')
-#     params = {
-#         'path_lim': None,
-#         'n_path': 0,
-#         'n_nfz': 6,
-#         'nfz_idx': [0,1,2,3,4,5],
-#         'zf_idx': None,
-#         'zf_min_idx': None,
-#         'zf_max_idx': None,
-#         'n': 6,
-#         'm': 3,
-#         'bools' : {
-#             'nondim': 1,
-#         },
-#     }
-#     params = defaults.set_nondim_params(params)
-#     print("params['nondim'] = ", params['nondim'])
 
 # TESTING CONFIG_PARAMS
 if __name__ == "__main__":

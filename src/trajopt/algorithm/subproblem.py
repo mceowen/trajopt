@@ -17,13 +17,14 @@ import trajopt.utils.tools                      as tools
 
 def solve_subproblem(problem):
     local_vars = baseline_subprob_inputs(problem)
-    #problem.custom_inputs(problem, local_vars)
+    #problem['custom_inputs'](problem, local_vars)
 
     local_vars = baseline_subprob_variables(problem,local_vars)
+    #problem['custom_variables'](problem, local_vars)
 
     constraints = []
     constraints += baseline_subprob_constraints(problem, local_vars)
-    #constraints += problem.custom_constraints(problem, local_vars, local_vars['sol_vars'])
+    #constraints += problem['custom_constraints'](problem, local_vars, local_vars['sol_vars'])
 
     PTR_COST    = baseline_subprob_cost(problem, local_vars)
 
@@ -473,9 +474,9 @@ def baseline_subprob_cost(problem,local_vars):
     TRUE_COST = 0
     for k in range(N):
         TRUE_COST += local_vars["w_cost"] * (
-            local_vars["dcostdz"][:, :, k] @ dz[:n, k]+
-            local_vars["dcostdu"][:, :, k] @ du[:, k] +
-            local_vars["cost"][:, :, k]
+            local_vars["dcostdz"][:, k] @ dz[:n, k]+
+            local_vars["dcostdu"][:, k] @ du[:, k] +
+            local_vars["cost"][:, k]
         )
 
     # --- TRUST REGION COST ---
@@ -682,8 +683,10 @@ def baseline_subprob_outputs(problem, local_vars, subprob):
     _, _, O["cnst_path"]                = convexify.compute_path_constraints(O["ts"], O["zs"], O["us"], problem)
 
     # Total cost via user-defined cost function (if available)
-    _, _, O["cost"]                     = convexify.compute_cost(O["ts"], O["zs"], O["us"],problem)
-    _, _, O["conv_data"]["cost_ref"]    = convexify.compute_cost(ts_ref, zs_ref, us_ref, problem)
+    O["cost"]                           = sum(np.squeeze(convexify.compute_cost(O["ts"], O["zs"], O["us"],problem)[2],axis=0))
+    O["conv_data"]["cost_ref"]          = sum(np.squeeze(convexify.compute_cost(ts_ref, zs_ref, us_ref, problem)[2]))
+
+
 
     return O
 
@@ -728,7 +731,7 @@ def display_baseline_subprob_status(problem, local_vars, O):
             float(log_vb_dyn),
             str(solve_stat),
             float(Ts * nt),
-            float(np.max(cost) * ncost)
+            float(cost * ncost)
         )
     )
 
