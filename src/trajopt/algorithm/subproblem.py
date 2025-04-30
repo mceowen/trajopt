@@ -388,8 +388,8 @@ def baseline_subprob_constraints(problem,local_vars):
         CNST.append(M_sel @ (dz[:n, -1] + zs_ref[:n, -1]) - vb_term[vb_N_ineq_idx, 0] <= np.concatenate([-zN_min, zN_max]))
 
     if buff_dyn == 'quad-1':
-        CNST.append(cp.sum(cp.vec(vb_dyn_plus)) == vb_plus)
-        CNST.append(cp.sum(cp.vec(vb_dyn_minus)) == vb_minus)
+        CNST.append(cp.sum(cp.vec(vb_dyn_plus, order='F')) == vb_plus)
+        CNST.append(cp.sum(cp.vec(vb_dyn_minus, order='F')) == vb_minus)
 
     elif buff_dyn == 'quad-3':
         for j in range(nz):
@@ -482,8 +482,8 @@ def baseline_subprob_cost(problem,local_vars):
     # --- TRUST REGION COST ---
     if solver_type == 'osqp':
         TR_COST = (
-            local_vars["wtr_z"] * cp.sum_squares(cp.vec(dz)) +
-            local_vars["wtr_u"] * cp.sum_squares(cp.vec(du))
+            local_vars["wtr_z"] * cp.sum_squares(cp.vec(dz, order='F')) +
+            local_vars["wtr_u"] * cp.sum_squares(cp.vec(du, order='F'))
         )
     else:
         dz_slacks = cp.Variable((1, N))
@@ -580,6 +580,11 @@ def baseline_autotune(problem, local_vars, O):
 
 
 def baseline_subprob_outputs(problem, local_vars, subprob):
+
+    N = problem['params']['N']
+    n = problem['params']['n']
+    m = problem['params']['m']
+
     dz          = local_vars['sol_vars']['dz']
     du          = local_vars['sol_vars']['du']
     dt          = local_vars['sol_vars']['dt']
@@ -637,7 +642,7 @@ def baseline_subprob_outputs(problem, local_vars, subprob):
     O['dt_val']         = dt_val
     O["zs"]             = tools.safe_val(dz, rows=n, cols=N) + zs_ref
     O["us"]             = tools.safe_val(du, rows=m, cols=N) + us_ref
-    O["dts"]            = tools.safe_val(dt) + dts_ref
+    O["dts"]            = np.squeeze( tools.safe_val(dt) )  + dts_ref
     O["ts"]             = np.concatenate(([0], np.cumsum(O["dts"])))
     O["Ts"]             = np.sum(O["dts"])
 
@@ -746,8 +751,6 @@ if __name__ == "__main__":
 
     # Step 3: Inject the first SCvx iteration into problem['I']
     N = problem['params']['N']
-    n = problem['params']['n']
-    m = problem['params']['m']
 
     problem["I"] = [{
         "iter_num": 0,
