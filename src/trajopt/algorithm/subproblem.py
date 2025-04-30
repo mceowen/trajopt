@@ -16,6 +16,7 @@ import trajopt.utils.tools                      as tools
 
 
 def solve_subproblem(problem):
+
     local_vars = baseline_subprob_inputs(problem)
     #problem['custom_inputs'](problem, local_vars)
 
@@ -290,8 +291,12 @@ def subprob_virtual_variables(problem, local_vars):
         vb_dyn_minus = cp.Variable((n['dyn'], N['dyn']))
 
     # Optional plus/minus aggregate buffers (e.g., for quad-1, quad-2)
-    vb_plus = cp.Variable((n['plus'], N['plus']))
-    vb_minus = cp.Variable((n['minus'], N['minus']))
+    if n['plus'] != 0:
+        vb_plus = cp.Variable((n['plus'], N['plus']))
+        vb_minus = cp.Variable((n['minus'], N['minus']))
+    else:
+        vb_plus = np.zeros((n['plus'], N['plus']))
+        vb_minus = np.zeros((n['minus'], N['minus']))
 
     return (
         vb_vals.get('path', np.zeros((n['path'], N['path']))),
@@ -447,7 +452,6 @@ def baseline_subprob_constraints(problem,local_vars):
                 CNST.append(vb_combined >= 0)
     
     return CNST
-
 
 
 def baseline_subprob_cost(problem,local_vars):

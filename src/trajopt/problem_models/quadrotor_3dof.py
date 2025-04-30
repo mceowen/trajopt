@@ -49,16 +49,15 @@ def config_main():
 
     # --- User problem setup ---
     config['params'] = {}
-    config['params']['N'] = 5
-    config['params']['T_init'] = 10
+    config['params']['N'] = 10
 
     config['params']['bools'] = {
         'flag_nfz': 1,          # 0, 1, 2
         'flag_autotune': '3',   # '0', '1', '2', '3', 'al-scvx'
         'free_final_time': 1,   # 0, 1
         'equal_dt': 0,          # 0, 1
-        'buff_dyn': 'quad-2',   # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
-        'buff_dyn_dual': 'l1',  # 'l1', 'none'
+        'buff_dyn': 'term',   # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
+        'buff_dyn_dual': 'none',  # 'l1', 'none'
         'ctcs': 0,              # 0, 1
         'ode_fixed_dt': 1,      # 0, 1 
     }
