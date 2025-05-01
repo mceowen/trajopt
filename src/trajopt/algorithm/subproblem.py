@@ -17,16 +17,16 @@ import trajopt.utils.tools                      as tools
 
 def solve_subproblem(problem):
     local_vars = baseline_subprob_inputs(problem)
-    #problem['custom_inputs'](problem, local_vars)
+    problem['custom_inputs'](problem, local_vars)
 
     local_vars = baseline_subprob_variables(problem,local_vars)
-    #problem['custom_variables'](problem, local_vars)
+    problem['custom_variables'](problem, local_vars)
 
-    constraints = []
-    constraints += baseline_subprob_constraints(problem, local_vars)
-    #constraints += problem['custom_constraints'](problem, local_vars, local_vars['sol_vars'])
+    constraints = baseline_subprob_constraints(problem, local_vars)
+    constraints = problem['custom_constraints'](constraints, local_vars)
 
     PTR_COST    = baseline_subprob_cost(problem, local_vars)
+    PTR_COST    = problem['custom_cost'](PTR_COST, local_vars)
 
     objective   = cp.Minimize(PTR_COST)
     subprob     = cp.Problem(objective, constraints)
@@ -717,7 +717,7 @@ def display_baseline_subprob_status(problem, local_vars, O):
     log_vb_dyn      = np.log10(max(chk_feas_dyn, 1e-12))
 
     solve_stat      = conv.get("status", "UNKNOWN")
-    iter_num        = len(getattr(problem, "I", []))
+    iter_num        = problem['I'][-1]['iter_num']
     nt              = local_vars['nt']
     ncost           = local_vars['ncost']
 

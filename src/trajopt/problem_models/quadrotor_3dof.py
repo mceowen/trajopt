@@ -9,6 +9,7 @@ import trajopt.algorithm.discretization     as discretize
 from scipy.interpolate  import interp1d
 from scipy.integrate    import solve_ivp
 import numpy as np
+import cvxpy as cp
 import os
 from pathlib import Path
 
@@ -57,8 +58,8 @@ def config_main():
         'flag_autotune': '3',   # '0', '1', '2', '3', 'al-scvx'
         'free_final_time': 1,   # 0, 1
         'equal_dt': 0,          # 0, 1
-        'buff_dyn': 'quad-2',   # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
-        'buff_dyn_dual': 'l1',  # 'l1', 'none'
+        'buff_dyn': 'term',     # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
+        'buff_dyn_dual': 'none',  # 'l1', 'none'
         'ctcs': 0,              # 0, 1
         'ode_fixed_dt': 1,      # 0, 1 
     }
@@ -156,10 +157,10 @@ def ocp(config):
         problem["lin_constr"] = lambda ts, zs, us: analytical_inequality_constraints(ts, zs, us, problem)
 
     # Algorithm - custom formulation
-    problem["custom_inputs"]                = lambda problem,   local_vars:     custom_inputs(problem, local_vars)
-    problem["custom_subprob_variables"]     = lambda problem,   local_vars:     custom_subprob_variables(problem, local_vars)
-    problem["custom_subprob_constraints"]   = lambda CNST,      local_vars:     custom_subprob_constraints(CNST, local_vars)
-    problem["custom_subprob_cost"]          = lambda PTR_COST,  local_vars:     custom_subprob_cost(PTR_COST, local_vars)
+    problem["custom_inputs"]        = lambda problem,   local_vars:     custom_inputs(problem, local_vars)
+    problem["custom_variables"]     = lambda problem,   local_vars:     custom_subprob_variables(problem, local_vars)
+    problem["custom_constraints"]   = lambda CNST,      local_vars:     custom_subprob_constraints(CNST, local_vars)
+    problem["custom_cost"]          = lambda PTR_COST,  local_vars:     custom_subprob_cost(PTR_COST, local_vars)
 
     # Plotting
     # TODO
@@ -691,13 +692,14 @@ def analytical_inequality_constraints(ts, zs, us, problem):
 ####### ALGORITHM 
 
 def custom_inputs(problem,local_vars):
-    u_norm_min = problem["params"]["u_norm_min"]
-    u_norm_max = problem["params"]["u_norm_max"]
-    theta_max  = problem["params"]["theta_max"]
-    mass       = problem["params"]["mass"]
-    ehat_u     = np.eye(m)
-    u1         = problem["params"]["ui"]
-    uN         = problem["params"]["uf"]
+    u_norm_min  = problem["params"]["u_norm_min"]
+    u_norm_max  = problem["params"]["u_norm_max"]
+    theta_max   = problem["params"]["theta_max"]
+    mass        = problem["params"]["mass"]
+    m           = problem["params"]["m"]
+    ehat_u      = np.eye(m)
+    u1          = problem["params"]["ui"]
+    uN          = problem["params"]["uf"]
 
     local_vars.update(locals())
 
@@ -705,6 +707,8 @@ def custom_inputs(problem,local_vars):
 
 def custom_subprob_variables(problem,local_vars): 
     
+    N           = problem["params"]["N"]
+
     u_slack = cp.Variable((1, N))  # 1×N variable
     w_jerk = 1e-1
 
@@ -715,7 +719,7 @@ def custom_subprob_variables(problem,local_vars):
 def custom_subprob_constraints(CNST,local_vars):
 
     us_ref     = local_vars["us_ref"]
-    du         = local_vars["du"]
+    du         = local_vars["sol_vars"]["du"]
     u1         = local_vars["u1"]
     uN         = local_vars["uN"]
     u_slack    = local_vars["u_slack"]
@@ -727,17 +731,17 @@ def custom_subprob_constraints(CNST,local_vars):
     N          = local_vars["N"]
 
     # Boundary constraints
-    CNST += [us_ref[:, 0] + du[:, 0] == u1]
-    CNST += [us_ref[:, N-1] + du[:, N-1] == uN]
+    CNST.append(us_ref[:, 0] + du[:, 0] == u1)
+    CNST.append(us_ref[:, N-1] + du[:, N-1] == uN)
 
     for k in range(N):
         u_k = us_ref[:, k] + du[:, k]
         slack_k = u_slack[:, k]
         
-        CNST += [cp.norm(u_k) <= slack_k]
-        CNST += [slack_k >= u_norm_min]
-        CNST += [slack_k <= u_norm_max]
-        CNST += [cp.cos(theta_max) * slack_k - (1 / mass) * ehat_u[:, 2].T @ u_k <= 0]
+        CNST.append(cp.norm(u_k) <= slack_k)
+        CNST.append(slack_k >= u_norm_min)
+        CNST.append(slack_k <= u_norm_max)
+        CNST.append(np.cos(theta_max) * slack_k - (1 / mass) * ehat_u[:, 2].T @ u_k <= 0)
 
     return CNST
 
@@ -748,7 +752,7 @@ def custom_subprob_cost(PTR_COST,local_vars):
     N         = local_vars["N"]
     u_slack   = local_vars["u_slack"]
     us_ref    = local_vars["us_ref"]
-    du        = local_vars["du"]
+    du        = local_vars["sol_vars"]["du"]
     # w_jerk  = local_vars["w_jerk"]  # Uncomment if you include JERK_COST term
 
     # Compute dts_ref (time step differences)

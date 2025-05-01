@@ -18,7 +18,7 @@ problem = quad3dof.ocp(config)
 N = problem['params']['N']
 
 problem["I"] = [{
-    "iter_num": 0,
+    "iter_num": 1,
     "zs_ref": problem["params"]["zs_init"],
     "us_ref": problem["params"]["us_init"],
     "dts_ref": np.full(N - 1, problem["params"]["T_init"] / (N - 1)),
@@ -41,7 +41,7 @@ print("  Iteration |  Propagation |   Solve   |    Parse   |  log(dz)  |      lo
 print("            |   time [ms]  | time [ms] |  time [ms] |           |  (path + NFZ)   |  (terminal) |  (dynamics) |              |  Flight [s] |           ")
 print("-" * 152)
 
-for ii in range( problem['params']['conv']['iter_max'] ):
+for ii in range( problem['params']['conv']['iter_max']+1 ):
 
     output = subproblem.solve_subproblem( problem )
 
