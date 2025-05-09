@@ -26,6 +26,7 @@ def solve_subproblem(problem):
     constraints = baseline_subprob_constraints(problem, local_vars)
     constraints = problem['custom_constraints'](constraints, local_vars)
 
+    PTR_COST    = 0
     PTR_COST    = baseline_subprob_cost(problem, local_vars)
     PTR_COST    = problem['custom_cost'](PTR_COST, local_vars)
 
@@ -462,6 +463,8 @@ def baseline_subprob_cost(problem,local_vars):
     vb_nfz          = local_vars['sol_vars']["vb_nfz"]
     vb_aux          = local_vars['sol_vars']["vb_aux"]
     vb_term         = local_vars['sol_vars']["vb_term"]
+    vb_dyn_plus     = local_vars['sol_vars']["vb_dyn_plus"]
+    vb_dyn_minus    = local_vars['sol_vars']["vb_dyn_minus"]
     vb_plus         = local_vars['sol_vars']["vb_plus"]
     vb_minus        = local_vars['sol_vars']["vb_minus"]
 
@@ -484,22 +487,22 @@ def baseline_subprob_cost(problem,local_vars):
         )
 
     # --- TRUST REGION COST ---
-    if solver_type == 'osqp':
-        TR_COST = (
-            local_vars["wtr_z"] * cp.sum_squares(cp.vec(dz, order='F')) +
-            local_vars["wtr_u"] * cp.sum_squares(cp.vec(du, order='F'))
-        )
-    else:
-        dz_slacks = cp.Variable((1, N))
-        du_slacks = cp.Variable((1, N))
-        slack_constraints = []
-        for k in range(N):
-            slack_constraints.append(cp.norm(dz[:, k], 2) ** 2 <= dz_slacks[0, k])
-            slack_constraints.append(cp.norm(du[:, k], 2) ** 2 <= du_slacks[0, k])
-        TR_COST = local_vars["wtr_z"] * cp.norm(dz_slacks, 1) + local_vars["wtr_u"] * cp.norm(du_slacks, 1)
+    # if solver_type == 'osqp':
+    TR_COST = (
+        local_vars["wtr_z"] * cp.sum_squares(cp.vec(dz, order='F')) +
+        local_vars["wtr_u"] * cp.sum_squares(cp.vec(du, order='F'))
+    )
+    # else:
+    #     dz_slacks = cp.Variable((1, N))
+    #     du_slacks = cp.Variable((1, N))
+    #     slack_constraints = []
+    #     for k in range(N):
+    #         slack_constraints.append(cp.norm(dz[:, k], 2) ** 2 <= dz_slacks[0, k])
+    #         slack_constraints.append(cp.norm(du[:, k], 2) ** 2 <= du_slacks[0, k])
+    #     TR_COST = local_vars["wtr_z"] * cp.norm(dz_slacks, 1) + local_vars["wtr_u"] * cp.norm(du_slacks, 1)
 
     # --- VIRTUAL BUFFER COST ---
-    VIRTUAL_COST = 0
+    VIRTUAL_COST = 0.0
     if flag_autotune in {'0', '2', '3', 'al-scvx'}:
         VIRTUAL_COST += cp.quad_form(vb_term, np.diag(local_vars["W_term"].flatten()))
 
@@ -543,7 +546,7 @@ def baseline_subprob_cost(problem,local_vars):
                             VIRTUAL_COST += cp.quad_form(vb_minus[:, k], np.diag(local_vars["W_minus"][:, k].flatten()))
 
     # --- DUAL COST ---
-    DUAL_COST = 0
+    DUAL_COST = 0.0
     if flag_autotune in {'1', '3', 'al-scvx'}:
         for k in range(N):
             if params["n_ineq"] > 0:
@@ -569,6 +572,8 @@ def baseline_subprob_cost(problem,local_vars):
 
     # --- TOTAL COST ---
     PTR_COST = TRUE_COST + 0.5 * VIRTUAL_COST + DUAL_COST + TR_COST
+
+    breakpoint()
 
     return PTR_COST
 
