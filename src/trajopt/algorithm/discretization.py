@@ -44,7 +44,7 @@ def discretize_type3a1_foh(zs_ref, us_ref, dts_ref, problem):
         # Setup LTV system dynamics
         params['lds0'][params['z_ind']]     = zs_ref[:, k]
         params['lds0'][params['Ak_ind']]    = np.eye(params['n']).reshape(-1)
-        lds0_stack.append(params['lds0'])
+        lds0_stack.append(params['lds0'].copy())
 
     lds0_stack                              = np.concatenate(lds0_stack)
 
