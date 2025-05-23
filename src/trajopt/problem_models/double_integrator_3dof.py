@@ -66,7 +66,7 @@ def config_main():
 
     # --- Solver options - TODO:expand ---
     config['params']['solver_opts'] = {
-        'solver': 'qoco',
+        'solver': 'Clarabel',
     }
 
     # --- Paths for problem-specific model and data ---
@@ -108,7 +108,7 @@ def ocp(config):
     """
     problem = {}
 
-    problem["name"] = "3DoF Quadrotor"
+    problem["name"] = "3-DoF Double Integrator"
 
     # Ingest parameters
     problem["config"]   = config
@@ -189,7 +189,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['m'] = 3
 
     # Time of flight
-    params['T_init'] = 10
+    params['T_init'] = 15
 
     # Define Cost Function
     params['cost'] = lambda t, z, u: np.dot(np.transpose(u), u) 
@@ -252,27 +252,27 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     # Control and state constraints
     #==============================
     # no state constraints
-    params['z_min'] = np.array([0, 0, 0.25])
-    params['z_min_idx'] = np.arange(0,3)
-    params['z_max'] = np.array([12, 12, 0.75])
-    params['z_max_idx'] = np.arange(0,3)
+    params['z_min']         = np.array([0, 0, 0.25])
+    params['z_min_idx']     = np.arange(0,3)
+    params['z_max']         = np.array([12, 12, 0.75])
+    params['z_max_idx']     = np.arange(0,3)
 
-    params['u_norm_min'] = 0.21 # [N]
-    params['u_norm_max'] = 8.12 # [N]
+    params['u_norm_min']    = 0.21 # [N]
+    params['u_norm_max']    = 8.12 # [N]
 
-    params['udot_max'] = 5*np.ones(3) # [N/s]
-    params['udot_max_idx'] = np.arange(0,3)
+    params['udot_max']      = 5*np.ones(3) # [N/s]
+    params['udot_max_idx']  = np.arange(0,3)
 
 
     ### Time of flight constraints ###
-    Ts_min = 1 / params['nondim']['nt']  # 50
-    Ts_max = 10 / params['nondim']['nt']
-    params['ddts_max'] = 5 / ((params['N'] - 1) * params['nondim']['nt'])  # 0.025
-    params['dts_min'] = Ts_min / (params['N'] - 1)
-    params['dts_max'] = Ts_max / (params['N'] - 1)
+    Ts_min                  = 1 / params['nondim']['nt']  # 50
+    Ts_max                  = 10 / params['nondim']['nt']
+    params['ddts_max']      = 5 / ((params['N'] - 1) * params['nondim']['nt'])  # 0.025
+    params['dts_min']       = Ts_min / (params['N'] - 1)
+    params['dts_max']       = Ts_max / (params['N'] - 1)
 
     ### Set default constraint data ###
-    params = defaults.set_params_constraint_default(params)
+    params                  = defaults.set_params_constraint_default(params)
 
 
     #======================================
@@ -299,7 +299,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
         # w_nfz: weight for path constraint buffer cost
 
     # === Baseline cost + trust region weights ===
-    params['weights']['w_cost'] = 0
+    params['weights']['w_cost'] = 1
     params['weights']['eps_nonzero1'] = 2e-1
     params['weights']['eps_nonzero2'] = 1e-10
 
@@ -477,13 +477,7 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
     # compute velocity and acceleration
     xDot = np.empty(6) # initialize
     xDot[0:3] = v
-    xDot[3:6] = T/mass + ge
-
-    if np.issubdtype(r.dtype, np.number):
-        if r[2] <= -1: # set xDot = 0 if the vehicle hits the ground
-            xDot = np.zeros(n)
-    elif np.issubdtype(r.dtype, np.nan) or any(np.isinf(r)):
-        breakpoint()
+    xDot[3:6] = T
         
     return xDot
 
@@ -513,7 +507,7 @@ def analytical_linsys(ts, zs, us, problem):
     Bc = np.vstack([
         np.zeros((n2, m)),
         np.eye(m)
-    ]) * (1.0 / mass)
+    ]) 
 
     # Evaluate nonlinear dynamics
     fc = system_dynamics(ts, zs, us, params)
@@ -692,82 +686,18 @@ def analytical_inequality_constraints(ts, zs, us, problem):
 ####### ALGORITHM 
 
 def custom_inputs(problem,local_vars):
-    u_norm_min  = problem["params"]["u_norm_min"]
-    u_norm_max  = problem["params"]["u_norm_max"]
-    theta_max   = problem["params"]["theta_max"]
-    mass        = problem["params"]["mass"]
-    m           = problem["params"]["m"]
-    ehat_u      = np.eye(m)
-    u1          = problem["params"]["ui"]
-    uN          = problem["params"]["uf"]
-
-    local_vars.update(locals())
 
     return local_vars 
 
 def custom_subprob_variables(problem,local_vars): 
     
-    N           = problem["params"]["N"]
-
-    u_slack = cp.Variable((1, N))  # 1×N variable
-    w_jerk = 1e-1
-
-    local_vars.update(locals())
-
     return local_vars 
 
 def custom_subprob_constraints(CNST,local_vars):
 
-    us_ref     = local_vars["us_ref"]
-    du         = local_vars["sol_vars"]["du"]
-    u1         = local_vars["u1"]
-    uN         = local_vars["uN"]
-    u_slack    = local_vars["u_slack"]
-    u_norm_min = local_vars["u_norm_min"]
-    u_norm_max = local_vars["u_norm_max"]
-    theta_max  = local_vars["theta_max"]
-    mass       = local_vars["mass"]
-    ehat_u     = local_vars["ehat_u"]
-    N          = local_vars["N"]
-
-    # Boundary constraints
-    CNST.append(us_ref[:, 0] + du[:, 0] == u1)
-    CNST.append(us_ref[:, N-1] + du[:, N-1] == uN)
-
-    for k in range(N):
-        u_k = us_ref[:, k] + du[:, k]
-        slack_k = u_slack[:, k]
-        
-        CNST.append(cp.norm(u_k) <= slack_k)
-        CNST.append(slack_k >= u_norm_min)
-        CNST.append(slack_k <= u_norm_max)
-        CNST.append(np.cos(theta_max) * slack_k - (1 / mass) * ehat_u[:, 2].T @ u_k <= 0)
-
     return CNST
 
 def custom_subprob_cost(PTR_COST,local_vars):
-
-    # Extract variables from local_vars
-    ts_ref    = local_vars["ts_ref"]
-    N         = local_vars["N"]
-    u_slack   = local_vars["u_slack"]
-    us_ref    = local_vars["us_ref"]
-    du        = local_vars["sol_vars"]["du"]
-    # w_jerk  = local_vars["w_jerk"]  # Uncomment if you include JERK_COST term
-
-    # Compute dts_ref (time step differences)
-    dts_ref = np.diff(ts_ref)  # shape: (N-1,)
-
-    TRUE_COST = 0
-    JERK_COST = 0
-
-    for k in range(N - 1):
-        TRUE_COST += cp.square(u_slack[:, k + 1]) * dts_ref[k]
-
-        jerk = (us_ref[:, k + 1] + du[:, k + 1] - us_ref[:, k] - du[:, k]) / dts_ref[k]
-        # JERK_COST += w_jerk * cp.sum_squares(jerk)
-
-    PTR_COST = PTR_COST + TRUE_COST + JERK_COST
 
     return PTR_COST
 

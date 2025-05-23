@@ -5,14 +5,14 @@ import matplotlib.pyplot as plt
 import time
 
 # trajopt imports
-import trajopt.problem_models.quadrotor_3dof    as quad3dof
-import trajopt.algorithm.subproblem             as subproblem
+import trajopt.problem_models.double_integrator_3dof    as double_int
+import trajopt.algorithm.subproblem                     as subproblem
 
 # Step 1: Define configuration
-config = quad3dof.config_main()
+config = double_int.config_main()
 
 # Step 2: Create the full problem dictionary using ocp()
-problem = quad3dof.ocp(config)
+problem = double_int.ocp(config)
 
 # Step 3: Inject the first SCvx iteration into problem['I']
 N = problem['params']['N']
@@ -46,10 +46,13 @@ for ii in range( problem['params']['conv']['iter_max']+1 ):
     output = subproblem.solve_subproblem( problem )
 
     problem["O"].append(output)
-    problem["O"][ii]["iter_num"]    = ii 
+    problem["O"][ii]["iter_num"]    = ii + 1
+
+    if problem["O"][-1]["converged"]:
+        break
 
     problem["I"].append(problem["I"][ii]) 
-    problem["I"][ii+1]["iter_num"]  = ii + 1
+    problem["I"][ii+1]["iter_num"]  = ii + 2
     problem["I"][ii+1]["ts_ref"]    = problem["O"][ii]["ts"]
     problem["I"][ii+1]["dts_ref"]   = problem["O"][ii]["dts"]
     problem["I"][ii+1]["zs_ref"]    = problem["O"][ii]["zs"]
@@ -58,15 +61,22 @@ for ii in range( problem['params']['conv']['iter_max']+1 ):
     problem["I"][ii+1]["weights"]   = problem["O"][ii]["weights"]
     problem["I"][ii+1]["conv_data"] = problem["O"][ii]["conv_data"]
 
-fig = plt.figure()
-ax = fig.add_subplot(111, projection="3d")
+
+# # # STORING DATA 
+import trajopt.prototypes.test_plot.store_data as store_data
+store_data.dump_filtered_dict(problem, '~/ACL/entry/python/scp_sandbox/trajopt/src/trajopt/prototypes/test_plot/Problem.json')
+
+# make plots 
+fig     = plt.figure()
+ax      = fig.add_subplot(111, projection="3d")
 ax.plot(problem["I"][-1]["zs_ref"][0, :], problem["I"][-1]["zs_ref"][1, :], problem["I"][-1]["zs_ref"][2, :])
 
 fig     = plt.figure()
 ax_1    = fig.add_subplot(311)
-ax_2   = fig.add_subplot(312)
+ax_2    = fig.add_subplot(312)
 ax_3    = fig.add_subplot(313)
 ax_1.plot(problem["I"][-1]["ts_ref"], problem["I"][-1]["us_ref"][0, :])
 ax_2.plot(problem["I"][-1]["ts_ref"], problem["I"][-1]["us_ref"][1, :])
 ax_3.plot(problem["I"][-1]["ts_ref"], problem["I"][-1]["us_ref"][2, :])
 plt.show()
+
