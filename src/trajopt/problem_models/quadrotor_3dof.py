@@ -27,8 +27,9 @@ def config_main():
     # Instead, assume working directory is already set or handled externally.
 
     # --- Set base defaults ---
-    config['model_type'] = 'quadrotor_3dof'
-    config['case_flag'] = 1  # 1: single integrator
+    config['model_type']    = 'quadrotor_3dof'
+    config['mission']       = config['model_type']
+    config['case_flag']     = 1  # 1: single integrator
 
     config['bools'] = {
         'opt': 1,
@@ -55,10 +56,10 @@ def config_main():
     config['params']['bools'] = {
         'flag_nfz': 0,          # 0, 1, 2
         'flag_autotune': '0',   # '0', '1', '2', '3', 'al-scvx'
-        'free_final_time': 0,   # 0, 1
+        'free_final_time': 1,   # 0, 1
         'equal_dt': 0,          # 0, 1
         'buff_dyn': 'term',     # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
-        'buff_dyn_dual': 'none',  # 'l1', 'none'
+        'buff_dyn_dual': 'none',# 'l1', 'none'
         'ctcs': 0,              # 0, 1
         'ode_fixed_dt': 0,      # 0, 1 ,
         'nondim': 0,            # 0, 1
@@ -182,17 +183,17 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['bools']['init_ctrl']       = 0
 
     # Physical constants
-    params['ge'] = np.array([0, 0, -9.81]) # [m/s^2], grav accel at sea lvl
+    params['ge']        = np.array([0, 0, -9.81]) # [m/s^2], grav accel at sea lvl
 
     # Problem params
-    params['n'] = 6
-    params['m'] = 3
+    params['n']         = 6
+    params['m']         = 3
 
     # Time of flight
-    params['T_init'] = 10
+    params['T_init']    = 10.
 
     # Define Cost Function
-    params['cost'] = lambda t, z, u: np.dot(np.transpose(u), u) 
+    params['cost']      = lambda t, z, u: np.dot(np.transpose(u), u) 
 
 
     #======================
@@ -213,66 +214,66 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
         rc = np.array([])
 
     params.setdefault('obs', {})['posc'] = np.array([xc, yc]) # xc and yc may be vectors
-    params['obs']['rc'] = rc
+    params['obs']['rc']     = rc
 
-    params['nfz_idx'] = np.arange(0, xc.size)
-    params['n_nfz'] = len(params['nfz_idx'])
+    params['nfz_idx']       = np.arange(0, xc.size)
+    params['n_nfz']         = len(params['nfz_idx'])
 
 
     ### Vehicle Parameters ###
-    params['mass'] = 0.35;                  # [kg], quadrotor mass
-    params['theta_max'] = np.deg2rad(100);  # [rad], maximum tilt angle
+    params['mass']          = 0.35;                  # [kg], quadrotor mass
+    params['theta_max']     = np.deg2rad(100.);  # [rad], maximum tilt angle
 
     ### Set dim/nondim params based on flag ###
     # scaling values for nondim
-    params = set_nondim_params(params)
+    params                  = set_nondim_params(params)
 
     #====================
     # Boundary Conditions
     #====================
     # initial conditions
-    params['z0s'] = np.array([0,0,0.5,0,0,0])
+    params['z0s']           = np.array([0,0,0.5,0,0,0])
 
     # equality initial conditions
-    params['zi'] = params['z0s']
-    params['zi_idx'] = np.arange(0, params['n'])
+    params['zi']            = params['nondim']['M_state_d2nd'] @ params['z0s']
+    params['zi_idx']        = np.arange(0, params['n'])
 
     # inequality initial conditions
     # none
 
     # equality terminal conditions
-    params['zf'] = params['nondim']['M_state_d2nd'] @ np.array([10,10,0.5,0,0,0])
-    params['zf_idx'] = np.arange(0,params['n'])
+    params['zf']            = params['nondim']['M_state_d2nd'] @ np.array([10,10,0.5,0,0,0])
+    params['zf_idx']        = np.arange(0,params['n'])
 
     # control boundary conditions
-    params['ui'] = -params['ge']*params['mass']
-    params['uf'] = -params['ge']*params['mass']
+    params['ui']            = -params['ge']*params['mass']
+    params['uf']            = -params['ge']*params['mass']
 
     #==============================
     # Control and state constraints
     #==============================
     # no state constraints
-    params['z_min'] = np.array([0, 0, 0.25])
-    params['z_min_idx'] = np.arange(0,3)
-    params['z_max'] = np.array([12, 12, 0.75])
-    params['z_max_idx'] = np.arange(0,3)
+    params['z_min']         = np.array([0, 0, 0.25])
+    params['z_min_idx']     = np.arange(0,3)
+    params['z_max']         = np.array([12, 12, 0.75])
+    params['z_max_idx']     = np.arange(0,3)
 
-    params['u_norm_min'] = 0.21 # [N]
-    params['u_norm_max'] = 8.12 # [N]
+    params['u_norm_min']    = 0.21 # [N]
+    params['u_norm_max']    = 8.12 # [N]
 
-    params['udot_max'] = 5*np.ones(3) # [N/s]
-    params['udot_max_idx'] = np.arange(0,3)
+    params['udot_max']      = 5*np.ones(3) # [N/s]
+    params['udot_max_idx']  = np.arange(0,3)
 
 
     ### Time of flight constraints ###
-    Ts_min = 1 / params['nondim']['nt']  # 50
-    Ts_max = 10 / params['nondim']['nt']
-    params['ddts_max'] = 5 / ((params['N'] - 1) * params['nondim']['nt'])  # 0.025
-    params['dts_min'] = Ts_min / (params['N'] - 1)
-    params['dts_max'] = Ts_max / (params['N'] - 1)
+    Ts_min                  = 1. / params['nondim']['nt']  # 50
+    Ts_max                  = 20. / params['nondim']['nt']
+    params['ddts_max']      = 5. / ((params['N'] - 1) * params['nondim']['nt'])  # 0.025
+    params['dts_min']       = Ts_min / (params['N'] - 1)
+    params['dts_max']       = Ts_max / (params['N'] - 1)
 
     ### Set default constraint data ###
-    params = defaults.set_params_constraint_default(params)
+    params                  = defaults.set_params_constraint_default(params)
 
 
     #======================================
@@ -284,7 +285,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
         params = guess.nonlinear_initial_guess(us_range, params)
     else:
         params = guess.waypoint_initial_guess(params) 
-        params['us_init'] = ( -params['ge'].reshape(-1,1) * params['mass'] ) @ np.ones((1, params['N']))
+        params['us_init'] =  np.tile(-params['ge'] * params['mass'], (params['N'], 1)) 
 
     if params['bools']['ctcs']:
         params = guess.ctcs_initial_guess(params)
@@ -299,16 +300,16 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
         # w_nfz: weight for path constraint buffer cost
 
     # === Baseline cost + trust region weights ===
-    params['weights']['w_cost'] = 0
-    params['weights']['eps_nonzero1'] = 2e-1
-    params['weights']['eps_nonzero2'] = 1e-10
+    params['weights']['w_cost']         = 0.
+    params['weights']['eps_nonzero1']   = 2e-1
+    params['weights']['eps_nonzero2']   = 1e-10
 
     # === Trust region weights ===
     params['weights'].setdefault('alpha_z', 0.5)
     params['weights'].setdefault('alpha_u', np.inf)
 
-    params['weights']['wtr_z'] = 1 / (2 * params['weights']['alpha_z'])
-    params['weights']['wtr_u'] = 0 if np.isinf(params['weights']['alpha_u']) else 1 / (2 * params['weights']['alpha_u'])
+    params['weights']['wtr_z']          = 1 / (2 * params['weights']['alpha_z'])
+    params['weights']['wtr_u']          = 0 if np.isinf(params['weights']['alpha_u']) else 1 / (2 * params['weights']['alpha_u'])
 
     # === Autotune modes (flag_autotune ∈ {0,2,3,al-scvx}) ===
     if str(params['bools']['flag_autotune']) in {'0', '2', '3', 'al-scvx'}:
@@ -321,13 +322,13 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
             if 'wbuff' not in params['weights']:
                 wbuff = 1e2
                 if str(params['bools']['flag_autotune']) == '0':
-                    w_nfz = wbuff / params['weights']['w_fac_N']
-                    w_dyn = 1e5 * wbuff / params['weights']['w_fac_Nm1']
-                    w_term = 1e2 * wbuff
+                    w_nfz   = wbuff / params['weights']['w_fac_N']
+                    w_dyn   = 1e5 * wbuff / params['weights']['w_fac_Nm1']
+                    w_term  = 1e2 * wbuff
                 else:
-                    w_nfz = wbuff / params['weights']['w_fac_N']
-                    w_dyn = wbuff / params['weights']['w_fac_Nm1']
-                    w_term = wbuff
+                    w_nfz   = wbuff / params['weights']['w_fac_N']
+                    w_dyn   = wbuff / params['weights']['w_fac_Nm1']
+                    w_term  = wbuff
             else:
                 wbuff = params['weights']['wbuff']
                 w_nfz = wbuff / params['weights']['w_fac_N']
@@ -371,75 +372,74 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
                     params['weights']['dual_minus'] += params['weights']['eps_nonzero1']
 
     ### ctcs convergence adjustments ###
-    ctcs_mult_state = 5e-1
-    ctcs_mult_cnst = 1e0
-    eps_ctcs = 1e-5
+    ctcs_mult_state         = 5e-1
+    ctcs_mult_cnst          = 1e0
+    eps_ctcs                = 1e-5
 
-    params['conv']['setup']['ctcs_mult_state'] = ctcs_mult_state
-    params['conv']['setup']['ctcs_mult_cnst'] = ctcs_mult_cnst
+    params['conv']['setup']['ctcs_mult_state']                  = ctcs_mult_state
+    params['conv']['setup']['ctcs_mult_cnst']                   = ctcs_mult_cnst
 
-    params['eps_ctcs'] = eps_ctcs
+    params['eps_ctcs']                                          = eps_ctcs
 
     ### State convergence ###
-    eps_d_state = 1e-1  # [m]
-    eps_v_state = 1e0   # [m/s]
-    params['conv']['setup']['eps_state'] = np.concatenate((eps_d_state * np.ones(params['n'] // 2), 
-                                                        eps_v_state * np.ones(params['n'] // 2)))
+    eps_d_state             = 1e-1  # [m]
+    eps_v_state             = 1e0   # [m/s]
+    params['conv']['setup']['eps_state']                        = np.concatenate((eps_d_state * np.ones(params['n'] // 2), 
+                                                                    eps_v_state * np.ones(params['n'] // 2)))
 
-    params['conv']['setup'].setdefault('state', {})['eps_d'] = eps_d_state
-    params['conv']['setup']['state']['eps_v'] = eps_v_state
+    params['conv']['setup'].setdefault('state', {})['eps_d']    = eps_d_state
+    params['conv']['setup']['state']['eps_v']                   = eps_v_state
 
     ### Cost convergence ###
-    eps_F_cost = 1 # N
+    eps_F_cost              = 1e0 # N
 
     # Assign to cost eps and store data
     params['conv']['setup']['eps_cost'] = eps_F_cost
-    params['conv']['setup'].setdefault('cost', {})['eps_v'] = eps_F_cost
+    params['conv']['setup'].setdefault('cost', {})['eps_v']     = eps_F_cost
 
     ### NFZ convergence values ###
-    eps_nfz_cnst = 1e-1
-    params['conv']['setup']['eps_nfz'] = eps_nfz_cnst * np.ones(params['n_nfz'])
-    params['conv']['setup'].setdefault('cnst', {})['eps_nfz'] = eps_nfz_cnst
+    eps_nfz_cnst            = 1e-1
+    params['conv']['setup']['eps_nfz']                          = eps_nfz_cnst * np.ones(params['n_nfz'])
+    params['conv']['setup'].setdefault('cnst', {})['eps_nfz']   = eps_nfz_cnst
 
     ### Terminal constraint values ###
-    eps_d_term = 1e-1
-    eps_v_term = 1e-2
+    eps_d_term              = 1e-1
+    eps_v_term              = 1e-2
 
     # Create eps_vector for full terminal state equality, min, max constraints
-    eps_term = np.array([eps_d_term, eps_d_term, eps_d_term, eps_v_term, eps_v_term, eps_v_term])
-    eps_term_min = eps_term.copy()
-    eps_term_max = eps_term.copy()
+    eps_term                = np.array([eps_d_term, eps_d_term, eps_d_term, eps_v_term, eps_v_term, eps_v_term])
+    eps_term_min            = eps_term.copy()
+    eps_term_max            = eps_term.copy()
 
     # Extract only those terminal constraints used
-    params['conv']['setup']['eps_term'] = np.concatenate((eps_term[params['zf_idx']], 
-                                                        eps_term_min[params['zf_min_idx']], 
-                                                        eps_term_max[params['zf_max_idx']]))
+    params['conv']['setup']['eps_term']                         = np.concatenate((eps_term[params['zf_idx']], 
+                                                                    eps_term_min[params['zf_min_idx']], 
+                                                                    eps_term_max[params['zf_max_idx']]))
 
     # Store data
-    params['conv']['setup'].setdefault('term', {})['eps_d'] = eps_d_term
+    params['conv']['setup'].setdefault('term', {})['eps_d']     = eps_d_term
 
     #### Configure multiple shooting dynamics defect convergence values ###
-    params['conv']['setup']['eps_defect'] = np.array([1e-2])
+    params['conv']['setup']['eps_defect']                       = np.array([1e-2])
 
     ### Dynamics convergence ###
-    eps_d_dyn = 1e-1  # [m]
-    eps_v_dyn = 1e0   # [m/s]
-    params['conv']['setup']['eps_dyn'] = np.concatenate((eps_d_dyn * np.ones(params['n'] // 2), 
-                                                        eps_v_dyn * np.ones(params['n'] // 2)))
+    eps_d_dyn               = 1e-1  # [m]
+    eps_v_dyn               = 1e0   # [m/s]
+    params['conv']['setup']['eps_dyn']                          = np.concatenate((eps_d_dyn * np.ones(params['n'] // 2), 
+                                                                    eps_v_dyn * np.ones(params['n'] // 2)))
 
     # Store data
-    params['conv']['setup'].setdefault('dyn', {})['eps_d'] = eps_d_dyn
-    params['conv']['setup']['dyn']['eps_v'] = eps_v_dyn
+    params['conv']['setup'].setdefault('dyn', {})['eps_d']      = eps_d_dyn
+    params['conv']['setup']['dyn']['eps_v']                     = eps_v_dyn
 
     ### Configure generic convergence criterion and max iterations ###
     params = convergence.set_convergence_tolerance(params)
 
     # Iterations
-    params['conv']['iter_max'] = 15
-    # params['conv']['num_buffers'] = 4
+    params['conv']['iter_max']  = 15
 
     # Save variable names
-    params['save_var_names'] = ['ts_opt', 'zs_opt', 'us_opt', 'params', 'O']
+    params['save_var_names']    = ['ts_opt', 'zs_opt', 'us_opt', 'params', 'O']
 
     return params
 
@@ -475,9 +475,9 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
     T = us2
 
     # compute velocity and acceleration
-    xDot = np.empty(6) # initialize
-    xDot[0:3] = v
-    xDot[3:6] = T/mass + ge
+    xDot        = np.empty(6) # initialize
+    xDot[0:3]   = v
+    xDot[3:6]   = T/mass + ge
 
     if np.issubdtype(r.dtype, np.number):
         if r[2] <= -1: # set xDot = 0 if the vehicle hits the ground
@@ -490,10 +490,10 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
 def analytical_linsys(ts, zs, us, problem):
     
     # Extract parameters
-    params = problem.get("params", problem)
-    n = params["n"]
-    m = params["m"]
-    mass = params["mass"]
+    params  = problem.get("params", problem)
+    n       = params["n"]
+    m       = params["m"]
+    mass    = params["mass"]
 
     # Sanity check for vector shapes
     zs = np.asarray(zs).flatten()
@@ -533,7 +533,6 @@ def nonlinear_inequality_constraints(ts, zs, us, params):
     if "params" in params:
         params = params["params"]
 
-    zs      = zs.reshape(-1, 1) if zs.ndim == 1 else zs
     N       = tools.num_timesteps(zs)
     n_nfz   = params["n_nfz"]
     n_path  = params.get("n_path", 0)  # currently unused
@@ -542,8 +541,15 @@ def nonlinear_inequality_constraints(ts, zs, us, params):
     P_nfz   = []
 
     for k in range(N):
-        rx_k = zs[0, k]
-        ry_k = zs[1, k]
+
+        if zs.ndim == 2:
+            rx_k = zs[k, 0]
+            ry_k = zs[k, 1]
+        elif zs.ndim == 1:
+            rx_k = zs[0]
+            ry_k = zs[1]
+        else:
+            raise ValueError(f"Unhandled zs shape {zs.shape}")
 
         # --- No Fly Zone constraints ---
         P_nfz_k = []
@@ -558,11 +564,11 @@ def nonlinear_inequality_constraints(ts, zs, us, params):
 
         P_nfz.append(P_nfz_k)
 
-    P_nfz = np.array(P_nfz).T if P_nfz else np.empty((0, N))
-    P_path = np.empty((0, N))  # not implemented
+    P_nfz   = np.array(P_nfz) if P_nfz else np.empty((N,0))
+    P_path  = np.empty((N,0))  # not implemented
 
     # Stack all inequality constraints
-    P = np.vstack([P_path, P_nfz])
+    P       = np.vstack([P_path, P_nfz])
     return P
 
 
@@ -570,100 +576,100 @@ def analytical_cost(ts, zs, us, problem):
 
     # Extract params
     params = problem.get("params", problem)
-    n = params["n"]
-    m = params["m"]
-    N = params["N"]
+    n               = params["n"]
+    m               = params["m"]
+    N               = params["N"]
 
-    ts = np.asarray(ts).flatten()
-    zs = np.asarray(zs)
-    us = np.asarray(us)
-    dt = np.diff(ts)
+    ts              = np.asarray(ts).flatten()
+    zs              = np.asarray(zs)
+    us              = np.asarray(us)
+    dt              = np.diff(ts)
 
     # Preallocate outputs
-    dcostdz = np.zeros((1, n, N))
-    dcostdu = np.zeros((1, m, N))
-    cost    = np.zeros((1, 1, N))
+    dcostdz         = np.zeros((N, 1, n))
+    dcostdu         = np.zeros((N, 1, m))
+    cost            = np.zeros((N, 1, 1))
 
     for k in range(N - 1):
-        tk   = ts[k]
-        zk   = zs[:, k]
-        uk   = us[:, k]
+        tk          = ts[k]
+        zk          = zs[k]
+        uk          = us[k]
 
-        tkp  = ts[k + 1]
-        zkp  = zs[:, k + 1]
-        ukp  = us[:, k + 1]
+        tkp         = ts[k + 1]
+        zkp         = zs[k + 1]
+        ukp         = us[k + 1]
 
-        dcostdu[:, :, k] = 2 * ((uk + ukp) / 2).reshape(1, m)
-        avg_cost = 0.5 * (problem["cost"](tk, zk, uk) + problem["cost"](tkp, zkp, ukp))
-        cost[:, :, k] = avg_cost * dt[k]
+        dcostdu[k]  = 2 * ((uk + ukp) / 2).reshape(1, m)
+        avg_cost    = 0.5 * (problem["cost"](tk, zk, uk) + problem["cost"](tkp, zkp, ukp))
+        cost[k]     = avg_cost * dt[k]
 
     # Last step (N)
-    dcostdz[:, :, N - 1] = 0
-    dcostdu[:, :, N - 1] = 0
-    cost[:, :, N - 1]    = 0
+    dcostdz[N - 1]  = 0
+    dcostdu[N - 1]  = 0
+    cost[N - 1]     = 0
 
     # Package into output dict
     lincost = {
-        "dfcn_dz": np.squeeze(dcostdz, axis=0),
-        "dfcn_du": np.squeeze(dcostdu, axis=0),
-        "fcn":     np.squeeze(cost, axis=0)
+        "dfcn_dz": dcostdz,
+        "dfcn_du": dcostdu,
+        "fcn":     cost     
     }
 
     return lincost
 
 def analytical_inequality_constraints(ts, zs, us, problem):
 
-    params = problem.get("params", problem)
+    params          = problem.get("params", problem)
 
-    N = tools.num_timesteps(zs)
-    n = params["n"]
-    m = params["m"]
-    n_path = params["n_path"]
-    n_nfz = params["n_nfz"]
+    N               = tools.num_timesteps(zs)
+    n               = params["n"]
+    m               = params["m"]
+    n_path          = params["n_path"]
+    n_nfz           = params["n_nfz"]
 
-    path_idx = params["path_idx"]
-    path_lim_diag = np.diag(params["nondim"]["np_ineq"][:n_path])
+    path_idx        = params["path_idx"]
+    path_lim_diag   = np.diag(params["nondim"]["np_ineq"][:n_path])
     path_lim_scaled = np.linalg.solve(path_lim_diag, params["path_lim"])
 
     # Preallocate storage
-    path_cnst = {"P": [], "Praw": [], "dPdz": [], "dPdu": []}
-    nfz_cnst = {"P": [], "dPdz": [], "dPdu": []}
+    path_cnst       = {"P": [], "Praw": [], "dPdz": [], "dPdu": []}
+    nfz_cnst        = {"P": [], "dPdz": [], "dPdu": []}
 
     for k in range(N):
-        tk = ts[k]
-        zk = zs[:, k]
-        uk = us[:, k]
-        rx_k, ry_k = zk[0], zk[1]
+        tk          = ts[k]
+        zk          = zs[k]
+        uk          = us[k]
+        rx_k, ry_k  = zk[0], zk[1]
 
         # Evaluate full constraint vector
-        P_full = nonlinear_inequality_constraints(tk, zk, uk, params)
+        P_full      = nonlinear_inequality_constraints(tk, zk, uk, params)
 
         # ---- Path constraints ----
         if n_path > 0:
-            P_path = P_full[path_idx]
+            P_path      = P_full[path_idx]
             path_cnst["P"].append(P_path - path_lim_scaled)
             path_cnst["Praw"].append(P_path)
 
             # Use zero Jacobians as placeholders (same as original MATLAB)
-            dPdz_path = np.zeros((n_path, n))
-            dPdu_path = np.zeros((n_path, m))
+            dPdz_path   = np.zeros((n_path, n))
+            dPdu_path   = np.zeros((n_path, m))
             path_cnst["dPdz"].append(dPdz_path)
             path_cnst["dPdu"].append(dPdu_path)
 
         # ---- No-fly zone constraints ----
         if n_nfz > 0:
-            P_nfz = P_full[n_path:n_path + n_nfz]
-            dPdz_nfz = []
-            dPdu_nfz = []
+            P_nfz       = P_full[n_path:n_path + n_nfz]
+            dPdz_nfz    = []
+            dPdu_nfz    = []
 
             for i in range(n_nfz):
-                xc = params["obs"]["posc"][0, i]
-                yc = params["obs"]["posc"][1, i]
-                rc = params["obs"]["rc"][i]
+                xc          = params["obs"]["posc"][0, i]
+                yc          = params["obs"]["posc"][1, i]
+                rc          = params["obs"]["rc"][i]
 
                 row_dz = np.zeros(n)
-                row_dz[0] = 2 * (rx_k - xc)
-                row_dz[1] = 2 * (ry_k - yc)
+                row_dz[0]   = 2 * (rx_k - xc)
+                row_dz[1]   = 2 * (ry_k - yc)
                 dPdz_nfz.append(row_dz)
 
                 dPdu_nfz.append(np.zeros(m))
@@ -709,8 +715,8 @@ def custom_subprob_variables(problem,local_vars):
     
     N           = problem["params"]["N"]
 
-    u_slack = cp.Variable((1, N))  # 1×N variable
-    w_jerk = 1e-1
+    u_slack     = cp.Variable((N,1))  # 1×N variable
+    w_jerk      = 1e-1
 
     local_vars.update(locals())
 
@@ -731,12 +737,12 @@ def custom_subprob_constraints(CNST,local_vars):
     N          = local_vars["N"]
 
     # Boundary constraints
-    CNST.append(us_ref[:, 0] + du[:, 0] == u1)
-    CNST.append(us_ref[:, N-1] + du[:, N-1] == uN)
+    CNST.append(us_ref[0] + du[0] == u1)
+    CNST.append(us_ref[N-1] + du[N-1] == uN)
 
     for k in range(N):
-        u_k = us_ref[:, k] + du[:, k]
-        slack_k = u_slack[:, k]
+        u_k     = us_ref[k] + du[k]
+        slack_k = u_slack[k]
         
         CNST.append(cp.norm(u_k) <= slack_k)
         CNST.append(slack_k >= u_norm_min)
@@ -762,12 +768,12 @@ def custom_subprob_cost(PTR_COST,local_vars):
     JERK_COST = 0
 
     for k in range(N - 1):
-        TRUE_COST += cp.square(u_slack[:, k + 1]) * dts_ref[k]
+        TRUE_COST   += cp.square(u_slack[k + 1]) * dts_ref[k]
 
-        jerk = (us_ref[:, k + 1] + du[:, k + 1] - us_ref[:, k] - du[:, k]) / dts_ref[k]
+        jerk        = (us_ref[k + 1] + du[k + 1] - us_ref[k] - du[k]) / dts_ref[k]
         # JERK_COST += w_jerk * cp.sum_squares(jerk)
 
-    PTR_COST = PTR_COST + TRUE_COST + JERK_COST
+    PTR_COST        = PTR_COST + TRUE_COST + JERK_COST
 
     return PTR_COST
 
@@ -816,11 +822,11 @@ def set_nondim_params(params): # TODO: Test
     params['nondim']['M_state_d2nd'] = np.diag(nd_state).copy()
     params['nondim']['M_ctrl_d2nd'] = np.diag(np.ones(m) / na).copy()
 
-    params['nondim']['M_term_d2nd'] = np.diag(np.concatenate([
-        nd_state[params['zf_idx']],
-        nd_state[params['zf_min_idx']],
-        nd_state[params['zf_max_idx']]
-    ])).copy()
+    # params['nondim']['M_term_d2nd'] = np.diag(np.concatenate([
+    #     nd_state[params['zf_idx']],
+    #     nd_state[params['zf_min_idx']],
+    #     nd_state[params['zf_max_idx']]
+    # ])).copy()
     params['nondim']['M_cnst_d2nd'] = np.diag(np_ineq ** -1).copy()
     params['nondim']['M_nfz_d2nd'] = np.diag(np_ineq[params['nfz_idx']] ** -1).copy()
 

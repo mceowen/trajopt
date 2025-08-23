@@ -24,10 +24,10 @@ problem["I"] = [{
     "dts_ref": np.full(N - 1, problem["params"]["T_init"] / (N - 1)),
     "ts_ref": np.linspace(0, problem["params"]["T_init"], N),
     "conv_data": {
-        "vb_path": np.zeros((problem["params"]["n_path"], N)),
-        "vb_nfz": np.zeros((problem["params"]["n_nfz"], N)),
-        "vb_aux": np.zeros((problem["params"].get("n_aux", 0), N)),
-        "vb_dyn": np.zeros((problem["params"]["nz"], N - 1)),
+        "vb_path": np.zeros((N, problem["params"]["n_path"])),
+        "vb_nfz": np.zeros((N,problem["params"]["n_nfz"])),
+        "vb_aux": np.zeros((N,problem["params"].get("n_aux", 0))),
+        "vb_dyn": np.zeros((N-1,problem["params"]["nz"])),
         "vb_term": np.zeros((problem["params"]["n_term"] + problem["params"]["n_term_ineq"], 1)),
     },
     "weights": problem["params"]["weights"]
@@ -71,14 +71,14 @@ store_data.dump_filtered_dict(problem, '~/ACL/entry/python/scp_sandbox/trajopt/s
 
 fig = plt.figure()
 ax = fig.add_subplot(111, projection="3d")
-ax.plot(problem["I"][-1]["zs_ref"][0, :], problem["I"][-1]["zs_ref"][1, :], problem["I"][-1]["zs_ref"][2, :])
+ax.plot(problem["I"][-1]["zs_ref"][:,0], problem["I"][-1]["zs_ref"][:, 1], problem["I"][-1]["zs_ref"][:, 2])
 
 fig     = plt.figure()
 ax_1    = fig.add_subplot(311)
-ax_2   = fig.add_subplot(312)
+ax_2    = fig.add_subplot(312)
 ax_3    = fig.add_subplot(313)
-ax_1.plot(problem["I"][-1]["ts_ref"], problem["I"][-1]["us_ref"][0, :])
-ax_2.plot(problem["I"][-1]["ts_ref"], problem["I"][-1]["us_ref"][1, :])
-ax_3.plot(problem["I"][-1]["ts_ref"], problem["I"][-1]["us_ref"][2, :])
+ax_1.plot(problem["I"][-1]["ts_ref"], problem["I"][-1]["us_ref"][:, 0])
+ax_2.plot(problem["I"][-1]["ts_ref"], problem["I"][-1]["us_ref"][:, 1])
+ax_3.plot(problem["I"][-1]["ts_ref"], problem["I"][-1]["us_ref"][:, 2])
 plt.show()
 

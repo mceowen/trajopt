@@ -36,63 +36,63 @@ def set_params_default(config=None):
     }
 
     # --- Basic structure ---
-    params['n'] = 1
-    params['m'] = 1
+    params['n']             = 1
+    params['m']             = 1
 
     # --- Constraint structure ---
-    params['path_lim'] = []
-    params['path_idx'] = []
-    params['n_path'] = 0
-    params['nfz_idx'] = []
-    params['n_nfz'] = 0
-    params['aux_idx'] = []
-    params['n_aux'] = 0
-    params['n_ineq'] = 0
-    params['n_eq'] = 0
+    params['path_lim']      = np.array([])
+    params['path_idx']      = np.array([], dtype=np.int64)
+    params['n_path']        = 0
+    params['nfz_idx']       = np.array([], dtype=np.int64)
+    params['n_nfz']         = 0
+    params['aux_idx']       = np.array([], dtype=np.int64)
+    params['n_aux']         = 0
+    params['n_ineq']        = 0
+    params['n_eq']          = 0
 
     # --- Cost label ---
-    params['cost_name'] = 'Cost'
+    params['cost_name']     = 'Cost'
 
     # --- Initial boundary conditions ---
-    params['zi'] = []
-    params['zi_idx'] = []
-    params['zi_min'] = []
-    params['zi_min_idx'] = []
-    params['zi_max'] = []
-    params['zi_max_idx'] = []
-    params['n_init'] = 0
-    params['n_init_ineq'] = 0
+    params['zi']            = np.array([])
+    params['zi_idx']        = np.array([], dtype=np.int64)
+    params['zi_min']        = np.array([])
+    params['zi_min_idx']    = np.array([], dtype=np.int64)
+    params['zi_max']        = np.array([])
+    params['zi_max_idx']    = np.array([], dtype=np.int64)
+    params['n_init']        = 0
+    params['n_init_ineq']   = 0
 
     # --- Terminal boundary conditions ---
-    params['zf'] = []
-    params['zf_idx'] = []
-    params['zf_min'] = []
-    params['zf_min_idx'] = []
-    params['zf_max'] = []
-    params['zf_max_idx'] = []
-    params['n_term'] = 0
-    params['n_term_ineq'] = 0
+    params['zf']            = np.array([])
+    params['zf_idx']        = np.array([], dtype=np.int64)
+    params['zf_min']        = np.array([])
+    params['zf_min_idx']    = np.array([], dtype=np.int64)
+    params['zf_max']        = np.array([])
+    params['zf_max_idx']    = np.array([], dtype=np.int64)
+    params['n_term']        = 0
+    params['n_term_ineq']   = 0
 
     # --- State constraints ---
-    params['z_min'] = []
-    params['z_min_idx'] = []
-    params['z_max'] = []
-    params['z_max_idx'] = []
-    params['n_state'] = 0
+    params['z_min']         = np.array([])
+    params['z_min_idx']     = np.array([], dtype=np.int64)
+    params['z_max']         = np.array([])
+    params['z_max_idx']     = np.array([], dtype=np.int64)
+    params['n_state']       = 0
 
     # --- Control constraints ---
-    params['u_min'] = []
-    params['u_min_idx'] = []
-    params['u_max'] = []
-    params['u_max_idx'] = []
-    params['udot_max'] = []
-    params['udot_max_idx'] = []
-    params['n_ctrl'] = 0
-    params['n_udot'] = 0
+    params['u_min']         = np.array([])
+    params['u_min_idx']     = np.array([], dtype=np.int64)
+    params['u_max']         = np.array([])
+    params['u_max_idx']     = np.array([], dtype=np.int64)
+    params['udot_max']      = np.array([])
+    params['udot_max_idx']  = np.array([], dtype=np.int64)
+    params['n_ctrl']        = 0
+    params['n_udot']        = 0
 
     # --- Weight structure ---
-    params['weights'] = {}
-    params['n_dyn'] = 0
+    params['weights']       = {}
+    params['n_dyn']         = 0
 
     # --- Convergence settings ---
     params['conv'] = {
@@ -125,17 +125,17 @@ def set_params_constraint_default(params):
     """
 
     # --- Constraint bookkeeping ---
-    params['n_init']       = len(params.get('zi_idx', []))
-    params['n_init_ineq']  = len(params.get('zi_min_idx', [])) + len(params.get('zi_max_idx', []))
-    params['n_term']       = len(params.get('zf_idx', []))
-    params['n_term_ineq']  = len(params.get('zf_min_idx', [])) + len(params.get('zf_max_idx', []))
-    params['n_ctrl']       = len(params.get('u_min_idx', [])) + len(params.get('u_max_idx', []))
-    params['n_state']      = len(params.get('z_min_idx', [])) + len(params.get('z_max_idx', []))
-    params['n_udot']       = len(params.get('udot_max', []))
+    params['n_init']       = len(params.get('zi_idx',       np.array([], dtype=np.int64)))
+    params['n_init_ineq']  = len(params.get('zi_min_idx',   np.array([], dtype=np.int64))) + len(params.get('zi_max_idx', np.array([], dtype=np.int64)))
+    params['n_term']       = len(params.get('zf_idx',       np.array([], dtype=np.int64)))
+    params['n_term_ineq']  = len(params.get('zf_min_idx',   np.array([], dtype=np.int64))) + len(params.get('zf_max_idx', np.array([], dtype=np.int64)))
+    params['n_ctrl']       = len(params.get('u_min_idx',    np.array([], dtype=np.int64))) + len(params.get('u_max_idx', np.array([], dtype=np.int64)))
+    params['n_state']      = len(params.get('z_min_idx',    np.array([], dtype=np.int64))) + len(params.get('z_max_idx', np.array([], dtype=np.int64)))
+    params['n_udot']       = len(params.get('udot_max',     np.array([], dtype=np.int64)))
 
-    params['n_path']       = len(params.get('path_idx', []))
-    params['n_nfz']        = len(params.get('nfz_idx', []))
-    params['n_aux']        = len(params.get('aux_idx', []))
+    params['n_path']       = len(params.get('path_idx',     np.array([], dtype=np.int64)))
+    params['n_nfz']        = len(params.get('nfz_idx',      np.array([], dtype=np.int64)))
+    params['n_aux']        = len(params.get('aux_idx',      np.array([], dtype=np.int64)))
     params['n_ineq']       = params['n_path'] + params['n_nfz'] + params['n_aux']
 
     # --- State vector size (ctcs mode) ---
@@ -148,6 +148,8 @@ def set_params_constraint_default(params):
 
     buff_dyn = str(params['bools'].get('buff_dyn', 'term'))
 
+
+    # --- Dynamics buffering ---
     if buff_dyn in {'term', 'l1', 'l2'}:
         params['n_plus'] = 0
         params['n_minus'] = 0
@@ -167,41 +169,53 @@ def set_params_constraint_default(params):
     else:
         raise ValueError("Invalid buff_dyn flag.")
 
+    # --- Terminal conditions nondimensionalization ---
+    # Get the diagonal of the source matrix
+    M_diag = np.diag(params['nondim']['M_state_d2nd'])
+    # Stack selected diagonals
+    selected = np.concatenate([
+        M_diag[params['zf_idx']],
+        M_diag[params['zf_min_idx']],
+        M_diag[params['zf_max_idx']]
+    ])
+    # Create the new diagonal matrix
+    params['nondim']['M_term_d2nd'] = np.diag(selected)
+
     # --- Default weights ---
     weights = params.setdefault('weights', {})
-    weights['w_fac_N'] = params['N']
-    weights['w_fac_Nm1'] = params['N'] - 1
-    weights['w_cost'] = 1.0
+    weights['w_fac_N']      = params['N']
+    weights['w_fac_Nm1']    = params['N'] - 1
+    weights['w_cost']       = 1.0
 
-    weights['dual_path']   = np.zeros((params['n_path'], params['N']))
-    weights['dual_nfz']    = np.zeros((params['n_nfz'], params['N']))
-    weights['dual_aux']    = np.zeros((params['n_aux'], params['N']))
-    weights['dual_term']   = np.zeros((params['n_term'] + params['n_term_ineq'], 1))
-    weights['dual_dyn']    = np.zeros((params['n_dyn'], params['N'] - 1))
-    weights['dual_plus']   = np.zeros((params['n_dyn'], params['N'] - 1))
-    weights['dual_minus']  = np.zeros((params['n_dyn'], params['N'] - 1))
+    weights['dual_path']    = np.zeros((params['N'], params['n_path']))
+    weights['dual_nfz']     = np.zeros((params['N'], params['n_nfz']))
+    weights['dual_aux']     = np.zeros((params['N'], params['n_aux']))
+    weights['dual_term']    = np.zeros(params['n_term'] + params['n_term_ineq'])
+    weights['dual_dyn']     = np.zeros((params['N'] - 1, params['n_dyn']))
+    weights['dual_plus']    = np.zeros((params['N'] - 1, params['n_dyn']))
+    weights['dual_minus']   = np.zeros((params['N'] - 1, params['n_dyn']))
 
-    weights['W_path']  = np.zeros((params['n_path'], params['N']))
-    weights['W_nfz']   = np.zeros((params['n_nfz'], params['N']))
-    weights['W_aux']   = np.zeros((params['n_aux'], params['N']))
-    weights['W_term']  = np.zeros((params['n_term'] + params['n_term_ineq'], 1))
-    weights['W_dyn']   = np.zeros((params['n_dyn'], params['N'] - 1))
-    weights['W_plus']  = np.zeros((params['n_plus'], params['Npm']))
-    weights['W_minus'] = np.zeros((params['n_minus'], params['Npm']))
+    weights['W_path']       = np.zeros((params['N'], params['n_path']))
+    weights['W_nfz']        = np.zeros((params['N'], params['n_nfz']))
+    weights['W_aux']        = np.zeros((params['N'], params['n_aux']))
+    weights['W_term']       = np.zeros(params['n_term'] + params['n_term_ineq'])
+    weights['W_dyn']        = np.zeros((params['N'] - 1, params['n_dyn']))
+    weights['W_plus']       = np.zeros((params['Npm'], params['n_plus']))
+    weights['W_minus']      = np.zeros((params['Npm'], params['n_minus']))
 
     # --- Convergence tolerances ---
     conv = params.setdefault('conv', {})
-    conv['eps_cost'] = 0
-    conv['eps_state'] = 0
-    conv['eps_path'] = 0
-    conv['eps_nfz'] = 0
-    conv['eps_aux'] = 0
-    conv['eps_term'] = 0
-    conv['eps_dyn'] = 0
+    conv['eps_cost']    = 0.
+    conv['eps_state']   = 0.
+    conv['eps_path']    = 0.
+    conv['eps_nfz']     = 0.
+    conv['eps_aux']     = 0.
+    conv['eps_term']    = 0.
+    conv['eps_dyn']     = 0.
 
     setup = conv.setdefault('setup', {})
     for key in ['eps_cost', 'eps_state', 'eps_path', 'eps_nfz', 'eps_aux', 'eps_term', 'eps_dyn']:
-        setup[key] = []
+        setup[key] = np.array([])
 
     setup['ctcs_mult_state'] = 1.0
     setup['ctcs_mult_cnst'] = 1.0
@@ -210,25 +224,24 @@ def set_params_constraint_default(params):
 
     # --- Terminal nondimensionalization matrix ---
     M_state_vec = np.diag(params['nondim']['M_state_d2nd'])
-    zf_idx = params.get('zf_idx', [])
-    zf_min_idx = params.get('zf_min_idx', [])
-    zf_max_idx = params.get('zf_max_idx', [])
+    zf_idx      = params.get('zf_idx', np.array([], dtype=np.int64))
+    zf_min_idx  = params.get('zf_min_idx', np.array([], dtype=np.int64))
+    zf_max_idx  = params.get('zf_max_idx', np.array([], dtype=np.int64))
     M_term_diag = np.concatenate([M_state_vec[zf_idx],
                                   M_state_vec[zf_min_idx],
                                   M_state_vec[zf_max_idx]])
     params['nondim']['M_term_d2nd'] = np.diag(M_term_diag)
 
     # --- LTV indexing ---
-    from trajopt.algorithm.discretization import set_ltv_indices
     params = set_ltv_indices(params)
 
     # --- Initialize virtual buffers ---
     conv_data = params.setdefault('conv_data', {})
-    conv_data['vb_path'] = np.zeros((params['n_path'], params['N']))
-    conv_data['vb_nfz']  = np.zeros((params['n_nfz'], params['N']))
-    conv_data['vb_aux']  = np.zeros((params['n_aux'], params['N']))
-    conv_data['vb_dyn']  = np.zeros((params['nz'], params['N'] - 1))
-    conv_data['vb_term'] = np.zeros((params['nz'], 1))
+    conv_data['vb_path'] = np.zeros((params['N'],   params['n_path']))
+    conv_data['vb_nfz']  = np.zeros((params['N'],   params['n_nfz']))
+    conv_data['vb_aux']  = np.zeros((params['N'],   params['n_aux']))
+    conv_data['vb_dyn']  = np.zeros((params['N']-1, params['nz']))
+    conv_data['vb_term'] = np.zeros(params['nz'])
 
     return params
 

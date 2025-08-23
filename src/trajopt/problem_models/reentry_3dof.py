@@ -104,10 +104,10 @@ def nonlinear_aero(ts, zs, us, params, case_flag=None):
 
     for k in range(N):
         # Extract states and controls
-        tk = ts if N == 1 else ts[:, k]
-        zk = zs if N == 1 else zs[:, k]
-        uk = us if N == 1 else us[:, k]
-        r, theta, phi, v, gamma, psi = zs[:6] if N == 1 else zs[:6, k]
+        tk = ts if N == 1 else ts[k]
+        zk = zs if N == 1 else zs[k]
+        uk = us if N == 1 else us[k]
+        r, theta, phi, v, gamma, psi = zs[:6] if N == 1 else zs[k,:6]
 
         # Extract thrust and mass
         mass, _ = mass_thrust(tk, zk, uk, params)
@@ -120,7 +120,7 @@ def nonlinear_aero(ts, zs, us, params, case_flag=None):
             Cd[k] = Kd1 + Kd2 * Cl[k] + Kd3 * Cl[k]**2
             alpha[k] = np.deg2rad(alphlim_deg - kalph * (min(v * nv, vlim) - vlim)**2)
         elif case_flag in [2, 3]:
-            alpha[k] = us[1] if N == 1 else us[1, k]
+            alpha[k] = us[1] if N == 1 else us[k,1]
             alpha_deg = np.rad2deg(alpha[k])
             Cl[k] = Kl1h + Kl2h * alpha_deg + Kl3h * alpha_deg**2
             Cd[k] = Kd1h + Kd2h * alpha_deg + Kd3h * alpha_deg**2 + Kd4h * alpha_deg**3 + Kd5h * alpha_deg**4

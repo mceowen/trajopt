@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import time
 
 # trajopt imports
-import trajopt.problem_models.double_integrator_3dof    as double_int
+import trajopt.problem_models.double_integrator_2dof    as double_int
 import trajopt.algorithm.subproblem                     as subproblem
 
 # Step 1: Define configuration

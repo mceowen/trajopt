@@ -29,7 +29,7 @@ def straight_line_initial_guess(params):
     zs_init             = np.array([np.linspace(params['zi'][i], params['zf'][i], params['N']) for i in range(params['n'])])
 
     # Initial control
-    us_init             = np.zeros((params['m'], params['N']))
+    us_init             = np.zeros((params['N'],params['m']))
 
     # Create initial state and control vector
     params['ts_init']   = ts_init
@@ -50,10 +50,10 @@ def waypoint_initial_guess(params):
     dict: Updated params with initial guesses for trajectory and control.
     """
     # Initialization trajectory
-    params['dt_init'] = (params['T_init'] / (params['N'] - 1)) * np.ones(params['N'] - 1)
-    params['Ts_init'] = params['T_init'] / params['nondim']['nt']
-    params['dts_init'] = params['dt_init'] / params['nondim']['nt']
-    ts_init = np.cumsum(np.concatenate(([0], params['dts_init'])))
+    params['dt_init']   = (params['T_init'] / (params['N'] - 1)) * np.ones(params['N'] - 1)
+    params['Ts_init']   = params['T_init'] / params['nondim']['nt']
+    params['dts_init']  = params['dt_init'] / params['nondim']['nt']
+    ts_init             = np.cumsum(np.concatenate(([0], params['dts_init'])))
 
     # Waypoint
     if 'z_waypt' not in params:
@@ -78,7 +78,7 @@ def waypoint_initial_guess(params):
     idx2 = np.arange(N1, params['N'])
 
     # Initialize
-    zs_init = np.zeros((params['n'], params['N']))
+    zs_init = np.zeros((params['N'],params['n']))
 
     # Initial state
     for i_state in range(min(params['n'], len(params['z_waypt']))):
@@ -86,16 +86,16 @@ def waypoint_initial_guess(params):
             i_init = np.where(params['zi_idx'] == i_state)[0][0]
             i_term = np.where(params['zf_idx'] == i_state)[0][0]
 
-            zs_init[i_state, idx1-1] = np.linspace(params['zi'][i_init], params['z_waypt'][i_state], N1)
-            zs_init[i_state, idx2] = np.linspace(params['z_waypt'][i_state], params['zf'][i_term], N2)
+            zs_init[idx1-1, i_state]    = np.linspace(params['zi'][i_init], params['z_waypt'][i_state], N1)
+            zs_init[idx2, i_state]      = np.linspace(params['z_waypt'][i_state], params['zf'][i_term], N2)
 
     # Initial control
-    us_init = np.zeros((params['m'], params['N']))
+    us_init             = np.zeros((params['N'], params['m']))
 
     # Create initial state and control vector
-    params['ts_init'] = ts_init
-    params['zs_init'] = zs_init
-    params['us_init'] = us_init
+    params['ts_init']   = ts_init
+    params['zs_init']   = zs_init
+    params['us_init']   = us_init
 
     return params
 

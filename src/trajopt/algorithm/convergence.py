@@ -28,71 +28,71 @@ def set_convergence_tolerance(params):
             np.diag(params['nondim']['M_cnst_d2nd'])
         ]))
     
-    eps_state_nd = M_state_d2nd @ eps_state
-    eps_min_state = np.min(eps_state_nd)
+    eps_state_nd                        = M_state_d2nd @ eps_state
+    eps_min_state                       = float(np.min(eps_state_nd))
     
-    Wconv_state = np.diag(eps_min_state / eps_state_nd)
+    Wconv_state                         = np.diag(eps_min_state / eps_state_nd)
     
-    params['conv']['eps_state'] = eps_min_state 
-    params['conv']['Wconv_state'] = Wconv_state
-    params['conv']['Wconv_state_vec'] = np.diag(Wconv_state).copy() # .copy() makes sure it is contiguous
+    params['conv']['eps_state']         = eps_min_state 
+    params['conv']['Wconv_state']       = Wconv_state
+    params['conv']['Wconv_state_vec']   = np.diag(Wconv_state).copy() # .copy() makes sure it is contiguous
 
     # COST CONVERGENCE
-    eps_cost = params['conv']['setup']['eps_cost']
-    M_cost_d2nd = params['nondim']['M_cost_d2nd']
+    eps_cost                            = params['conv']['setup']['eps_cost']
+    M_cost_d2nd                         = params['nondim']['M_cost_d2nd']
     
-    params['conv']['eps_cost'] = M_cost_d2nd * eps_cost
+    params['conv']['eps_cost']          = M_cost_d2nd * eps_cost
 
     # NONCONVEX PATH CONSTRAINT CONVERGENCE
     n_path = params['n_path']
 
     if n_path > 0:
         if len(params['conv']['setup']['eps_path']) == 1:
-            eps_path = params['conv']['setup']['eps_path'] * np.ones(n_path)
-            M_path_d2nd = np.eye(n_path)
-            eps_path_nd = M_path_d2nd @ eps_path
-            eps_min_path = np.min(eps_path_nd)
+            eps_path        = params['conv']['setup']['eps_path'] * np.ones(n_path)
+            M_path_d2nd     = np.eye(n_path)
+            eps_path_nd     = M_path_d2nd @ eps_path
+            eps_min_path    = float(np.min(eps_path_nd))
         else:
-            eps_path = params['conv']['setup']['eps_path']
-            M_path_d2nd = params['nondim']['M_path_d2nd']
-            eps_path_nd = M_path_d2nd @ eps_path
-            eps_min_path = np.min(eps_path_nd)
+            eps_path        = params['conv']['setup']['eps_path']
+            M_path_d2nd     = params['nondim']['M_path_d2nd']
+            eps_path_nd     = M_path_d2nd @ eps_path
+            eps_min_path    = float(np.min(eps_path_nd))
     else:
-        eps_path = 0
-        M_path_d2nd = np.zeros((1, n_path))
-        eps_path_nd = M_path_d2nd * eps_path
-        eps_min_path = 0
+        eps_path            = 0.
+        M_path_d2nd         = np.zeros((1, n_path))
+        eps_path_nd         = M_path_d2nd * eps_path
+        eps_min_path        = 0.
     
-    Wconv_path = np.diag(eps_min_path / eps_path_nd)
+    Wconv_path                          = np.diag(eps_min_path / eps_path_nd)
     
-    params['conv']['eps_path'] = eps_min_path 
-    params['conv']['Wconv_path'] = Wconv_path
-    params['conv']['Wconv_path_vec'] = np.diag(Wconv_path).copy()
+    params['conv']['eps_path']          = eps_min_path 
+    params['conv']['Wconv_path']        = Wconv_path
+    params['conv']['Wconv_path_vec']    = np.diag(Wconv_path).copy()
 
     # NONCONVEX NFZ CONSTRAINT CONVERGENCE
     n_nfz = params['n_nfz']
 
     if n_nfz > 0:
         if len(params['conv']['setup']['eps_nfz']) == 1:
-            eps_nfz = params['conv']['setup']['eps_nfz'] * np.ones(n_nfz)
-            M_nfz_d2nd = np.eye(n_nfz)
-            eps_nfz_nd = M_nfz_d2nd @ eps_nfz
-            eps_min_nfz = np.min(eps_nfz_nd)
+            eps_nfz     = params['conv']['setup']['eps_nfz'] * np.ones(n_nfz)
+            M_nfz_d2nd  = np.eye(n_nfz)
+            eps_nfz_nd  = M_nfz_d2nd @ eps_nfz
+            eps_min_nfz = float(np.min(eps_nfz_nd))
         else:
-            eps_nfz = params['conv']['setup']['eps_nfz']
-            M_nfz_d2nd = params['nondim']['M_nfz_d2nd']
-            eps_nfz_nd = M_nfz_d2nd @ eps_nfz
-            eps_min_nfz = np.min(eps_nfz_nd)
+            eps_nfz     = params['conv']['setup']['eps_nfz']
+            M_nfz_d2nd  = params['nondim']['M_nfz_d2nd']
+            eps_nfz_nd  = M_nfz_d2nd @ eps_nfz
+            eps_min_nfz = float(np.min(eps_nfz_nd))
     else:
-        eps_nfz = 0
-        M_nfz_d2nd = np.zeros((1, n_nfz))
-        eps_nfz_nd = M_nfz_d2nd * eps_nfz
-        eps_min_nfz = 0
+        eps_nfz         = 0.
+        M_nfz_d2nd      = np.zeros((1, n_nfz))
+        eps_nfz_nd      = M_nfz_d2nd * eps_nfz
+        eps_min_nfz     = 0.
 
     Wconv_nfz = np.diag(eps_min_nfz / eps_nfz_nd)
     
-    params['conv']['eps_nfz'] = eps_min_nfz 
-    params['conv']['Wconv_nfz'] = Wconv_nfz
+    params['conv']['eps_nfz']       = eps_min_nfz 
+    params['conv']['Wconv_nfz']     = Wconv_nfz
     params['conv']['Wconv_nfz_vec'] = np.diag(Wconv_nfz).copy()
 
     # NONCONVEX AUXILIARY CONSTRAINT CONVERGENCE
@@ -100,24 +100,24 @@ def set_convergence_tolerance(params):
 
     if n_aux > 0:
         if len(params['conv']['setup']['eps_aux']) == 1:
-            eps_aux = params['conv']['setup']['eps_aux'] * np.ones(n_aux)
-            M_aux_d2nd = np.eye(n_aux)
+            eps_aux     = params['conv']['setup']['eps_aux'] * np.ones(n_aux)
+            M_aux_d2nd  = np.eye(n_aux)
         else:
-            eps_aux = params['conv']['setup']['eps_aux']
-            M_aux_d2nd = params['nondim']['M_aux_d2nd']
+            eps_aux     = params['conv']['setup']['eps_aux']
+            M_aux_d2nd  = params['nondim']['M_aux_d2nd']
             
-        eps_aux_nd = M_aux_d2nd @ eps_aux
-        eps_min_aux = np.min(eps_aux_nd)
+        eps_aux_nd      = M_aux_d2nd @ eps_aux
+        eps_min_aux     = float(np.min(eps_aux_nd))
     else:
-        eps_aux = 0
-        M_aux_d2nd = np.zeros((1, n_aux))
-        eps_aux_nd = M_aux_d2nd * eps_aux
-        eps_min_aux = 0
+        eps_aux         = 0.
+        M_aux_d2nd      = np.zeros((1, n_aux))
+        eps_aux_nd      = M_aux_d2nd * eps_aux
+        eps_min_aux     = 0.
 
-    Wconv_aux = np.diag(eps_min_aux / eps_aux_nd)
+    Wconv_aux                       = np.diag(eps_min_aux / eps_aux_nd)
     
-    params['conv']['eps_aux'] = eps_min_aux 
-    params['conv']['Wconv_aux'] = Wconv_aux
+    params['conv']['eps_aux']       = eps_min_aux 
+    params['conv']['Wconv_aux']     = Wconv_aux
     params['conv']['Wconv_aux_vec'] = np.diag(Wconv_aux).copy()
 
     # TERMINAL CONSTRAINT CONVERGENCE
@@ -125,53 +125,53 @@ def set_convergence_tolerance(params):
 
     if n_term > 0:
         if len(params['conv']['setup']['eps_term']) == 1 and (params['n_term'] + params['n_term_ineq']) != 1:
-            eps_term = params['conv']['setup']['eps_term'] * np.ones(n_term)
+            eps_term    = params['conv']['setup']['eps_term'] * np.ones(n_term)
             M_term_d2nd = np.eye(n_term)
         else:
-            eps_term = params['conv']['setup']['eps_term']
+            eps_term    = params['conv']['setup']['eps_term']
             M_term_d2nd = params['nondim']['M_term_d2nd']
-        eps_term_nd = M_term_d2nd @ eps_term
-        eps_min_term = np.min(eps_term_nd)
+        eps_term_nd     = M_term_d2nd @ eps_term
+        eps_min_term    = float(np.min(eps_term_nd))
     else:
-        eps_term = 0
-        M_term_d2nd = np.zeros((1, n_term))
-        eps_term_nd = M_term_d2nd * eps_term
-        eps_min_term = 0
+        eps_term        = 0.
+        M_term_d2nd     = np.zeros((1, n_term))
+        eps_term_nd     = M_term_d2nd * eps_term
+        eps_min_term    = 0.
     
-    Wconv_term = np.diag(eps_min_term / eps_term_nd)
+    Wconv_term                          = np.diag(eps_min_term / eps_term_nd)
     
 
-    params['conv']['eps_term'] = eps_min_term 
-    params['conv']['Wconv_term'] = Wconv_term
-    params['conv']['Wconv_term_vec'] = np.diag(Wconv_term).copy()
+    params['conv']['eps_term']          = eps_min_term 
+    params['conv']['Wconv_term']        = Wconv_term
+    params['conv']['Wconv_term_vec']    = np.diag(Wconv_term).copy()
 
     # MULTIPLE SHOOTING DYNAMICS DEFECT CONVERGENCE
     if len(params['conv']['setup']['eps_defect']) == 1:
-        eps_defect = params['conv']['setup']['eps_defect'] * np.ones(n)
-        M_defect_d2nd = np.eye(n)
+        eps_defect      = params['conv']['setup']['eps_defect'] * np.ones(n)
+        M_defect_d2nd   = np.eye(n)
     else:
-        eps_defect = params['conv']['setup']['eps_defect']
-        M_defect_d2nd = params['nondim']['M_state_d2nd']
+        eps_defect      = params['conv']['setup']['eps_defect']
+        M_defect_d2nd   = params['nondim']['M_state_d2nd']
 
-    eps_defect_nd = M_defect_d2nd @ eps_defect
-    eps_min_defect = np.min(eps_defect_nd)
+    eps_defect_nd       = M_defect_d2nd @ eps_defect
+    eps_min_defect      = float(np.min(eps_defect_nd))
     
-    Wconv_defect = np.diag(eps_min_defect / eps_defect_nd)
+    Wconv_defect                        = np.diag(eps_min_defect / eps_defect_nd)
     
-    params['conv']['eps_defect'] = eps_min_defect 
-    params['conv']['Wconv_defect'] = Wconv_defect
-    params['conv']['Wconv_defect_vec'] = np.diag(Wconv_defect).copy()
+    params['conv']['eps_defect']        = eps_min_defect 
+    params['conv']['Wconv_defect']      = Wconv_defect
+    params['conv']['Wconv_defect_vec']  = np.diag(Wconv_defect).copy()
 
     # DYNAMICS CONVERGENCE
     n_dyn = params['n_dyn']
 
     # extract convergence tolerance with dimensional units and nondimensionalization factor
     if n_dyn > 0:
-        eps_dyn = params['conv']['setup']['eps_dyn']
-        M_dyn_d2nd = params['nondim']['M_dyn_d2nd']
+        eps_dyn     = params['conv']['setup']['eps_dyn']
+        M_dyn_d2nd  = params['nondim']['M_dyn_d2nd']
     else:
-        eps_dyn = np.zeros((params['nz'], params['nz'])) # make sure we can mat-mult w/ M_dyn_d2nd and get a 1-by-nz
-        M_dyn_d2nd = np.zeros((1, params['nz']))
+        eps_dyn     = np.zeros((params['nz'], params['nz'])) # make sure we can mat-mult w/ M_dyn_d2nd and get a 1-by-nz
+        M_dyn_d2nd  = np.zeros((1, params['nz']))
 
     if params['bools']['ctcs'] and params['n_ineq'] > 0:
         eps_dyn = np.concatenate([
@@ -185,13 +185,13 @@ def set_convergence_tolerance(params):
             np.diag(params['nondim']['M_cnst_d2nd'])
         ]))
     
-    eps_dyn_nd = M_dyn_d2nd @ eps_dyn
-    eps_min_dyn = np.min(eps_dyn_nd)
+    eps_dyn_nd                      = M_dyn_d2nd @ eps_dyn
+    eps_min_dyn                     = float(np.min(eps_dyn_nd))
     
     if np.all(eps_dyn_nd == 0):
-        Wconv_dyn = np.diag(eps_dyn_nd) # zero matrix
+        Wconv_dyn   = np.diag(eps_dyn_nd) # zero matrix
     else:
-        Wconv_dyn = np.diag(eps_min_dyn / eps_dyn_nd)
+        Wconv_dyn   = np.diag(eps_min_dyn / eps_dyn_nd)
     
     params['conv']['eps_dyn']       = eps_min_dyn 
     params['conv']['Wconv_dyn']     = Wconv_dyn
@@ -209,8 +209,7 @@ def check_convergence_tolerance(problem, local_vars, O):
     N               = local_vars['N']
     
     dz              = O['dz_s']
-    # TODO: Possibly change dimensions of cost in base function and remove reshape here
-    dcost           = (O['cost'] - O['conv_data']['cost_ref']).reshape(1, -1) 
+    dcost           = O['cost'] - O['conv_data']['cost_ref'] 
     
     vb_path         = tools.safe_array(O['conv_data']['vb_path'])
     vb_nfz          = tools.safe_array(O['conv_data']['vb_nfz'])
@@ -226,18 +225,17 @@ def check_convergence_tolerance(problem, local_vars, O):
     eps_cost        = problem['params']['conv']['eps_cost']
 
 
-    # TODO: Possibly change dimensions of path constraints in base function and remove reshape here
     eps_path        = problem['params']['conv']['eps_path']
     Wconv_path      = tools.safe_array(problem['params']['conv']['Wconv_path'])
-    conv_path_nl    = tools.safe_array(O['cnst_path'][problem['params']['path_idx']]).reshape(1, -1)
+    conv_path_nl    = tools.safe_array(O['cnst_path'][problem['params']['path_idx']])
 
     eps_nfz         = problem['params']['conv']['eps_nfz']
     Wconv_nfz       = tools.safe_array(problem['params']['conv']['Wconv_nfz'])
-    conv_nfz_nl     = tools.safe_array(O['cnst_path'][problem['params']['nfz_idx']]).reshape(1, -1)
+    conv_nfz_nl     = tools.safe_array(O['cnst_path'][problem['params']['nfz_idx']])
 
     eps_aux         = problem['params']['conv']['eps_aux']
     Wconv_aux       = tools.safe_array(problem['params']['conv']['Wconv_aux'])
-    conv_aux_nl     = tools.safe_array(O['cnst_path'][problem['params']['aux_idx']]).reshape(1, -1)
+    conv_aux_nl     = tools.safe_array(O['cnst_path'][problem['params']['aux_idx']])
 
     eps_term        = problem['params']['conv']['eps_term']
     Wconv_term      = problem['params']['conv']['Wconv_term']
@@ -249,7 +247,7 @@ def check_convergence_tolerance(problem, local_vars, O):
     Wconv_dyn       = problem['params']['conv']['Wconv_dyn']
 
     # Pull out optimality checks
-    chk_dz          = np.max(Wconv_state @ np.abs(tools.safe_val(dz, rows=n, cols=N)))
+    chk_dz = np.max([ Wconv_state @ dz_k for dz_k in np.abs(tools.safe_val(dz, rows=N, cols=n))])
     chk_cost        = np.abs(dcost)
 
     # Pull out feasibility checks
@@ -257,9 +255,8 @@ def check_convergence_tolerance(problem, local_vars, O):
     chk_vb_nfz      = np.max(Wconv_nfz      @ np.maximum(np.array([0.0]), vb_nfz))
     chk_vb_aux      = np.max(Wconv_aux      @ np.maximum(np.array([0.0]), vb_aux))
     chk_vb_term     = np.max(Wconv_term     @ np.abs(vb_term))
-    chk_vb_dyn      = np.max(Wconv_dyn      @ np.abs(vb_dyn))
-    chk_defect      = np.max(Wconv_defect   @ np.abs(defect))
-
+    chk_vb_dyn      = np.max([ Wconv_dyn @ vb_k for vb_k in np.abs(vb_dyn)])
+    chk_defect      = np.max([ Wconv_defect @ defect_k for defect_k in np.abs(defect) ])
     # TODO: ADD LINEAR CONSTRAINT CHECK (LESS STRINGENT) FOR CASE 1 (CHECKING DZ)
     chk_path_2      = np.max(Wconv_path     @ np.maximum(np.array([0.0]), conv_path_nl))
     chk_nfz_2       = np.max(Wconv_nfz      @ np.maximum(np.array([0.0]), conv_nfz_nl))
@@ -405,12 +402,12 @@ if __name__ == "__main__":
         'conv_data': {
             'soln': {'problem': 0},
             'cost_ref': 1.0,
-            'vb_path': np.zeros((3, 3)),
-            'vb_nfz': np.zeros((3, 3)),
-            'vb_aux': np.zeros((3, 3)),
-            'vb_term': np.zeros((3, 3)),
-            'vb_dyn': np.zeros((3, 3)),
-            'defect': np.zeros((3, 3))
+            'vb_path':  np.zeros((3, 3)),
+            'vb_nfz':   np.zeros((3, 3)),
+            'vb_aux':   np.zeros((3, 3)),
+            'vb_term':  np.zeros((3, 3)),
+            'vb_dyn':   np.zeros((3, 3)),
+            'defect':   np.zeros((3, 3))
         },
         'dz_s': np.zeros((3, 3)),
         'cost': 1.0,

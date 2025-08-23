@@ -108,7 +108,7 @@ def ocp(config):
     """
     problem = {}
 
-    problem["name"] = "3-DoF Double Integrator"
+    problem["name"] = "2-DoF Double Integrator"
 
     # Ingest parameters
     problem["config"]   = config
@@ -181,12 +181,9 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['bools']['auto_jac_cnst']   = 0    # (1=symbolic jacobians for constraints, 0=analytical)
     params['bools']['init_ctrl']       = 0
 
-    # Physical constants
-    params['ge'] = np.array([0, 0, -9.81]) # [m/s^2], grav accel at sea lvl
-
     # Problem params
-    params['n'] = 6
-    params['m'] = 3
+    params['n'] = 4
+    params['m'] = 2
 
     # Time of flight
     params['T_init'] = 15
@@ -218,11 +215,6 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['nfz_idx'] = np.arange(0, xc.size)
     params['n_nfz'] = len(params['nfz_idx'])
 
-
-    ### Vehicle Parameters ###
-    params['mass'] = 0.35;                  # [kg], quadrotor mass
-    params['theta_max'] = np.deg2rad(100);  # [rad], maximum tilt angle
-
     ### Set dim/nondim params based on flag ###
     # scaling values for nondim
     params = set_nondim_params(params)
@@ -231,42 +223,42 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     # Boundary Conditions
     #====================
     # initial conditions
-    params['z0s'] = np.array([0,0,0.5,0,0,0])
+    params['z0s']       = np.zeros(params['n'])
 
     # equality initial conditions
-    params['zi'] = params['z0s']
-    params['zi_idx'] = np.arange(0, params['n'])
+    params['zi']        = params['z0s']
+    params['zi_idx']    = np.arange(0, params['n'])
 
     # inequality initial conditions
     # none
 
     # equality terminal conditions
-    params['zf'] = params['nondim']['M_state_d2nd'] @ np.array([10,10,0.5,0,0,0])
-    params['zf_idx'] = np.arange(0,params['n'])
+    params['zf']        = params['nondim']['M_state_d2nd'] @ np.array([10.,10.,0.,0.])
+    params['zf_idx']    = np.arange(0,params['n'])
 
     # control boundary conditions
-    params['ui'] = -params['ge']*params['mass']
-    params['uf'] = -params['ge']*params['mass']
+    params['ui'] = np.zeros(params['m'])
+    params['uf'] = np.zeros(params['m'])
 
     #==============================
     # Control and state constraints
     #==============================
     # no state constraints
-    params['z_min']         = np.array([0, 0, 0.25])
-    params['z_min_idx']     = np.arange(0,3)
-    params['z_max']         = np.array([12, 12, 0.75])
-    params['z_max_idx']     = np.arange(0,3)
+    params['z_min']         = np.zeros(params['n'])
+    params['z_min_idx']     = np.arange(0,2)
+    params['z_max']         = np.array([12, 12])
+    params['z_max_idx']     = np.arange(0,2)
 
-    params['u_norm_min']    = 0.21 # [N]
-    params['u_norm_max']    = 8.12 # [N]
+    params['u_norm_min']    = 0.    # [N]
+    params['u_norm_max']    = 10.   # [N]
 
-    params['udot_max']      = 5*np.ones(3) # [N/s]
-    params['udot_max_idx']  = np.arange(0,3)
+    params['udot_max']      = 5*np.ones(2) # [N/s]
+    params['udot_max_idx']  = np.arange(0,2)
 
 
     ### Time of flight constraints ###
     Ts_min                  = 1 / params['nondim']['nt']  # 50
-    Ts_max                  = 10 / params['nondim']['nt']
+    Ts_max                  = 20 / params['nondim']['nt']
     params['ddts_max']      = 5 / ((params['N'] - 1) * params['nondim']['nt'])  # 0.025
     params['dts_min']       = Ts_min / (params['N'] - 1)
     params['dts_max']       = Ts_max / (params['N'] - 1)
@@ -279,12 +271,12 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     # Initialize trajectory (initial guess)
     #======================================
     if params['bools']['free_final_time'] and not params['bools']['buff_dyn']:
-        us_range = ( -params['ge'].reshape(-1,1) * params['mass'] ) @ np.ones((1, 2)) + np.array([0.08, 0.08, 0]).reshape(-1,1)
-        # need to manually set the left-hand side vector to a column vector for multiplacation to work
+        us_range = np.ones((params['m'], 2)) 
+        # need to manually set the left-hand side vector to a column vector for multiplication to work
         params = guess.nonlinear_initial_guess(us_range, params)
     else:
         params = guess.waypoint_initial_guess(params) 
-        params['us_init'] = ( -params['ge'].reshape(-1,1) * params['mass'] ) @ np.ones((1, params['N']))
+        params['us_init'] = np.ones((params['m'], params['N']))
 
     if params['bools']['ctcs']:
         params = guess.ctcs_initial_guess(params)
@@ -299,7 +291,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
         # w_nfz: weight for path constraint buffer cost
 
     # === Baseline cost + trust region weights ===
-    params['weights']['w_cost'] = 1
+    params['weights']['w_cost'] = 0
     params['weights']['eps_nonzero1'] = 2e-1
     params['weights']['eps_nonzero2'] = 1e-10
 
@@ -384,7 +376,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     eps_d_state = 1e-1  # [m]
     eps_v_state = 1e0   # [m/s]
     params['conv']['setup']['eps_state'] = np.concatenate((eps_d_state * np.ones(params['n'] // 2), 
-                                                        eps_v_state * np.ones(params['n'] // 2)))
+                                                            eps_v_state * np.ones(params['n'] // 2)))
 
     params['conv']['setup'].setdefault('state', {})['eps_d'] = eps_d_state
     params['conv']['setup']['state']['eps_v'] = eps_v_state
@@ -406,7 +398,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     eps_v_term = 1e-2
 
     # Create eps_vector for full terminal state equality, min, max constraints
-    eps_term = np.array([eps_d_term, eps_d_term, eps_d_term, eps_v_term, eps_v_term, eps_v_term])
+    eps_term = np.array([eps_d_term, eps_d_term, eps_v_term, eps_v_term])
     eps_term_min = eps_term.copy()
     eps_term_max = eps_term.copy()
 
@@ -459,8 +451,8 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
     ge      = params['ge']
 
     # extract states
-    r = zs[0:3]
-    v = zs[3:6]
+    r = zs[0:2]
+    v = zs[2:4]
 
     # extract controls 
     if t_vec is None:
@@ -476,8 +468,8 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
 
     # compute velocity and acceleration
     xDot = np.empty(6) # initialize
-    xDot[0:3] = v
-    xDot[3:6] = T
+    xDot[0:2] = v
+    xDot[2:4] = T
         
     return xDot
 
@@ -738,28 +730,28 @@ def set_nondim_params(params): # TODO: Test
         np_ineq = np.ones(n_path + n_nfz)
         ncost = 1
 
-    nd_state = np.array([1/nd, 1/nd, 1/nd, 1/nv, 1/nv, 1/nv])
+    nd_state = np.array([1/nd, 1/nd, 1/nv, 1/nv])
 
     if 'nondim' not in params: # initialize if it doesn't already exist
        params['nondim'] = {}
 
-    params['nondim']['M_state_d2nd'] = np.diag(nd_state).copy()
-    params['nondim']['M_ctrl_d2nd'] = np.diag(np.ones(m) / na).copy()
+    params['nondim']['M_state_d2nd']    = np.diag(nd_state).copy()
+    params['nondim']['M_ctrl_d2nd']     = np.diag(np.ones(m) / na).copy()
 
-    params['nondim']['M_term_d2nd'] = np.diag(np.concatenate([
+    params['nondim']['M_term_d2nd']     = np.diag(np.concatenate([
         nd_state[params['zf_idx']],
         nd_state[params['zf_min_idx']],
         nd_state[params['zf_max_idx']]
     ])).copy()
-    params['nondim']['M_cnst_d2nd'] = np.diag(np_ineq ** -1).copy()
-    params['nondim']['M_nfz_d2nd'] = np.diag(np_ineq[params['nfz_idx']] ** -1).copy()
+    params['nondim']['M_cnst_d2nd']     = np.diag(np_ineq ** -1).copy()
+    params['nondim']['M_nfz_d2nd']      = np.diag(np_ineq[params['nfz_idx']] ** -1).copy()
 
-    nd_dyn = np.array([1/nv, 1/nv, 1/nv, 1/na, 1/na, 1/na])
-    params['nondim']['M_dyn_d2nd'] = np.diag(nd_dyn).copy()
+    nd_dyn                              = np.array([1/nv, 1/nv, 1/nv, 1/na, 1/na, 1/na])
+    params['nondim']['M_dyn_d2nd']      = np.diag(nd_dyn).copy()
 
-    params['nondim']['M_cost_d2nd'] = 1 / ncost
+    params['nondim']['M_cost_d2nd']     = 1 / ncost
 
-    params['nondim']['nu_rad_ind'] = []
+    params['nondim']['nu_rad_ind']      = []
 
     # add scalar nondim variables to nondim substruct
     params['nondim']['nd'] = nd
