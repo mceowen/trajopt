@@ -185,7 +185,7 @@ def discretize_ctcs(zs_ref, us_ref, dts_ref, problem):
     # Setup LTV system dynamics
     lds0_stack = []
     for k in range(N - 1):
-        params['lds0'][params['z_ind']] = zs_ref[:, k]
+        params['lds0'][params['z_ind']] = zs_ref[k]
         params['lds0'][params['Ak_ind']] = np.reshape(np.eye(params['nz']), -1)
         lds0_stack.append(params['lds0'])
 
@@ -218,10 +218,10 @@ def discretize_ctcs(zs_ref, us_ref, dts_ref, problem):
         Sk_bar = lds_end[k * params['lds0_size'] + params['Sk_ind']]
 
         # Fill in the next STM
-        Ak[:, :, k] = Ak_bar
-        Bk[:, :, k] = Ak_bar @ Bk_bar
-        Bkp[:, :, k] = Ak_bar @ Bkp_bar
-        Sk[:, k] = Ak_bar @ Sk_bar
+        Ak[k]   = Ak_bar
+        Bk[k]   = Ak_bar @ Bk_bar
+        Bkp[k]  = Ak_bar @ Bkp_bar
+        Sk[k]   = Ak_bar @ Sk_bar
 
     # Extract x_ref_minus traj (from integration)
     zs_minus = np.column_stack(traj_minus_data['zs_minus'])
