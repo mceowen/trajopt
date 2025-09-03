@@ -1,5 +1,70 @@
 import numpy as np
 
+
+def config_params():
+    """
+    Configures parameters dictionary for reentry_3dof case (case_flag = 1)
+    """
+
+    params = {}
+
+    # === System setup ===
+    params['case_flag'] = 1
+    params['n'] = 6
+    params['m'] = 1
+    params['T_init'] = 1700.0  # [s], total propagation time
+
+    # === Physical constants ===
+    params['ge'] = 9.81  # [m/s^2]
+    params['re'] = 6378.137e3  # [m]
+    params['rhoe'] = 1.3       # [kg/m^3]
+    params['H'] = 7e3          # [m], scale height
+    params['beta'] = 1.0 / params['H']
+    params['mue'] = 3.986004418e14  # [m^3/s^2], gravitational constant
+
+    # === Earth rotation (set to 1 for enabled) ===
+    params['bools'] = {}
+    params['bools']['earth_rot'] = 1
+    day_seconds = 23 * 3600 + 56 * 60 + 4  # sidereal day in seconds
+    params['Omega'] = 2 * np.pi / day_seconds * params['bools']['earth_rot']
+
+    # === Initial state ===
+    h0 = 100e3  # [m]
+    theta0 = np.deg2rad(0)
+    phi0 = np.deg2rad(0)
+    v0 = 7450  # [m/s]
+    gamma0 = np.deg2rad(-0.5)
+    psi0 = np.deg2rad(0)
+
+    params['z0'] = np.array([params['re'] + h0, theta0, phi0, v0, gamma0, psi0])  # shape (6,)
+
+    # === Vehicle properties ===
+    mass = 1000.0  # [kg]
+    params['mass'] = mass
+    params['ce'] = 0.5  # optional, only relevant for case_flag = 3
+
+    # === Nondimensionalization ===
+    nt = np.sqrt(params['re'] / params['ge'])
+    nv = np.sqrt(params['re'] * params['ge'])
+    nf = mass * params['ge']
+    nm = mass
+    nd = params['re']
+    na = params['ge']
+    nm_dot = mass / nt
+
+    params['nondim'] = {
+        'nt': nt,
+        'nt_inv': 1.0 / nt,
+        'nd': nd,
+        'nv': nv,
+        'na': na,
+        'nm': nm,
+        'nm_dot': nm_dot,
+        'nf': nf,
+    }
+
+    return params
+
 def extract_N(ts):
     N = 1 if isinstance(ts, float) else (ts.shape[0] if ts.ndim == 1 else ts.shape[1])
     return N
@@ -104,7 +169,7 @@ def nonlinear_aero(ts, zs, us, params, case_flag=None):
         tk = ts if N == 1 else ts[k]
         zk = zs if N == 1 else zs[k]
         uk = us if N == 1 else us[k]
-        r, theta, phi, v, gamma, psi = zs[:6] if N == 1 else zs[k,:6]
+        r, theta, phi, v, gamma, psi = zs if N == 1 else zs[k]
 
         # Extract thrust and mass
         mass, _ = mass_thrust(tk, zk, uk, params)
@@ -127,8 +192,7 @@ def nonlinear_aero(ts, zs, us, params, case_flag=None):
         L[k] = (B / mass) * rho * Cl[k] * v**2
         D[k] = (B / mass) * rho * Cd[k] * v**2
 
-    aero = np.array([L, D, Cl, Cd])
-    return aero, alpha
+    return L, D, Cl, Cd, alpha
 
 def system_dynamics(ts, zs, us, params, t_vec=None):
     """
@@ -154,25 +218,21 @@ def system_dynamics(ts, zs, us, params, t_vec=None):
     case_flag   = params['case_flag']
     N           = extract_N(ts)
     # Extract states
-    r, theta, phi, v, gamma, psi = zs[:6]
+    r, theta, phi, v, gamma, psi = zs
     
     # Extract controls 
     if t_vec is None:
         us2 = us
     else:
-        us2 = np.zeros(m+1)
-        for i in range(m+1):
+        us2 = np.zeros(m)
+        for i in range(m-1):
             us2[i] = np.interp(ts, t_vec, us[:, i])
 
     # Extract bank angle
     sigma = us2 if isinstance(us2, float) else us2[0]
 
     # Determine lift and drag coefficients from velocity
-    aero, alpha = nonlinear_aero(ts, zs, us2, params)
-    L           = aero[0, 0]
-    D           = aero[1, 0]
-    Cl          = aero[2, 0]
-    Cd          = aero[3, 0]
+    L, D, Cl, Cd, alpha = nonlinear_aero(ts, zs, us2, params)
 
     # Extract mass and thrust
     mass, Tf = mass_thrust(ts, zs, us2, params)
@@ -226,12 +286,12 @@ if __name__ == "__main__":
     # Define dummy data for testing
     # note can turn to column vector via: 
     #  ts      = np.array([0.0])[:, np.newaxis]
-    ts      = np.array([0.0])
-    zs      = np.array([1, 0.5, 0.2, 3000, 0.05, 0.1, 1000])
-    us = np.zeros((100, 3)) 
-    us[:, 0] = np.linspace(0.1, 0.2, 100)
-    us[:, 1] = np.linspace(0.1, 0.2, 100)
-    us[:, 2] = np.linspace(0.1, 0.2, 100)
+    ts          = np.array([0.0])
+    zs          = np.array([1, 0.5, 0.2, 3000, 0.05, 0.1, 1000])
+    us          = np.zeros((100, 3)) 
+    us[:, 0]    = np.linspace(0.1, 0.2, 100)
+    us[:, 1]    = np.linspace(0.1, 0.2, 100)
+    us[:, 2]    = np.linspace(0.1, 0.2, 100)
 
     t_vec   = np.linspace(0, 10, 100)
 
