@@ -1,5 +1,6 @@
 import numpy as np
 
+import numpy as np
 
 def config_params():
     """
@@ -8,53 +9,52 @@ def config_params():
 
     params = {}
 
-    # === System setup ===
+
+    # === Case setup ===
+    params['nondim_on'] = False
     params['case_flag'] = 1
-    params['n'] = 6
-    params['m'] = 1
-    params['T_init'] = 1700.0  # [s], total propagation time
+    params['N']         = 40
+    params['n']         = 6
+    params['m']         = 1
+    params['T_init']    = 1700.0
 
     # === Physical constants ===
-    params['ge'] = 9.81  # [m/s^2]
-    params['re'] = 6378.137e3  # [m]
-    params['rhoe'] = 1.3       # [kg/m^3]
-    params['H'] = 7e3          # [m], scale height
-    params['beta'] = 1.0 / params['H']
-    params['mue'] = 3.986004418e14  # [m^3/s^2], gravitational constant
+    params['ge']        = 9.81
+    params['re']        = 6378.137e3
+    params['mue']       = 3.986004418e14
+    params['rhoe']      = 1.3
+    params['H']         = 7e3
+    params['beta']      = 1.0 / params['H']
+    params['bools']     = {'earth_rot': 1}
+    sidereal_day_s      = 23 * 3600 + 56 * 60 + 4
+    params['Omega']     = 2 * np.pi / sidereal_day_s * params['bools']['earth_rot']
 
-    # === Earth rotation (set to 1 for enabled) ===
-    params['bools'] = {}
-    params['bools']['earth_rot'] = 1
-    day_seconds = 23 * 3600 + 56 * 60 + 4  # sidereal day in seconds
-    params['Omega'] = 2 * np.pi / day_seconds * params['bools']['earth_rot']
+    # === Vehicle mass & reference geometry ===
+    mass                = 104305.0
+    params['mass']      = mass
+    params['Sref']      = 391.22  # [m^2]
+    params['ce']        = 0.5       # only used for case_flag = 3
 
-    # === Initial state ===
-    h0 = 100e3  # [m]
-    theta0 = np.deg2rad(0)
-    phi0 = np.deg2rad(0)
-    v0 = 7450  # [m/s]
-    gamma0 = np.deg2rad(-0.5)
-    psi0 = np.deg2rad(0)
-
-    params['z0'] = np.array([params['re'] + h0, theta0, phi0, v0, gamma0, psi0])  # shape (6,)
-
-    # === Vehicle properties ===
-    mass = 1000.0  # [kg]
-    params['mass'] = mass
-    params['ce'] = 0.5  # optional, only relevant for case_flag = 3
 
     # === Nondimensionalization ===
-    nt = np.sqrt(params['re'] / params['ge'])
-    nv = np.sqrt(params['re'] * params['ge'])
-    nf = mass * params['ge']
-    nm = mass
-    nd = params['re']
-    na = params['ge']
-    nm_dot = mass / nt
+    if params['nondim_on']:
+        # Compute nondimensional values using local variables
+        nt      = np.sqrt(params['re'] / params['ge'])
+        nt_inv  = 1.0 / nt
+        nd      = params['re']
+        nv      = np.sqrt(params['re'] * params['ge'])
+        na      = params['ge']
+        nm      = params['mass']
+        nm_dot  = nm / nt
+        nf      = nm * na
+    else:
+        # Identity scalings for fully dimensional case
+        nt = nt_inv = nd = nv = na = nm = nm_dot = nf = 1.0
 
+    # Assign to params
     params['nondim'] = {
         'nt': nt,
-        'nt_inv': 1.0 / nt,
+        'nt_inv': nt_inv,
         'nd': nd,
         'nv': nv,
         'na': na,
@@ -63,7 +63,46 @@ def config_params():
         'nf': nf,
     }
 
+    # === Scaled constants ===
+    params['kg']        = params['mue'] / (na * nd**2)
+    params['B']         = (nd / nm) * (params['Sref'] / 2)
+    params['Omega_s']   = params['Omega'] * nt  # scaled Earth rotation
+
+    # === Initial state
+    h0                  = 100e3
+    theta0              = np.deg2rad(0)
+    phi0                = np.deg2rad(0)
+    v0                  = 7450
+    gamma0              = np.deg2rad(-0.5)
+    psi0                = np.deg2rad(0)
+
+    params['z0'] = np.array([
+        (params['re'] + h0) / nd,
+        theta0 / na,
+        phi0 / na,
+        v0 / nv,
+        gamma0 / na,
+        psi0 / na
+    ])
+
+
+    # === Initial time grid ===
+    dt_init = (params['T_init'] / (params['N'] - 1)) * np.ones(params['N'] - 1)
+    dts_init = dt_init / params['nondim']['nt']  # nondimensionalized
+    Ts_init = params['T_init'] / params['nondim']['nt']
+    ts_init = np.cumsum(np.insert(dts_init, 0, 0.0))  # size N
+
+    params['dt_init'] = dt_init                  # dimensional [s]
+    params['dts_init'] = dts_init                # nondimensional
+    params['Ts_init'] = Ts_init                  # nondimensional
+    params['ts_init'] = ts_init                  # nondimensional
+
+    # === Initial trajectory guess ===
+    # params['zs_init'] = np.tile(params['z0'], (params['N'], 1))       # (N, 6)
+
     return params
+
+
 
 def extract_N(ts):
     N = 1 if isinstance(ts, float) else (ts.shape[0] if ts.ndim == 1 else ts.shape[1])
