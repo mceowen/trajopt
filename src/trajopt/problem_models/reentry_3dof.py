@@ -1,8 +1,5 @@
 import numpy as np
 
-def test_func(input='Hello World!'):
-    return input
-
 def extract_N(ts):
     N = 1 if isinstance(ts, float) else (ts.shape[0] if ts.ndim == 1 else ts.shape[1])
     return N
