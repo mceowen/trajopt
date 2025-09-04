@@ -11,7 +11,7 @@ def config_params():
 
 
     # === Case setup ===
-    params['nondim_on'] = False
+    params['nondim_on'] = True
     params['case_flag'] = 1
     params['N']         = 40
     params['n']         = 6
@@ -30,8 +30,7 @@ def config_params():
     params['Omega']     = 2 * np.pi / sidereal_day_s * params['bools']['earth_rot']
 
     # === Vehicle mass & reference geometry ===
-    mass                = 104305.0
-    params['mass']      = mass
+    params['mass']      = 104305.0
     params['Sref']      = 391.22  # [m^2]
     params['ce']        = 0.5       # only used for case_flag = 3
 
@@ -77,6 +76,15 @@ def config_params():
     psi0                = np.deg2rad(0)
 
     params['z0'] = np.array([
+        (params['re'] + h0) ,
+        theta0 ,
+        phi0 ,
+        v0 ,
+        gamma0 ,
+        psi0 
+    ])
+
+    params['z0s'] = np.array([
         (params['re'] + h0) / nd,
         theta0 / na,
         phi0 / na,
@@ -119,7 +127,7 @@ def mass_thrust(ts, zs, us, params):
     problem (dict): Dictionary containing parameters.
 
     Returns:
-    tuple: Mass and thrust.
+    dictionary: Mass and thrust.
     """
     # Extract params if "problem" parent struct is passed in
     params  = params['params'] if 'params' in params else params
@@ -132,7 +140,11 @@ def mass_thrust(ts, zs, us, params):
         Tf      = 0. / params['nondim']['nf']
         mass    = params['mass'] / params['nondim']['nm']
 
-    return mass, Tf
+    return {
+            'mass' : mass, 
+            'Tf' : Tf
+        }
+
 
 def nonlinear_aero(ts, zs, us, params, case_flag=None):
     """
@@ -146,7 +158,7 @@ def nonlinear_aero(ts, zs, us, params, case_flag=None):
     case_flag (int, optional): Case flag for determining the type of coefficients. Default is None.
 
     Returns:
-    tuple: Aerodynamic coefficients and angle of attack.
+    dictionary: Aerodynamic coefficients and angle of attack.
     """
     # Extract params if "problem" parent struct is passed in
     if 'params' in params:
@@ -211,27 +223,37 @@ def nonlinear_aero(ts, zs, us, params, case_flag=None):
         r, theta, phi, v, gamma, psi = zs if N == 1 else zs[k]
 
         # Extract thrust and mass
-        mass, _ = mass_thrust(tk, zk, uk, params)
+        force   = mass_thrust(tk, zk, uk, params)
+        mass    = force['mass']
+        Tf      = force['Tf']
 
         # Extract control
         if case_flag == 1:
             # Velocity-dependent coefficients
-            v_sat = min(v * nv, vlim)
-            Cl[k] = Kl1 + Kl2 * (v_sat - vlim)**2 + Kl3 * (v_sat - vlim)**4
-            Cd[k] = Kd1 + Kd2 * Cl[k] + Kd3 * Cl[k]**2
-            alpha[k] = np.deg2rad(alphlim_deg - kalph * (min(v * nv, vlim) - vlim)**2)
+            v_sat       = min(v * nv, vlim)
+            Cl[k]       = Kl1 + Kl2 * (v_sat - vlim)**2 + Kl3 * (v_sat - vlim)**4
+            Cd[k]       = Kd1 + Kd2 * Cl[k] + Kd3 * Cl[k]**2
+            alpha[k]    = np.deg2rad(alphlim_deg - kalph * (min(v * nv, vlim) - vlim)**2)
         elif case_flag in [2, 3]:
-            alpha[k] = us[1] if N == 1 else us[k,1]
-            alpha_deg = np.rad2deg(alpha[k])
-            Cl[k] = Kl1h + Kl2h * alpha_deg + Kl3h * alpha_deg**2
-            Cd[k] = Kd1h + Kd2h * alpha_deg + Kd3h * alpha_deg**2 + Kd4h * alpha_deg**3 + Kd5h * alpha_deg**4
+            alpha[k]    = us[1] if N == 1 else us[k,1]
+            alpha_deg   = np.rad2deg(alpha[k])
+            Cl[k]       = Kl1h + Kl2h * alpha_deg + Kl3h * alpha_deg**2
+            Cd[k]       = Kd1h + Kd2h * alpha_deg + Kd3h * alpha_deg**2 + Kd4h * alpha_deg**3 + Kd5h * alpha_deg**4
 
         # Compute lift and drag
-        rho = rhoe * np.exp(-beta * (params['nondim']['nd'] * r - re))
-        L[k] = (B / mass) * rho * Cl[k] * v**2
-        D[k] = (B / mass) * rho * Cd[k] * v**2
+        rho     = rhoe * np.exp(-beta * (params['nondim']['nd'] * r - re))
+        L[k]    = (B / mass) * rho * Cl[k] * v**2
+        D[k]    = (B / mass) * rho * Cd[k] * v**2
 
-    return L, D, Cl, Cd, alpha
+    return {
+        'L': L,
+        'D': D,
+        'Cl': Cl,
+        'Cd': Cd,
+        'alpha': alpha,
+        'rho': rho
+    }
+
 
 def system_dynamics(ts, zs, us, params, t_vec=None):
     """
@@ -268,13 +290,20 @@ def system_dynamics(ts, zs, us, params, t_vec=None):
             us2[i] = np.interp(ts, t_vec, us[:, i])
 
     # Extract bank angle
-    sigma = us2 if isinstance(us2, float) else us2[0]
+    sigma   = us2 if isinstance(us2, float) else us2[0]
 
     # Determine lift and drag coefficients from velocity
-    L, D, Cl, Cd, alpha = nonlinear_aero(ts, zs, us2, params)
+    aero    = nonlinear_aero(ts, zs, us2, params)
+    L       = aero['L']
+    D       = aero['D']
+    Cl      = aero['Cl']
+    Cd      = aero['Cd']
+    alpha   = aero['alpha']
 
     # Extract mass and thrust
-    mass, Tf = mass_thrust(ts, zs, us2, params)
+    force   = mass_thrust(ts, zs, us2, params)
+    mass    = force['mass']
+    Tf      = force['Tf']
 
     # Extract sines and cosines of various values
     cp          = np.cos(phi)
@@ -322,33 +351,4 @@ def system_dynamics(ts, zs, us, params, t_vec=None):
 
 # Example usage
 if __name__ == "__main__":
-    # Define dummy data for testing
-    # note can turn to column vector via: 
-    #  ts      = np.array([0.0])[:, np.newaxis]
-    ts          = np.array([0.0])
-    zs          = np.array([1, 0.5, 0.2, 3000, 0.05, 0.1, 1000])
-    us          = np.zeros((100, 3)) 
-    us[:, 0]    = np.linspace(0.1, 0.2, 100)
-    us[:, 1]    = np.linspace(0.1, 0.2, 100)
-    us[:, 2]    = np.linspace(0.1, 0.2, 100)
-
-    t_vec   = np.linspace(0, 10, 100)
-
-    params  = {
-        're': 6371e3,
-        'rhoe': 1.225,
-        'beta': 0.1,
-        'B': 0.5,
-        'Omega_s': 7.2921159e-5,
-        'kg': 3.986004418e14,
-        'n': 6,
-        'm': 1,
-        'case_flag': 1,
-        'mass': 1000,
-        'ce': 0.5,
-        'nondim': {'nv': 1.0, 'nd': 1.0, 'nf': 1.0, 'nm': 1.0},
-    }
-
-    
-    xDot    = system_dynamics(ts, zs, us, params, t_vec)
-    print(xDot)
+    print("This module provides functions for reentry 3DoF dynamics and aerodynamics.")
