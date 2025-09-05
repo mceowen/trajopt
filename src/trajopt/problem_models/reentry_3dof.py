@@ -95,15 +95,15 @@ def config_params():
 
 
     # === Initial time grid ===
-    dt_init = (params['T_init'] / (params['N'] - 1)) * np.ones(params['N'] - 1)
-    dts_init = dt_init / params['nondim']['nt']  # nondimensionalized
-    Ts_init = params['T_init'] / params['nondim']['nt']
-    ts_init = np.cumsum(np.insert(dts_init, 0, 0.0))  # size N
+    dt_init             = (params['T_init'] / (params['N'] - 1)) * np.ones(params['N'] - 1)
+    dts_init            = dt_init / params['nondim']['nt']  # nondimensionalized
+    Ts_init             = params['T_init'] / params['nondim']['nt']
+    ts_init             = np.cumsum(np.insert(dts_init, 0, 0.0))  # size N
 
-    params['dt_init'] = dt_init                  # dimensional [s]
-    params['dts_init'] = dts_init                # nondimensional
-    params['Ts_init'] = Ts_init                  # nondimensional
-    params['ts_init'] = ts_init                  # nondimensional
+    params['dt_init']   = dt_init       # dimensional [s]
+    params['dts_init']  = dts_init      # nondimensional
+    params['Ts_init']   = Ts_init       # nondimensional
+    params['ts_init']   = ts_init       # nondimensional
 
     # === Initial trajectory guess ===
     # params['zs_init'] = np.tile(params['z0'], (params['N'], 1))       # (N, 6)
