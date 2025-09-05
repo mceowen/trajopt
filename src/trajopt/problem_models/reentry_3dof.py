@@ -332,9 +332,9 @@ def system_dynamics(ts, zs, us, params, t_vec=None):
     # v_dot
     xDot[3]     = (Tf / mass) * ca - D - Kg * sg / r**2 + Om**2 * r * cp * (sg * cp - cg * sp * cps)
     # gamma_dot
-    xDot[4]     = (1 / v) * ((Tf / mass) * sa + L) * cs + (v**2 - Kg / r) * cg / r + 2 * Om * cp * sps + Om**2 * r * (1 / v) * cp * (cg * cp + sg * cps * sp)
+    xDot[4]     = (1 / v) * ( ((Tf / mass) * sa + L) * cs + (v**2 - Kg / r) * cg / r ) + 2 * Om * cp * sps + Om**2 * r * (1 / v) * cp * (cg * cp + sg * cps * sp)
     # psi_dot
-    xDot[5]     = (1 / v) * ((Tf / mass) * sa + L) * ss / cg + v**2 * cg * sps * tp / r - 2 * Om * (tg * cps * cp - sp) + Om**2 * r * (1 / (v * cg)) * sps * sp * cp
+    xDot[5]     = (1 / v) * ( ((Tf / mass) * sa + L) * ss / cg + v**2 * cg * sps * tp / r ) - 2 * Om * (tg * cps * cp - sp) + Om**2 * r * (1 / (v * cg)) * sps * sp * cp
 
     if case_flag == 3:
         ce = params['ce']
