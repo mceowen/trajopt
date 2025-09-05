@@ -16,7 +16,7 @@ def config_params():
     params['N']         = 40
     params['n']         = 6
     params['m']         = 1
-    params['T_init']    = 500.0
+    params['T_init']    = 300.0
 
     # === Physical constants ===
     params['ge']    = 3.73                          # [m/s^2]
@@ -71,7 +71,7 @@ def config_params():
     h0      = 120e3                  # Entry altitude [m]
     theta0  = np.deg2rad(0)
     phi0    = np.deg2rad(0)
-    v0      = 5500                   # Entry velocity [m/s]
+    v0      = 5900                   # Entry velocity [m/s]
     gamma0  = np.deg2rad(-14.5)      # Entry flight path angle [rad]
     psi0    = 0.0                    # Mars doesn't use heading in this 2D sim
 
