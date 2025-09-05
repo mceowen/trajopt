@@ -11,7 +11,7 @@ def config_params():
 
 
     # === Case setup ===
-    params['nondim_on'] = True
+    params['nondim_on'] = False
     params['case_flag'] = 1
     params['N']         = 40
     params['n']         = 6
