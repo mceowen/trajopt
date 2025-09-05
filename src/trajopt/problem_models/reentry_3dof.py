@@ -86,11 +86,11 @@ def config_params():
 
     params['z0s'] = np.array([
         (params['re'] + h0) / nd,
-        theta0 / na,
-        phi0 / na,
+        theta0 ,
+        phi0 ,
         v0 / nv,
-        gamma0 / na,
-        psi0 / na
+        gamma0,
+        psi0
     ])
 
 
