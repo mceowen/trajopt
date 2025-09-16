@@ -1,7 +1,5 @@
 import numpy as np
 
-import numpy as np
-
 def config_params():
     """
     Configures parameters dictionary for reentry_3dof case (case_flag = 1)
