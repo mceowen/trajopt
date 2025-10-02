@@ -26,7 +26,7 @@ def solve_subproblem(problem):
     constraints = baseline_subprob_constraints(problem, local_vars)
     constraints = problem['custom_constraints'](constraints, local_vars)
 
-    PTR_COST    = 0
+    PTR_COST    = 0.0
     PTR_COST    = baseline_subprob_cost(problem, local_vars)
     PTR_COST    = problem['custom_cost'](PTR_COST, local_vars)
 
@@ -52,6 +52,42 @@ def solve_subproblem(problem):
 
     return O
 
+def solve_subproblem_og(problem):
+
+    local_vars = baseline_subprob_inputs(problem)
+    problem['custom_inputs'](problem, local_vars)
+
+    local_vars = baseline_subprob_variables(problem,local_vars)
+    problem['custom_variables'](problem, local_vars)
+
+    constraints = baseline_subprob_constraints(problem, local_vars)
+    constraints = problem['custom_constraints'](constraints, local_vars)
+
+    PTR_COST    = 0
+    PTR_COST    = baseline_subprob_cost(problem, local_vars)
+    PTR_COST    = problem['custom_cost'](PTR_COST, local_vars)
+
+    # TODO(Skye): vectorize cost computation for speedup
+    objective   = cp.Minimize(PTR_COST)
+    subprob     = cp.Problem(objective, constraints)
+    subprob.solve()
+
+    O = baseline_subprob_outputs(
+        problem,
+        local_vars,
+        subprob,
+    )
+
+    # TODO: Add custom outputs
+    # problem.custom_outputs(problem, local_vars, O)
+
+    O = convergence.check_convergence_tolerance(problem, local_vars, O)
+
+    O = baseline_autotune(problem, local_vars, O)
+    
+    display_baseline_subprob_status(problem, local_vars, O)
+
+    return O
 
 def baseline_subprob_inputs(problem):
 
@@ -448,7 +484,7 @@ def baseline_subprob_constraints(problem,local_vars):
                     x for x in [vb_path[k], vb_nfz[k], vb_aux[k]]
                     if getattr(x, "shape", (0,))[0] > 0
                 ])
-            CNST.append(dgdz[k] @ dz[k,:n] + dgdu[k] @ du[k] + g[k] - vb_combined <= 0)
+            CNST.append(dgdz[k] @ dz[k] + dgdu[k] @ du[k] + g[k] - vb_combined <= 0)
 
             if str(flag_autotune) in {'1', '3', 'al-scvx'}:
                 CNST.append(vb_combined >= 0)

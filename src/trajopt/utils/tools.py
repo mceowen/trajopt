@@ -66,6 +66,6 @@ def num_timesteps(zs):
     if zs.ndim == 1:
         return 1
     elif zs.ndim == 2:
-        return zs.shape[1]
+        return zs.shape[0]
     else:
         raise ValueError(f"Expected 1D or 2D array, got shape {arr.shape}")

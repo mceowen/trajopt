@@ -54,9 +54,9 @@ def config_main():
     config['params']['N'] = 40
 
     config['params']['bools'] = {
-        'flag_nfz': 0,          # 0, 1, 2
+        'flag_nfz': 1,          # 0, 1, 2
         'flag_autotune': '0',   # '0', '1', '2', '3', 'al-scvx'
-        'free_final_time': 1,   # 0, 1
+        'free_final_time': 0,   # 0, 1
         'equal_dt': 0,          # 0, 1
         'buff_dyn': 'term',     # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
         'buff_dyn_dual': 'none',# 'l1', 'none'
@@ -534,41 +534,37 @@ def nonlinear_inequality_constraints(ts, zs, us, params):
         params = params["params"]
 
     N       = tools.num_timesteps(zs)
-    n_nfz   = params["n_nfz"]
-    n_path  = params.get("n_path", 0)  # currently unused
+    n_nfz   = params.get("n_nfz", 0)
+    n_path  = params.get("n_path", 0)  # placeholder
 
-    P_path  = []  # placeholder for path constraints
-    P_nfz   = []
+    # Handle state unpacking
+    if zs.ndim == 2:
+        rx = zs[:, 0]
+        ry = zs[:, 1]
+    elif zs.ndim == 1:
+        rx = np.full(N, zs[0])
+        ry = np.full(N, zs[1])
+    else:
+        raise ValueError(f"Unhandled zs shape {zs.shape}")
 
-    for k in range(N):
+    # === NFZ constraints ===
+    if n_nfz > 0:
+        xc = params["obs"]["posc"][0]
+        yc = params["obs"]["posc"][1]
+        rc = params["obs"]["rc"]
 
-        if zs.ndim == 2:
-            rx_k = zs[k, 0]
-            ry_k = zs[k, 1]
-        elif zs.ndim == 1:
-            rx_k = zs[0]
-            ry_k = zs[1]
-        else:
-            raise ValueError(f"Unhandled zs shape {zs.shape}")
+        P_nfz = np.stack([
+            rc[i]**2 - (rx - xc[i])**2 - (ry - yc[i])**2
+            for i in range(n_nfz)
+        ], axis=1)  # shape: (N, n_nfz)
+    else:
+        P_nfz = np.empty((N, 0))
 
-        # --- No Fly Zone constraints ---
-        P_nfz_k = []
-        if n_nfz > 0:
-            for i in range(n_nfz):
-                xc = params["obs"]["posc"][0, i]
-                yc = params["obs"]["posc"][1, i]
-                Rc = params["obs"]["rc"][i]
+    # === Path constraints (placeholder) ===
+    P_path = np.empty((N, 0))  # currently unused
 
-                val = Rc**2 - (rx_k - xc)**2 - (ry_k - yc)**2
-                P_nfz_k.append(val)
-
-        P_nfz.append(P_nfz_k)
-
-    P_nfz   = np.array(P_nfz) if P_nfz else np.empty((N,0))
-    P_path  = np.empty((N,0))  # not implemented
-
-    # Stack all inequality constraints
-    P       = np.vstack([P_path, P_nfz])
+    # === Stack all inequality constraints ===
+    P = np.hstack([P_path, P_nfz]) if P_path.size or P_nfz.size else np.empty((N, 0))
     return P
 
 
@@ -618,81 +614,85 @@ def analytical_cost(ts, zs, us, problem):
     return lincost
 
 def analytical_inequality_constraints(ts, zs, us, problem):
+    params    = problem.get("params", problem)
+    N         = tools.num_timesteps(zs)
+    n         = params["n"]
+    m         = params["m"]
+    n_path    = params["n_path"]
+    n_nfz     = params["n_nfz"]
+    path_idx  = params["path_idx"]
 
-    params          = problem.get("params", problem)
+    # Scale path limits using nondimensional constraint weights
+    scale = params["nondim"]["np_ineq"][:n_path]
+    path_lim_scaled = np.linalg.solve(np.diag(scale), params["path_lim"])
 
-    N               = tools.num_timesteps(zs)
-    n               = params["n"]
-    m               = params["m"]
-    n_path          = params["n_path"]
-    n_nfz           = params["n_nfz"]
+    # Obstacle info (broadcasted for speed)
+    if n_nfz > 0:
+        xc = params["obs"]["posc"][0]
+        yc = params["obs"]["posc"][1]
+        rc = params["obs"]["rc"]
 
-    path_idx        = params["path_idx"]
-    path_lim_diag   = np.diag(params["nondim"]["np_ineq"][:n_path])
-    path_lim_scaled = np.linalg.solve(path_lim_diag, params["path_lim"])
+    # === Preallocate flattened output arrays ===
+    fcn_all   = np.zeros((N, n_path + n_nfz))
+    dPdz_all  = np.zeros((N, n_path + n_nfz, n))
+    dPdu_all  = np.zeros((N, n_path + n_nfz, m))
 
-    # Preallocate storage
-    path_cnst       = {"P": [], "Praw": [], "dPdz": [], "dPdu": []}
-    nfz_cnst        = {"P": [], "dPdz": [], "dPdu": []}
+    # Also collect detailed path and NFZ constraint data if needed
+    path_data = {"P": [], "Praw": [], "dPdz": [], "dPdu": []}
+    nfz_data  = {"P": [], "dPdz": [], "dPdu": []}
 
     for k in range(N):
-        tk          = ts[k]
-        zk          = zs[k]
-        uk          = us[k]
-        rx_k, ry_k  = zk[0], zk[1]
+        tk = ts[k]
+        zk = zs[k]
+        uk = us[k]
+        rx_k, ry_k = zk[0], zk[1]
 
-        # Evaluate full constraint vector
-        P_full      = nonlinear_inequality_constraints(tk, zk, uk, params)
+        # Evaluate all inequality constraints
+        P_full = nonlinear_inequality_constraints(tk, zk, uk, params)
 
-        # ---- Path constraints ----
+        # === Path constraints ===
         if n_path > 0:
-            P_path      = P_full[path_idx]
-            path_cnst["P"].append(P_path - path_lim_scaled)
-            path_cnst["Praw"].append(P_path)
+            P_path = P_full[path_idx]
+            fcn_all[k, :n_path] = P_path - path_lim_scaled
+            dPdz_all[k, :n_path, :] = np.zeros((n_path, n))  # Placeholder
+            dPdu_all[k, :n_path, :] = np.zeros((n_path, m))
 
-            # Use zero Jacobians as placeholders (same as original MATLAB)
-            dPdz_path   = np.zeros((n_path, n))
-            dPdu_path   = np.zeros((n_path, m))
-            path_cnst["dPdz"].append(dPdz_path)
-            path_cnst["dPdu"].append(dPdu_path)
+            # Append to raw data
+            path_data["P"].append(P_path - path_lim_scaled)
+            path_data["Praw"].append(P_path)
+            path_data["dPdz"].append(np.zeros((n_path, n)))
+            path_data["dPdu"].append(np.zeros((n_path, m)))
 
-        # ---- No-fly zone constraints ----
+        # === No-fly zone constraints ===
         if n_nfz > 0:
-            P_nfz       = P_full[n_path:n_path + n_nfz]
-            dPdz_nfz    = []
-            dPdu_nfz    = []
+            P_nfz = P_full[n_path:n_path + n_nfz]
+            fcn_all[k, n_path:n_path + n_nfz] = P_nfz
 
-            for i in range(n_nfz):
-                xc          = params["obs"]["posc"][0, i]
-                yc          = params["obs"]["posc"][1, i]
-                rc          = params["obs"]["rc"][i]
+            dPdz_nfz = np.zeros((n_nfz, n))
+            dPdz_nfz[:, 0] = 2 * (rx_k - xc)
+            dPdz_nfz[:, 1] = 2 * (ry_k - yc)
 
-                row_dz = np.zeros(n)
-                row_dz[0]   = 2 * (rx_k - xc)
-                row_dz[1]   = 2 * (ry_k - yc)
-                dPdz_nfz.append(row_dz)
+            dPdu_nfz = np.zeros((n_nfz, m))
 
-                dPdu_nfz.append(np.zeros(m))
+            dPdz_all[k, n_path:n_path + n_nfz, :] = dPdz_nfz
+            dPdu_all[k, n_path:n_path + n_nfz, :] = dPdu_nfz
 
-            nfz_cnst["P"].append(P_nfz)
-            nfz_cnst["dPdz"].append(np.vstack(dPdz_nfz))
-            nfz_cnst["dPdu"].append(np.vstack(dPdu_nfz))
+            # Store full data
+            nfz_data["P"].append(P_nfz)
+            nfz_data["dPdz"].append(dPdz_nfz)
+            nfz_data["dPdu"].append(dPdu_nfz)
 
-    # Stack outputs across time
-    path_out = {
-        "dfcn_dz": np.stack(path_cnst["dPdz"] + nfz_cnst["dPdz"], axis=2)
-                   if n_path + n_nfz > 0 else np.array([]),
-        "dfcn_du": np.stack(path_cnst["dPdu"] + nfz_cnst["dPdu"], axis=2)
-                   if n_path + n_nfz > 0 else np.array([]),
-        "fcn":     np.stack(path_cnst["P"] + nfz_cnst["P"], axis=1)
-                   if n_path + n_nfz > 0 else np.array([]),
+    return {
+        "fcn": fcn_all,
+        "dfcn_dz": dPdz_all,
+        "dfcn_du": dPdu_all,
         "data": {
-            "path": path_cnst,
-            "nfz": nfz_cnst
+            "path": path_data,
+            "nfz": nfz_data,
         }
     }
 
-    return path_out
+
 
 
 ####### ALGORITHM 

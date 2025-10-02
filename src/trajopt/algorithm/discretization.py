@@ -33,7 +33,7 @@ def set_ltv_indices(params):
     return params
 
 # Compute exact discretization for linear dynamic system
-def discretize_type3a1_foh(zs_ref, us_ref, dts_ref, problem):
+def discretize_inv_foh(zs_ref, us_ref, dts_ref, problem):
     params = problem['params']
     N = params['N']
 
@@ -157,9 +157,9 @@ def compute_linsys_discrete(zs_ref, us_ref, dts_ref, problem):
     tuple: Ak, Bk, Bkp, Sk, zs_minus
     """
     if problem['params']['bools']['ctcs']:
-        Ak, Bk, Bkp, Sk, zs_minus = ctcs(zs_ref, us_ref, dts_ref, problem)
+        Ak, Bk, Bkp, Sk, zs_minus = discretize_ctcs(zs_ref, us_ref, dts_ref, problem)
     else:
-        Ak, Bk, Bkp, Sk, zs_minus = discretize_type3a1_foh(zs_ref, us_ref, dts_ref, problem)
+        Ak, Bk, Bkp, Sk, zs_minus = discretize_inv_foh(zs_ref, us_ref, dts_ref, problem)
     
     return Ak, Bk, Bkp, Sk, zs_minus
 
@@ -258,7 +258,7 @@ def RHS_ltv_ctcs(tau, lds, us_ref, dts_ref, problem):
         dts_k = dts_ref[k]
         x = lds[k * params['lds0_size'] + params['z_ind']]
 
-        Ac, Bc, fc = compute_ctcs_jacobians(tau, x, u[k, :], problem)
+        Ac, Bc, fc = convexify.compute_ctcs_jacobians(tau, x, u[k, :], problem)
 
         Phi_tau = np.reshape(lds[k * params['lds0_size'] + params['Ak_ind']],
                              (params['nz'], params['nz']))
@@ -318,7 +318,7 @@ if __name__ == "__main__":
         }
     }
 
-    Ak, Bk, Bkp, Sk, zs_minus = discretize_type3a1_foh(zs_ref, us_ref, dts_ref, problem)
+    Ak, Bk, Bkp, Sk, zs_minus = discretize_inv_foh(zs_ref, us_ref, dts_ref, problem)
     print(f"Ak: {Ak}")
     print(f"Bk: {Bk}")
     print(f"Bkp: {Bkp}")

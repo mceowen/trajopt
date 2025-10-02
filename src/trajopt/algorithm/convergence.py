@@ -200,121 +200,113 @@ def set_convergence_tolerance(params):
     return params
 
 def check_convergence_tolerance(problem, local_vars, O):
-   
-    # Pull out conv_data
-    conv_data       = O['conv_data']
-    soln            = O['conv_data']['soln']
+    # --- Load convergence data
+    conv_data = O['conv_data']
+    soln      = conv_data['soln']
 
-    n               = local_vars['nz']
-    N               = local_vars['N']
+    n = local_vars['nz']
+    N = local_vars['N']
     
-    dz              = O['dz_s']
-    dcost           = O['cost'] - O['conv_data']['cost_ref'] 
-    
-    vb_path         = tools.safe_array(O['conv_data']['vb_path'])
-    vb_nfz          = tools.safe_array(O['conv_data']['vb_nfz'])
-    vb_aux          = tools.safe_array(O['conv_data']['vb_aux'])
-    vb_term         = tools.safe_array(O['conv_data']['vb_term'])
-    vb_dyn          = tools.safe_array(O['conv_data']['vb_dyn'])
-    defect          = tools.safe_array(np.abs(O['conv_data']['defect']))
+    dz       = O['dz_s']
+    dcost    = O['cost'] - conv_data['cost_ref']
+    defect   = np.abs(tools.safe_array(conv_data['defect']))
+    vb_dyn   = np.abs(tools.safe_array(conv_data['vb_dyn']))
+    vb_path  = np.maximum(0.0, tools.safe_array(conv_data['vb_path']))
+    vb_nfz   = np.maximum(0.0, tools.safe_array(conv_data['vb_nfz']))
+    vb_aux   = np.maximum(0.0, tools.safe_array(conv_data['vb_aux']))
+    vb_term  = np.abs(tools.safe_array(conv_data['vb_term']))
 
-    # Extract convergence criterion
-    eps_state       = problem['params']['conv']['eps_state']
-    Wconv_state     = problem['params']['conv']['Wconv_state']
+    # --- Extract convergence criteria
+    eps_state   = problem['params']['conv']['eps_state']
+    eps_cost    = problem['params']['conv']['eps_cost']
+    eps_path    = problem['params']['conv']['eps_path']
+    eps_nfz     = problem['params']['conv']['eps_nfz']
+    eps_aux     = problem['params']['conv']['eps_aux']
+    eps_term    = problem['params']['conv']['eps_term']
+    eps_defect  = problem['params']['conv']['eps_defect']
+    eps_dyn     = problem['params']['conv']['eps_dyn']
 
-    eps_cost        = problem['params']['conv']['eps_cost']
+    W_state   = problem['params']['conv']['Wconv_state']
+    W_path    = tools.safe_array(problem['params']['conv']['Wconv_path'])
+    W_nfz     = tools.safe_array(problem['params']['conv']['Wconv_nfz'])
+    W_aux     = tools.safe_array(problem['params']['conv']['Wconv_aux'])
+    W_term    = problem['params']['conv']['Wconv_term']
+    W_dyn     = problem['params']['conv']['Wconv_dyn']
+    W_defect  = problem['params']['conv']['Wconv_defect']
 
+    # --- Extract linear constraints
+    conv_path_nl = np.maximum(0.0, tools.safe_array(O['cnst_path'][problem['params']['path_idx']]))
+    conv_nfz_nl  = np.maximum(0.0, tools.safe_array(O['cnst_path'][problem['params']['nfz_idx']]))
+    conv_aux_nl  = np.maximum(0.0, tools.safe_array(O['cnst_path'][problem['params']['aux_idx']]))
 
-    eps_path        = problem['params']['conv']['eps_path']
-    Wconv_path      = tools.safe_array(problem['params']['conv']['Wconv_path'])
-    conv_path_nl    = tools.safe_array(O['cnst_path'][problem['params']['path_idx']])
+    # === Optimality ===
+    dz_array = tools.safe_val(dz, rows=N, cols=n)
+    chk_dz = np.max([np.max(W_state @ np.abs(dz_k)) for dz_k in dz_array])
+    chk_cost = np.abs(dcost)
 
-    eps_nfz         = problem['params']['conv']['eps_nfz']
-    Wconv_nfz       = tools.safe_array(problem['params']['conv']['Wconv_nfz'])
-    conv_nfz_nl     = tools.safe_array(O['cnst_path'][problem['params']['nfz_idx']])
+    # === Feasibility: Virtual Buffer violations ===
+    chk_vb_path = np.max([np.max(W_path @ vb_path[k].reshape(-1, 1)) for k in range(N)]) if vb_path.size else 0.0
+    chk_vb_nfz  = np.max([np.max(W_nfz  @ vb_nfz[k].reshape(-1, 1))  for k in range(N)]) if vb_nfz.size else 0.0
+    chk_vb_aux  = np.max([np.max(W_aux  @ vb_aux[k].reshape(-1, 1))  for k in range(N)]) if vb_aux.size else 0.0
+    chk_vb_term = np.max(W_term * vb_term)
+    chk_vb_dyn  = np.max([np.max(W_dyn @ vb_dyn[k].reshape(-1, 1)) for k in range(N - 1)]) if vb_dyn.size else 0.0
+    chk_defect  = np.max([np.max(W_defect @ defect[k].reshape(-1, 1)) for k in range(N)]) if defect.size else 0.0
 
-    eps_aux         = problem['params']['conv']['eps_aux']
-    Wconv_aux       = tools.safe_array(problem['params']['conv']['Wconv_aux'])
-    conv_aux_nl     = tools.safe_array(O['cnst_path'][problem['params']['aux_idx']])
+    # === Feasibility: Linearized constraint residuals ===
+    chk_path_2 = np.max([np.max(W_path @ conv_path_nl[k].reshape(-1, 1)) for k in range(N)]) if conv_path_nl.size else 0.0
+    chk_nfz_2  = np.max([np.max(W_nfz  @ conv_nfz_nl[k].reshape(-1, 1))  for k in range(N)]) if conv_nfz_nl.size else 0.0
+    chk_aux_2  = np.max([np.max(W_aux  @ conv_aux_nl[k].reshape(-1, 1))  for k in range(N)]) if conv_aux_nl.size else 0.0
 
-    eps_term        = problem['params']['conv']['eps_term']
-    Wconv_term      = problem['params']['conv']['Wconv_term']
+    # === Convergence mode selection
+    ctcs = problem['params']['bools']['ctcs']
+    flag_conv = problem['params']['bools']['flag_conv']
 
-    eps_defect      = problem['params']['conv']['eps_defect']
-    Wconv_defect    = problem['params']['conv']['Wconv_defect']
-
-    eps_dyn         = problem['params']['conv']['eps_dyn']
-    Wconv_dyn       = problem['params']['conv']['Wconv_dyn']
-
-    # Pull out optimality checks
-    chk_dz = np.max([ Wconv_state @ dz_k for dz_k in np.abs(tools.safe_val(dz, rows=N, cols=n))])
-    chk_cost        = np.abs(dcost)
-
-    # Pull out feasibility checks
-    chk_vb_path     = np.max(Wconv_path     @ np.maximum(np.array([0.0]), vb_path))
-    chk_vb_nfz      = np.max(Wconv_nfz      @ np.maximum(np.array([0.0]), vb_nfz))
-    chk_vb_aux      = np.max(Wconv_aux      @ np.maximum(np.array([0.0]), vb_aux))
-    chk_vb_term     = np.max(Wconv_term     @ np.abs(vb_term))
-    chk_vb_dyn      = np.max([ Wconv_dyn @ vb_k for vb_k in np.abs(vb_dyn)])
-    chk_defect      = np.max([ Wconv_defect @ defect_k for defect_k in np.abs(defect) ])
-    # TODO: ADD LINEAR CONSTRAINT CHECK (LESS STRINGENT) FOR CASE 1 (CHECKING DZ)
-    chk_path_2      = np.max(Wconv_path     @ np.maximum(np.array([0.0]), conv_path_nl))
-    chk_nfz_2       = np.max(Wconv_nfz      @ np.maximum(np.array([0.0]), conv_nfz_nl))
-    chk_aux_2       = np.max(Wconv_aux      @ np.maximum(np.array([0.0]), conv_aux_nl))
-
-    if problem['params']['bools']['ctcs']:
-        chk_cnst_1  = [chk_vb_term, chk_vb_dyn]
-        chk_cnst_2  = [chk_vb_term, chk_defect]
-        eps_cnst_1  = [eps_term, eps_dyn]
-        eps_cnst_2  = [eps_term, eps_defect]
+    if ctcs:
+        chk_feas_1 = np.array([chk_vb_term, chk_vb_dyn])
+        chk_feas_2 = np.array([chk_vb_term, chk_defect])
+        eps_feas_1 = np.array([eps_term, eps_dyn])
+        eps_feas_2 = np.array([eps_term, eps_defect])
     else:
-        chk_cnst_1  = [chk_vb_path, chk_vb_nfz, chk_vb_aux, chk_vb_term, chk_vb_dyn]
-        chk_cnst_2  = [chk_path_2, chk_nfz_2, chk_aux_2, chk_vb_term]
-        eps_cnst_1  = [eps_path, eps_nfz, eps_aux, eps_term, eps_dyn]
-        eps_cnst_2  = [eps_path, eps_nfz, eps_aux, eps_term]
+        chk_feas_1 = np.array([chk_vb_path, chk_vb_nfz, chk_vb_aux, chk_vb_term, chk_vb_dyn])
+        chk_feas_2 = np.array([chk_path_2, chk_nfz_2, chk_aux_2, chk_vb_term])
+        eps_feas_1 = np.array([eps_path, eps_nfz, eps_aux, eps_term, eps_dyn])
+        eps_feas_2 = np.array([eps_path, eps_nfz, eps_aux, eps_term])
 
-    if problem['params']['bools']['flag_conv'] == 0:
-        # IF CHECKING DZ OR COST AND NONCONVEX VIOLATION
-        chk_opt     = [chk_dz, chk_cost]
-        eps_opt     = [eps_state, eps_cost]
-        chk_feas    = [chk_cnst_1, chk_cnst_2]
-        eps_feas    = [eps_cnst_1, eps_cnst_2]
-    elif problem['params']['bools']['flag_conv'] == 1:
-        # IF CHECKING DZ
-        chk_opt     = [chk_dz, np.nan]
-        eps_opt     = [eps_state, np.nan]
-        chk_feas    = [chk_cnst_1, np.nan]
-        eps_feas    = [eps_cnst_1, np.nan]
-    elif problem['params']['bools']['flag_conv'] == 2:
-        # IF CHECKING COST AND NONCONVEX VIOLATION
-        chk_opt     = [np.nan, chk_cost]
-        eps_opt     = [np.nan, eps_cost]
-        chk_feas    = [np.nan, chk_cnst_2]
-        eps_feas    = [np.nan, eps_cnst_2]
+    if flag_conv == 0:
+        chk_opt = np.array([chk_dz, chk_cost])
+        eps_opt = np.array([eps_state, eps_cost])
+    elif flag_conv == 1:
+        chk_opt = np.array([chk_dz, np.nan])
+        eps_opt = np.array([eps_state, np.nan])
+    elif flag_conv == 2:
+        chk_opt = np.array([np.nan, chk_cost])
+        eps_opt = np.array([np.nan, eps_cost])
 
-    if ( np.all(np.array(chk_feas[0]) <= np.array(eps_feas[0])) and np.all(np.array(chk_opt[0]) <= np.array(eps_opt[0])) ) \
-        or ( np.all(np.array(chk_feas[1]) <= np.array(eps_feas[1])) and np.all(np.array(chk_opt[1]) <= np.array(eps_opt[1])) ):
-        bool_conv = True
-    else:
-        bool_conv = False
+    # === Convergence check
+    bool_conv = (
+        (np.all(chk_feas_1 <= eps_feas_1) and np.all(chk_opt[0] <= eps_opt[0])) or
+        (np.all(chk_feas_2 <= eps_feas_2) and np.all(chk_opt[1] <= eps_opt[1]))
+    )
 
-    # Fill data struct
-    conv_data['bool_conv']      = bool_conv
-    conv_data['chk_dz']         = chk_opt[0]
-    conv_data['chk_opt']        = np.maximum(chk_opt[0], chk_opt[1])
-    conv_data['chk_feas_term']  = chk_vb_term
-    conv_data['chk_feas_path']  = chk_vb_path
-    conv_data['chk_feas_nfz']   = chk_vb_nfz
-    conv_data['chk_feas_aux']   = chk_vb_aux
-    conv_data['chk_feas_dyn']   = chk_vb_dyn
-    conv_data['chk_feas']       = max(np.max(chk_feas[0]), np.max(chk_feas[1]))
-    conv_data['status']         = O['subprob'].status
+    # === Populate convergence summary
+    conv_data.update({
+        'bool_conv': bool_conv,
+        'chk_dz': chk_opt[0],
+        'chk_opt': np.nanmax(chk_opt),
+        'chk_feas_term': chk_vb_term,
+        'chk_feas_path': chk_vb_path,
+        'chk_feas_nfz': chk_vb_nfz,
+        'chk_feas_aux': chk_vb_aux,
+        'chk_feas_dyn': chk_vb_dyn,
+        'chk_feas': max(np.max(chk_feas_1), np.max(chk_feas_2)),
+        'status': O['subprob'].status,
+    })
 
-    # Populate output struct with convergence data
     O['converged'] = bool_conv
     O['conv_data'] = conv_data
 
     return O
+
 
 # Example usage
 if __name__ == "__main__":
