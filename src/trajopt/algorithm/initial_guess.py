@@ -26,7 +26,7 @@ def straight_line_initial_guess(params):
     ts_init             = np.cumsum(np.concatenate(([0], params['dts_init'])))
 
     # Initial state
-    zs_init             = np.array([np.linspace(params['zi'][i], params['zf'][i], params['N']) for i in range(params['n'])])
+    zs_init             = np.array([np.linspace(params['zi'][i], params['zf'][i], params['N']) for i in range(params['n'])]).T
 
     # Initial control
     us_init             = np.zeros((params['N'],params['m']))

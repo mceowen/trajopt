@@ -190,7 +190,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['m']         = 3
 
     # Time of flight
-    params['T_init']    = 10.
+    params['T_init']    = 5.
 
     # Define Cost Function
     params['cost']      = lambda t, z, u: np.dot(np.transpose(u), u) 
@@ -232,7 +232,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     # Boundary Conditions
     #====================
     # initial conditions
-    params['z0s']           = np.array([0,0,0.5,0,0,0])
+    params['z0s']           = np.array([0,0,5,0,0.5,0])
 
     # equality initial conditions
     params['zi']            = params['nondim']['M_state_d2nd'] @ params['z0s']
@@ -255,7 +255,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     # no state constraints
     params['z_min']         = np.array([0, 0, 0.25])
     params['z_min_idx']     = np.arange(0,3)
-    params['z_max']         = np.array([12, 12, 0.75])
+    params['z_max']         = np.array([12, 12, 10])
     params['z_max_idx']     = np.arange(0,3)
 
     params['u_norm_min']    = 0.21 # [N]
@@ -284,7 +284,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
         # need to manually set the left-hand side vector to a column vector for multiplacation to work
         params = guess.nonlinear_initial_guess(us_range, params)
     else:
-        params = guess.waypoint_initial_guess(params) 
+        params = guess.straight_line_initial_guess(params) 
         params['us_init'] =  np.tile(-params['ge'] * params['mass'], (params['N'], 1)) 
 
     if params['bools']['ctcs']:
@@ -669,8 +669,8 @@ def analytical_inequality_constraints(ts, zs, us, problem):
             fcn_all[k, n_path:n_path + n_nfz] = P_nfz
 
             dPdz_nfz = np.zeros((n_nfz, n))
-            dPdz_nfz[:, 0] = 2 * (rx_k - xc)
-            dPdz_nfz[:, 1] = 2 * (ry_k - yc)
+            dPdz_nfz[:, 0] = - 2 * (rx_k - xc)
+            dPdz_nfz[:, 1] = - 2 * (ry_k - yc)
 
             dPdu_nfz = np.zeros((n_nfz, m))
 
