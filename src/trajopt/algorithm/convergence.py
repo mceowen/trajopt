@@ -209,12 +209,12 @@ def check_convergence_tolerance(problem, local_vars, O):
     
     dz       = O['dz_s']
     dcost    = O['cost'] - conv_data['cost_ref']
-    defect   = np.abs(tools.safe_array(conv_data['defect']))
-    vb_dyn   = np.abs(tools.safe_array(conv_data['vb_dyn']))
-    vb_path  = np.maximum(0.0, tools.safe_array(conv_data['vb_path']))
-    vb_nfz   = np.maximum(0.0, tools.safe_array(conv_data['vb_nfz']))
-    vb_aux   = np.maximum(0.0, tools.safe_array(conv_data['vb_aux']))
-    vb_term  = np.abs(tools.safe_array(conv_data['vb_term']))
+    defect   = conv_data['defect']
+    vb_dyn   = conv_data['vb_dyn']
+    vb_path  = conv_data['vb_path']
+    vb_nfz   = conv_data['vb_nfz']
+    vb_aux   = conv_data['vb_aux']
+    vb_term  = conv_data['vb_term']
 
     # --- Extract convergence criteria
     eps_state   = problem['params']['conv']['eps_state']
@@ -227,17 +227,17 @@ def check_convergence_tolerance(problem, local_vars, O):
     eps_dyn     = problem['params']['conv']['eps_dyn']
 
     W_state   = problem['params']['conv']['Wconv_state']
-    W_path    = tools.safe_array(problem['params']['conv']['Wconv_path'])
-    W_nfz     = tools.safe_array(problem['params']['conv']['Wconv_nfz'])
-    W_aux     = tools.safe_array(problem['params']['conv']['Wconv_aux'])
+    W_path    = problem['params']['conv']['Wconv_path']
+    W_nfz     = problem['params']['conv']['Wconv_nfz']
+    W_aux     = problem['params']['conv']['Wconv_aux']
     W_term    = problem['params']['conv']['Wconv_term']
     W_dyn     = problem['params']['conv']['Wconv_dyn']
     W_defect  = problem['params']['conv']['Wconv_defect']
 
     # --- Extract linear constraints
-    conv_path_nl = np.maximum(0.0, tools.safe_array(O['cnst_path'][problem['params']['path_idx']]))
-    conv_nfz_nl  = np.maximum(0.0, tools.safe_array(O['cnst_path'][problem['params']['nfz_idx']]))
-    conv_aux_nl  = np.maximum(0.0, tools.safe_array(O['cnst_path'][problem['params']['aux_idx']]))
+    conv_path_nl = np.maximum(0.0, O['cnst_path'][:, problem['params']['path_idx']]) if problem['params']['path_idx'].size > 0 else np.zeros((O['cnst_path'].shape[0], 0))
+    conv_nfz_nl  = np.maximum(0.0, O['cnst_path'][:, problem['params']['nfz_idx']])  if problem['params']['nfz_idx'].size  > 0 else np.zeros((O['cnst_path'].shape[0], 0))
+    conv_aux_nl  = np.maximum(0.0, O['cnst_path'][:, problem['params']['aux_idx']])  if problem['params']['aux_idx'].size  > 0 else np.zeros((O['cnst_path'].shape[0], 0))
 
     # === Optimality ===
     dz_array = tools.safe_val(dz, rows=N, cols=n)
