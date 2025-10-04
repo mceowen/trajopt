@@ -194,18 +194,7 @@ def nonlinear_aero(ts, zs, us, params, case_flag=None):
         zk = zs if N == 1 else zs[:, k]
         uk = us if N == 1 else us[:, k]
 
-        r, theta, phi, v, gamma, psi = zk
-
-        """#tk = ts[:, k]
-        tk = 
-        zk = zs[:,k]
-        uk = us[:,k]
-        r = zs[0,k]
-        theta = zs[1,k]
-        phi = zs[2,k]
-        v = zs[3,k]
-        gamma = zs[4,k]
-        psi = zs[5,k]"""
+        r, theta, phi, v, gamma, psi = zk[:6]
 
         mass_and_thrust = mass_thrust(tk, zk, uk, params)
         mass = mass_and_thrust['mass']
@@ -215,7 +204,7 @@ def nonlinear_aero(ts, zs, us, params, case_flag=None):
             alpha_deg = np.rad2deg(alpha[k]);
 
         elif case_flag in (2, 3):
-            alpha[k] = us[1, k]
+            alpha[k] = us[1] if N == 1 else us[1, k]
             alpha_deg = np.rad2deg(alpha[k])
 
         # COEFFICIENTS
@@ -242,13 +231,23 @@ def nonlinear_aero(ts, zs, us, params, case_flag=None):
 
     """aero = np.vstack((L, D, Cl, Cd))"""
 
-    return {
-        'L': L,
-        'D': D,
-        'Cl': Cl,
-        'Cd': Cd,
-        'alpha': alpha
-    }
+    if N == 1:
+        return {
+            'L': float(L[0]),
+            'D': float(D[0]),
+            'Cl': float(Cl[0]),
+            'Cd': float(Cd[0]),
+            'alpha': float(alpha[0])
+        }
+    
+    else: 
+        return {
+            'L': L,
+            'D': D,
+            'Cl': Cl,
+            'Cd': Cd,
+            'alpha': alpha
+        }
     
 
 # this is the vtol_wang nonlinear aero
@@ -393,15 +392,34 @@ def system_dynamics(ts, zs, us, params, t_vec=None):
     r, theta, phi, v, gamma, psi = zs
     
     # Extract controls 
-    if t_vec is None:
+    """if t_vec is None:
         us2 = us
     else:
         us2 = np.zeros(m)
         for i in range(m-1):
-            us2[i] = np.interp(ts, t_vec, us[:, i])
+            us2[i] = np.interp(ts, t_vec, us[:, i])"""
+    
+    #us2 = us
 
+    """
     # Extract bank angle
-    sigma   = us2 if isinstance(us2, float) else us2[0]
+    sigma   = us2 if isinstance(us2, float) else us2[0]"""
+
+    #Extract controls 
+    if np.ndim(us) == 0:                # scalar (unlikely here)
+        us2 = np.array([us])
+    elif np.ndim(us) == 1:              # single control vector (σ, α)
+        us2 = us
+    elif np.ndim(us) == 2:              # full trajectory (m, N)
+        # pick the closest column for current t
+        k = np.argmin(np.abs(t_vec - ts)) if t_vec is not None else 0
+        us2 = us[:, k]
+    else:
+        raise ValueError("Unexpected control input shape for us")
+
+    # Now safely extract individual controls
+    sigma = float(us2[0])   # bank angle
+    alpha = float(us2[1])   # angle of attack
 
     # Determine lift and drag coefficients from velocity
     aero    = nonlinear_aero(ts, zs, us2, params)
@@ -443,6 +461,7 @@ def system_dynamics(ts, zs, us, params, t_vec=None):
     # v_dot
     xDot[3]     = (Tf / mass) * ca - D - Kg * sg / r**2 + Om**2 * r * cp * (sg * cp - cg * sp * cps)
     # gamma_dot
+    print("DEBUG types:", type(alpha), type(L), type(D), type(sigma), type(mass))
     xDot[4]     = (1 / v) * ( ((Tf / mass) * sa + L) * cs + (v**2 - Kg / r) * cg / r ) + 2 * Om * cp * sps + Om**2 * r * (1 / v) * cp * (cg * cp + sg * cps * sp)
     # psi_dot
     xDot[5]     = (1 / v) * ( ((Tf / mass) * sa + L) * ss / cg + v**2 * cg * sps * tp / r ) - 2 * Om * (tg * cps * cp - sp) + Om**2 * r * (1 / (v * cg)) * sps * sp * cp
