@@ -56,8 +56,8 @@ def config_main():
     config['params']['bools'] = {
         'flag_nfz': 1,          # 0, 1, 2
         'flag_autotune': '0',   # '0', '1', '2', '3', 'al-scvx'
-        'free_final_time': 0,   # 0, 1
-        'equal_dt': 0,          # 0, 1
+        'free_final_time': 1,   # 0, 1
+        'equal_dt': 1,          # 0, 1
         'buff_dyn': 'term',     # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
         'buff_dyn_dual': 'none',# 'l1', 'none'
         'ctcs': 0,              # 0, 1

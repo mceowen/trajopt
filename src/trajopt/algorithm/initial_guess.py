@@ -146,7 +146,8 @@ def ctcs_initial_guess(params):
     dict: Updated params with initial guesses for the state vector.
     """
     # Extend zs_init with zeros for the inequality constraints
-    params['zs_init'] = np.vstack([params['zs_init'], np.zeros((params['n_ineq'], params['N']))])
+    params['zs_init'] = np.hstack([params['zs_init'], np.zeros((params['zs_init'].shape[0], params['n_ineq']))])
+
 
     return params
 

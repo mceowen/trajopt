@@ -493,81 +493,73 @@ def baseline_subprob_constraints(problem,local_vars):
 
 
 def baseline_subprob_cost(problem, local_vars):
-    dz              = local_vars['sol_vars']["dz"]
-    du              = local_vars['sol_vars']["du"]
-    dt              = local_vars['sol_vars']["dt"]
-    vb_path         = local_vars['sol_vars']["vb_path"]
-    vb_nfz          = local_vars['sol_vars']["vb_nfz"]
-    vb_aux          = local_vars['sol_vars']["vb_aux"]
-    vb_term         = local_vars['sol_vars']["vb_term"]
-    vb_dyn_plus     = local_vars['sol_vars']["vb_dyn_plus"]
-    vb_dyn_minus    = local_vars['sol_vars']["vb_dyn_minus"]
-    vb_plus         = local_vars['sol_vars']["vb_plus"]
-    vb_minus        = local_vars['sol_vars']["vb_minus"]
+    dz          = local_vars['sol_vars']["dz"]
+    du          = local_vars['sol_vars']["du"]
+    dt          = local_vars['sol_vars']["dt"]
+    vb_path     = local_vars['sol_vars']["vb_path"]
+    vb_nfz      = local_vars['sol_vars']["vb_nfz"]
+    vb_aux      = local_vars['sol_vars']["vb_aux"]
+    vb_term     = local_vars['sol_vars']["vb_term"]
+    vb_dyn_plus = local_vars['sol_vars']["vb_dyn_plus"]
+    vb_dyn_minus= local_vars['sol_vars']["vb_dyn_minus"]
+    vb_plus     = local_vars['sol_vars']["vb_plus"]
+    vb_minus    = local_vars['sol_vars']["vb_minus"]
 
-    params          = local_vars["params"]
-    N               = params["N"]
-    n               = params["n"]
-    solver_type     = params.get("solver_type", "osqp")
-    flag_autotune   = local_vars['bools']["flag_autotune"]
-    buff_dyn        = local_vars['bools']["buff_dyn"]
+    params        = local_vars["params"]
+    N             = params["N"]
+    solver_type   = params.get("solver_type", "osqp")
+    flag_autotune = local_vars['bools']["flag_autotune"]
+    buff_dyn      = local_vars['bools']["buff_dyn"]
 
-    # TRUE COST (vectorized)
-    dcostdz = local_vars["dcostdz"]
-    dcostdu = local_vars["dcostdu"]
-    cost    = local_vars["cost"]
+    dcostdz = local_vars["dcostdz"][:,0,:]    # (N,n)
+    dcostdu = local_vars["dcostdu"][:,0,:]    # (N,m)
+    cost    = local_vars["cost"][:,0,0]       # (N,)
     w_cost  = local_vars["w_cost"]
 
-    TRUE_COST = w_cost * cp.sum([
-                    np.squeeze(dcostdz[k, 0, :]) @ dz[k] +
-                    np.squeeze(dcostdu[k, 0, :]) @ du[k] +
-                    np.squeeze(cost[k, 0, 0])
-                    for k in range(N)
-                ])        
+    # ---- TRUE COST (vectorized) ----
+    # Stack along first dimension then use cp.sum directly.
+    TRUE_COST = w_cost * (
+        cp.sum(cp.multiply(dcostdz, dz)) +
+        cp.sum(cp.multiply(dcostdu, du)) +
+        cp.sum(cost)
+    )
 
-    # TRUST REGION COST (remains compact)
-    TR_COST = cp.sum([
-                local_vars["wtr_z"] * cp.sum_squares(dz[k]) +
-                local_vars["wtr_u"] * cp.sum_squares(du[k])
-            for k in range(N)
-            ])
+    # ---- TRUST REGION COST (vectorized) ----
+    TR_COST = (
+        local_vars["wtr_z"] * cp.sum(cp.sum_squares(dz)) +
+        local_vars["wtr_u"] * cp.sum(cp.sum_squares(du))
+    )
 
-    # VIRTUAL COST
+    # ---- VIRTUAL COST ----
     VIRTUAL_COST = 0.0
     if flag_autotune in {'0', '2', '3', 'al-scvx'}:
-        VIRTUAL_COST += cp.quad_form(vb_term, np.diag(local_vars["W_term"]))
+        W_term = np.diag(local_vars["W_term"])
+        VIRTUAL_COST += cp.quad_form(vb_term, W_term)
 
         if buff_dyn == 'l1':
             for vb_mat, W in zip([vb_path, vb_nfz, vb_aux],
                                  [local_vars["W_path"], local_vars["W_nfz"], local_vars["W_aux"]]):
                 if vb_mat.shape[0] > 0:
-                    VIRTUAL_COST += cp.sum([
-                        np.max(W[k]) * cp.norm(vb_mat[k], 1)
-                        for k in range(N)
-                    ])
+                    weights = np.max(W, axis=1)
+                    VIRTUAL_COST += cp.sum(cp.multiply(weights, cp.norm(vb_mat, 1, axis=1)))
 
             if vb_dyn_plus.shape[0] > 0:
-                VIRTUAL_COST += cp.sum([
-                    np.max(local_vars["W_dyn"][k]) *
-                    cp.norm(vb_dyn_plus[k] - vb_dyn_minus[k], 1)
-                    for k in range(N - 1)
-                ])
-        else:  # Quadratic penalties
+                w_dyn = np.max(local_vars["W_dyn"], axis=1)
+                diff  = vb_dyn_plus - vb_dyn_minus
+                VIRTUAL_COST += cp.sum(cp.multiply(w_dyn, cp.norm(diff, 1, axis=1)))
+
+        else:
             for vb_mat, W in zip([vb_path, vb_nfz, vb_aux],
                                  [local_vars["W_path"], local_vars["W_nfz"], local_vars["W_aux"]]):
                 if vb_mat.shape[1] > 0:
-                    VIRTUAL_COST += cp.sum([
-                        cp.quad_form(vb_mat[k], np.diag(W[k].flatten(order='C')))
-                        for k in range(N)
-                    ])
+                    W_diag = np.array([np.diag(Wk.flatten(order='C')) for Wk in W])
+                    # Vectorized quad_form equivalent: sum_i (x_i.T * D_i * x_i)
+                    VIRTUAL_COST += cp.sum(cp.sum(cp.multiply(vb_mat**2, np.array([np.diag(Wi) for Wi in W_diag]))))
 
             if buff_dyn == 'l2' and vb_dyn_plus.shape[0] > 0:
-                VIRTUAL_COST += cp.sum([
-                    cp.quad_form(
-                        vb_dyn_plus[k] - vb_dyn_minus[k],
-                        np.diag(local_vars["W_dyn"][k].flatten(order='C'))
-                    ) for k in range(N - 1)
-                ])
+                diff = vb_dyn_plus - vb_dyn_minus
+                W_dyn = np.array([np.diag(Wk.flatten(order='C')) for Wk in local_vars["W_dyn"]])
+                VIRTUAL_COST += cp.sum(cp.sum(cp.multiply(diff**2, np.array([np.diag(Wi) for Wi in W_dyn]))))
             elif buff_dyn == 'quad-1':
                 if vb_plus.shape[0] > 0:
                     VIRTUAL_COST += cp.quad_form(vb_plus[0], np.diag(local_vars["W_plus"].flatten(order='C')))
@@ -577,49 +569,42 @@ def baseline_subprob_cost(problem, local_vars):
                 if vb_plus.shape[0] > 0:
                     VIRTUAL_COST += cp.sum([
                         cp.quad_form(vb_plus[k], np.diag(local_vars["W_plus"][k]))
-                        for k in range(N)
+                        for k in range(vb_plus.shape[0])
                     ])
                 if vb_minus.shape[0] > 0:
                     VIRTUAL_COST += cp.sum([
                         cp.quad_form(vb_minus[k], np.diag(local_vars["W_minus"][k]))
-                        for k in range(N)
+                        for k in range(vb_minus.shape[0])
                     ])
 
-    # DUAL COST
+    # ---- DUAL COST ----
     DUAL_COST = 0.0
     if flag_autotune in {'1', '3', 'al-scvx'}:
-        if params["n_ineq"] > 0:
-            DUAL_COST += cp.sum([
-                cp.sum(cp.multiply(
-                    cp.hstack([v for v in [vb_path[k], vb_nfz[k], vb_aux[k]] if v.shape[0] > 0]),
-                    cp.hstack([d for v, d in zip(
+        n_ineq = params["n_ineq"]
+        n_eq   = params["n_eq"]
+        n_term = params["n_term"]
+
+        if n_ineq > 0:
+            for k in range(N):
+                stack_v = cp.hstack([v for v in [vb_path[k], vb_nfz[k], vb_aux[k]] if v.shape[0] > 0])
+                if stack_v.shape[0] > 0:
+                    duals = cp.hstack([d for v, d in zip(
                         [vb_path[k], vb_nfz[k], vb_aux[k]],
                         [local_vars["dual_path"][k], local_vars["dual_nfz"][k], local_vars["dual_aux"][k]]
                     ) if v.shape[0] > 0])
-                ))
-                for k in range(N)
-                if any(v.shape[0] > 0 for v in [vb_path[k], vb_nfz[k], vb_aux[k]])
-            ])
+                    DUAL_COST += cp.sum(cp.multiply(stack_v, duals))
 
-        if params["n_eq"] > 0:
-            DUAL_COST += cp.sum([
-                cp.sum(cp.multiply(vb_dyn_plus[k] - vb_dyn_minus[k], local_vars["dual_dyn"][k])) +
-                local_vars["dual_plus"][k] @ vb_plus[k] +
-                local_vars["dual_minus"][k] @ vb_minus[k]
-                for k in range(N - 1)
-            ])
+        if n_eq > 0:
+            diff = vb_dyn_plus - vb_dyn_minus
+            DUAL_COST += cp.sum(cp.multiply(diff, local_vars["dual_dyn"][:N-1]))
+            DUAL_COST += cp.sum(cp.multiply(vb_plus[:N-1], local_vars["dual_plus"][:N-1]))
+            DUAL_COST += cp.sum(cp.multiply(vb_minus[:N-1], local_vars["dual_minus"][:N-1]))
 
-        if params["n_term"] > 0:
+        if n_term > 0:
             DUAL_COST += local_vars["dual_term"].T @ vb_term
 
-    # TOTAL COST
-    PTR_COST = (
-        cp.sum(cp.vec(TRUE_COST, order='F')) +
-        0.5 * cp.sum(cp.vec(VIRTUAL_COST, order='F')) +
-        DUAL_COST +
-        TR_COST
-    )
-
+    # ---- TOTAL COST ----
+    PTR_COST = TRUE_COST + 0.5 * VIRTUAL_COST + DUAL_COST + TR_COST
     return PTR_COST
 
 
@@ -796,39 +781,6 @@ def display_baseline_subprob_status(problem, local_vars, O):
 ### UNIT TEST
 
 if __name__ == "__main__":
-    # Step 1: Define configuration
-    config = quad3dof.config_main()
-
-    # Step 2: Create the full problem dictionary using ocp()
-    problem = quad3dof.ocp(config)
-
-    # Step 3: Inject the first SCvx iteration into problem['I']
-    N = problem['params']['N']
-
-    problem["I"] = [{
-        "iter_num": 0,
-        "zs_ref": problem["params"]["zs_init"],
-        "us_ref": problem["params"]["us_init"],
-        "dts_ref": np.full(N - 1, problem["params"]["T_init"] / (N - 1)),
-        "ts_ref": np.linspace(0, problem["params"]["T_init"], N),
-        "conv_data": {
-            "vb_path": np.zeros((N, problem["params"]["n_path"])),
-            "vb_nfz": np.zeros((N, problem["params"]["n_nfz"])),
-            "vb_aux": np.zeros((N, problem["params"].get("n_aux", 0))),
-            "vb_dyn": np.zeros((N-1, problem["params"]["nz"])),
-            "vb_term": np.zeros((problem["params"]["n_term"] + problem["params"]["n_term_ineq"], 1)),
-        },
-        "weights": problem["params"]["weights"]
-    }]
-
-    # Step 5: Solve
-    output = solve_subproblem(problem)
-
-    # Step 6: Print summary
-    print("Solve completed.")
-    print("Final cost:", output.get("cost", "N/A"))
-    print("Final state (zs):", output.get("zs", "N/A")[:, -1])
-    print("Final control (us):", output.get("us", "N/A")[:, -1])
-    print("Ts:", output.get("Ts", "N/A"))
+    pass
 
 
