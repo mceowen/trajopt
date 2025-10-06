@@ -148,7 +148,7 @@ def nonlinear_initial_guess(us_range, params):
     sol = solve_ivp(
         get_system_dynamics(params),
         [ts_init[0], ts_init[-1]],
-        params['z0s'],
+        params['zi'],
         args=(us_init, params, ts_init),
         t_eval=ts_init,
         **odesettings

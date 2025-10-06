@@ -62,7 +62,7 @@ def config_main():
         'buff_dyn_dual': 'none',# 'l1', 'none'
         'ctcs': 0,              # 0, 1
         'ode_fixed_dt': 0,      # 0, 1 ,
-        'nondim': 0,            # 0, 1
+        'nondim': 1,            # 0, 1
     }
 
     # todo: clean this
@@ -199,47 +199,49 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     # Define Cost Function
     params['cost']      = lambda t, z, u: np.dot(np.transpose(u), u) 
 
+    ### Vehicle Parameters ###
+    params['mass']          = 0.35;                 # [kg], quadrotor mass
+    params['theta_max']     = np.deg2rad(100.);     # [rad], maximum tilt angle
 
     #======================
     # Path /NFZ constraints
     #======================
     # no fly zones, specified by position and radius [rad]
     if params['bools']['flag_nfz'] == 1:
-        xc = np.array([5])
-        yc = np.array([4])
-        rc = np.array([2])
+        xc_dim = np.array([5]) 
+        yc_dim = np.array([4])
+        rc_dim = np.array([2])
     elif params['bools']['flag_nfz'] == 2:
-        xc = np.array([2.5, 5,  2.5, 5.5,  8,  5.5])  # 5
-        yc = np.array([2,   2.5,  5, 5.25, 5.5, 8])   # 4
-        rc = np.ones(xc.size)  # 2, 1
+        xc_dim = np.array([2.5, 5,  2.5, 5.5,  8,  5.5]) # 5
+        yc_dim = np.array([2,   2.5,  5, 5.25, 5.5, 8]) # 4
+        rc_dim = np.ones(xc_dim.size)# 2, 1
     else:
-        xc = np.array([])
-        yc = np.array([])
-        rc = np.array([])
+        xc_dim = np.array([])
+        yc_dim = np.array([])
+        rc_dim = np.array([])
 
-    params.setdefault('obs', {})['posc'] = np.array([xc, yc]) # xc and yc may be vectors
-    params['obs']['rc']     = rc
-
-    params['nfz_idx']       = np.arange(0, xc.size)
+    params['nfz_idx']       = np.arange(0, xc_dim.size)
     params['n_nfz']         = len(params['nfz_idx'])
-
-
-    ### Vehicle Parameters ###
-    params['mass']          = 0.35;                 # [kg], quadrotor mass
-    params['theta_max']     = np.deg2rad(100.);     # [rad], maximum tilt angle
 
     ### Set dim/nondim params based on flag ###
     # scaling values for nondim
     params                  = set_nondim_params(params)
 
+    xc = xc_dim / params['nondim']['nd']
+    yc = yc_dim / params['nondim']['nd']
+    rc = rc_dim / params['nondim']['nd']
+
+    params.setdefault('obs', {})['posc'] = np.array([xc, yc]) # xc and yc may be vectors
+    params['obs']['rc']     = rc
+
     #====================
     # Boundary Conditions
     #====================
     # initial conditions
-    params['z0s']           = np.array([0,0,5,0,0.5,0])
+    params['z0_dim']           = np.array([0,0,5,0,0.5,0])
 
     # equality initial conditions
-    params['zi']            = params['nondim']['M_state_d2nd'] @ params['z0s']
+    params['zi']            = params['nondim']['M_state_d2nd'] @ params['z0_dim']
     params['zi_idx']        = np.arange(0, params['n'])
 
     # inequality initial conditions
@@ -250,22 +252,22 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['zf_idx']        = np.arange(0,params['n'])
 
     # control boundary conditions
-    params['ui']            = -params['ge']*params['mass']
-    params['uf']            = -params['ge']*params['mass']
+    params['ui']            = -params['ge']*params['mass'] / params['nondim']['nf']
+    params['uf']            = -params['ge']*params['mass'] / params['nondim']['nf']
 
     #==============================
     # Control and state constraints
     #==============================
     # no state constraints
-    params['z_min']         = np.array([0, 0, 0.25])
+    params['z_min']         = np.array([0, 0, 0.25]) / params['nondim']['nd']
     params['z_min_idx']     = np.arange(0,3)
-    params['z_max']         = np.array([12, 12, 10])
+    params['z_max']         = np.array([12, 12, 10]) / params['nondim']['nd']
     params['z_max_idx']     = np.arange(0,3)
 
-    params['u_norm_min']    = 0.21 # [N]
-    params['u_norm_max']    = 8.12 # [N]
+    params['u_norm_min']    = 0.21 / params['nondim']['nf']
+    params['u_norm_max']    = 8.12 / params['nondim']['nf']
 
-    params['udot_max']      = 5*np.ones(3) # [N/s]
+    params['udot_max']      = 5*np.ones(3) / (params['nondim']['nf'] / params['nondim']['nt'])# [N/s]
     params['udot_max_idx']  = np.arange(0,3)
 
 
@@ -284,17 +286,14 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     # Initialize trajectory (initial guess)
     #======================================
     if params['bools']['free_final_time'] and (params['bools'].get('buff_dyn')=='term'):
-        us_range = np.ones((2, 1)) @ (
-                    (-params['ge'].reshape(1, -1) * params['mass'])
-                    + np.array([0.08, 0.08, 0.0])
-                    )
+        us_range = np.ones((2, 1)) @ ((-params['ge'].reshape(1, -1) * params['mass'])+ np.array([0.08, 0.08, 0.0])) / params['nondim']['nf']
         
         # need to manually set the left-hand side vector to a column vector for multiplacation to work
         params              = guess.nonlinear_initial_guess(us_range, params)
 
     else:
         params              = guess.straight_line_initial_guess(params) 
-        params['us_init']   =  np.tile(-params['ge'] * params['mass'], (params['N'], 1)) 
+        params['us_init']   =  np.tile(-params['ge'] * params['mass'], (params['N'], 1)) / params['nondim']['nf']
 
     if params['bools']['ctcs']:
         params              = guess.ctcs_initial_guess(params)
@@ -331,7 +330,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
             if 'wbuff' not in params['weights']:
                 wbuff = 1e2
                 if str(params['bools']['flag_autotune']) == '0':
-                    w_nfz   = wbuff / params['weights']['w_fac_N']
+                    w_nfz   = 1e2 * wbuff / params['weights']['w_fac_N']
                     w_dyn   = 1e5 * wbuff / params['weights']['w_fac_Nm1']
                     w_term  = 1e2 * wbuff
                 else:
@@ -391,8 +390,8 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['eps_ctcs']                                          = eps_ctcs
 
     ### State convergence ###
-    eps_d_state             = 1e-1  # [m]
-    eps_v_state             = 1e0   # [m/s]
+    eps_d_state             = 1e-2  # [m]
+    eps_v_state             = 1e-2   # [m/s]
     params['conv']['setup']['eps_state']                        = np.concatenate((eps_d_state * np.ones(params['n'] // 2), 
                                                                     eps_v_state * np.ones(params['n'] // 2)))
 
@@ -432,8 +431,8 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['conv']['setup']['eps_defect']                       = np.array([1e-2])
 
     ### Dynamics convergence ###
-    eps_d_dyn               = 1e-1  # [m]
-    eps_v_dyn               = 1e0   # [m/s]
+    eps_d_dyn               = 1e-3  # [m]
+    eps_v_dyn               = 1e-3   # [m/s]
     params['conv']['setup']['eps_dyn']                          = np.concatenate((eps_d_dyn * np.ones(params['n'] // 2), 
                                                                     eps_v_dyn * np.ones(params['n'] // 2)))
 
@@ -464,8 +463,8 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
     # extract constant param values
     m       = int( params['m'] )
     n       = int( params['n'] )
-    mass    = params['mass']
-    ge      = params['ge']
+    mass    = params['mass'] / params['nondim']['nm']
+    ge      = params['ge'] / params['nondim']['na']
 
     # extract states
     r = zs[0:3]
@@ -499,7 +498,7 @@ def analytical_linsys(ts, zs, us, problem):
     params  = problem.get("params", problem)
     n       = params["n"]
     m       = params["m"]
-    mass    = params["mass"]
+    mass    = params["mass"] / params['nondim']['nm']
 
     # Sanity check for vector shapes
     zs = np.asarray(zs).flatten()
@@ -707,7 +706,7 @@ def custom_inputs(problem,local_vars):
     u_norm_min  = problem["params"]["u_norm_min"]
     u_norm_max  = problem["params"]["u_norm_max"]
     theta_max   = problem["params"]["theta_max"]
-    mass        = problem["params"]["mass"]
+    mass        = problem["params"]["mass"] / problem['params']['nondim']['nm']
     m           = problem["params"]["m"]
     ehat_u      = np.eye(m)
     u1          = problem["params"]["ui"]
@@ -803,9 +802,9 @@ def set_nondim_params(params): # TODO: Test
         nt_inv = 1 / nt
         na = nv / nt
         nm = 1
-        nm_dot = 1
-        nf = 1
-        np_ineq = np.ones(n_nfz) * nd
+        nm_dot = nm / nt
+        nf = nm * na
+        np_ineq = np.ones(n_nfz) * nd**2
         ncost = nv
     else:
         # set dim params
