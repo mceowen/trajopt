@@ -105,33 +105,49 @@ def nonlinear_initial_guess(us_range, params):
     Generate a nonlinear initial guess for trajectory and control.
 
     Parameters:
-    us_range (numpy.ndarray): Range of control inputs.
-    params (dict): Dictionary containing parameters.
+        us_range (ndarray): 2×1 or 2×2 array giving control input range (min/max per axis)
+        params (dict): Parameter dictionary with fields 'N', 'T_init', 'nondim', 'z0s', etc.
 
     Returns:
-    dict: Updated params with initial guesses for trajectory and control.
+        dict: Updated params with initial guesses (zs_init: N×n, us_init: N×m)
     """
-    # Initialization trajectory
+
+    # ---- Time grid initialization ----
     params['dt_init'] = (params['T_init'] / (params['N'] - 1)) * np.ones(params['N'] - 1)
-    params['Ts_init'] = params['T_init'] / params['nondim']['nt']
+    params['Ts_init']  = params['T_init'] / params['nondim']['nt']
     params['dts_init'] = params['dt_init'] / params['nondim']['nt']
     ts_init = np.cumsum(np.concatenate(([0], params['dts_init'])))
-    
-    # Initial control
-    us_init = np.array([np.linspace(us_range[i, 0], us_range[i, 1], params['N']) for i in range(len(us_range))])
-    
-    # Propagate initial trajectory from nonlinear simulation
-    odesettings = {'atol': 1E-12, 'rtol': 1E-12}
-    # sol = solve_ivp(lambda t, x: system_dynamics(t, x, us_init, params, ts_init), [ts_init[0], ts_init[-1]], params['z0s'], t_eval=ts_init, **odesettings)
-    sol = solve_ivp(system_dynamics, [ts_init[0], ts_init[-1]], params['z0s'], args=(us_init, params, ts_init),t_eval=ts_init, **odesettings)
 
-    zs_init = sol.y
-    
-    # Create initial state and control vector
+    # ---- Control initialization ----
+    # us_range is expected to have shape (m, 2): [[u1_min, u1_max], [u2_min, u2_max], ...]
+    m = us_range.shape[1]
+    N = params['N']
+
+    # Create N×m matrix: each column is a linspace for that control dimension
+    us_init = np.zeros((N, m))
+    for i in range(m):
+        umin, umax = us_range[0,i], us_range[1,i]
+        us_init[:, i] = np.linspace(umin, umax, N)
+
+    # ---- Propagate initial trajectory ----
+    odesettings = {'atol': 1e-12, 'rtol': 1e-12}
+    sol = solve_ivp(
+        system_dynamics,
+        [ts_init[0], ts_init[-1]],
+        params['z0s'],
+        args=(us_init, params, ts_init),
+        t_eval=ts_init,
+        **odesettings
+    )
+
+    # sol.y is (n, N) → transpose to (N, n)
+    zs_init = sol.y.T
+
+    # ---- Store results ----
     params['ts_init'] = ts_init
     params['zs_init'] = zs_init
     params['us_init'] = us_init
-    
+
     return params
 
 

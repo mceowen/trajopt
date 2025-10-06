@@ -679,10 +679,10 @@ def baseline_subprob_outputs(problem, local_vars, subprob):
     # Primal recovered solution
     O["dz_s"]           = dz_val
     O["du_s"]           = du_val
-    O['dt_val']         = dt_val
-    O["zs"]             = tools.safe_val(dz, rows=n, cols=N) + zs_ref
-    O["us"]             = tools.safe_val(du, rows=m, cols=N) + us_ref
-    O["dts"]            = np.squeeze( tools.safe_val(dt) )  + dts_ref
+    O['dt_s']           = dt_val
+    O["zs"]             = tools.safe_val(dz_val, rows=N, cols=n) + zs_ref
+    O["us"]             = tools.safe_val(du_val, rows=N, cols=m) + us_ref
+    O["dts"]            = np.squeeze( tools.safe_val(dt_val) )  + dts_ref
     O["ts"]             = np.concatenate(([0], np.cumsum(O["dts"])))
     O["Ts"]             = np.sum(O["dts"])
 

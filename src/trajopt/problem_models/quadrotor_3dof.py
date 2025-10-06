@@ -56,7 +56,7 @@ def config_main():
     config['params']['bools'] = {
         'flag_nfz': 1,          # 0, 1, 2
         'flag_autotune': '0',   # '0', '1', '2', '3', 'al-scvx'
-        'free_final_time': 1,   # 0, 1
+        'free_final_time': 0,   # 0, 1
         'equal_dt': 1,          # 0, 1
         'buff_dyn': 'term',     # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
         'buff_dyn_dual': 'none',# 'l1', 'none'
@@ -221,8 +221,8 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
 
 
     ### Vehicle Parameters ###
-    params['mass']          = 0.35;                  # [kg], quadrotor mass
-    params['theta_max']     = np.deg2rad(100.);  # [rad], maximum tilt angle
+    params['mass']          = 0.35;                 # [kg], quadrotor mass
+    params['theta_max']     = np.deg2rad(100.);     # [rad], maximum tilt angle
 
     ### Set dim/nondim params based on flag ###
     # scaling values for nondim
@@ -279,16 +279,21 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     #======================================
     # Initialize trajectory (initial guess)
     #======================================
-    if params['bools']['free_final_time'] and not params['bools']['buff_dyn']:
-        us_range = ( -params['ge'].reshape(-1,1) * params['mass'] ) @ np.ones((1, 2)) + np.array([0.08, 0.08, 0]).reshape(-1,1)
+    if params['bools']['free_final_time'] and (params['bools'].get('buff_dyn')=='term'):
+        us_range = np.ones((2, 1)) @ (
+                    (-params['ge'].reshape(1, -1) * params['mass'])
+                    + np.array([0.08, 0.08, 0.0])
+                    )
+        
         # need to manually set the left-hand side vector to a column vector for multiplacation to work
-        params = guess.nonlinear_initial_guess(us_range, params)
+        params              = guess.nonlinear_initial_guess(us_range, params)
+
     else:
-        params = guess.straight_line_initial_guess(params) 
-        params['us_init'] =  np.tile(-params['ge'] * params['mass'], (params['N'], 1)) 
+        params              = guess.straight_line_initial_guess(params) 
+        params['us_init']   =  np.tile(-params['ge'] * params['mass'], (params['N'], 1)) 
 
     if params['bools']['ctcs']:
-        params = guess.ctcs_initial_guess(params)
+        params              = guess.ctcs_initial_guess(params)
 
     #============================================
     # Optimization parameters and hyperparameters
