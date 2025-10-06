@@ -29,7 +29,7 @@ def config_main():
     # --- Set base defaults ---
     config['model_type']    = 'quadrotor_3dof'
     config['mission']       = config['model_type']
-    config['case_flag']     = 1  # 1: single integrator
+    config['case_flag']     = 1  # 1: double integrator
 
     config['bools'] = {
         'opt': 1,
@@ -54,16 +54,19 @@ def config_main():
     config['params']['N'] = 40
 
     config['params']['bools'] = {
-        'flag_nfz': 2,          # 0, 1, 2
-        'flag_autotune': '0',   # '0', '1', '2', '3', 'al-scvx'
-        'free_final_time': 0,   # 0, 1
+        'flag_nfz': 0,          # 0, 1, 2
+        'free_final_time': 1,   # 0, 1
         'equal_dt': 1,          # 0, 1
-        'buff_dyn': 'term',     # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
+        'flag_autotune': '0',   # '0', '1', '2', '3', 'al-scvx'
+        'buff_dyn': 'term',       # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
         'buff_dyn_dual': 'none',# 'l1', 'none'
         'ctcs': 0,              # 0, 1
         'ode_fixed_dt': 0,      # 0, 1 ,
         'nondim': 0,            # 0, 1
     }
+
+    # todo: clean this
+    config['params']['model_type'] = config['model_type']
 
     # --- Solver options - TODO:expand ---
     config['params']['solver_opts'] = {
@@ -176,11 +179,12 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     """
     # Initialize
     params = defaults.set_params_default(config)
-    params['case_flag']                = 1    # case1: bank angle only
-    params['bools']['auto_jac']        = 0    # (1=symbolic jacobians for dynamics, 0=analytical)
-    params['bools']['auto_jac_aero']   = 0    # (1=symbolic jacobians for aerodynamics, 0=analytical)
-    params['bools']['auto_jac_cnst']   = 0    # (1=symbolic jacobians for constraints, 0=analytical)
-    params['bools']['init_ctrl']       = 0
+    params['system']                    = 'quad3dof'
+    params['case_flag']                 = 1    # case1
+    params['bools']['auto_jac']         = 0    # (1=symbolic jacobians for dynamics, 0=analytical)
+    params['bools']['auto_jac_aero']    = 0    # (1=symbolic jacobians for aerodynamics, 0=analytical)
+    params['bools']['auto_jac_cnst']    = 0    # (1=symbolic jacobians for constraints, 0=analytical)
+    params['bools']['init_ctrl']        = 0
 
     # Physical constants
     params['ge']        = np.array([0, 0, -9.81]) # [m/s^2], grav accel at sea lvl
@@ -441,7 +445,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params = convergence.set_convergence_tolerance(params)
 
     # Iterations
-    params['conv']['iter_max']  = 15
+    params['conv']['iter_max']  = 20
 
     # Save variable names
     params['save_var_names']    = ['ts_opt', 'zs_opt', 'us_opt', 'params', 'O']
@@ -471,10 +475,7 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
     if t_vec is None:
         us2 = us
     else:
-        us2 = np.empty(m)
-        for i in range(m):
-            interp = interp1d(t_vec, us[i,:]) # does this work?
-            us2[i] = interp(ts)
+        us2 = np.array([np.interp(ts, t_vec, us[:, i]) for i in range(m)])
             
     # extract control
     T = us2

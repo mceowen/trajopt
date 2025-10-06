@@ -1,13 +1,27 @@
 import numpy as np
 from scipy.integrate import solve_ivp
+import importlib
 
-def system_dynamics(t, x, us_init, params, ts_init):
-    # This function should define the system dynamics
-    # Placeholder implementation - replace with actual dynamics
-    
-    # TODO: INCLUDE SPECIFIC DYNAMICS HERE
+#def system_dynamics(t, x, us_init, params, ts_init):
 
-    return np.zeros_like(x)
+def get_system_dynamics(params):
+    """
+    Dynamically load the correct system_dynamics() function
+    depending on the provided module flag.
+    """
+    # Map flag names to module paths
+    base_prefix = "trajopt.problem_models"
+    full_module = f"{base_prefix}.{params['model_type']}"
+
+    try:
+        module = importlib.import_module(full_module)
+    except ModuleNotFoundError as e:
+        raise ImportError(f"Could not import dynamics module '{full_module}'") from e
+
+    if not hasattr(module, "system_dynamics"):
+        raise AttributeError(f"Module '{full_module}' has no function 'system_dynamics'")
+
+    return module.system_dynamics
 
 def straight_line_initial_guess(params):
     """
@@ -132,7 +146,7 @@ def nonlinear_initial_guess(us_range, params):
     # ---- Propagate initial trajectory ----
     odesettings = {'atol': 1e-12, 'rtol': 1e-12}
     sol = solve_ivp(
-        system_dynamics,
+        get_system_dynamics(params),
         [ts_init[0], ts_init[-1]],
         params['z0s'],
         args=(us_init, params, ts_init),
