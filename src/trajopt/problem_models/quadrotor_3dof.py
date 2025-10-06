@@ -54,7 +54,7 @@ def config_main():
     config['params']['N'] = 40
 
     config['params']['bools'] = {
-        'flag_nfz': 0,          # 0, 1, 2
+        'flag_nfz': 2,          # 0, 1, 2
         'free_final_time': 1,   # 0, 1
         'equal_dt': 1,          # 0, 1
         'flag_autotune': '0',   # '0', '1', '2', '3', 'al-scvx'
@@ -194,7 +194,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['m']         = 3
 
     # Time of flight
-    params['T_init']    = 5.
+    params['T_init']    = 7.
 
     # Define Cost Function
     params['cost']      = lambda t, z, u: np.dot(np.transpose(u), u) 
