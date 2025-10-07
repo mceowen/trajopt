@@ -75,7 +75,7 @@ def set_convergence_tolerance(params):
     if n_nfz > 0:
         if len(params['conv']['setup']['eps_nfz']) == 1:
             eps_nfz     = params['conv']['setup']['eps_nfz'] * np.ones(n_nfz)
-            M_nfz_d2nd  = np.eye(n_nfz)
+            M_nfz_d2nd  = params['nondim']['M_nfz_d2nd']
             eps_nfz_nd  = M_nfz_d2nd @ eps_nfz
             eps_min_nfz = float(np.min(eps_nfz_nd))
         else:
