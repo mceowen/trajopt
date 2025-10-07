@@ -539,11 +539,11 @@ def baseline_subprob_cost(problem, local_vars):
         if buff_dyn == 'l1':
             for vb_mat, W in zip([vb_path, vb_nfz, vb_aux],
                                  [local_vars["W_path"], local_vars["W_nfz"], local_vars["W_aux"]]):
-                if vb_mat.shape[0] > 0:
+                if vb_mat.shape[1] > 0:
                     weights = np.max(W, axis=1)
                     VIRTUAL_COST += cp.sum(cp.multiply(weights, cp.norm(vb_mat, 1, axis=1)))
 
-            if vb_dyn_plus.shape[0] > 0:
+            if vb_dyn_plus.shape[1] > 0:
                 w_dyn = np.max(local_vars["W_dyn"], axis=1)
                 diff  = vb_dyn_plus - vb_dyn_minus
                 VIRTUAL_COST += cp.sum(cp.multiply(w_dyn, cp.norm(diff, 1, axis=1)))
@@ -556,25 +556,25 @@ def baseline_subprob_cost(problem, local_vars):
                     # Vectorized quad_form equivalent: sum_i (x_i.T * D_i * x_i)
                     VIRTUAL_COST += cp.sum(cp.sum(cp.multiply(vb_mat**2, np.array([np.diag(Wi) for Wi in W_diag]))))
 
-            if buff_dyn == 'l2' and vb_dyn_plus.shape[0] > 0:
+            if buff_dyn == 'l2' and vb_dyn_plus.shape[1] > 0:
                 diff = vb_dyn_plus - vb_dyn_minus
                 W_dyn = np.array([np.diag(Wk.flatten(order='C')) for Wk in local_vars["W_dyn"]])
                 VIRTUAL_COST += cp.sum(cp.sum(cp.multiply(diff**2, np.array([np.diag(Wi) for Wi in W_dyn]))))
             elif buff_dyn == 'quad-1':
-                if vb_plus.shape[0] > 0:
+                if vb_plus.shape[1] > 0:
                     VIRTUAL_COST += cp.quad_form(vb_plus[0], np.diag(local_vars["W_plus"].flatten(order='C')))
-                if vb_minus.shape[0] > 0:
+                if vb_minus.shape[1] > 0:
                     VIRTUAL_COST += cp.quad_form(vb_minus[0], np.diag(local_vars["W_minus"].flatten(order='C')))
             elif buff_dyn == 'quad-2':
-                if vb_plus.shape[0] > 0:
+                if vb_plus.shape[1] > 0:
                     VIRTUAL_COST += cp.sum([
                         cp.quad_form(vb_plus[k], np.diag(local_vars["W_plus"][k]))
-                        for k in range(vb_plus.shape[0])
+                        for k in range(vb_plus.shape[1])
                     ])
-                if vb_minus.shape[0] > 0:
+                if vb_minus.shape[1] > 0:
                     VIRTUAL_COST += cp.sum([
                         cp.quad_form(vb_minus[k], np.diag(local_vars["W_minus"][k]))
-                        for k in range(vb_minus.shape[0])
+                        for k in range(vb_minus.shape[1])
                     ])
 
     # ---- DUAL COST ----
@@ -586,12 +586,12 @@ def baseline_subprob_cost(problem, local_vars):
 
         if n_ineq > 0:
             for k in range(N):
-                stack_v = cp.hstack([v for v in [vb_path[k], vb_nfz[k], vb_aux[k]] if v.shape[0] > 0])
-                if stack_v.shape[0] > 0:
+                stack_v = cp.hstack([v for v in [vb_path[k], vb_nfz[k], vb_aux[k]] if v.shape[1] > 0])
+                if stack_v.shape[1] > 0:
                     duals = cp.hstack([d for v, d in zip(
                         [vb_path[k], vb_nfz[k], vb_aux[k]],
                         [local_vars["dual_path"][k], local_vars["dual_nfz"][k], local_vars["dual_aux"][k]]
-                    ) if v.shape[0] > 0])
+                    ) if v.shape[1] > 0])
                     DUAL_COST += cp.sum(cp.multiply(stack_v, duals))
 
         if n_eq > 0:
