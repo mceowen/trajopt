@@ -171,7 +171,7 @@ def set_params_constraint_default(params):
 
     # --- Terminal conditions nondimensionalization ---
     # Get the diagonal of the source matrix
-    M_diag = np.diag(params['nondim']['M_state_d2nd'])
+    M_diag = np.diag(params['nondim']['M']['state']['d2nd'])
     # Stack selected diagonals
     selected = np.concatenate([
         M_diag[params['zf_idx']],
@@ -223,7 +223,7 @@ def set_params_constraint_default(params):
     params['eps_ctcs'] = 1e-5
 
     # --- Terminal nondimensionalization matrix ---
-    M_state_vec = np.diag(params['nondim']['M_state_d2nd'])
+    M_state_vec = np.diag(params['nondim']['M']['state']['d2nd'])
     zf_idx      = params.get('zf_idx', np.array([], dtype=np.int64))
     zf_min_idx  = params.get('zf_min_idx', np.array([], dtype=np.int64))
     zf_max_idx  = params.get('zf_max_idx', np.array([], dtype=np.int64))

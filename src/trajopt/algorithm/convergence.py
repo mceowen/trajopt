@@ -14,7 +14,7 @@ def set_convergence_tolerance(params):
         M_state_d2nd    = np.eye(n)
     else:
         eps_state       = params['conv']['setup']['eps_state']
-        M_state_d2nd    = params['nondim']['M_state_d2nd']
+        M_state_d2nd    = params['nondim']['M']['state']['d2nd']
 
     if params['bools']['ctcs'] and params['n_ineq'] > 0:
         eps_state = np.concatenate([
@@ -25,7 +25,7 @@ def set_convergence_tolerance(params):
         ])
         M_state_d2nd = np.diag(np.concatenate([
             np.diag(M_state_d2nd),
-            np.diag(params['nondim']['M_cnst_d2nd'])
+            np.diag(params['nondim']['M']['cnst']['d2nd'])
         ]))
     
     eps_state_nd                        = M_state_d2nd @ eps_state
@@ -39,7 +39,7 @@ def set_convergence_tolerance(params):
 
     # COST CONVERGENCE
     eps_cost                            = params['conv']['setup']['eps_cost']
-    M_cost_d2nd                         = params['nondim']['M_cost_d2nd']
+    M_cost_d2nd                         = params['nondim']['M']['cost']['d2nd']
     
     params['conv']['eps_cost']          = M_cost_d2nd * eps_cost
 
@@ -75,12 +75,12 @@ def set_convergence_tolerance(params):
     if n_nfz > 0:
         if len(params['conv']['setup']['eps_nfz']) == 1:
             eps_nfz     = params['conv']['setup']['eps_nfz'] * np.ones(n_nfz)
-            M_nfz_d2nd  = params['nondim']['M_nfz_d2nd']
+            M_nfz_d2nd  = params['nondim']['M']['nfz']['d2nd']
             eps_nfz_nd  = M_nfz_d2nd @ eps_nfz
             eps_min_nfz = float(np.min(eps_nfz_nd))
         else:
             eps_nfz     = params['conv']['setup']['eps_nfz']
-            M_nfz_d2nd  = params['nondim']['M_nfz_d2nd']
+            M_nfz_d2nd  = params['nondim']['M']['nfz']['d2nd']
             eps_nfz_nd  = M_nfz_d2nd @ eps_nfz
             eps_min_nfz = float(np.min(eps_nfz_nd))
     else:
@@ -151,7 +151,7 @@ def set_convergence_tolerance(params):
         M_defect_d2nd   = np.eye(n)
     else:
         eps_defect      = params['conv']['setup']['eps_defect']
-        M_defect_d2nd   = params['nondim']['M_state_d2nd']
+        M_defect_d2nd   = params['nondim']['M']['state']['d2nd']
 
     eps_defect_nd       = M_defect_d2nd @ eps_defect
     eps_min_defect      = float(np.min(eps_defect_nd))
@@ -168,7 +168,7 @@ def set_convergence_tolerance(params):
     # extract convergence tolerance with dimensional units and nondimensionalization factor
     if n_dyn > 0:
         eps_dyn     = params['conv']['setup']['eps_dyn']
-        M_dyn_d2nd  = params['nondim']['M_dyn_d2nd']
+        M_dyn_d2nd  = params['nondim']['M']['dyn']['d2nd']
     else:
         eps_dyn     = np.zeros((params['nz'], params['nz'])) # make sure we can mat-mult w/ M_dyn_d2nd and get a 1-by-nz
         M_dyn_d2nd  = np.zeros((1, params['nz']))
@@ -182,7 +182,7 @@ def set_convergence_tolerance(params):
         ])
         M_dyn_d2nd = np.diag(np.concatenate([
             np.diag(M_dyn_d2nd),
-            np.diag(params['nondim']['M_cnst_d2nd'])
+            np.diag(params['nondim']['M']['cnst']['d2nd'])
         ]))
     
     eps_dyn_nd                      = M_dyn_d2nd @ eps_dyn

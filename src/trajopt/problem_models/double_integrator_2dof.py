@@ -233,7 +233,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     # none
 
     # equality terminal conditions
-    params['zf']        = params['nondim']['M_state_d2nd'] @ np.array([10.,10.,0.,0.])
+    params['zf']        = params['nondim']['M']['state']['d2nd'] @ np.array([10.,10.,0.,0.])
     params['zf_idx']    = np.arange(0,params['n'])
 
     # control boundary conditions
@@ -735,21 +735,21 @@ def set_nondim_params(params): # TODO: Test
     if 'nondim' not in params: # initialize if it doesn't already exist
        params['nondim'] = {}
 
-    params['nondim']['M_state_d2nd']    = np.diag(nd_state).copy()
-    params['nondim']['M_ctrl_d2nd']     = np.diag(np.ones(m) / na).copy()
+    params['nondim']['M']['state']['d2nd']    = np.diag(nd_state).copy()
+    params['nondim']['M']['ctrl']['d2nd']     = np.diag(np.ones(m) / na).copy()
 
     params['nondim']['M_term_d2nd']     = np.diag(np.concatenate([
         nd_state[params['zf_idx']],
         nd_state[params['zf_min_idx']],
         nd_state[params['zf_max_idx']]
     ])).copy()
-    params['nondim']['M_cnst_d2nd']     = np.diag(np_ineq ** -1).copy()
-    params['nondim']['M_nfz_d2nd']      = np.diag(np_ineq[params['nfz_idx']] ** -1).copy()
+    params['nondim']['M']['cnst']['d2nd']     = np.diag(np_ineq ** -1).copy()
+    params['nondim']['M']['nfz']['d2nd']      = np.diag(np_ineq[params['nfz_idx']] ** -1).copy()
 
     nd_dyn                              = np.array([1/nv, 1/nv, 1/nv, 1/na, 1/na, 1/na])
-    params['nondim']['M_dyn_d2nd']      = np.diag(nd_dyn).copy()
+    params['nondim']['M']['dyn']['d2nd']      = np.diag(nd_dyn).copy()
 
-    params['nondim']['M_cost_d2nd']     = 1 / ncost
+    params['nondim']['M']['cost']['d2nd']     = 1 / ncost
 
     params['nondim']['nu_rad_ind']      = []
 

@@ -24,8 +24,8 @@ def nondim_vars(t, x, u, params):
     nx_ind          = np.arange(x.shape[0])
     nu_ind          = np.arange(u.shape[0])
     nu_rad_ind      = params['nondim']['nu_rad_ind']
-    M_state_d2nd    = params['nondim']['M_state_d2nd'][np.ix_(nx_ind, nx_ind)]
-    M_ctrl_d2nd     = params['nondim']['M_ctrl_d2nd'][np.ix_(nu_ind, nu_ind)]
+    M_state_d2nd    = params['nondim']['M']['state']['d2nd'][np.ix_(nx_ind, nx_ind)]
+    M_ctrl_d2nd     = params['nondim']['M']['ctrl']['d2nd'][np.ix_(nu_ind, nu_ind)]
     
     # Rescale time to physical units of seconds
     ts              = params['nondim']['nt'] * t
@@ -53,8 +53,8 @@ def dim_vars(ts, xs, us, params):
     nx_ind          = np.arange(params['n'])
     nu_ind          = np.arange(params['m'])
     nu_rad_ind      = [idx for idx in params['nondim']['nu_rad_ind'] if idx <= nu_ind[-1]]
-    M_state_nd2d    = np.linalg.pinv(params['nondim']['M_state_d2nd'][np.ix_(nx_ind, nx_ind)])
-    M_ctrl_nd2d     = np.linalg.pinv(params['nondim']['M_ctrl_d2nd'][np.ix_(nu_ind, nu_ind)])
+    M_state_nd2d    = np.linalg.pinv(params['nondim']['M']['state']['d2nd'][np.ix_(nx_ind, nx_ind)])
+    M_ctrl_nd2d     = np.linalg.pinv(params['nondim']['M']['ctrl']['d2nd'][np.ix_(nu_ind, nu_ind)])
     
     # Rescale time to physical units of seconds
     t               = params['nondim']['nt'] * ts

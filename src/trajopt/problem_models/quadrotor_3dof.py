@@ -4,6 +4,7 @@ import trajopt.algorithm.initial_guess      as guess
 import trajopt.algorithm.convergence        as convergence
 import trajopt.algorithm.convexification    as convexify
 import trajopt.algorithm.discretization     as discretize
+import trajopt.utils.nondim                 as nondim
 
 # TODO consolidate imports 
 from scipy.interpolate  import interp1d
@@ -223,9 +224,14 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['nfz_idx']       = np.arange(0, xc_dim.size)
     params['n_nfz']         = len(params['nfz_idx'])
 
-    ### Set dim/nondim params based on flag ###
-    # scaling values for nondim
-    params                  = set_nondim_params(params)
+    # set nondim scaling
+
+    z_types = ['d', 'd', 'd', 'v', 'v', 'v']
+    u_types = ['f', 'f', 'f']
+    anchor_scales = [('d', 10), ('v', 10), ('m', 1)]
+    base_unit_labels = ['m', 's', 'kg']
+
+    params = nondim.set_nondim_params(z_types, u_types, anchor_scales, params, base_unit_labels=base_unit_labels)
 
     xc = xc_dim / params['nondim']['nd']
     yc = yc_dim / params['nondim']['nd']
@@ -241,14 +247,14 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['z0_dim']           = np.array([0,0,5,0,0.5,0])
 
     # equality initial conditions
-    params['zi']            = params['nondim']['M_state_d2nd'] @ params['z0_dim']
+    params['zi']            = params['nondim']['M']['state']['d2nd'] @ params['z0_dim']
     params['zi_idx']        = np.arange(0, params['n'])
 
     # inequality initial conditions
     # none
 
     # equality terminal conditions
-    params['zf']            = params['nondim']['M_state_d2nd'] @ np.array([10,10,0.5,0,0,0])
+    params['zf']            = params['nondim']['M']['state']['d2nd'] @ np.array([10,10,0.5,0,0,0])
     params['zf_idx']        = np.arange(0,params['n'])
 
     # control boundary conditions
@@ -457,7 +463,7 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
     u1, u2: v (velocity)
     """
     # extracts params if "problem" parent struct is passed in
-    if hasattr(params, 'params'):
+    if 'params' in params:
         params = params['params']
 
     # extract constant param values
@@ -782,79 +788,6 @@ def custom_subprob_cost(PTR_COST,local_vars):
 
     return PTR_COST
 
-
-def set_nondim_params(params): # TODO: Test
-    """
-    Initializes all nondimensional parameters
-    """
-    # Extract dimension constants
-    path_lim = params['path_lim']
-    n_path = params['n_path']
-    n_nfz = params['n_nfz']
-    n = params['n']
-    m = params['m']
-
-    if params['bools']['nondim']:
-        # set nondim params
-        nd = 10
-        nv = 10
-        nt = nd / nv
-        nt_inv = 1 / nt
-        na = nv / nt
-        nm = 1
-        nm_dot = nm / nt
-        nf = nm * na
-        np_ineq = np.ones(n_nfz) * nd**2
-        ncost = nv
-    else:
-        # set dim params
-        nt = 1
-        nt_inv = 1
-        nd = 1
-        nv = 1
-        na = 1
-        nm = 1
-        nm_dot = 1
-        nf = 1
-        np_ineq = np.ones(n_path + n_nfz)
-        ncost = 1
-
-    nd_state = np.array([1/nd, 1/nd, 1/nd, 1/nv, 1/nv, 1/nv])
-
-    if 'nondim' not in params: # initialize if it doesn't already exist
-       params['nondim'] = {}
-
-    params['nondim']['M_state_d2nd'] = np.diag(nd_state).copy()
-    params['nondim']['M_ctrl_d2nd'] = np.diag(np.ones(m) / na).copy()
-
-    # params['nondim']['M_term_d2nd'] = np.diag(np.concatenate([
-    #     nd_state[params['zf_idx']],
-    #     nd_state[params['zf_min_idx']],
-    #     nd_state[params['zf_max_idx']]
-    # ])).copy()
-    params['nondim']['M_cnst_d2nd'] = np.diag(np_ineq ** -1).copy()
-    params['nondim']['M_nfz_d2nd'] = np.diag(np_ineq[params['nfz_idx']] ** -1).copy()
-
-    nd_dyn = np.array([1/nv, 1/nv, 1/nv, 1/na, 1/na, 1/na])
-    params['nondim']['M_dyn_d2nd'] = np.diag(nd_dyn).copy()
-
-    params['nondim']['M_cost_d2nd'] = 1 / ncost
-
-    params['nondim']['nu_rad_ind'] = []
-
-    # add scalar nondim variables to nondim substruct
-    params['nondim']['nd'] = nd
-    params['nondim']['na'] = na
-    params['nondim']['nt'] = nt
-    params['nondim']['nt_inv'] = nt_inv
-    params['nondim']['nv'] = nv
-    params['nondim']['nm'] = nm
-    params['nondim']['nm_dot'] = nm_dot
-    params['nondim']['nf'] = nf
-    params['nondim']['np_ineq'] = np_ineq
-    params['nondim']['ncost'] = ncost
-
-    return params
 
 # TESTING CONFIG_PARAMS
 if __name__ == "__main__":
