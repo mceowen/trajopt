@@ -56,14 +56,14 @@ def config_main():
 
     config['params']['bools'] = {
         'flag_nfz': 2,          # 0, 1, 2
-        'free_final_time': 1,   # 0, 1
-        'equal_dt': 1,          # 0, 1
+        'free_final_time': 0,   # 0, 1
+        'equal_dt': 0,          # 0, 1
         'flag_autotune': '0',   # '0', '1', '2', '3', 'al-scvx'
         'buff_dyn': 'l1',       # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
         'buff_dyn_dual': 'none',# 'l1', 'none'
         'ctcs': 1,              # 0, 1
         'ode_fixed_dt': 0,      # 0, 1 ,
-        'nondim': 1,            # 0, 1
+        'nondim': 0,            # 0, 1
     }
 
     # todo: clean this
@@ -356,7 +356,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
 
         params['weights']['W_nfz'] += w_nfz
 
-        if params['bools']['free_final_time']:
+        if params['bools']['free_final_time'] or params['bools']['ctcs']:
             buff_dyn = str(params['bools'].get('buff_dyn', ''))
             if buff_dyn in {'l1', 'l2'}:
                 params['weights']['W_dyn'] += w_dyn
@@ -388,7 +388,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     ### ctcs convergence adjustments ###
     ctcs_mult_state         = 5e-1
     ctcs_mult_cnst          = 1e0
-    eps_ctcs                = 1e-8
+    eps_ctcs                = 1e-4
 
     params['conv']['setup']['ctcs_mult_state']                  = ctcs_mult_state
     params['conv']['setup']['ctcs_mult_cnst']                   = ctcs_mult_cnst
@@ -396,8 +396,8 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['eps_ctcs']                                          = eps_ctcs
 
     ### State convergence ###
-    eps_d_state             = 1e-2  # [m]
-    eps_v_state             = 1e-2   # [m/s]
+    eps_d_state             = 1e-1  # [m]
+    eps_v_state             = 1e-1   # [m/s]
     params['conv']['setup']['eps_state']                        = np.concatenate((eps_d_state * np.ones(params['n'] // 2), 
                                                                     eps_v_state * np.ones(params['n'] // 2)))
 
