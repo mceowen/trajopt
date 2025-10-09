@@ -52,18 +52,18 @@ def config_main():
 
     # --- User problem setup ---
     config['params'] = {}
-    config['params']['N'] = 10
+    config['params']['N'] = 40  # timesteps; 40 for no ctcs, 10 for ctcs
 
     config['params']['bools'] = {
         'flag_nfz': 2,          # 0, 1, 2
-        'free_final_time': 0,   # 0, 1
-        'equal_dt': 0,          # 0, 1
+        'free_final_time': 1,   # 0, 1
+        'equal_dt': 1,          # 0, 1
         'flag_autotune': '0',   # '0', '1', '2', '3', 'al-scvx'
         'buff_dyn': 'term',       # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
         'buff_dyn_dual': 'none',# 'l1', 'none'
-        'ctcs': 1,              # 0, 1
+        'ctcs': 0,              # 0, 1
         'ode_fixed_dt': 0,      # 0, 1 ,
-        'nondim': 0,            # 0, 1
+        'nondim': 1,            # 0, 1
     }
 
     # todo: clean this
@@ -388,7 +388,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     ### ctcs convergence adjustments ###
     ctcs_mult_state         = 5e-1
     ctcs_mult_cnst          = 1e0
-    eps_ctcs                = 1e-4
+    eps_ctcs                = 1e-8 # 1e-8 ctcs
 
     params['conv']['setup']['ctcs_mult_state']                  = ctcs_mult_state
     params['conv']['setup']['ctcs_mult_cnst']                   = ctcs_mult_cnst
