@@ -71,7 +71,7 @@ def set_nondim_params(z_types, u_types, anchor_scales, params, base_unit_labels=
 
     # custom nondim params
     np_ineq = np.ones(n_nfz) * nd**2
-    ncost = scales['v']
+    ncost = 1
 
     nd_state = np.array([1 / scales[z_types[i]] for i in range(n)])
     nd_ctrl  = np.array([1 / scales[u_types[i]] for i in range(m)])
