@@ -4,6 +4,7 @@ import trajopt.algorithm.initial_guess      as guess
 import trajopt.algorithm.convergence        as convergence
 import trajopt.algorithm.convexification    as convexify
 import trajopt.algorithm.discretization     as discretize
+import trajopt.utils.nondim                 as nondim
 
 # TODO consolidate imports 
 from scipy.interpolate  import interp1d
@@ -51,18 +52,18 @@ def config_main():
 
     # --- User problem setup ---
     config['params'] = {}
-    config['params']['N'] = 40
+    config['params']['N'] = 10
 
     config['params']['bools'] = {
         'flag_nfz': 2,          # 0, 1, 2
-        'free_final_time': 1,   # 0, 1
-        'equal_dt': 1,          # 0, 1
+        'free_final_time': 0,   # 0, 1
+        'equal_dt': 0,          # 0, 1
         'flag_autotune': '0',   # '0', '1', '2', '3', 'al-scvx'
         'buff_dyn': 'term',       # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
         'buff_dyn_dual': 'none',# 'l1', 'none'
-        'ctcs': 0,              # 0, 1
+        'ctcs': 1,              # 0, 1
         'ode_fixed_dt': 0,      # 0, 1 ,
-        'nondim': 1,            # 0, 1
+        'nondim': 0,            # 0, 1
     }
 
     # todo: clean this
@@ -223,9 +224,14 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['nfz_idx']       = np.arange(0, xc_dim.size)
     params['n_nfz']         = len(params['nfz_idx'])
 
-    ### Set dim/nondim params based on flag ###
-    # scaling values for nondim
-    params                  = set_nondim_params(params)
+    # set nondim scaling
+
+    z_types = ['d', 'd', 'd', 'v', 'v', 'v']
+    u_types = ['f', 'f', 'f']
+    anchor_scales = [('d', 10), ('v', 10), ('m', 1)]
+    base_unit_labels = ['m', 's', 'kg']
+
+    params = nondim.set_nondim_params(z_types, u_types, anchor_scales, params, base_unit_labels=base_unit_labels)
 
     xc = xc_dim / params['nondim']['nd']
     yc = yc_dim / params['nondim']['nd']
@@ -241,14 +247,14 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['z0_dim']           = np.array([0,0,5,0,0.5,0])
 
     # equality initial conditions
-    params['zi']            = params['nondim']['M_state_d2nd'] @ params['z0_dim']
+    params['zi']            = params['nondim']['M']['state']['d2nd'] @ params['z0_dim']
     params['zi_idx']        = np.arange(0, params['n'])
 
     # inequality initial conditions
     # none
 
     # equality terminal conditions
-    params['zf']            = params['nondim']['M_state_d2nd'] @ np.array([10,10,0.5,0,0,0])
+    params['zf']            = params['nondim']['M']['state']['d2nd'] @ np.array([10,10,0.5,0,0,0])
     params['zf_idx']        = np.arange(0,params['n'])
 
     # control boundary conditions
@@ -350,7 +356,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
 
         params['weights']['W_nfz'] += w_nfz
 
-        if params['bools']['free_final_time']:
+        if params['bools']['free_final_time'] or params['bools']['ctcs']:
             buff_dyn = str(params['bools'].get('buff_dyn', ''))
             if buff_dyn in {'l1', 'l2'}:
                 params['weights']['W_dyn'] += w_dyn
@@ -382,7 +388,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     ### ctcs convergence adjustments ###
     ctcs_mult_state         = 5e-1
     ctcs_mult_cnst          = 1e0
-    eps_ctcs                = 1e-5
+    eps_ctcs                = 1e-4
 
     params['conv']['setup']['ctcs_mult_state']                  = ctcs_mult_state
     params['conv']['setup']['ctcs_mult_cnst']                   = ctcs_mult_cnst
@@ -390,8 +396,8 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['eps_ctcs']                                          = eps_ctcs
 
     ### State convergence ###
-    eps_d_state             = 1e-2  # [m]
-    eps_v_state             = 1e-2   # [m/s]
+    eps_d_state             = 1e-1  # [m]
+    eps_v_state             = 1e-1   # [m/s]
     params['conv']['setup']['eps_state']                        = np.concatenate((eps_d_state * np.ones(params['n'] // 2), 
                                                                     eps_v_state * np.ones(params['n'] // 2)))
 
@@ -457,7 +463,7 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
     u1, u2: v (velocity)
     """
     # extracts params if "problem" parent struct is passed in
-    if hasattr(params, 'params'):
+    if 'params' in params:
         params = params['params']
 
     # extract constant param values
@@ -570,6 +576,10 @@ def nonlinear_inequality_constraints(ts, zs, us, params):
 
     # === Stack all inequality constraints ===
     P = np.hstack([P_path, P_nfz]) if P_path.size or P_nfz.size else np.empty((N, 0))
+
+    if zs.ndim == 1:
+        P = P.flatten()
+
     return P
 
 
@@ -645,6 +655,11 @@ def analytical_inequality_constraints(ts, zs, us, problem):
     # Also collect detailed path and NFZ constraint data if needed
     path_data = {"P": [], "Praw": [], "dPdz": [], "dPdu": []}
     nfz_data  = {"P": [], "dPdz": [], "dPdu": []}
+
+    if zs.ndim == 1:
+        ts = np.array([ts])
+        zs = zs.reshape((1, -1))
+        us = us.reshape((1, -1))
 
     for k in range(N):
         tk = ts[k]
@@ -782,79 +797,6 @@ def custom_subprob_cost(PTR_COST,local_vars):
 
     return PTR_COST
 
-
-def set_nondim_params(params): # TODO: Test
-    """
-    Initializes all nondimensional parameters
-    """
-    # Extract dimension constants
-    path_lim = params['path_lim']
-    n_path = params['n_path']
-    n_nfz = params['n_nfz']
-    n = params['n']
-    m = params['m']
-
-    if params['bools']['nondim']:
-        # set nondim params
-        nd = 10
-        nv = 10
-        nt = nd / nv
-        nt_inv = 1 / nt
-        na = nv / nt
-        nm = 1
-        nm_dot = nm / nt
-        nf = nm * na
-        np_ineq = np.ones(n_nfz) * nd**2
-        ncost = nv
-    else:
-        # set dim params
-        nt = 1
-        nt_inv = 1
-        nd = 1
-        nv = 1
-        na = 1
-        nm = 1
-        nm_dot = 1
-        nf = 1
-        np_ineq = np.ones(n_path + n_nfz)
-        ncost = 1
-
-    nd_state = np.array([1/nd, 1/nd, 1/nd, 1/nv, 1/nv, 1/nv])
-
-    if 'nondim' not in params: # initialize if it doesn't already exist
-       params['nondim'] = {}
-
-    params['nondim']['M_state_d2nd'] = np.diag(nd_state).copy()
-    params['nondim']['M_ctrl_d2nd'] = np.diag(np.ones(m) / na).copy()
-
-    # params['nondim']['M_term_d2nd'] = np.diag(np.concatenate([
-    #     nd_state[params['zf_idx']],
-    #     nd_state[params['zf_min_idx']],
-    #     nd_state[params['zf_max_idx']]
-    # ])).copy()
-    params['nondim']['M_cnst_d2nd'] = np.diag(np_ineq ** -1).copy()
-    params['nondim']['M_nfz_d2nd'] = np.diag(np_ineq[params['nfz_idx']] ** -1).copy()
-
-    nd_dyn = np.array([1/nv, 1/nv, 1/nv, 1/na, 1/na, 1/na])
-    params['nondim']['M_dyn_d2nd'] = np.diag(nd_dyn).copy()
-
-    params['nondim']['M_cost_d2nd'] = 1 / ncost
-
-    params['nondim']['nu_rad_ind'] = []
-
-    # add scalar nondim variables to nondim substruct
-    params['nondim']['nd'] = nd
-    params['nondim']['na'] = na
-    params['nondim']['nt'] = nt
-    params['nondim']['nt_inv'] = nt_inv
-    params['nondim']['nv'] = nv
-    params['nondim']['nm'] = nm
-    params['nondim']['nm_dot'] = nm_dot
-    params['nondim']['nf'] = nf
-    params['nondim']['np_ineq'] = np_ineq
-    params['nondim']['ncost'] = ncost
-
-    return params
 
 # TESTING CONFIG_PARAMS
 if __name__ == "__main__":

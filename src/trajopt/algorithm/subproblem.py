@@ -456,7 +456,7 @@ def baseline_subprob_constraints(problem,local_vars):
                 CNST.append(cp.sum(vb_dyn_plus[k])  == vb_plus[k])
                 CNST.append(cp.sum(vb_dyn_minus[k]) == vb_minus[k])
 
-            if bools['ctcs']:
+            if bools['ctcs'] and not n == nz:
                 CNST.append(zs_ref[k + 1, n:nz] + dz[k + 1, n:nz] - (zs_ref[k,n:nz] + dz[k,n:nz]) <= eps_ctcs)
 
             if bools['free_final_time']:
@@ -507,6 +507,7 @@ def baseline_subprob_cost(problem, local_vars):
 
     params        = local_vars["params"]
     N             = params["N"]
+    n             = params['n']
     solver_type   = params.get("solver_type", "osqp")
     flag_autotune = local_vars['bools']["flag_autotune"]
     buff_dyn      = local_vars['bools']["buff_dyn"]
@@ -519,7 +520,7 @@ def baseline_subprob_cost(problem, local_vars):
     # ---- TRUE COST (vectorized) ----
     # Stack along first dimension then use cp.sum directly.
     TRUE_COST = w_cost * (
-        cp.sum(cp.multiply(dcostdz, dz)) +
+        cp.sum(cp.multiply(dcostdz, dz[:, :n])) +
         cp.sum(cp.multiply(dcostdu, du)) +
         cp.sum(cost)
     )
