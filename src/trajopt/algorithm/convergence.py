@@ -204,8 +204,8 @@ def check_convergence_tolerance(problem, local_vars, O):
     conv_data = O['conv_data']
     soln      = conv_data['soln']
 
-    n = local_vars['nz']
-    N = local_vars['N']
+    n       = local_vars['nz']
+    N       = local_vars['N']
     
     dz       = O['dz_s']
     dcost    = O['cost'] - conv_data['cost_ref']
@@ -258,8 +258,8 @@ def check_convergence_tolerance(problem, local_vars, O):
     chk_aux_2  = np.max([np.max(W_aux  @ conv_aux_nl[k].reshape(-1, 1))  for k in range(N)]) if conv_aux_nl.size else 0.0
 
     # === Convergence mode selection
-    ctcs = problem['params']['bools']['ctcs']
-    flag_conv = problem['params']['bools']['flag_conv']
+    ctcs        = problem['params']['bools']['ctcs']
+    flag_conv   = problem['params']['bools']['flag_conv']
 
     if ctcs:
         chk_feas_1 = np.array([chk_vb_term, chk_vb_dyn])
@@ -304,6 +304,10 @@ def check_convergence_tolerance(problem, local_vars, O):
 
     O['converged'] = bool_conv
     O['conv_data'] = conv_data
+
+    # TODO(Skye): remove
+    if problem['I'][-1]['iter_num']==11:
+        breakpoint()
 
     return O
 

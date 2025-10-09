@@ -58,7 +58,7 @@ def config_main():
         'free_final_time': 1,   # 0, 1
         'equal_dt': 1,          # 0, 1
         'flag_autotune': '0',   # '0', '1', '2', '3', 'al-scvx'
-        'buff_dyn': 'l1',       # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
+        'buff_dyn': 'term',       # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
         'buff_dyn_dual': 'none',# 'l1', 'none'
         'ctcs': 0,              # 0, 1
         'ode_fixed_dt': 0,      # 0, 1 ,

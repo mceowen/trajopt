@@ -267,8 +267,8 @@ def subprob_virtual_variables(problem, local_vars):
     """
 
     # Extract autotune flag and dynamics buffer toggle
-    flag_autotune = problem['params']['bools']['flag_autotune']
-    buff_dyn = problem['params']['bools']['buff_dyn']
+    flag_autotune   = problem['params']['bools']['flag_autotune']
+    buff_dyn        = problem['params']['bools']['buff_dyn']
 
     # Extract dimensions
     n = {
@@ -586,12 +586,12 @@ def baseline_subprob_cost(problem, local_vars):
 
         if n_ineq > 0:
             for k in range(N):
-                stack_v = cp.hstack([v for v in [vb_path[k], vb_nfz[k], vb_aux[k]] if v.shape[1] > 0])
-                if stack_v.shape[1] > 0:
+                stack_v = cp.hstack([v for v in [vb_path[k], vb_nfz[k], vb_aux[k]] if v.size > 0])
+                if stack_v.size > 0:
                     duals = cp.hstack([d for v, d in zip(
                         [vb_path[k], vb_nfz[k], vb_aux[k]],
                         [local_vars["dual_path"][k], local_vars["dual_nfz"][k], local_vars["dual_aux"][k]]
-                    ) if v.shape[1] > 0])
+                    ) if v.size > 0])
                     DUAL_COST += cp.sum(cp.multiply(stack_v, duals))
 
         if n_eq > 0:
@@ -700,15 +700,15 @@ def baseline_subprob_outputs(problem, local_vars, subprob):
     conv                = {}
     conv["soln"]        = soln_stats["soln_object"]
 
-    conv["vb_path"]     = tools.get_val(vb_path, rows=n_path, cols=N) 
-    conv["vb_nfz"]      = tools.get_val(vb_nfz, rows=n_nfz, cols=N) 
-    conv["vb_aux"]      = tools.get_val(vb_aux, rows=n_aux, cols=N) 
-    conv["vb_term"]     = tools.get_val(vb_term, rows=n_term, cols=1) 
-    conv["vb_dyn"]      = tools.get_val(vb_dyn_plus, rows=n_dyn, cols=N)  - tools.get_val(vb_dyn_minus, rows=n_dyn, cols=N) 
+    conv["vb_path"]     = tools.get_val(vb_path,    rows=N, cols=n_path) 
+    conv["vb_nfz"]      = tools.get_val(vb_nfz,     rows=N, cols=n_nfz) 
+    conv["vb_aux"]      = tools.get_val(vb_aux,     rows=N, cols=n_aux) 
+    conv["vb_term"]     = tools.get_val(vb_term,    rows=1, cols=n_term) 
+    conv["vb_dyn"]      = tools.get_val(vb_dyn_plus, rows=N, cols=n_dyn)  - tools.get_val(vb_dyn_minus, cols=n_dyn, rows=N) 
 
-    conv["defect"]      = tools.safe_val(dz, rows=n, cols=N) + zs_ref - zs_minus
+    conv["defect"]      = tools.safe_val(dz, cols=n, rows=N) + zs_ref - zs_minus
 
-    conv["Jtr"]         = (wtr_z * np.sum(tools.safe_val(dz, rows=n, cols=N)**2) + wtr_u * np.sum(tools.safe_val(du, rows=m, cols=N)**2))
+    conv["Jtr"]         = (wtr_z * np.sum(tools.safe_val(dz, cols=n, rows=N)**2) + wtr_u * np.sum(tools.safe_val(du, rows=N, cols=m)**2))
 
     O["conv_data"]      = conv
 
