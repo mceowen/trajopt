@@ -180,14 +180,14 @@ def discretize_ctcs(zs_ref, us_ref, dts_ref, problem):
     params = problem['params']
     N = params['N']
 
-    traj_minus_data = {'zs_minus': [zs_ref[:, 0]]}
+    traj_minus_data = {'zs_minus': [zs_ref[0]]}
 
     # Setup LTV system dynamics
     lds0_stack = []
     for k in range(N - 1):
         params['lds0'][params['z_ind']] = zs_ref[k]
         params['lds0'][params['Ak_ind']] = np.reshape(np.eye(params['nz']), -1)
-        lds0_stack.append(params['lds0'])
+        lds0_stack.append(params['lds0'].copy())
 
     lds0_stack = np.hstack(lds0_stack)
 
@@ -200,7 +200,7 @@ def discretize_ctcs(zs_ref, us_ref, dts_ref, problem):
     Ak = np.zeros((N-1, params['nz'], params['nz']))
     Bk = np.zeros((N-1, params['nz'], params['m']))
     Bkp = np.zeros((N-1,params['nz'], params['m']))
-    Sk = np.zeros((N-1, params['nz'], 1))
+    Sk = np.zeros((N-1, params['nz']))
 
     # Extract dense values
     for k in range(N - 1):
@@ -224,7 +224,7 @@ def discretize_ctcs(zs_ref, us_ref, dts_ref, problem):
         Sk[k]   = Ak_bar @ Sk_bar
 
     # Extract x_ref_minus traj (from integration)
-    zs_minus = np.column_stack(traj_minus_data['zs_minus'])
+    zs_minus    = np.array(traj_minus_data['zs_minus'])
 
     return Ak, Bk, Bkp, Sk, zs_minus
 
@@ -252,7 +252,7 @@ def RHS_ltv_ctcs(tau, lds, us_ref, dts_ref, problem):
 
     Om = np.diag(Om_k * np.ones(us_ref.shape[0])) + np.diag(Om_kp * np.ones(us_ref.shape[0] - 1), 1)
 
-    u = Om @ us_ref.T
+    u = Om @ us_ref
 
     for k in range(N - 1):
         dts_k = dts_ref[k]

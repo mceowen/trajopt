@@ -52,7 +52,7 @@ def config_main():
 
     # --- User problem setup ---
     config['params'] = {}
-    config['params']['N'] = 40
+    config['params']['N'] = 10
 
     config['params']['bools'] = {
         'flag_nfz': 2,          # 0, 1, 2
@@ -61,7 +61,7 @@ def config_main():
         'flag_autotune': '0',   # '0', '1', '2', '3', 'al-scvx'
         'buff_dyn': 'l1',       # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
         'buff_dyn_dual': 'none',# 'l1', 'none'
-        'ctcs': 0,              # 0, 1
+        'ctcs': 1,              # 0, 1
         'ode_fixed_dt': 0,      # 0, 1 ,
         'nondim': 1,            # 0, 1
     }
@@ -388,7 +388,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     ### ctcs convergence adjustments ###
     ctcs_mult_state         = 5e-1
     ctcs_mult_cnst          = 1e0
-    eps_ctcs                = 1e-5
+    eps_ctcs                = 1e-8
 
     params['conv']['setup']['ctcs_mult_state']                  = ctcs_mult_state
     params['conv']['setup']['ctcs_mult_cnst']                   = ctcs_mult_cnst
@@ -576,6 +576,10 @@ def nonlinear_inequality_constraints(ts, zs, us, params):
 
     # === Stack all inequality constraints ===
     P = np.hstack([P_path, P_nfz]) if P_path.size or P_nfz.size else np.empty((N, 0))
+
+    if zs.ndim == 1:
+        P = P.flatten()
+
     return P
 
 
@@ -651,6 +655,11 @@ def analytical_inequality_constraints(ts, zs, us, problem):
     # Also collect detailed path and NFZ constraint data if needed
     path_data = {"P": [], "Praw": [], "dPdz": [], "dPdu": []}
     nfz_data  = {"P": [], "dPdz": [], "dPdu": []}
+
+    if zs.ndim == 1:
+        ts = np.array([ts])
+        zs = zs.reshape((1, -1))
+        us = us.reshape((1, -1))
 
     for k in range(N):
         tk = ts[k]

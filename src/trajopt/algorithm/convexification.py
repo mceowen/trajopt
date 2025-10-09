@@ -48,14 +48,16 @@ def compute_ctcs_jacobians(ts, zs, us, problem):
     n_ineq = params["n_ineq"]
 
     # Evaluate linearized dynamics
-    f_xu = problem["lin_dyn"]["fcn"](ts, zs, us)
-    dfdx = problem["lin_dyn"]["dfcn_dz"](ts, zs, us)
-    dfdu = problem["lin_dyn"]["dfcn_du"](ts, zs, us)
+    lin_dyn_info    = problem['lin_dyn'](ts, zs[:n], us)
+    f_xu = lin_dyn_info["fcn"]
+    dfdx = lin_dyn_info["dfcn_dz"]
+    dfdu = lin_dyn_info["dfcn_du"]
 
     # Evaluate linearized path constraints
-    g_xu = problem["lin_constr"]["fcn"](ts, zs, us)
-    dgdx = problem["lin_constr"]["dfcn_dz"](ts, zs, us)
-    dgdu = problem["lin_constr"]["dfcn_du"](ts, zs, us)
+    lin_constr_info = problem['lin_constr'](ts, zs, us)
+    g_xu = lin_constr_info["fcn"][0]
+    dgdx = lin_constr_info["dfcn_dz"][0]
+    dgdu = lin_constr_info["dfcn_du"][0]
 
     # Conditional constraint smoothing
     beta_dot = np.maximum(g_xu, 0.0) ** 2

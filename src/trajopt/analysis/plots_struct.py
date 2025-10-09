@@ -26,6 +26,8 @@ def perform_default_analysis(problem):
     O.insert(0, I0.copy())
     params = problem['params']
 
+    n = params['n']
+
     iters = [{} for _ in range(len(O))]
 
     # extract final optimized trajectory
@@ -51,7 +53,7 @@ def perform_default_analysis(problem):
 
         sol = solve_ivp(dyn_wrapped,
                 t_span=(ts_opt[0],ts_opt[-1]),
-                y0=zs_opt[0],
+                y0=zs_opt[0, :n],
                 t_eval=ts_dense,
                 method='RK45', 
                 rtol=1e-12,
@@ -69,17 +71,17 @@ def perform_default_analysis(problem):
         us_ref = O[i]['us_ref']
 
         iters[i]['t_ref'] = ts_ref * params['nondim']['nt']
-        iters[i]['z_ref'] = zs_ref @ params['nondim']['M']['state']['nd2d']
+        iters[i]['z_ref'] = zs_ref[:, :n] @ params['nondim']['M']['state']['nd2d']
         iters[i]['u_ref'] = us_ref @ params['nondim']['M']['ctrl']['nd2d']
 
          # add dimensional optimized trajectories
         if i > 0:
             ts = O[i]['ts']
-            zs = O[i]['zs']
+            zs = O[i]['zs'][:, :n]
             us = O[i]['us']
 
             iters[i]['t'] = ts * params['nondim']['nt']
-            iters[i]['z'] = zs @ params['nondim']['M']['state']['nd2d']
+            iters[i]['z'] = zs[:, :n] @ params['nondim']['M']['state']['nd2d']
             iters[i]['u'] = us @ params['nondim']['M']['ctrl']['nd2d']
             
             iters[i]['weights'] = O[i]['weights']
