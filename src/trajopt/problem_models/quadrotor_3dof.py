@@ -63,7 +63,7 @@ def config_main():
         'buff_dyn_dual': 'none',# 'l1', 'none'
         'ctcs': 0,              # 0, 1
         'ode_fixed_dt': 0,      # 0, 1 ,
-        'nondim': 1,            # 0, 1
+        'nondim': 0,            # 0, 1
     }
 
     # todo: clean this
@@ -388,7 +388,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     ### ctcs convergence adjustments ###
     ctcs_mult_state         = 5e-1
     ctcs_mult_cnst          = 1e0
-    eps_ctcs                = 1e-8 # 1e-8 ctcs
+    eps_ctcs                = 1e-8 # 1e-8 for nondim, 1e-4 for dim
 
     params['conv']['setup']['ctcs_mult_state']                  = ctcs_mult_state
     params['conv']['setup']['ctcs_mult_cnst']                   = ctcs_mult_cnst
