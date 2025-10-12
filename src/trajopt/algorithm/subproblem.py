@@ -33,7 +33,7 @@ def solve_subproblem(problem):
     # TODO(Skye): vectorize cost computation for speedup
     objective   = cp.Minimize(PTR_COST)
     subprob     = cp.Problem(objective, constraints)
-    subprob.solve()
+    subprob.solve(solver=problem['params']['solver_opts']['solver'])
 
     O = baseline_subprob_outputs(
         problem,
@@ -424,7 +424,7 @@ def baseline_subprob_constraints(problem,local_vars):
 
     # Terminal state
     if params['n_term'] > 0:
-        CNST.append(dz[-1,zN_idx] + zs_ref[-1,zN_idx] - vb_term[vb_N_idx] == zN)
+        CNST.append(dz[-1,zN_idx] + zs_ref[-1,zN_idx] - vb_term[vb_N_idx] == zN[zN_idx])
 
     if params['n_term_ineq'] > 0:
         M_sel = tools.constraint_index_selector(zN_min_idx, zN_max_idx, n)

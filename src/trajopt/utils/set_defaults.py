@@ -32,7 +32,8 @@ def set_params_default(config=None):
         'ode_fixed_dt': 0,
         'aoa_vb': 0,
         'earth_rot': 0,
-        'init_ctrl': 1
+        'init_ctrl': 1,
+        'jax_dyn': 0
     }
 
     # --- Basic structure ---

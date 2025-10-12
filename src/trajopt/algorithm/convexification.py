@@ -153,6 +153,25 @@ def generate_jacobians_jax(fcn_hdl, problem):
 
     return lin_hdl
 
+def generate_lin_sys_jax(fcn, params):
+
+    def wrapped_dyn(zs, us):
+        return fcn(0, zs, us, params)
+
+    dfcn_dz = jax.jit(jax.jacrev(wrapped_dyn, argnums=0))
+    dfcn_du = jax.jit(jax.jacrev(wrapped_dyn, argnums=1))
+    f = jax.jit(wrapped_dyn)
+
+    def lin_sys(t, z, u):
+
+        return {
+            "dfcn_dz": dfcn_dz(z, u),
+            "dfcn_du": dfcn_du(z, u),
+            "fcn": f(z, u)
+        }
+
+    return lin_sys
+
 def generate_jacobians2(func_nl, params):
     """
     Generate symbolic Jacobian function handles from a nonlinear symbolic function.

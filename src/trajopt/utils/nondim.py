@@ -1,6 +1,6 @@
 import numpy as np
 
-# set_nondim_params(['d', 'd', 'd', 'v', 'v', 'v'], ['f', 'f'], [('d', 10), ('v', 10), ('m', 1)], params)
+# example usage: set_nondim_params(['d', 'd', 'd', 'v', 'v', 'v'], ['f', 'f'], [('d', 10), ('v', 10), ('m', 1)], params)
 
 def set_nondim_params(z_types, u_types, anchor_scales, params, base_unit_labels=['m', 's', 'kg']):
     """
@@ -69,9 +69,11 @@ def set_nondim_params(z_types, u_types, anchor_scales, params, base_unit_labels=
         'angv' : f"rad / {t_lbl}"
     }
 
+    # TODO: these custom nondim params are currently problem-dependent, need to update to make them general
+
     # custom nondim params
     np_ineq = np.ones(n_nfz) * nd**2
-    ncost = 1
+    ncost = scales['v']
 
     nd_state = np.array([1 / scales[z_types[i]] for i in range(n)])
     nd_ctrl  = np.array([1 / scales[u_types[i]] for i in range(m)])
