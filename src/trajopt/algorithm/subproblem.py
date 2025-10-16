@@ -570,12 +570,12 @@ def baseline_subprob_cost(problem, local_vars):
                 if vb_plus.shape[1] > 0:
                     VIRTUAL_COST += cp.sum([
                         cp.quad_form(vb_plus[k], np.diag(local_vars["W_plus"][k]))
-                        for k in range(vb_plus.shape[1])
+                        for k in range(vb_plus.shape[0])
                     ])
                 if vb_minus.shape[1] > 0:
                     VIRTUAL_COST += cp.sum([
                         cp.quad_form(vb_minus[k], np.diag(local_vars["W_minus"][k]))
-                        for k in range(vb_minus.shape[1])
+                        for k in range(vb_minus.shape[0])
                     ])
 
     # ---- DUAL COST ----
