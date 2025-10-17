@@ -154,35 +154,46 @@ def RHS_ltv(tau, lds, us_ref, dts_ref, problem):
 
     return lds_dot
 
-# derivative function for rk4
-def RHS_ltv_jax(tau, lds_stack, us_ref, dts_ref, problem):
-    
+def jit_jax_discretization(problem):
     params = problem['params']
-
-    a = 1 - tau
-    b = tau
-
-    n = params['nz']
-    m = params['m']
-    N = params['N']
-
-    def pack_lds_dot(k):
-        z_ind       = k * params['lds0_size_jax'] + params['z_ind_jax']
-        phi_a_ind   = k * params['lds0_size_jax'] + params['Ak_ind_jax']
-        phi_b_m_ind = k * params['lds0_size_jax'] + params['Bk_ind_jax']
-        phi_b_p_ind = k * params['lds0_size_jax'] + params['Bkp_ind_jax']
-        phi_s_ind   = k * params['lds0_size_jax'] + params['Sk_ind_jax']
-
-        phi_a   = lds_stack[phi_a_ind].reshape((n, n))
-        phi_b_m = lds_stack[phi_b_m_ind].reshape((n, m))
-        phi_b_p = lds_stack[phi_b_p_ind].reshape((n, m))
-        phi_s   = lds_stack[phi_s_ind]
     
-        u = a * us_ref[k,:] + b * us_ref[k+1, :]
-        x = lds_stack[z_ind]
-        sigma = dts_ref[k]
+    n = int(params['nz'])
+    m = int(params['m'])
+    N = int(params['N'])
 
-        Ac, Bc, fc  = convexify.compute_linsys_continuous(tau, x, u, problem)
+    # define static indices for stacked RHS vector 
+    Ak_ind0   = n
+    Bk_ind0   = Ak_ind0  + n*n
+    Bkp_ind0  = Bk_ind0  + n*m
+    Sk_ind0   = Bkp_ind0 + n*m
+
+    # pull ltv dynamics
+    lin_sys = problem['lin_dyn']
+
+    # nsub defines the number of sub *nodes* between knot points
+    nsub_nodes = 30
+    dt_sub = 1.0 / (nsub_nodes + 1)
+    t = jnp.linspace(0.0, 1.0, nsub_nodes + 2)
+
+    # packs the derivative of stacked RHS vector for node k
+    def pack_lds_dot(tau, lds_k, us_k, us_kp, dts_k):
+        a = 1 - tau
+        b = tau
+
+        x       = lds_k[         : Ak_ind0]
+        phi_a   = lds_k[Ak_ind0  : Bk_ind0].reshape((n, n))
+        phi_b_m = lds_k[Bk_ind0  : Bkp_ind0].reshape((n, m))
+        phi_b_p = lds_k[Bkp_ind0 : Sk_ind0].reshape((n, m))
+        phi_s   = lds_k[Sk_ind0  : ]
+
+        u = a * us_k + b * us_kp
+        sigma = dts_k
+
+        lin_info    = lin_sys(tau, x, u)
+
+        Ac = lin_info['dfcn_dz']
+        Bc = lin_info['dfcn_du']
+        fc = lin_info['fcn']
 
         P1_dot = (sigma * fc)
         P2_dot = (sigma * Ac @ phi_a).reshape((n*n,))
@@ -191,76 +202,84 @@ def RHS_ltv_jax(tau, lds_stack, us_ref, dts_ref, problem):
         P5_dot = (sigma * Ac @ phi_s   + fc)
 
         return jnp.concatenate([P1_dot, P2_dot, P3_dot, P4_dot, P5_dot])
-    
-    return jax.vmap(pack_lds_dot)(jnp.arange(N - 1)).flatten()
 
-# rk4 single step function for jax integration
-def rk4_step_jax(tau, lds, us_ref, dts_ref, dt_sub, problem):
-    k1 = RHS_ltv_jax(tau, lds, us_ref, dts_ref, problem)
-    k2 = RHS_ltv_jax(tau + dt_sub / 2, lds + (dt_sub / 2) * k1, us_ref, dts_ref, problem)
-    k3 = RHS_ltv_jax(tau + dt_sub / 2, lds + (dt_sub / 2) * k2, us_ref, dts_ref, problem)
-    k4 = RHS_ltv_jax(tau + dt_sub, lds + dt_sub * k3, us_ref, dts_ref, problem)
-    
-    lds_next = lds + (dt_sub / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
-    return lds_next, None
+    # rk4 single step function for jax integration
+    def rk4_step_jax(tau, lds, us_k, us_kp, dts_k):
+        k1 = pack_lds_dot(tau, lds, us_k, us_kp, dts_k)
+        k2 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k1, us_k, us_kp, dts_k)
+        k3 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k2, us_k, us_kp, dts_k)
+        k4 = pack_lds_dot(tau + dt_sub, lds + dt_sub * k3, us_k, us_kp, dts_k)
+        
+        lds_next = lds + (dt_sub / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
+        return lds_next, None
 
-# inverse free discretization with jax
-def discretize_inv_free_jax(zs_ref_np, us_ref_np, dts_ref_np, problem):
+    rk4_step_jax_jit = jax.jit(rk4_step_jax)
 
-    params = problem['params']
-
-    zs_ref = jnp.asarray(zs_ref_np)
-    us_ref = jnp.asarray(us_ref_np)
-    dts_ref = jnp.asarray(dts_ref_np)
-
-    # nsub defines the number of sub *nodes* between knot points
-    nsub_nodes = 30
-    t = jnp.linspace(0.0, 1.0, nsub_nodes + 2)
-    dt_sub = 1.0 / (nsub_nodes + 1)
-    ks = jnp.arange(params['N'] - 1)
-
-    n = params['nz']
-    m = params['m']
-    N = params['N']
-
-    def pack_lds0(k):
-        P1 = zs_ref[k, :]
+    # initilize stacked propagation vector  
+    def pack_lds0(zs_k):
+        P1 = zs_k
         P2 = jnp.eye(n).reshape(n*n)
         P3 = jnp.zeros(n*m)
         P4 = jnp.zeros(n*m)
         P5 = jnp.zeros(n)
 
         return jnp.concatenate([P1, P2, P3, P4, P5])
-    
-    lds0_stack = jax.vmap(pack_lds0)(ks).reshape(-1)
 
-    def rk4_step_jax_partial(lds, tau):
-        return rk4_step_jax(tau, lds, us_ref, dts_ref, dt_sub, problem)
-        
-    ldsf_stack, ys = jax.lax.scan(rk4_step_jax_partial, lds0_stack, t[:-1])
-
-    def unpack_ldsf(k):
-
-        zs_minus_k    = ldsf_stack[k * params['lds0_size_jax'] + params['z_ind_jax']]
-        A_jax_k_flat  = ldsf_stack[k * params['lds0_size_jax'] + params['Ak_ind_jax']]
-        B_jax_k_flat  = ldsf_stack[k * params['lds0_size_jax'] + params['Bk_ind_jax']]
-        Bp_jax_k_flat = ldsf_stack[k * params['lds0_size_jax'] + params['Bkp_ind_jax']]
-        S_jax_k_flat  = ldsf_stack[k * params['lds0_size_jax'] + params['Sk_ind_jax']]
-        
-
-        A_jax_k  = A_jax_k_flat.reshape((n, n))
-        B_jax_k  = B_jax_k_flat.reshape((n, m))
-        Bp_jax_k = Bp_jax_k_flat.reshape((n, m))
-        S_jax_k  = S_jax_k_flat.reshape((n, ))
+    # unpacks stacked propagation vector to correct shapes
+    def unpack_ldsf(ldsf_k):
+        zs_minus_k = ldsf_k[ : Ak_ind0]
+        A_jax_k    = ldsf_k[Ak_ind0  : Bk_ind0].reshape((n, n))
+        B_jax_k    = ldsf_k[Bk_ind0  : Bkp_ind0].reshape((n, m))
+        Bp_jax_k   = ldsf_k[Bkp_ind0 : Sk_ind0].reshape((n, m))
+        S_jax_k    = ldsf_k[Sk_ind0  : ]
 
         return (A_jax_k, B_jax_k, Bp_jax_k, S_jax_k, zs_minus_k)
 
-    A_jax, B_jax, Bp_jax, S_jax, zs_minus = jax.vmap(unpack_ldsf)(ks)
+    # propagation function for node k
+    def propagate_k(k, zs_ref, us_ref, dts_ref):
+        zs_k  = zs_ref[k]
+        us_k  = us_ref[k]
+        us_kp = us_ref[k+1]
+        dts_k = dts_ref[k]
+
+        # stack z, A, B, Bp, S for multiple shooting propagation
+        lds0_k = pack_lds0(zs_k)
+
+        # propagate stacked vector
+        def rk4_step_jax_partial(lds, tau):
+            return rk4_step_jax_jit(tau, lds, us_k, us_kp, dts_k)
+
+        ldsf_k, _ = jax.lax.scan(rk4_step_jax_partial, lds0_k, t[:-1])
+
+        # unpack the stacked vector back into appropriate shapes
+        return unpack_ldsf(ldsf_k)
+    
+    propagate = jax.jit(jax.vmap(propagate_k, in_axes=(0, None, None, None)))
+
+    problem['propagate'] = propagate
+
+    return problem
+
+# inverse free discretization with jax
+def discretize_inv_free_jax(zs_ref_np, us_ref_np, dts_ref_np, problem):
+
+    params = problem['params']
+
+    # get jitted jax propagation
+    problem['propagate']
+
+    # convert numpy arrays to jax
+    zs_ref = jnp.asarray(zs_ref_np)
+    us_ref = jnp.asarray(us_ref_np)
+    dts_ref = jnp.asarray(dts_ref_np)
+
+    # call jitted propagator for each node
+    ks = jnp.arange(params['N'] - 1)
+    A_jax, B_jax, Bp_jax, S_jax, zs_minus = problem['propagate'](ks, zs_ref, us_ref, dts_ref)
 
     zs_ref_0 = zs_ref[[0], :]
-
+    
     return np.asarray(A_jax), np.asarray(B_jax), np.asarray(Bp_jax), np.asarray(S_jax), np.asarray(jnp.vstack([zs_ref_0, zs_minus]))
-
 
 def compute_linsys_discrete(zs_ref, us_ref, dts_ref, problem):
     """
