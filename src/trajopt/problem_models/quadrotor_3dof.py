@@ -738,87 +738,113 @@ def analytical_inequality_constraints(ts, zs, us, problem):
 
 ####### ALGORITHM 
 
-def custom_inputs(problem,local_vars):
-    u_norm_min  = problem["params"]["u_norm_min"]
-    u_norm_max  = problem["params"]["u_norm_max"]
-    theta_max   = problem["params"]["theta_max"]
-    mass        = problem["params"]["mass"] / problem['params']['nondim']['nm']
-    m           = problem["params"]["m"]
-    ehat_u      = np.eye(m)
-    u1          = problem["params"]["ui"]
-    uN          = problem["params"]["uf"]
+# ============================================================
+# Custom subproblem extensions for quadrotor_3dof
+# ============================================================
+import cvxpy as cp
+import numpy as np
 
-    local_vars.update(locals())
 
-    return local_vars 
+# --------------------------------------
+# 1. Custom Inputs
+# --------------------------------------
+def custom_inputs(problem, ctx):
+    """
+    Add model-specific constants and boundary conditions into ctx.
+    """
+    P = problem["params"]
 
-def custom_subprob_variables(problem,local_vars): 
-    
-    N           = problem["params"]["N"]
+    ctx["u_norm_min"] = P["u_norm_min"]
+    ctx["u_norm_max"] = P["u_norm_max"]
+    ctx["theta_max"]  = P["theta_max"]
+    ctx["mass"]       = P["mass"] / P["nondim"]["nm"]
+    ctx["m"]          = P["m"]
+    ctx["ehat_u"]     = np.eye(P["m"])
+    ctx["u1"]         = P["ui"]
+    ctx["uN"]         = P["uf"]
+    ctx["w_jerk"]     = 1e-1  # Optional jerk weighting
 
-    u_slack     = cp.Variable((N,1))  # 1×N variable
-    w_jerk      = 1e-1
+    return ctx
 
-    local_vars.update(locals())
 
-    return local_vars 
+# --------------------------------------
+# 2. Custom Variables
+# --------------------------------------
+def custom_subprob_variables(problem, ctx):
+    """
+    Define additional CVXPY variables required for this model.
+    """
+    N = problem["params"]["N"]
+    ctx["u_slack"] = cp.Variable((N, 1), name="u_slack")  # per-timestep thrust magnitude slack
+    return ctx
 
-def custom_subprob_constraints(CNST,local_vars):
 
-    us_ref     = local_vars["us_ref"]
-    du         = local_vars["sol_vars"]["du"]
-    u1         = local_vars["u1"]
-    uN         = local_vars["uN"]
-    u_slack    = local_vars["u_slack"]
-    u_norm_min = local_vars["u_norm_min"]
-    u_norm_max = local_vars["u_norm_max"]
-    theta_max  = local_vars["theta_max"]
-    mass       = local_vars["mass"]
-    ehat_u     = local_vars["ehat_u"]
-    N          = local_vars["N"]
+# --------------------------------------
+# 3. Custom Constraints
+# --------------------------------------
+def custom_subprob_constraints(problem, constraints, ctx):
+    """
+    Append additional model-specific convex constraints to the subproblem.
+    """
+    us_ref     = ctx["us_ref"]
+    du         = ctx["du"]
+    u1         = ctx["u1"]
+    uN         = ctx["uN"]
+    u_slack    = ctx["u_slack"]
+    u_norm_min = ctx["u_norm_min"]
+    u_norm_max = ctx["u_norm_max"]
+    theta_max  = ctx["theta_max"]
+    mass       = ctx["mass"]
+    ehat_u     = ctx["ehat_u"]
+    N          = ctx["N"]
 
     # Boundary constraints
-    CNST.append(us_ref[0] + du[0] == u1)
-    CNST.append(us_ref[N-1] + du[N-1] == uN)
+    constraints.append(us_ref[0] + du[0] == u1)
+    constraints.append(us_ref[N - 1] + du[N - 1] == uN)
 
+    # Per-stage norm and attitude constraints
     for k in range(N):
-        u_k     = us_ref[k] + du[k]
+        u_k = us_ref[k] + du[k]
         slack_k = u_slack[k]
-        
-        CNST.append(cp.norm(u_k) <= slack_k)
-        CNST.append(slack_k >= u_norm_min)
-        CNST.append(slack_k <= u_norm_max)
-        CNST.append(np.cos(theta_max) * slack_k - (1 / mass) * ehat_u[:, 2].T @ u_k <= 0)
 
-    return CNST
+        # Norm cone constraint
+        constraints.append(cp.norm(u_k) <= slack_k)
+        # Min/max thrust magnitude
+        constraints.append(slack_k >= u_norm_min)
+        constraints.append(slack_k <= u_norm_max)
+        # Attitude cone constraint (thrust angle limit)
+        constraints.append(np.cos(theta_max) * slack_k - (1 / mass) * ehat_u[:, 2].T @ u_k <= 0)
 
-def custom_subprob_cost(PTR_COST,local_vars):
+    return constraints
 
-    # Extract variables from local_vars
-    ts_ref    = local_vars["ts_ref"]
-    N         = local_vars["N"]
-    u_slack   = local_vars["u_slack"]
-    us_ref    = local_vars["us_ref"]
-    du        = local_vars["sol_vars"]["du"]
-    # w_jerk  = local_vars["w_jerk"]  # Uncomment if you include JERK_COST term
 
-    # Compute dts_ref (time step differences)
-    dts_ref = np.diff(ts_ref)  # shape: (N-1,)
-
-    params = local_vars['params']
-    w_true = params['nondim']['ncost']
+# --------------------------------------
+# 4. Custom Cost
+# --------------------------------------
+def custom_subprob_cost(problem, PTR_COST, ctx):
+    """
+    Add model-specific terms (e.g., thrust effort or jerk regularization) to the cost.
+    """
+    ts_ref  = ctx["ts_ref"]
+    N       = ctx["N"]
+    u_slack = ctx["u_slack"]
+    us_ref  = ctx["us_ref"]
+    du      = ctx["du"]
+    w_true  = problem["params"]["nondim"]["ncost"]
+    dts_ref = np.diff(ts_ref)
 
     TRUE_COST = 0
     JERK_COST = 0
 
+    # Thrust-magnitude cost
     for k in range(N - 1):
-        TRUE_COST   += cp.square(u_slack[k + 1]) * dts_ref[k]
+        TRUE_COST += cp.square(u_slack[k + 1]) * dts_ref[k]
 
-        jerk        = (us_ref[k + 1] + du[k + 1] - us_ref[k] - du[k]) / dts_ref[k]
-        # JERK_COST += w_jerk * cp.sum_squares(jerk)
+        # Optional jerk penalty (currently disabled)
+        jerk = (us_ref[k + 1] + du[k + 1] - us_ref[k] - du[k]) / dts_ref[k]
+        # JERK_COST += ctx["w_jerk"] * cp.sum_squares(jerk)
 
-    PTR_COST        = PTR_COST + w_true * TRUE_COST + JERK_COST
-
+    PTR_COST = PTR_COST + w_true * TRUE_COST + JERK_COST
     return PTR_COST
 
 
