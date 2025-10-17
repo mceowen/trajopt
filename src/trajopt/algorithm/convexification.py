@@ -55,8 +55,8 @@ def compute_ctcs_jacobians(ts, zs, us, problem):
 
     # Evaluate linearized path constraints
     lin_constr_info = problem['lin_constr'](ts, zs, us)
-    g_xu = lin_constr_info["fcn"][0]
-    dgdx = lin_constr_info["dfcn_dz"][0]
+    g_xu = lin_constr_info["fcn"][0] * params['weights']['w_ctcs']
+    dgdx = lin_constr_info["dfcn_dz"][0] * params['weights']['w_ctcs']
     dgdu = lin_constr_info["dfcn_du"][0]
 
     # Conditional constraint smoothing

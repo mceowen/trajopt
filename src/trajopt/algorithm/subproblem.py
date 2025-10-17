@@ -52,43 +52,6 @@ def solve_subproblem(problem):
 
     return O
 
-def solve_subproblem_og(problem):
-
-    local_vars = baseline_subprob_inputs(problem)
-    problem['custom_inputs'](problem, local_vars)
-
-    local_vars = baseline_subprob_variables(problem,local_vars)
-    problem['custom_variables'](problem, local_vars)
-
-    constraints = baseline_subprob_constraints(problem, local_vars)
-    constraints = problem['custom_constraints'](constraints, local_vars)
-
-    PTR_COST    = 0
-    PTR_COST    = baseline_subprob_cost(problem, local_vars)
-    PTR_COST    = problem['custom_cost'](PTR_COST, local_vars)
-
-    # TODO(Skye): vectorize cost computation for speedup
-    objective   = cp.Minimize(PTR_COST)
-    subprob     = cp.Problem(objective, constraints)
-    subprob.solve()
-
-    O = baseline_subprob_outputs(
-        problem,
-        local_vars,
-        subprob,
-    )
-
-    # TODO: Add custom outputs
-    # problem.custom_outputs(problem, local_vars, O)
-
-    O = convergence.check_convergence_tolerance(problem, local_vars, O)
-
-    O = baseline_autotune(problem, local_vars, O)
-    
-    display_baseline_subprob_status(problem, local_vars, O)
-
-    return O
-
 def baseline_subprob_inputs(problem):
 
     I               = problem['I'][-1]
@@ -570,12 +533,12 @@ def baseline_subprob_cost(problem, local_vars):
                 if vb_plus.shape[1] > 0:
                     VIRTUAL_COST += cp.sum([
                         cp.quad_form(vb_plus[k], np.diag(local_vars["W_plus"][k]))
-                        for k in range(vb_plus.shape[1])
+                        for k in range(vb_plus.shape[0])
                     ])
                 if vb_minus.shape[1] > 0:
                     VIRTUAL_COST += cp.sum([
                         cp.quad_form(vb_minus[k], np.diag(local_vars["W_minus"][k]))
-                        for k in range(vb_minus.shape[1])
+                        for k in range(vb_minus.shape[0])
                     ])
 
     # ---- DUAL COST ----

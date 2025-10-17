@@ -129,7 +129,7 @@ def set_convergence_tolerance(params):
             M_term_d2nd = np.eye(n_term)
         else:
             eps_term    = params['conv']['setup']['eps_term']
-            M_term_d2nd = params['nondim']['M_term_d2nd']
+            M_term_d2nd = params['nondim']['M']['term']['d2nd']
         eps_term_nd     = M_term_d2nd @ eps_term
         eps_min_term    = float(np.min(eps_term_nd))
     else:

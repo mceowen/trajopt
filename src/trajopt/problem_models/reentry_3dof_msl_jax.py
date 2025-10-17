@@ -34,7 +34,7 @@ def config_main():
     # Instead, assume working directory is already set or handled externally.
 
     # --- Set base defaults ---
-    config['model_type']    = 'reentry_3dof'
+    config['model_type']    = 'reentry_3dof_msl_jax'
     config['mission']       = config['model_type']
     config['case_flag']     = 1  # 1: double integrator
 
@@ -64,7 +64,7 @@ def config_main():
         'free_final_time': 1,   # 0, 1
         'equal_dt': 1,          # 0, 1
         'flag_autotune': '0',   # '0', '1', '2', '3', 'al-scvx'
-        'buff_dyn': 'l1',       # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
+        'buff_dyn': 'term',       # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
         'buff_dyn_dual': 'none',# 'l1', 'none'
         'ctcs': 0,              # 0, 1
         'ode_fixed_dt': 0,      # 0, 1 ,
@@ -169,6 +169,10 @@ def ocp(config):
     else:
         problem["lin_constr"] = lambda ts, zs, us: analytical_inequality_constraints(ts, zs, us, problem)
 
+    # precompile discretization functions for jax
+    if problem['params']['bools']['jax_dyn'] == 1:
+        problem = discretize.jit_jax_discretization(problem)
+
     # Algorithm - custom formulation
     problem["custom_inputs"]        = lambda problem,   local_vars:     custom_inputs(problem, local_vars)
     problem["custom_variables"]     = lambda problem,   local_vars:     custom_subprob_variables(problem, local_vars)
@@ -256,6 +260,12 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
 
     params = nondim.set_nondim_params(z_types, u_types, anchor_scales, params, base_unit_labels=base_unit_labels)
 
+    # set nondim for cost and constraints
+    np_ineq = np.ones(params['n_nfz']) * params['nondim']['nd']**2
+    ncost = params['nondim']['nv']
+
+    params = nondim.set_cost_cnst_nondim_params(np_ineq, ncost, params)
+
     xc = xc_dim / params['nondim']['nd']
     yc = yc_dim / params['nondim']['nd']
     rc = rc_dim / params['nondim']['nd']
@@ -326,7 +336,8 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     # Initialize trajectory (initial guess)
     #======================================
     if params['bools']['free_final_time'] and (params['bools'].get('buff_dyn')=='term'):
-        us_range = np.ones((2, 1)) @ ((-params['ge'].reshape(1, -1) * params['mass']) + np.array([0.08, 0.08, 0.0])) / params['nondim']['nf']
+
+        us_range = np.tile(np.array([np.deg2rad(5), 0]).reshape(-1, 1), (1, 2))
         
         # need to manually set the left-hand side vector to a column vector for multiplacation to work
         params              = guess.nonlinear_initial_guess(us_range, params)
@@ -349,13 +360,13 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
         # w_nfz: weight for path constraint buffer cost
 
     # === Baseline cost + trust region weights ===
-    params['weights']['w_cost']         = 10.
+    params['weights']['w_cost']         = 1e3
     params['weights']['eps_nonzero1']   = 2e-1
     params['weights']['eps_nonzero2']   = 1e-10
 
     # === Trust region weights ===
-    params['weights'].setdefault('alpha_z', 0.1)
-    params['weights'].setdefault('alpha_u', 0.1)
+    params['weights'].setdefault('alpha_z', 0.5)
+    params['weights'].setdefault('alpha_u', 0.5)
 
     params['weights']['wtr_z']          = 1 / (2 * params['weights']['alpha_z'])
     params['weights']['wtr_u']          = 0 if np.isinf(params['weights']['alpha_u']) else 1 / (2 * params['weights']['alpha_u'])
@@ -369,9 +380,9 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
         # --- Buffer weights ---
         if str(params['bools']['flag_autotune']) in {'0', 'al-scvx'}:
             if 'wbuff' not in params['weights']:
-                wbuff = 1
+                wbuff = 1e2
                 if str(params['bools']['flag_autotune']) == '0':
-                    w_nfz   = 1e2 * wbuff / params['weights']['w_fac_N']
+                    w_nfz   = wbuff / params['weights']['w_fac_N']
                     w_dyn   = 1e6 * wbuff / params['weights']['w_fac_Nm1']
                     w_term  = 1e2 * wbuff
                 else:
@@ -431,9 +442,9 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['eps_ctcs']                                          = eps_ctcs
 
     ### State convergence ###
-    eps_d_state             = 1e-1  # [m]
-    eps_v_state             = 1e-1   # [m/s]
-    eps_ang_state           = np.deg2rad(0.05) # [rad]
+    eps_d_state             = 10  # [m]
+    eps_v_state             = 10   # [m/s]
+    eps_ang_state           = np.deg2rad(1) # [rad]
 
     params['conv']['setup']['eps_state']                        = np.array([eps_d_state, eps_ang_state, eps_ang_state, eps_d_state, eps_ang_state, eps_ang_state])
 
@@ -453,9 +464,9 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['conv']['setup'].setdefault('cnst', {})['eps_nfz']   = eps_nfz_cnst
 
     ### Terminal constraint values ###
-    eps_d_term              = 1e-1
-    eps_v_term              = 1e-2
-    eps_ang_term            = np.deg2rad(0.05) # [rad]
+    eps_d_term              = 10
+    eps_v_term              = 10
+    eps_ang_term            = np.deg2rad(1) # [rad]
 
     # Create eps_vector for full terminal state equality, min, max constraints
     eps_term                = np.array([eps_d_term, eps_ang_term, eps_ang_term, eps_v_term, eps_ang_term, eps_ang_term])
@@ -474,9 +485,9 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['conv']['setup']['eps_defect']                       = np.array([1e-2])
 
     ### Dynamics convergence ###
-    eps_d_dyn               = 1e-3  # [m/s]
-    eps_v_dyn               = 1e-3   # [m/s^2]
-    eps_ang_dyn             = np.deg2rad(0.5) # [rad/s]
+    eps_d_dyn               = 10  # [m/s]
+    eps_v_dyn               = 10   # [m/s^2]
+    eps_ang_dyn             = np.deg2rad(1) # [rad/s]
     params['conv']['setup']['eps_dyn']                          = np.array([eps_d_dyn, eps_ang_dyn, eps_ang_dyn, eps_v_dyn, eps_ang_dyn, eps_ang_dyn])
 
     # Store data
@@ -487,7 +498,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params = convergence.set_convergence_tolerance(params)
 
     # Iterations
-    params['conv']['iter_max']  = 20
+    params['conv']['iter_max']  = 10
 
     # Save variable names
     params['save_var_names']    = ['ts_opt', 'zs_opt', 'us_opt', 'params', 'O']
@@ -519,7 +530,7 @@ def nonlinear_aero(ts, zs, us, params):
 
     return {'L': L, 'D': D, 'alpha': alpha, 'rho': rho}
 
-def system_dynamics(ts, zs, us, params):
+def system_dynamics(ts, zs, us, params, t_vec=None):
 
     # Extract constant param values from struct
     Om = params['omega_s']
@@ -533,9 +544,15 @@ def system_dynamics(ts, zs, us, params):
     L    = aero['L']
     D    = aero['D']
 
+    # extract controls 
+    if t_vec is None:
+        us2 = us
+    else:
+        us2 = np.array([jnp.interp(ts, t_vec, us[:, i]) for i in range(params['m'])])
+
     # Extract bank angle
-    sigma   = us[0]
-    alpha   = us[1]
+    sigma   = us2[0]
+    alpha   = us2[1]
 
     # Extract sines and cosines of various values
     cp  = jnp.cos(phi)

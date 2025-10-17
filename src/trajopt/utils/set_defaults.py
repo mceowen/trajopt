@@ -180,7 +180,7 @@ def set_params_constraint_default(params):
         M_diag[params['zf_max_idx']]
     ])
     # Create the new diagonal matrix
-    params['nondim']['M_term_d2nd'] = np.diag(selected)
+    params['nondim']['M']['term']['d2nd'] = np.diag(selected)
 
     # --- Default weights ---
     weights = params.setdefault('weights', {})
@@ -231,7 +231,7 @@ def set_params_constraint_default(params):
     M_term_diag = np.concatenate([M_state_vec[zf_idx],
                                   M_state_vec[zf_min_idx],
                                   M_state_vec[zf_max_idx]])
-    params['nondim']['M_term_d2nd'] = np.diag(M_term_diag)
+    params['nondim']['M']['term']['d2nd'] = np.diag(M_term_diag)
 
     # --- LTV indexing ---
     params = set_ltv_indices(params)

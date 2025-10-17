@@ -63,7 +63,7 @@ def config_main():
         'buff_dyn_dual': 'none',# 'l1', 'none'
         'ctcs': 0,              # 0, 1
         'ode_fixed_dt': 0,      # 0, 1 ,
-        'nondim': 0,            # 0, 1
+        'nondim': 1,            # 0, 1
     }
 
     # todo: clean this
@@ -225,13 +225,22 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['n_nfz']         = len(params['nfz_idx'])
 
     # set nondim scaling
-
     z_types = ['d', 'd', 'd', 'v', 'v', 'v']
     u_types = ['f', 'f', 'f']
-    anchor_scales = [('d', 10), ('v', 10), ('m', 1)]
-    base_unit_labels = ['m', 's', 'kg']
 
+    if params['bools']['nondim'] == 1:
+        anchor_scales = [('d', 10), ('v', 10), ('m', 1)]
+    else:
+        anchor_scales = [('d', 1), ('v', 1), ('m', 1)]
+    
+    base_unit_labels = ['m', 's', 'kg']
     params = nondim.set_nondim_params(z_types, u_types, anchor_scales, params, base_unit_labels=base_unit_labels)
+
+    # set nondim for cost and constraints
+    np_ineq = np.ones(params['n_nfz']) * params['nondim']['nd']**2
+    ncost = params['nondim']['nf']**2 * params['nondim']['nt']
+
+    params = nondim.set_cost_cnst_nondim_params(np_ineq, ncost, params)
 
     xc = xc_dim / params['nondim']['nd']
     yc = yc_dim / params['nondim']['nd']
@@ -318,11 +327,14 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['weights']['eps_nonzero1']   = 2e-1
     params['weights']['eps_nonzero2']   = 1e-10
 
+    M_state  = params['nondim']['M']['state']['nd2d']
+    avg_state_nd_sq  = np.mean(np.diag(M_state)**2)
+
     # === Trust region weights ===
     params['weights'].setdefault('alpha_z', 0.5)
     params['weights'].setdefault('alpha_u', np.inf)
 
-    params['weights']['wtr_z']          = 1 / (2 * params['weights']['alpha_z'])
+    params['weights']['wtr_z']          = avg_state_nd_sq  * 1 / (2 * params['weights']['alpha_z'])
     params['weights']['wtr_u']          = 0 if np.isinf(params['weights']['alpha_u']) else 1 / (2 * params['weights']['alpha_u'])
 
     # === Autotune modes (flag_autotune ∈ {0,2,3,al-scvx}) ===
@@ -336,13 +348,23 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
             if 'wbuff' not in params['weights']:
                 wbuff = 1e2
                 if str(params['bools']['flag_autotune']) == '0':
-                    w_nfz   = 1e2 * wbuff / params['weights']['w_fac_N']
-                    w_dyn   = 1e5 * wbuff / params['weights']['w_fac_Nm1']
-                    w_term  = 1e2 * wbuff
-                else:
-                    w_nfz   = wbuff / params['weights']['w_fac_N']
-                    w_dyn   = wbuff / params['weights']['w_fac_Nm1']
-                    w_term  = wbuff
+
+                    w_nfz_dim  = wbuff / params['weights']['w_fac_N']
+                    w_dyn_dim  = 1e5 * wbuff / params['weights']['w_fac_Nm1']
+                    w_term_dim = 1e2 * wbuff
+
+                    # scaled nondim weights to approximately preserve relative scaling between cost terms
+                    M_nfz  = params['nondim']['M']['nfz']['nd2d']
+                    M_dyn  = params['nondim']['M']['dyn']['nd2d']
+                    M_term = params['nondim']['M']['term']['nd2d']
+
+                    avg_nfz_nd_sq  = np.mean(np.diag(M_nfz)**2)
+                    avg_dyn_nd_sq  = np.mean(np.diag(M_dyn)**2)
+                    avg_term_nd_sq = np.mean(np.diag(M_term)**2)
+
+                    w_nfz   = avg_nfz_nd_sq  * w_nfz_dim
+                    w_dyn   = avg_dyn_nd_sq  * w_dyn_dim
+                    w_term  = avg_term_nd_sq * w_term_dim
             else:
                 wbuff = params['weights']['wbuff']
                 w_nfz = wbuff / params['weights']['w_fac_N']
@@ -386,14 +408,15 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
                     params['weights']['dual_minus'] += params['weights']['eps_nonzero1']
 
     ### ctcs convergence adjustments ###
-    ctcs_mult_state         = 5e-1
-    ctcs_mult_cnst          = 1e0
-    eps_ctcs                = 1e-8 # 1e-8 for nondim, 1e-4 for dim
+    ctcs_mult_state         = 1e0
+    ctcs_mult_cnst          = 1e0 
+    eps_ctcs                = 1e-4
 
     params['conv']['setup']['ctcs_mult_state']                  = ctcs_mult_state
     params['conv']['setup']['ctcs_mult_cnst']                   = ctcs_mult_cnst
 
     params['eps_ctcs']                                          = eps_ctcs
+    params['weights']['w_ctcs']                                 = params['nondim']['nd']**2
 
     ### State convergence ###
     eps_d_state             = 1e-1  # [m]
@@ -412,13 +435,14 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['conv']['setup'].setdefault('cost', {})['eps_v']     = eps_F_cost
 
     ### NFZ convergence values ###
-    eps_nfz_cnst            = 1e-1
+    eps_nfz_dim             = 1e-1 # [m]
+    eps_nfz_cnst            = 2 * rc_dim * eps_nfz_dim - eps_nfz_dim**2
     params['conv']['setup']['eps_nfz']                          = eps_nfz_cnst * np.ones(params['n_nfz'])
     params['conv']['setup'].setdefault('cnst', {})['eps_nfz']   = eps_nfz_cnst
 
     ### Terminal constraint values ###
-    eps_d_term              = 1e-1
-    eps_v_term              = 1e-2
+    eps_d_term              = 1e-1 # [m]
+    eps_v_term              = 1e-2 # [m/s]
 
     # Create eps_vector for full terminal state equality, min, max constraints
     eps_term                = np.array([eps_d_term, eps_d_term, eps_d_term, eps_v_term, eps_v_term, eps_v_term])
@@ -610,7 +634,7 @@ def analytical_cost(ts, zs, us, problem):
         zkp         = zs[k + 1]
         ukp         = us[k + 1]
 
-        dcostdu[k]  = 2 * ((uk + ukp) / 2).reshape(1, m)
+        dcostdu[k]  = 2 * dt[k] * ((uk + ukp) / 2).reshape(1, m)
         avg_cost    = 0.5 * (problem["cost"](tk, zk, uk) + problem["cost"](tkp, zkp, ukp))
         cost[k]     = avg_cost * dt[k]
 
@@ -712,9 +736,6 @@ def analytical_inequality_constraints(ts, zs, us, problem):
         }
     }
 
-
-
-
 ####### ALGORITHM 
 
 def custom_inputs(problem,local_vars):
@@ -784,6 +805,9 @@ def custom_subprob_cost(PTR_COST,local_vars):
     # Compute dts_ref (time step differences)
     dts_ref = np.diff(ts_ref)  # shape: (N-1,)
 
+    params = local_vars['params']
+    w_true = params['nondim']['ncost']
+
     TRUE_COST = 0
     JERK_COST = 0
 
@@ -793,7 +817,7 @@ def custom_subprob_cost(PTR_COST,local_vars):
         jerk        = (us_ref[k + 1] + du[k + 1] - us_ref[k] - du[k]) / dts_ref[k]
         # JERK_COST += w_jerk * cp.sum_squares(jerk)
 
-    PTR_COST        = PTR_COST + TRUE_COST + JERK_COST
+    PTR_COST        = PTR_COST + w_true * TRUE_COST + JERK_COST
 
     return PTR_COST
 
