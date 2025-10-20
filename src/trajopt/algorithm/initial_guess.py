@@ -114,7 +114,7 @@ def waypoint_initial_guess(params):
     return params
 
 
-def nonlinear_initial_guess(us_range, params):
+def nonlinear_initial_guess(us_range, problem):
     """
     Generate a nonlinear initial guess for trajectory and control.
 
@@ -125,6 +125,8 @@ def nonlinear_initial_guess(us_range, params):
     Returns:
         dict: Updated params with initial guesses (zs_init: N×n, us_init: N×m)
     """
+
+    params = problem['params']
 
     # ---- Time grid initialization ----
     params['dt_init'] = (params['T_init'] / (params['N'] - 1)) * np.ones(params['N'] - 1)
@@ -146,10 +148,10 @@ def nonlinear_initial_guess(us_range, params):
     # ---- Propagate initial trajectory ----
     odesettings = {'atol': 1e-12, 'rtol': 1e-12}
     sol = solve_ivp(
-        get_system_dynamics(params),
+        problem['xdot'],
         [ts_init[0], ts_init[-1]],
         params['zi'],
-        args=(us_init, params, ts_init),
+        args=(us_init, ts_init),
         t_eval=ts_init,
         **odesettings
     )

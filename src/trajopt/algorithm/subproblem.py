@@ -6,7 +6,6 @@ import numpy as np
 import time
 
 # trajopt imports
-import trajopt.problem_models.quadrotor_3dof    as quad3dof
 import trajopt.algorithm.hyperparameters        as hp
 import trajopt.algorithm.scaling                as scaling
 import trajopt.algorithm.convexification        as convexify
