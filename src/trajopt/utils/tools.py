@@ -61,6 +61,40 @@ def constraint_index_selector(min_idx, max_idx, n_elem):
     M_select = np.vstack([M_min, M_max])
     return M_select
 
+def load_dict(yaml_file):
+    '''
+    Loads dictionary from a provided yaml file and converts all lists to np arrays 
+    unless the array stores tuples of strings.
+    '''
+
+    with open(yaml_name, 'r') as file:
+        dict_unconverted = yaml.safe_load(file)
+    
+    dict_converted = convert_list(dict_unconverted)
+
+    return dict_converted
+
+def convert_list(dictionary):
+    '''
+    Converts all lists to arrays with exception of lists of tuples and strings.
+    '''
+
+    temp_dict = {}
+
+    for key, value in dictionary.items():
+        if isinstance(value, dict):
+            temp_dict[key] = convert_list(value)
+        elif isinstance(value, list):
+            if all(isinstance(item, dict) for item in value):
+                temp_dict[key] = [convert_list(item) for item in value]
+            elif all(isinstance(item, (tuple, str)) for item in value):
+                temp_dict[key] = value
+            else:
+                temp_dict[key] = np.array(value)
+        else:
+            temp_dict[key] = value
+
+    return temp_dict
 
 def num_timesteps(zs):
     if zs.ndim == 1:
