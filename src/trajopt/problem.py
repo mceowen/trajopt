@@ -5,12 +5,14 @@ import trajopt.algorithm.convergence        as convergence
 import trajopt.algorithm.convexification    as convexify
 import trajopt.utils.nondim                 as nondim
 import trajopt.config.main_config           as main_config
+import trajopt.utils.config_loader          as cfg
+
 from trajopt.mission import Mission
 from trajopt.model import Model
 import numpy as np
 
 # TEMP: REPLACE WITH PROBLEM CLASS
-def ocp(config):
+def ocp(example_name):
     """
     Define the optimal control problem (OCP):
     - cost
@@ -25,18 +27,13 @@ def ocp(config):
     """
     problem = {}
 
-    problem["name"] = "3DoF Quadrotor"
+    params = cfg.load_params_from_example(f"trajopt.examples.{example_name}")
+    params                  = defaults.set_params_constraint_default(params)
 
-    # Ingest parameters
-    problem["config"]  = config
-    params             = main_config.problem_params(config)
-    problem["params"]  = params
-
-    params['mission_name'] = 'quadrotor_mission'
-    params['model_name']   = 'quadrotor_3dof_model'
+    # at this point, we should have the params['mission'] and params['model'] dictionaries
 
     problem['mission']    = Mission(problem)
-    problem['model']      = Model(problem, problem['mission'])
+    problem['model']      = Model(problem)
 
     mission               = problem['mission']
     model                 = problem['model']
@@ -46,7 +43,7 @@ def ocp(config):
 
     # Default state/control bounds
     problem               = defaults.set_problem_default(problem)
-
+    
     # Cost function
     problem["cost"]       = mission.cost
     problem['lin_cost']   = mission.lin_cost
@@ -67,11 +64,6 @@ def ocp(config):
     problem["custom_constraints"]   = mission.custom_subprob_constraints
     problem["custom_cost"]          = mission.custom_subprob_cost
 
-    
-    
-    
-    
-    
     
     # TEMP: this would go in method and take in the model 
 

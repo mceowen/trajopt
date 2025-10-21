@@ -296,7 +296,6 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     ### Set default constraint data ###
     params                  = defaults.set_params_constraint_default(params)
 
-
     #======================================
     # Initialize trajectory (initial guess)
     #======================================

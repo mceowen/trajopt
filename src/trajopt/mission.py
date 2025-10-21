@@ -12,7 +12,6 @@ import trajopt.utils.nondim                 as nondim
 class Mission:
     def __init__(self, problem):
 
-        self.problem = problem
         self.params = problem['params']
 
         # point to selected mission module
@@ -37,9 +36,9 @@ class Mission:
         self._custom_subprob_constraints = mission_module.custom_subprob_constraints
         self._custom_subprob_cost = mission_module.custom_subprob_cost
 
-    #===============================================================
+    # ===============================================================
     # member functions point to selected fcns from selected module
-    #===============================================================
+    # ===============================================================
 
     def cost(self, ts, zs, us):
         return self._cost(ts, zs, us, self)

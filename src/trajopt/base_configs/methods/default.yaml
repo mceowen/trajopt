@@ -1,0 +1,30 @@
+bools:
+  auto_jac: 1
+  auto_jac_aero: 1
+  auto_jac_cnst: 1
+  dev_var: 1
+  var_scl_flag: 0
+  free_final_time: 0
+  equal_dt: 0
+  flag_nfz: 0
+  flag_autotune: 3
+  flag_Wauto_memory: 0
+  weight_zero: 0
+  stepsize_auto_primal: 0
+  stepsize_auto_dual: 0
+  flag_conv: 0
+  buff_dyn: "l2"
+  buff_dyn_dual: "l1"
+  ctcs: 0
+  ode_fixed_dt: 0
+  aoa_vb: 0
+  init_ctrl: 1
+
+# Convergence settings
+conv:
+  eps_feas_conv: 1.0e-1
+  eps_conv: 1.0e-1
+  eps_cost_conv: 1.0e-1
+
+# Weight structure
+weights: {}

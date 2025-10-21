@@ -15,11 +15,9 @@ import trajopt.utils.nondim                 as nondim
 
 class Model:
 
-    def __init__(self, problem, mission):
+    def __init__(self, problem):
         
-        self.mission = mission
-        self.problem = problem
-        self.params = self.problem['params']
+        self.params = problem['params']
 
         # point to selected model module
         model_name = self.params['model_name']

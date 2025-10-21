@@ -110,7 +110,8 @@ def mission_params(params):
     # none
 
     # equality terminal conditions
-    params['zf']            = params['nondim']['M']['state']['d2nd'] @ np.array([10,10,0.5,0,0,0])
+    zf_dim = np.array([10,10,0.5,0,0,0])
+    params['zf']            = params['nondim']['M']['state']['d2nd'] @ zf_dim
     params['zf_idx']        = np.arange(0,params['n'])
 
     # control boundary conditions
@@ -139,9 +140,6 @@ def mission_params(params):
     params['ddts_max']      = 5. / ((params['N'] - 1) * params['nondim']['nt'])  # 0.025
     params['dts_min']       = Ts_min / (params['N'] - 1)
     params['dts_max']       = Ts_max / (params['N'] - 1)
-
-    ### Set default constraint data ###
-    params                  = defaults.set_params_constraint_default(params)
 
     return params
 

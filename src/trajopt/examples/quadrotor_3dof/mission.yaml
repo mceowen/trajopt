@@ -1,0 +1,25 @@
+# Dimensional mission configuration (no nondim)
+mission_name: quadrotor_mission
+
+ge: [0.0, 0.0, -9.81]
+
+nfz:
+  xc: [2.5, 5.0, 2.5, 5.5, 8.0, 5.5]
+  yc: [2.0, 2.5, 5.0, 5.25, 5.5, 8.0]
+  rc: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+
+# Initial & terminal states (dimensional)
+z0_dim: [0.0, 0.0, 5.0, 0.0, 0.5, 0.0]
+zf_dim: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
+
+# Vehicle and bounds (dimensional)
+mass: 0.35
+z_min: [0.0, 0.0, 0.25]
+z_min_idx: [0, 1, 2]
+z_max: [12.0, 12.0, 10.0]
+z_max_idx: [0, 1, 2]
+
+# Timing constraints (seconds)
+Ts_min: 1.0
+Ts_max: 20.0
+ddts_max: 0.13

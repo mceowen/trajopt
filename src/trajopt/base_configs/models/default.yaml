@@ -1,0 +1,9 @@
+# default model params
+
+n: 1
+m: 1
+
+bools:
+  jax_dyn: 0
+  earth_rot: 0
+  nondim: 0
