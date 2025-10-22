@@ -7,56 +7,56 @@ import jax.numpy as jnp
 
 
 def compute_cost(ts, zs, us, problem):
-    lin_info    = problem['mission'].lin_cost(ts, zs, us)
-    dcostdz     = lin_info['dfcn_dz']
-    dcostdu     = lin_info['dfcn_du']
-    cost        = lin_info['fcn']
+    lin_info    = problem["mission"].lin_cost(ts, zs, us)
+    dcostdz     = lin_info["dfcn_dz"]
+    dcostdu     = lin_info["dfcn_du"]
+    cost        = lin_info["fcn"]
 
     return dcostdz, dcostdu, cost
 
 
 def compute_aero(ts, zs, us, problem):
-    lin_info = problem['mission'].lin_aero(ts, zs, us)
-    daero_dx = lin_info['dfcn_dz']
-    daero_du = lin_info['dfcn_du']
-    aero     = lin_info['fcn']
+    lin_info = problem["mission"].lin_aero(ts, zs, us)
+    daero_dx = lin_info["dfcn_dz"]
+    daero_du = lin_info["dfcn_du"]
+    aero     = lin_info["fcn"]
 
     return daero_dx, daero_du, aero
 
 
 def compute_path_constraints(ts, zs, us, problem):
-    lin_info    = problem['model'].lin_constr(ts, zs, us)
-    dPdz        = lin_info['dfcn_dz']
-    dPdu        = lin_info['dfcn_du']
-    P           = lin_info['fcn']
+    lin_info    = problem["model"].lin_constr(ts, zs, us)
+    dPdz        = lin_info["dfcn_dz"]
+    dPdu        = lin_info["dfcn_du"]
+    P           = lin_info["fcn"]
 
     return dPdz, dPdu, P
 
 
 def compute_linsys_continuous(ts, zs, us, problem):
-    lin_info    = problem['model'].lin_dyn(ts, zs, us)
-    Ac          = lin_info['dfcn_dz']
-    Bc          = lin_info['dfcn_du']
-    fc          = lin_info['fcn']
+    lin_info    = problem["model"].lin_dyn(ts, zs, us)
+    Ac          = lin_info["dfcn_dz"]
+    Bc          = lin_info["dfcn_du"]
+    fc          = lin_info["fcn"]
 
     return Ac, Bc, fc
 
 
 def compute_ctcs_jacobians(ts, zs, us, problem):
     params = problem["params"]
-    n = params["n"]
-    n_ineq = params["n_ineq"]
+    n = params["model"]["n"]
+    n_ineq = params["mission"]["n_ineq"]
 
     # Evaluate linearized dynamics
-    lin_dyn_info    = problem['lin_dyn'](ts, zs[:n], us)
+    lin_dyn_info    = problem["lin_dyn"](ts, zs[:n], us)
     f_xu = lin_dyn_info["fcn"]
     dfdx = lin_dyn_info["dfcn_dz"]
     dfdu = lin_dyn_info["dfcn_du"]
 
     # Evaluate linearized path constraints
-    lin_constr_info = problem['lin_constr'](ts, zs, us)
-    g_xu = lin_constr_info["fcn"][0] * params['weights']['w_ctcs']
-    dgdx = lin_constr_info["dfcn_dz"][0] * params['weights']['w_ctcs']
+    lin_constr_info = problem["lin_constr"](ts, zs, us)
+    g_xu = lin_constr_info["fcn"][0] * params["method"]["weights"]["w_ctcs"]
+    dgdx = lin_constr_info["dfcn_dz"][0] * params["method"]["weights"]["w_ctcs"]
     dgdu = lin_constr_info["dfcn_du"][0]
 
     # Conditional constraint smoothing
@@ -93,8 +93,8 @@ def generate_jacobians(fcn_hdl, problem):
 
     # Extract params
     params = problem.get("params", problem)
-    n = params["n"]
-    m = params["m"]
+    n = params["model"]["n"]
+    m = params["model"]["m"]
 
     # Symbolic variables
     t = sp.Symbol("t")
@@ -107,9 +107,9 @@ def generate_jacobians(fcn_hdl, problem):
     dfcn_du_sym = sp.simplify(fcn_sym.jacobian(u))
 
     # Turn symbolic expressions into callable functions
-    dfdz_hdl = sp.lambdify((t, z, u), dfcn_dz_sym, modules='numpy')
-    dfdu_hdl = sp.lambdify((t, z, u), dfcn_du_sym, modules='numpy')
-    fcn_eval = sp.lambdify((t, z, u), fcn_sym, modules='numpy')
+    dfdz_hdl = sp.lambdify((t, z, u), dfcn_dz_sym, modules="numpy")
+    dfdu_hdl = sp.lambdify((t, z, u), dfcn_du_sym, modules="numpy")
+    fcn_eval = sp.lambdify((t, z, u), fcn_sym, modules="numpy")
 
     def lin_hdl(t_val, z_val, u_val):
         z_arr = np.array(z_val).flatten()
@@ -126,7 +126,7 @@ def generate_jacobians(fcn_hdl, problem):
 def generate_jacobians_jax(fcn_hdl, problem):
     
     params = problem.get("params", problem)
-    n, m = params["n"], params["m"]
+    n, m = params["model"]["n"], params["model"]["m"]
 
     # Wrap function to make t, z, u separate JAX arguments
     def wrapped(z_u, t):
@@ -178,21 +178,21 @@ def generate_jacobians2(func_nl, params):
 
     Parameters:
         func_nl : function handle returning sympy Matrix, i.e. func_nl(t, z, u)
-        params  : dict with 'n' (state dimension) and 'm' (control dimension)
+        params  : dict with "n" (state dimension) and "m" (control dimension)
 
     Returns:
         lin_hdl : dict with keys:
-                    'fcn'      - original symbolic function
-                    'dfcn_dx'  - ∂f/∂z function handle
-                    'dfcn_du'  - ∂f/∂u function handle
+                    "fcn"      - original symbolic function
+                    "dfcn_dx"  - ∂f/∂z function handle
+                    "dfcn_du"  - ∂f/∂u function handle
     """
-    n = params["n"]
-    m = params["m"]
+    n = params["model"]["n"]
+    m = params["model"]["m"]
 
     # Define symbolic variables
-    t = sp.Symbol('t')
-    z = sp.Matrix(sp.symbols(f'z0:{n}')).reshape(n, 1)
-    u = sp.Matrix(sp.symbols(f'u0:{m}')).reshape(m, 1)
+    t = sp.Symbol("t")
+    z = sp.Matrix(sp.symbols(f"z0:{n}")).reshape(n, 1)
+    u = sp.Matrix(sp.symbols(f"u0:{m}")).reshape(m, 1)
 
     # Evaluate symbolic nonlinear function
     f_sym = sp.simplify(func_nl(t, z, u))
@@ -211,8 +211,8 @@ def generate_jacobians2(func_nl, params):
             dfdu_sym[i, j] = sp.simplify(sp.diff(f_sym[i], u[j]))
 
     # Create callable function handles
-    dfdx_hdl = sp.lambdify((t, z, u), dfdx_sym, modules='numpy')
-    dfdu_hdl = sp.lambdify((t, z, u), dfdu_sym, modules='numpy')
+    dfdx_hdl = sp.lambdify((t, z, u), dfdx_sym, modules="numpy")
+    dfdu_hdl = sp.lambdify((t, z, u), dfdu_sym, modules="numpy")
 
     lin_hdl = {
         "fcn": func_nl,

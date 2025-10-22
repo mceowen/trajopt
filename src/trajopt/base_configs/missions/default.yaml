@@ -1,4 +1,6 @@
 # default mission parameters
+bools:
+  flag_nfz: 0
 
 # Constraint structure
 path_lim: []
@@ -52,3 +54,5 @@ n_ctrl: 0
 n_udot: 0
 
 n_dyn: 0
+
+theta_max: 100

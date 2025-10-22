@@ -1,5 +1,7 @@
 import numpy as np
-import cvxpy as cp 
+import cvxpy as cp
+import importlib 
+import yaml
 
 # TODO: just condense into a single function (not both get_val, safe_val)
 
@@ -67,7 +69,7 @@ def load_dict(yaml_file):
     unless the array stores tuples of strings.
     '''
 
-    with open(yaml_name, 'r') as file:
+    with open(yaml_file, 'r') as file:
         dict_unconverted = yaml.safe_load(file)
     
     dict_converted = convert_list(dict_unconverted)
@@ -85,7 +87,9 @@ def convert_list(dictionary):
         if isinstance(value, dict):
             temp_dict[key] = convert_list(value)
         elif isinstance(value, list):
-            if all(isinstance(item, dict) for item in value):
+            if not value:
+                temp_dict[key] = np.array([], dtype=int)
+            elif all(isinstance(item, dict) for item in value):
                 temp_dict[key] = [convert_list(item) for item in value]
             elif all(isinstance(item, (tuple, str)) for item in value):
                 temp_dict[key] = value
@@ -96,6 +100,10 @@ def convert_list(dictionary):
 
     return temp_dict
 
+def load_yaml(pkg, file_name):
+    path = importlib.resources.files(pkg).joinpath(file_name)
+    return convert_list(load_dict(path))
+
 def num_timesteps(zs):
     if zs.ndim == 1:
         return 1
@@ -103,3 +111,11 @@ def num_timesteps(zs):
         return zs.shape[0]
     else:
         raise ValueError(f"Expected 1D or 2D array, got shape {arr.shape}")
+
+def deep_update(dst, src):
+    for k, v in src.items():
+        if isinstance(v, dict) and isinstance(dst.get(k), dict):
+            deep_update(dst[k], v)
+        else:
+            dst[k] = v
+    return dst

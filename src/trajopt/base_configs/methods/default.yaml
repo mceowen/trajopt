@@ -6,7 +6,6 @@ bools:
   var_scl_flag: 0
   free_final_time: 0
   equal_dt: 0
-  flag_nfz: 0
   flag_autotune: 3
   flag_Wauto_memory: 0
   weight_zero: 0
@@ -19,6 +18,7 @@ bools:
   ode_fixed_dt: 0
   aoa_vb: 0
   init_ctrl: 1
+  jax_dyn: 0
 
 # Convergence settings
 conv:
@@ -28,3 +28,5 @@ conv:
 
 # Weight structure
 weights: {}
+
+N: 40

@@ -16,82 +16,82 @@ def set_ltv_indices(params):
     Returns:
     dict: Updated params with LTV indices and initialized arrays.
     """
-    params['z_ind']     = np.arange(0, params['nz'])
-    params['Ak_ind']    = np.arange(params['z_ind'][-1] + 1, params['z_ind'][-1] + 1 + params['nz']**2 )
-    params['Bk_ind']    = np.arange(params['Ak_ind'][-1] + 1, params['Ak_ind'][-1] + 1 + params['nz'] * params['m'] )
-    params['Bkp_ind']   = np.arange(params['Bk_ind'][-1] + 1, params['Bk_ind'][-1] + 1 + params['nz'] * params['m'] )
-    params['Sk_ind']    = np.arange(params['Bkp_ind'][-1] + 1, params['Bkp_ind'][-1] +
-                                    1 + params['nz'] )
+    params["z_ind"]     = np.arange(0, params["model"]["nz"])
+    params["Ak_ind"]    = np.arange(params["z_ind"][-1] + 1, params["z_ind"][-1] + 1 + params["model"]["nz"]**2 )
+    params["Bk_ind"]    = np.arange(params["Ak_ind"][-1] + 1, params["Ak_ind"][-1] + 1 + params["model"]["nz"] * params["model"]["m"] )
+    params["Bkp_ind"]   = np.arange(params["Bk_ind"][-1] + 1, params["Bk_ind"][-1] + 1 + params["model"]["nz"] * params["model"]["m"] )
+    params["Sk_ind"]    = np.arange(params["Bkp_ind"][-1] + 1, params["Bkp_ind"][-1] +
+                                    1 + params["model"]["nz"] )
 
-    params['Ak']        = np.zeros((params['N'] - 1,params['nz'], params['nz']))
-    params['Bk']        = np.zeros((params['N'] - 1, params['nz'], params['m']))
-    params['Bkp']       = np.zeros((params['N'] - 1, params['nz'], params['m']))
-    params['Sk']        = np.zeros((params['N'] - 1, params['nz'], 1))
+    params["Ak"]        = np.zeros((params["method"]["N"] - 1,params["model"]["nz"], params["model"]["nz"]))
+    params["Bk"]        = np.zeros((params["method"]["N"] - 1, params["model"]["nz"], params["model"]["m"]))
+    params["Bkp"]       = np.zeros((params["method"]["N"] - 1, params["model"]["nz"], params["model"]["m"]))
+    params["Sk"]        = np.zeros((params["method"]["N"] - 1, params["model"]["nz"], 1))
 
-    params['lds0_size'] = params['Sk_ind'][-1] + 1
-    params['lds0']      = np.zeros( params['lds0_size'] )
+    params["lds0_size"] = params["Sk_ind"][-1] + 1
+    params["lds0"]      = np.zeros( params["lds0_size"] )
 
-    params['lds0'][params['Ak_ind']] = np.reshape(np.eye(params['nz']), -1)
-    params['N_dens']    = 20
+    params["lds0"][params["Ak_ind"]] = np.reshape(np.eye(params["model"]["nz"]), -1)
+    params["N_dens"]    = 20
 
     # convert indeces to jax arrays for jax discretization option
-    params['lds0_size_jax'] = int(params['lds0_size'])
-    params['z_ind_jax']     = jnp.asarray(params['z_ind'])  
-    params['Ak_ind_jax']    = jnp.asarray(params['Ak_ind'])
-    params['Bk_ind_jax']    = jnp.asarray(params['Bk_ind'])
-    params['Bkp_ind_jax']   = jnp.asarray(params['Bkp_ind'])
-    params['Sk_ind_jax']    = jnp.asarray(params['Sk_ind'])
+    params["lds0_size_jax"] = int(params["lds0_size"])
+    params["z_ind_jax"]     = jnp.asarray(params["z_ind"])  
+    params["Ak_ind_jax"]    = jnp.asarray(params["Ak_ind"])
+    params["Bk_ind_jax"]    = jnp.asarray(params["Bk_ind"])
+    params["Bkp_ind_jax"]   = jnp.asarray(params["Bkp_ind"])
+    params["Sk_ind_jax"]    = jnp.asarray(params["Sk_ind"])
 
     return params
 
 # Compute exact discretization for linear dynamic system
 def discretize_inv_foh(zs_ref, us_ref, dts_ref, problem):
-    params = problem['params']
-    N = params['N']
+    params = problem["params"]
+    N = params["method"]["N"]
 
-    traj_minus_data = {'zs_minus': [zs_ref[0]]}
+    traj_minus_data = {"zs_minus": [zs_ref[0]]}
 
     # Precompute
-    eye_flat = np.eye(params['n']).ravel()
+    eye_flat = np.eye(params["model"]["n"]).ravel()
 
     # Stack dynamics
     lds0_stack = []
     for k in range(N - 1):
-        params['lds0'][params['z_ind']] = zs_ref[k]
-        params['lds0'][params['Ak_ind']] = eye_flat
-        lds0_stack.append(params['lds0'].copy())
+        params["lds0"][params["z_ind"]] = zs_ref[k]
+        params["lds0"][params["Ak_ind"]] = eye_flat
+        lds0_stack.append(params["lds0"].copy())
 
     lds0_stack = np.concatenate(lds0_stack)
 
     def derivs_step(tau, lds):
         return RHS_ltv(tau, lds, us_ref, dts_ref, problem)
 
-    sol = solve_ivp(derivs_step, [0, 1], lds0_stack, method='RK45', atol=1e-6, rtol=1e-6)
+    sol = solve_ivp(derivs_step, [0, 1], lds0_stack, method="RK45", atol=1e-6, rtol=1e-6)
 
     lds_end = sol.y[:, -1]  # shape: (total_state_size,)
 
-    assert lds_end.shape[0] == (N - 1) * params['lds0_size']
+    assert lds_end.shape[0] == (N - 1) * params["lds0_size"]
 
-    Ak  = np.zeros((N - 1, params['n'], params['n']))
-    Bk  = np.zeros((N - 1, params['n'], params['m']))
-    Bkp = np.zeros((N - 1, params['n'], params['m']))
-    Sk  = np.zeros((N - 1, params['n']))
+    Ak  = np.zeros((N - 1, params["model"]["n"], params["model"]["n"]))
+    Bk  = np.zeros((N - 1, params["model"]["n"], params["model"]["m"]))
+    Bkp = np.zeros((N - 1, params["model"]["n"], params["model"]["m"]))
+    Sk  = np.zeros((N - 1, params["model"]["n"]))
 
     for k in range(N - 1):
-        base    = k * params['lds0_size']
-        traj_minus_data['zs_minus'].append(lds_end[base + params['z_ind']])
+        base    = k * params["lds0_size"]
+        traj_minus_data["zs_minus"].append(lds_end[base + params["z_ind"]])
 
-        Ak_bar  = lds_end[base + params['Ak_ind']].reshape(params['n'], params['n'])
-        Bk_bar  = lds_end[base + params['Bk_ind']].reshape(params['n'], params['m'])
-        Bkp_bar = lds_end[base + params['Bkp_ind']].reshape(params['n'], params['m'])
-        Sk_bar  = lds_end[base + params['Sk_ind']]
+        Ak_bar  = lds_end[base + params["Ak_ind"]].reshape(params["model"]["n"], params["model"]["n"])
+        Bk_bar  = lds_end[base + params["Bk_ind"]].reshape(params["model"]["n"], params["model"]["m"])
+        Bkp_bar = lds_end[base + params["Bkp_ind"]].reshape(params["model"]["n"], params["model"]["m"])
+        Sk_bar  = lds_end[base + params["Sk_ind"]]
 
         Ak[k]   = Ak_bar
         Bk[k]   = Ak_bar @ Bk_bar
         Bkp[k]  = Ak_bar @ Bkp_bar
         Sk[k]   = Ak_bar @ Sk_bar
 
-    zs_minus    = np.array(traj_minus_data['zs_minus'])
+    zs_minus    = np.array(traj_minus_data["zs_minus"])
 
     return Ak, Bk, Bkp, Sk, zs_minus
 
@@ -101,8 +101,8 @@ def RHS_ltv(tau, lds, us_ref, dts_ref, problem):
 
     # Initialize
     lds_dot         = np.zeros_like(lds)
-    params          = problem['params']
-    N               = params['N']
+    params          = problem["params"]
+    N               = params["method"]["N"]
 
     # Extract times and FOH control input
     Om_k            = 1 - tau
@@ -121,13 +121,13 @@ def RHS_ltv(tau, lds, us_ref, dts_ref, problem):
         dts_k       = dts_ref[k]
 
         # Extract state info
-        x           = lds[ k * params['lds0_size'] + params['z_ind'] ]
+        x           = lds[ k * params["lds0_size"] + params["z_ind"] ]
 
         # Extract continuous time Jacobians
         Ac, Bc, fc  = convexify.compute_linsys_continuous(tau, x, u[k], problem)
 
         # Extract STM
-        Phi_tau     = lds[ k * params['lds0_size'] + params['Ak_ind'] ].reshape(params['n'], params['n'])
+        Phi_tau     = lds[ k * params["lds0_size"] + params["Ak_ind"] ].reshape(params["model"]["n"], params["model"]["n"])
 
         # Construct Jacobians w.r.t. tau
         f_tau       = dts_k * fc
@@ -146,20 +146,20 @@ def RHS_ltv(tau, lds, us_ref, dts_ref, problem):
         S_tau_dot   = Phi_tau_inv @ S_tau
 
         # Setup linear system properly
-        lds_dot[ k * params['lds0_size'] + params['z_ind']]     = x_dot
-        lds_dot[ k * params['lds0_size'] + params['Ak_ind']]    = A_tau_dot.flatten()
-        lds_dot[ k * params['lds0_size'] + params['Bk_ind']]    = B_tau_dot.flatten()
-        lds_dot[ k * params['lds0_size'] + params['Bkp_ind']]   = Bp_tau_dot.flatten()
-        lds_dot[ k * params['lds0_size'] + params['Sk_ind']]    = S_tau_dot
+        lds_dot[ k * params["lds0_size"] + params["z_ind"]]     = x_dot
+        lds_dot[ k * params["lds0_size"] + params["Ak_ind"]]    = A_tau_dot.flatten()
+        lds_dot[ k * params["lds0_size"] + params["Bk_ind"]]    = B_tau_dot.flatten()
+        lds_dot[ k * params["lds0_size"] + params["Bkp_ind"]]   = Bp_tau_dot.flatten()
+        lds_dot[ k * params["lds0_size"] + params["Sk_ind"]]    = S_tau_dot
 
     return lds_dot
 
 def jit_jax_discretization(problem):
-    params = problem['params']
+    params = problem["params"]
     
-    n = int(params['nz'])
-    m = int(params['m'])
-    N = int(params['N'])
+    n = int(params["model"]["nz"])
+    m = int(params["model"]["m"])
+    N = int(params["N"])
 
     # define static indices for stacked RHS vector 
     Ak_ind0   = n
@@ -168,7 +168,7 @@ def jit_jax_discretization(problem):
     Sk_ind0   = Bkp_ind0 + n*m
 
     # pull ltv dynamics
-    lin_sys = problem['lin_dyn']
+    lin_sys = problem["lin_dyn"]
 
     # nsub defines the number of sub *nodes* between knot points
     nsub_nodes = 30
@@ -191,9 +191,9 @@ def jit_jax_discretization(problem):
 
         lin_info    = lin_sys(tau, x, u)
 
-        Ac = lin_info['dfcn_dz']
-        Bc = lin_info['dfcn_du']
-        fc = lin_info['fcn']
+        Ac = lin_info["dfcn_dz"]
+        Bc = lin_info["dfcn_du"]
+        fc = lin_info["fcn"]
 
         P1_dot = (sigma * fc)
         P2_dot = (sigma * Ac @ phi_a).reshape((n*n,))
@@ -256,17 +256,17 @@ def jit_jax_discretization(problem):
     
     propagate = jax.jit(jax.vmap(propagate_k, in_axes=(0, None, None, None)))
 
-    problem['propagate'] = propagate
+    problem["propagate"] = propagate
 
     return problem
 
 # inverse free discretization with jax
 def discretize_inv_free_jax(zs_ref_np, us_ref_np, dts_ref_np, problem):
 
-    params = problem['params']
+    params = problem["params"]
 
     # get jitted jax propagation
-    problem['propagate']
+    problem["propagate"]
 
     # convert numpy arrays to jax
     zs_ref = jnp.asarray(zs_ref_np)
@@ -274,8 +274,8 @@ def discretize_inv_free_jax(zs_ref_np, us_ref_np, dts_ref_np, problem):
     dts_ref = jnp.asarray(dts_ref_np)
 
     # call jitted propagator for each node
-    ks = jnp.arange(params['N'] - 1)
-    A_jax, B_jax, Bp_jax, S_jax, zs_minus = problem['propagate'](ks, zs_ref, us_ref, dts_ref)
+    ks = jnp.arange(params["N"] - 1)
+    A_jax, B_jax, Bp_jax, S_jax, zs_minus = problem["propagate"](ks, zs_ref, us_ref, dts_ref)
 
     zs_ref_0 = zs_ref[[0], :]
     
@@ -294,9 +294,9 @@ def compute_linsys_discrete(zs_ref, us_ref, dts_ref, problem):
     Returns:
     tuple: Ak, Bk, Bkp, Sk, zs_minus
     """
-    if problem['params']['bools']['ctcs']:
+    if problem["params"]["method"]["bools"]["ctcs"]:
         Ak, Bk, Bkp, Sk, zs_minus = discretize_ctcs(zs_ref, us_ref, dts_ref, problem)
-    elif problem['params']['bools']['jax_dyn']:
+    elif problem["params"]["method"]["bools"]["jax_dyn"]:
         Ak, Bk, Bkp, Sk, zs_minus = discretize_inv_free_jax(zs_ref, us_ref, dts_ref, problem)
     else:
         Ak, Bk, Bkp, Sk, zs_minus = discretize_inv_foh(zs_ref, us_ref, dts_ref, problem)
@@ -317,17 +317,17 @@ def discretize_ctcs(zs_ref, us_ref, dts_ref, problem):
     Returns:
     tuple: Ak, Bk, Bkp, Sk, zs_minus
     """
-    params = problem['params']
-    N = params['N']
+    params = problem["params"]
+    N = params["method"]["N"]
 
-    traj_minus_data = {'zs_minus': [zs_ref[0]]}
+    traj_minus_data = {"zs_minus": [zs_ref[0]]}
 
     # Setup LTV system dynamics
     lds0_stack = []
     for k in range(N - 1):
-        params['lds0'][params['z_ind']] = zs_ref[k]
-        params['lds0'][params['Ak_ind']] = np.reshape(np.eye(params['nz']), -1)
-        lds0_stack.append(params['lds0'].copy())
+        params["lds0"][params["z_ind"]] = zs_ref[k]
+        params["lds0"][params["Ak_ind"]] = np.reshape(np.eye(params["model"]["nz"]), -1)
+        lds0_stack.append(params["lds0"].copy())
 
     lds0_stack = np.hstack(lds0_stack)
 
@@ -337,25 +337,25 @@ def discretize_ctcs(zs_ref, us_ref, dts_ref, problem):
     sol = solve_ivp(derivs_step, [0, 1], lds0_stack, atol=1E-12, rtol=1E-12)
     lds_out_stack = sol.y
 
-    Ak = np.zeros((N-1, params['nz'], params['nz']))
-    Bk = np.zeros((N-1, params['nz'], params['m']))
-    Bkp = np.zeros((N-1,params['nz'], params['m']))
-    Sk = np.zeros((N-1, params['nz']))
+    Ak = np.zeros((N-1, params["model"]["nz"], params["model"]["nz"]))
+    Bk = np.zeros((N-1, params["model"]["nz"], params["model"]["m"]))
+    Bkp = np.zeros((N-1,params["model"]["nz"], params["model"]["m"]))
+    Sk = np.zeros((N-1, params["model"]["nz"]))
 
     # Extract dense values
     for k in range(N - 1):
         lds_end = lds_out_stack[:, -1]
-        traj_minus_data['zs_minus'].append(
-            lds_end[k * params['lds0_size'] + params['z_ind']])
+        traj_minus_data["zs_minus"].append(
+            lds_end[k * params["lds0_size"] + params["z_ind"]])
 
         # Reshape matrices
-        Ak_bar = np.reshape(lds_end[k * params['lds0_size'] + params['Ak_ind']],
-                            (params['nz'], params['nz']))
-        Bk_bar = np.reshape(lds_end[k * params['lds0_size'] + params['Bk_ind']],
-                            (params['nz'], params['m']))
-        Bkp_bar = np.reshape(lds_end[k * params['lds0_size'] + params['Bkp_ind']],
-                             (params['nz'], params['m']))
-        Sk_bar = lds_end[k * params['lds0_size'] + params['Sk_ind']]
+        Ak_bar = np.reshape(lds_end[k * params["lds0_size"] + params["Ak_ind"]],
+                            (params["model"]["nz"], params["model"]["nz"]))
+        Bk_bar = np.reshape(lds_end[k * params["lds0_size"] + params["Bk_ind"]],
+                            (params["model"]["nz"], params["model"]["m"]))
+        Bkp_bar = np.reshape(lds_end[k * params["lds0_size"] + params["Bkp_ind"]],
+                             (params["model"]["nz"], params["model"]["m"]))
+        Sk_bar = lds_end[k * params["lds0_size"] + params["Sk_ind"]]
 
         # Fill in the next STM
         Ak[k]   = Ak_bar
@@ -364,7 +364,7 @@ def discretize_ctcs(zs_ref, us_ref, dts_ref, problem):
         Sk[k]   = Ak_bar @ Sk_bar
 
     # Extract x_ref_minus traj (from integration)
-    zs_minus    = np.array(traj_minus_data['zs_minus'])
+    zs_minus    = np.array(traj_minus_data["zs_minus"])
 
     return Ak, Bk, Bkp, Sk, zs_minus
 
@@ -384,8 +384,8 @@ def RHS_ltv_ctcs(tau, lds, us_ref, dts_ref, problem):
     numpy.ndarray: Derivative of the linear dynamic system state.
     """
     lds_dot = np.zeros_like(lds)
-    params = problem['params']
-    N = params['N']
+    params = problem["params"]
+    N = params["N"]
 
     Om_k = 1 - tau
     Om_kp = tau
@@ -396,12 +396,12 @@ def RHS_ltv_ctcs(tau, lds, us_ref, dts_ref, problem):
 
     for k in range(N - 1):
         dts_k = dts_ref[k]
-        x = lds[k * params['lds0_size'] + params['z_ind']]
+        x = lds[k * params["lds0_size"] + params["z_ind"]]
 
         Ac, Bc, fc = convexify.compute_ctcs_jacobians(tau, x, u[k, :], problem)
 
-        Phi_tau = np.reshape(lds[k * params['lds0_size'] + params['Ak_ind']],
-                             (params['nz'], params['nz']))
+        Phi_tau = np.reshape(lds[k * params["lds0_size"] + params["Ak_ind"]],
+                             (params["model"]["nz"], params["model"]["nz"]))
 
         f_tau = dts_k * fc
         A_tau = dts_k * Ac
@@ -417,11 +417,11 @@ def RHS_ltv_ctcs(tau, lds, us_ref, dts_ref, problem):
         Bp_tau_dot = Phi_tau_inv @ Bp_tau
         S_tau_dot = Phi_tau_inv @ S_tau
 
-        lds_dot[k * params['lds0_size'] + params['z_ind']] = x_dot
-        lds_dot[k * params['lds0_size'] + params['Ak_ind']] = np.reshape(A_tau_dot, -1)
-        lds_dot[k * params['lds0_size'] + params['Bk_ind']] = np.reshape(B_tau_dot, -1)
-        lds_dot[k * params['lds0_size'] + params['Bkp_ind']] = np.reshape(Bp_tau_dot, -1)
-        lds_dot[k * params['lds0_size'] + params['Sk_ind']] = S_tau_dot
+        lds_dot[k * params["lds0_size"] + params["z_ind"]] = x_dot
+        lds_dot[k * params["lds0_size"] + params["Ak_ind"]] = np.reshape(A_tau_dot, -1)
+        lds_dot[k * params["lds0_size"] + params["Bk_ind"]] = np.reshape(B_tau_dot, -1)
+        lds_dot[k * params["lds0_size"] + params["Bkp_ind"]] = np.reshape(Bp_tau_dot, -1)
+        lds_dot[k * params["lds0_size"] + params["Sk_ind"]] = S_tau_dot
 
     return lds_dot
 
@@ -430,9 +430,9 @@ if __name__ == "__main__":
 
      # Define dummy data for testing
     params = {
-        'nz': 3,
-        'm': 2,
-        'N': 10
+        "nz": 3,
+        "m": 2,
+        "N": 10
     }
 
     updated_params = set_ltv_indices(params)
@@ -443,18 +443,18 @@ if __name__ == "__main__":
     us_ref = np.random.rand(4, 3)
     dts_ref = np.random.rand(3)
     problem = {
-        'params': {
-            'N': 4,
-            'n': 3,
-            'm': 3,
-            'lds0_size': 9,
-            'z_ind': slice(0, 3),
-            'Ak_ind': slice(3, 6),
-            'Bk_ind': slice(6, 9),
-            'Bkp_ind': slice(9, 12),
-            'Sk_ind': slice(12, 15),
-            'lds0': np.zeros(15),
-            'bools': {'ode_fixed_dt': False}
+        "params": {
+            "N": 4,
+            "n": 3,
+            "m": 3,
+            "lds0_size": 9,
+            "z_ind": slice(0, 3),
+            "Ak_ind": slice(3, 6),
+            "Bk_ind": slice(6, 9),
+            "Bkp_ind": slice(9, 12),
+            "Sk_ind": slice(12, 15),
+            "lds0": np.zeros(15),
+            "bools": {"ode_fixed_dt": False}
         }
     }
 

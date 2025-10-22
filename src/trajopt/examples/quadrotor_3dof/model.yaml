@@ -1,8 +1,16 @@
 # Dimensional model configuration (no nondim)
-model_name: quadrotor_3dof_model
+model_name: "quadrotor"
 
 # State/control dimensions
 n: 6
 m: 3
+
+z_types: ["d", "d", "d", "v", "v", "v"]
+u_types: ["f", "f", "f"]
+
+anchor_types : ["d", "v", "m"]
+anchor_scales: [10.0, 10.0, 1.0]
+
+base_unit_labels: ["m", "s", "kg"]
 
 theta_max_deg: 100.0    # degrees, loader will convert to radians

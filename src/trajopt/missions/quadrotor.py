@@ -12,18 +12,18 @@ import trajopt.utils.nondim                 as nondim
 def cost(ts, zs, us, mission):
 
     problem = mission.problem
-    params = problem['params']
+    params = problem["params"]
     
     return np.dot(np.transpose(us), us)
 
 def analytical_cost(ts, zs, us, mission):
 
     problem = mission.problem
-    params = problem['params']
+    params = problem["params"]
 
-    n               = params["n"]
-    m               = params["m"]
-    N               = params["N"]
+    n               = params["model"]["n"]
+    m               = params["model"]["m"]
+    N               = params["method"]["N"]
 
     ts              = np.asarray(ts).flatten()
     zs              = np.asarray(zs)
@@ -64,35 +64,32 @@ def analytical_cost(ts, zs, us, mission):
 
 def mission_params(params):
 
-    # Physical constants
-    params['ge']        = np.array([0, 0, -9.81]) # [m/s^2], grav accel at sea lvl
-
     #======================
     # Path /NFZ constraints
     #======================
     # no fly zones, specified by position and radius [rad]
-    if params['bools']['flag_nfz'] == 1:
-        xc = np.array([5]) / params['nondim']['nd']
-        yc = np.array([4]) / params['nondim']['nd']
-        rc = np.array([2]) / params['nondim']['nd']
-    elif params['bools']['flag_nfz'] == 2:
-        xc = np.array([2.5, 5,  2.5, 5.5,  8,  5.5]) / params['nondim']['nd']# 5
-        yc = np.array([2,   2.5,  5, 5.25, 5.5, 8]) / params['nondim']['nd']# 4
-        rc = np.ones(xc.size) / params['nondim']['nd'] # 2, 1
+    if params["mission"]["bools"]["flag_nfz"] == 1:
+        xc = params["mission"]["nfz_1"]["xc"] / params["method"]["nondim"]["nd"]
+        yc = params["mission"]["nfz_1"]["yc"] / params["method"]["nondim"]["nd"]
+        rc = params["mission"]["nfz_1"]["rc"] / params["method"]["nondim"]["nd"]
+    elif params["mission"]["bools"]["flag_nfz"] == 2:
+        xc = params["mission"]["nfz_2"]["xc"] / params["method"]["nondim"]["nd"]
+        yc = params["mission"]["nfz_2"]["yc"] / params["method"]["nondim"]["nd"]
+        rc = params["mission"]["nfz_2"]["rc"] / params["method"]["nondim"]["nd"]
     else:
-        xc = np.array([])
-        yc = np.array([])
-        rc = np.array([])
+        xc = params["mission"]["nfz_0"]["xc"] / params["method"]["nondim"]["nd"]
+        yc = params["mission"]["nfz_0"]["yc"] / params["method"]["nondim"]["nd"]
+        rc = params["mission"]["nfz_0"]["rc"] / params["method"]["nondim"]["nd"]
 
-    params['nfz_idx']       = np.arange(0, xc.size)
-    params['n_nfz']         = len(params['nfz_idx'])
+    params["mission"]["nfz_idx"]       = np.arange(0, xc.size)
+    params["mission"]["n_nfz"]         = len(params["mission"]["nfz_idx"])
 
-    params.setdefault('obs', {})['posc'] = np.array([xc, yc]) # xc and yc may be vectors
-    params['obs']['rc']     = rc
+    params["mission"].setdefault("obs", {})["posc"] = np.array([xc, yc]) # xc and yc may be vectors
+    params["mission"]["obs"]["rc"]     = rc
 
     # set nondim for cost and constraints
-    np_ineq = np.ones(params['n_nfz']) * params['nondim']['nd']**2
-    ncost = params['nondim']['nf']**2 * params['nondim']['nt']
+    np_ineq = np.ones(params["mission"]["n_nfz"]) * params["method"]["nondim"]["nd"]**2
+    ncost = params["method"]["nondim"]["nf"]**2 * params["method"]["nondim"]["nt"]
 
     params = nondim.set_cost_cnst_nondim_params(np_ineq, ncost, params)
 
@@ -100,58 +97,54 @@ def mission_params(params):
     # Boundary Conditions
     #====================
     # initial conditions
-    params['z0_dim']           = np.array([0,0,5,0,0.5,0])
 
     # equality initial conditions
-    params['zi']            = params['nondim']['M']['state']['d2nd'] @ params['z0_dim']
-    params['zi_idx']        = np.arange(0, params['n'])
+    params["mission"]["zi"]            = params["method"]["nondim"]["M"]["state"]["d2nd"] @ params["mission"]["zi"]
+    params["mission"]["zi_idx"]        = np.arange(0, params["model"]["n"])
 
     # inequality initial conditions
     # none
 
     # equality terminal conditions
-    zf_dim = np.array([10,10,0.5,0,0,0])
-    params['zf']            = params['nondim']['M']['state']['d2nd'] @ zf_dim
-    params['zf_idx']        = np.arange(0,params['n'])
+    params["mission"]["zf"]            = params["method"]["nondim"]["M"]["state"]["d2nd"] @ params["mission"]["zf"]  
+    params["mission"]["zf_idx"]        = np.arange(0,params["model"]["n"])
 
     # control boundary conditions
-    params['ui']            = -params['ge']*params['mass'] / params['nondim']['nf']
-    params['uf']            = -params['ge']*params['mass'] / params['nondim']['nf']
+    params["mission"]["ui"]            = -params["mission"]["ge"]*params["mission"]["mass"] / params["method"]["nondim"]["nf"]
+    params["mission"]["uf"]            = -params["mission"]["ge"]*params["mission"]["mass"] / params["method"]["nondim"]["nf"]
 
     #==============================
     # Control and state constraints
     #==============================
     # no state constraints
-    params['z_min']         = np.array([0, 0, 0.25]) / params['nondim']['nd']
-    params['z_min_idx']     = np.arange(0,3)
-    params['z_max']         = np.array([12, 12, 10]) / params['nondim']['nd']
-    params['z_max_idx']     = np.arange(0,3)
-
-    params['u_norm_min']    = 0.21 / params['nondim']['nf']
-    params['u_norm_max']    = 8.12 / params['nondim']['nf']
-
-    params['udot_max']      = 5*np.ones(3) / (params['nondim']['nf'] / params['nondim']['nt'])# [N/s]
-    params['udot_max_idx']  = np.arange(0,3)
+    params["mission"]["z_min"]         = np.array([0, 0, 0.25]) / params["method"]["nondim"]["nd"]
+    params["mission"]["z_min_idx"]     = np.arange(0,3)
+    params["mission"]["z_max"]         = np.array([12, 12, 10]) / params["method"]["nondim"]["nd"]
+    params["mission"]["z_max_idx"]     = np.arange(0,3)
+    params["mission"]["u_norm_min"]    = 0.21 / params["method"]["nondim"]["nf"]
+    params["mission"]["u_norm_max"]    = 8.12 / params["method"]["nondim"]["nf"]
+    params["mission"]["udot_max"]      = 5*np.ones(3) / (params["method"]["nondim"]["nf"] / params["method"]["nondim"]["nt"])# [N/s]
+    params["mission"]["udot_max_idx"]  = np.arange(0,3)
 
 
     ### Time of flight constraints ###
-    Ts_min                  = 1. / params['nondim']['nt']  # 50
-    Ts_max                  = 20. / params['nondim']['nt']
-    params['ddts_max']      = 5. / ((params['N'] - 1) * params['nondim']['nt'])  # 0.025
-    params['dts_min']       = Ts_min / (params['N'] - 1)
-    params['dts_max']       = Ts_max / (params['N'] - 1)
+    Ts_min                  = 1. / params["method"]["nondim"]["nt"]  # 50
+    Ts_max                  = 20. / params["method"]["nondim"]["nt"]
+    params["method"]["ddts_max"]      = 5. / ((params["method"]["N"] - 1) * params["method"]["nondim"]["nt"])  # 0.025
+    params["method"]["dts_min"]       = Ts_min / (params["method"]["N"] - 1)
+    params["method"]["dts_max"]       = Ts_max / (params["method"]["N"] - 1)
 
     return params
 
 def custom_inputs(problem,local_vars):
-    u_norm_min  = problem["params"]["u_norm_min"]
-    u_norm_max  = problem["params"]["u_norm_max"]
-    theta_max   = problem["params"]["theta_max"]
-    mass        = problem["params"]["mass"] / problem['params']['nondim']['nm']
-    m           = problem["params"]["m"]
+    u_norm_min  = problem["params"]["mission"]["u_norm_min"]
+    u_norm_max  = problem["params"]["mission"]["u_norm_max"]
+    theta_max   = np.deg2rad(problem["params"]["mission"]["theta_max"])
+    mass        = problem["params"]["mission"]["mass"] / problem["params"]["method"]["nondim"]["nm"]
+    m           = problem["params"]["model"]["m"]
     ehat_u      = np.eye(m)
-    u1          = problem["params"]["ui"]
-    uN          = problem["params"]["uf"]
+    u1          = problem["params"]["mission"]["ui"]
+    uN          = problem["params"]["mission"]["uf"]
 
     local_vars.update(locals())
 
@@ -159,7 +152,7 @@ def custom_inputs(problem,local_vars):
 
 def custom_subprob_variables(problem,local_vars): 
     
-    N           = problem["params"]["N"]
+    N           = problem["params"]["method"]["N"]
 
     u_slack     = cp.Variable((N,1))  # 1×N variable
     w_jerk      = 1e-1
@@ -210,8 +203,8 @@ def custom_subprob_cost(PTR_COST,local_vars):
     # Compute dts_ref (time step differences)
     dts_ref = np.diff(ts_ref)  # shape: (N-1,)
 
-    params = local_vars['params']
-    w_true = params['nondim']['ncost']
+    params = local_vars["params"]
+    w_true = params["method"]["nondim"]["ncost"]
 
     TRUE_COST = 0
     JERK_COST = 0
