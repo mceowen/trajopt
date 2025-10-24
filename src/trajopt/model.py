@@ -33,9 +33,7 @@ class Model:
             self._lin_dyn = model_module.analytical_linsys
 
         # set nonlinear inequality constraints
-        self._nonlinear_inequality_constraints = (
-            model_module.nonlinear_inequality_constraints
-        )
+        self._nonlinear_inequality_constraints = (model_module.nonlinear_inequality_constraints)
 
         # set linearized constraints
         if self.params["method"]["bools"]["auto_jac_cnst"]:
