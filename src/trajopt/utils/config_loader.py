@@ -279,13 +279,15 @@ def update_method_params(params):
 
     ### NFZ convergence values ###
     eps_nfz_dim             = 1e-1 # [m]
-    eps_nfz_cnst            = 2 * params["mission"]["obs"]["rc"] * eps_nfz_dim - eps_nfz_dim**2
+    rc_dim = params["mission"]["obs"]["rc"] * params["method"]["nondim"]["nd"]
+
+    eps_nfz_cnst            = 2 * rc_dim * eps_nfz_dim - eps_nfz_dim**2
     params["method"]["conv"]["setup"]["eps_nfz"]                          = eps_nfz_cnst * np.ones(params["mission"]["n_nfz"])
     params["method"]["conv"]["setup"].setdefault("cnst", {})["eps_nfz"]   = eps_nfz_cnst
 
     ### Terminal constraint values ###
     eps_d_term              = 1e-1 # [m]
-    eps_v_term              = 1e-2 # [m/s]
+    eps_v_term              = 1e-1 # [m/s]
 
     # Create eps_vector for full terminal state equality, min, max constraints
     eps_term                = np.array([eps_d_term, eps_d_term, eps_d_term, eps_v_term, eps_v_term, eps_v_term])

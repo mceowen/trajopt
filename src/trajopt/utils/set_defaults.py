@@ -169,17 +169,17 @@ def set_params_constraint_default(params):
     else:
         raise ValueError("Invalid buff_dyn flag.")
 
-    # # --- Terminal conditions nondimensionalization ---
-    # # Get the diagonal of the source matrix
-    # M_diag = np.diag(params["method"]["nondim"]["M"]["state"]["d2nd"])
-    # # Stack selected diagonals
-    # selected = np.concatenate([
-    #     M_diag[params["mission"]["zf_idx"]],
-    #     M_diag[params["mission"]["zf_min_idx"]],
-    #     M_diag[params["mission"]["zf_max_idx"]]
-    # ])
-    # # Create the new diagonal matrix
-    # params["method"]["nondim"]["M"]["term"]["d2nd"] = np.diag(selected)
+    # --- Terminal conditions nondimensionalization ---
+    # Get the diagonal of the source matrix
+    M_diag = np.diag(params["method"]["nondim"]["M"]["state"]["d2nd"])
+    # Stack selected diagonals
+    selected = np.concatenate([
+        M_diag[params["mission"]["zf_idx"]],
+        M_diag[params["mission"]["zf_min_idx"]],
+        M_diag[params["mission"]["zf_max_idx"]]
+    ])
+    # Create the new diagonal matrix
+    params["method"]["nondim"]["M"]["term"]["d2nd"] = np.diag(selected)
 
     # --- Default weights ---
     weights = params["method"].setdefault("weights", {})
@@ -222,15 +222,15 @@ def set_params_constraint_default(params):
 
     params["eps_ctcs"] = 1e-5
 
-    # # --- Terminal nondimensionalization matrix ---
-    # M_state_vec = np.diag(params["method"]["nondim"]["M"]["state"]["d2nd"])
-    # zf_idx      = params["method"].get("zf_idx", np.array([], dtype=np.int64))
-    # zf_min_idx  = params["method"].get("zf_min_idx", np.array([], dtype=np.int64))
-    # zf_max_idx  = params["method"].get("zf_max_idx", np.array([], dtype=np.int64))
-    # M_term_diag = np.concatenate([M_state_vec[zf_idx],
-    #                               M_state_vec[zf_min_idx],
-    #                               M_state_vec[zf_max_idx]])
-    # params["method"]["nondim"]["M"]["term"]["d2nd"] = np.diag(M_term_diag)
+    # --- Terminal nondimensionalization matrix ---
+    M_state_vec = np.diag(params["method"]["nondim"]["M"]["state"]["d2nd"])
+    zf_idx      = params["mission"].get("zf_idx", np.array([], dtype=np.int64))
+    zf_min_idx  = params["mission"].get("zf_min_idx", np.array([], dtype=np.int64))
+    zf_max_idx  = params["mission"].get("zf_max_idx", np.array([], dtype=np.int64))
+    M_term_diag = np.concatenate([M_state_vec[zf_idx],
+                                  M_state_vec[zf_min_idx],
+                                  M_state_vec[zf_max_idx]])
+    params["method"]["nondim"]["M"]["term"]["d2nd"] = np.diag(M_term_diag)
 
     # --- LTV indexing ---
     params = set_ltv_indices(params)
@@ -244,7 +244,6 @@ def set_params_constraint_default(params):
     conv_data["vb_term"] = np.zeros(params["model"]["nz"])
 
     return params
-
 
 def set_problem_default(problem):
     """
