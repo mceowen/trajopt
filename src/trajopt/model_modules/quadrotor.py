@@ -20,7 +20,7 @@ def system_dynamics(ts, zs, us, model, t_vec=None):
     # extract constant param values
     m       = int( params["model"]["m"] )
     n       = int( params["model"]["n"] )
-    mass    = params["mission"]["mass"] / params["method"]["nondim"]["nm"]                  ######## CHANGE NONDIM TO BE DONE UPFRONT!!!!! (CARLOS)
+    mass    = params["mission"]["mass"] / params["method"]["nondim"]["nm"]
     ge      = params["mission"]["ge"] / params["method"]["nondim"]["na"]
 
     # extract states

@@ -15,7 +15,7 @@ def load_params(example_name):
     params["method"] = {}
 
     # example configs
-    example_pkg = f"trajopt.examples.{example_name}"
+    example_pkg = f"trajopt.example_configs.{example_name}"
     example = {k: tools.load_yaml(example_pkg, f"{k}.yaml") for k in ["mission", "model", "method"]}
 
     example_mission_params = example["mission"]
@@ -52,7 +52,6 @@ def load_params(example_name):
     default_mission_params = default["mission"]
     default_model_params   = default["model"]
     default_method_params  = default["method"]
-
 
     # update params with defaults -> base -> example params
     params["mission"].update(default_mission_params)
