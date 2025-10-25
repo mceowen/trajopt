@@ -16,15 +16,12 @@ def load_params(example_name):
 
     # example configs
     example_pkg = f"trajopt.examples.{example_name}"
-    example = {k: tools.load_yaml(example_pkg, f"{k}.yaml") for k in ["mission", "model", "method"]}
-
-    example_mission_params = example["mission"]
-    example_model_params   = example["model"]
-    example_method_params  = example["method"]
-
-    mission_name = example_mission_params["mission_name"]
-    model_name   = example_model_params["model_name"]
-    method_name  = example_method_params["method_name"]
+    example = {
+        k: tools.load_yaml(example_pkg, f"{k}.yaml")
+        for k in [
+            "mission", "model", "method"
+            ]
+        }
 
     # base configs
     base_pkgs = {
@@ -36,36 +33,27 @@ def load_params(example_name):
     base = {
         k: tools.load_yaml(base_pkgs[k], f"{name}.yaml")
         for k, name in {
-            "mission": mission_name,
-            "model":   model_name,
-            "method":  method_name,
+            "mission": example["mission"]["mission_name"],
+            "model":   example["model"]["model_name"],
+            "method":  example["method"]["method_name"],
         }.items()
     }
 
-    base_mission_params = base["mission"]
-    base_model_params   = base["model"]
-    base_method_params  = base["method"]
 
     # general default configs
-    default = {k: tools.load_yaml(base_pkgs[k], "default.yaml") for k in base_pkgs}
-
-    default_mission_params = default["mission"]
-    default_model_params   = default["model"]
-    default_method_params  = default["method"]
+    default = {
+        k: tools.load_yaml(base_pkgs[k], "default.yaml")
+        for k in base_pkgs
+        }
 
 
     # update params with defaults -> base -> example params
-    params["mission"].update(default_mission_params)
-    params["mission"] = tools.deep_update(params["mission"], base_mission_params)
-    params["mission"] = tools.deep_update(params["mission"], example_mission_params)
-
-    params["model"].update(default_model_params)
-    params["model"] = tools.deep_update(params["model"], base_model_params)
-    params["model"] = tools.deep_update(params["model"], example_model_params)
-
-    params["method"].update(default_method_params)
-    params["method"] = tools.deep_update(params["method"], base_method_params)
-    params["method"] = tools.deep_update(params["method"], example_method_params)
+    for param_type in ['mission', 'model', 'method']:
+        for update_type in [default, base, example]:
+            if f'{update_type}' == 'default':
+                params[param_type].update(default[param_type])
+            else:
+                params[param_type] = tools.deep_update(params[param_type], update_type[param_type])
 
     # update mission/method/model params based on configs
     params = nondim.set_nondim_params(params["model"]["z_types"],
@@ -86,19 +74,16 @@ def update_mission_params(params):
     #======================
     # Path /NFZ constraints
     #======================
+
+    nd = params["method"]["nondim"]["nd"]
+    nt = params["method"]["nondim"]["nt"]
+    nf = params["method"]["nondim"]["nf"]
+
     # no fly zones, specified by position and radius [rad]
-    if params["mission"]["bools"]["flag_nfz"] == 1:
-        xc = params["mission"]["nfz_1"]["xc"] / params["method"]["nondim"]["nd"]
-        yc = params["mission"]["nfz_1"]["yc"] / params["method"]["nondim"]["nd"]
-        rc = params["mission"]["nfz_1"]["rc"] / params["method"]["nondim"]["nd"]
-    elif params["mission"]["bools"]["flag_nfz"] == 2:
-        xc = params["mission"]["nfz_2"]["xc"] / params["method"]["nondim"]["nd"]
-        yc = params["mission"]["nfz_2"]["yc"] / params["method"]["nondim"]["nd"]
-        rc = params["mission"]["nfz_2"]["rc"] / params["method"]["nondim"]["nd"]
-    else:
-        xc = params["mission"]["nfz_0"]["xc"] / params["method"]["nondim"]["nd"]
-        yc = params["mission"]["nfz_0"]["yc"] / params["method"]["nondim"]["nd"]
-        rc = params["mission"]["nfz_0"]["rc"] / params["method"]["nondim"]["nd"]
+    num_nfz = params["mission"]["bools"]["flag_nfz"]
+    xc = params["mission"][f"nfz_{num_nfz}"]["xc"] / nd
+    yc = params["mission"][f"nfz_{num_nfz}"]["yc"] / nd
+    rc = params["mission"][f"nfz_{num_nfz}"]["rc"] / nd
 
     params["mission"]["nfz_idx"]       = np.arange(0, xc.size)
     params["mission"]["n_nfz"]         = len(params["mission"]["nfz_idx"])
@@ -107,8 +92,8 @@ def update_mission_params(params):
     params["mission"]["obs"]["rc"]     = rc
 
     # set nondim for cost and constraints
-    np_ineq = np.ones(params["mission"]["n_nfz"]) * params["method"]["nondim"]["nd"]**2
-    ncost = params["method"]["nondim"]["nf"]**2 * params["method"]["nondim"]["nt"]
+    np_ineq = np.ones(params["mission"]["n_nfz"]) * nd**2
+    ncost = params["method"]["nondim"]["nf"]**2 * nt
 
     params = nondim.set_cost_cnst_nondim_params(np_ineq, ncost, params)
 
@@ -136,13 +121,13 @@ def update_mission_params(params):
     # Control and state constraints
     #==============================
     # no state constraints
-    params["mission"]["z_min"]         = np.array([0, 0, 0.25]) / params["method"]["nondim"]["nd"]
+    params["mission"]["z_min"]         = np.array([0, 0, 0.25]) / nd
     params["mission"]["z_min_idx"]     = np.arange(0,3)
-    params["mission"]["z_max"]         = np.array([12, 12, 10]) / params["method"]["nondim"]["nd"]
+    params["mission"]["z_max"]         = np.array([12, 12, 10]) / nd
     params["mission"]["z_max_idx"]     = np.arange(0,3)
-    params["mission"]["u_norm_min"]    = 0.21 / params["method"]["nondim"]["nf"]
-    params["mission"]["u_norm_max"]    = 8.12 / params["method"]["nondim"]["nf"]
-    params["mission"]["udot_max"]      = 5*np.ones(3) / (params["method"]["nondim"]["nf"] / params["method"]["nondim"]["nt"])# [N/s]
+    params["mission"]["u_norm_min"]    = 0.21 / nf
+    params["mission"]["u_norm_max"]    = 8.12 / nf
+    params["mission"]["udot_max"]      = 5*np.ones(3) / (nf / nt)# [N/s]
     params["mission"]["udot_max_idx"]  = np.arange(0,3)
 
     return params
