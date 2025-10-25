@@ -18,7 +18,7 @@ class Mission:
 
         # point to selected mission module
         mission_name = self.params["mission"]["mission_name"]
-        mission_module = importlib.import_module(f"trajopt.missions.{mission_name}")
+        mission_module = importlib.import_module(f"trajopt.mission_modules.{mission_name}")
 
         # set cost function
         self._cost = mission_module.cost

@@ -21,7 +21,7 @@ class Model:
 
         # point to selected model module
         model_name = self.params["model"]["model_name"]
-        model_module = importlib.import_module(f"trajopt.models.{model_name}")
+        model_module = importlib.import_module(f"trajopt.model_modules.{model_name}")
 
         # set dynamics
         self._dynamics = model_module.system_dynamics
