@@ -9,21 +9,19 @@ import trajopt.algorithm.convergence        as convergence
 import trajopt.algorithm.convexification    as convexify
 import trajopt.utils.nondim                 as nondim
 
-def cost(ts, zs, us, mission):
-
-    problem = mission.problem
-    params = problem["params"]
+def cost(ts, zs, us, problem):
     
     return np.dot(np.transpose(us), us)
 
-def analytical_cost(ts, zs, us, mission):
+def analytical_cost(ts, zs, us, problem):
 
-    problem = mission.problem
-    params = problem["params"]
+    mission = problem.mission
+    model = problem.model
+    method = problem.method
 
-    n               = params["model"]["n"]
-    m               = params["model"]["m"]
-    N               = params["method"]["N"]
+    n               = model.n
+    m               = model.m
+    N               = method.N
 
     ts              = np.asarray(ts).flatten()
     zs              = np.asarray(zs)
@@ -45,7 +43,7 @@ def analytical_cost(ts, zs, us, mission):
         ukp         = us[k + 1]
 
         dcostdu[k]  = 2 * dt[k] * ((uk + ukp) / 2).reshape(1, m)
-        avg_cost    = 0.5 * (problem["cost"](tk, zk, uk) + problem["cost"](tkp, zkp, ukp))
+        avg_cost    = 0.5 * (mission.cost(tk, zk, uk) + mission.cost(tkp, zkp, ukp))
         cost[k]     = avg_cost * dt[k]
 
     # Last step (N)
@@ -63,22 +61,30 @@ def analytical_cost(ts, zs, us, mission):
     return lincost
 
 def custom_inputs(problem,local_vars):
-    u_norm_min  = problem["params"]["mission"]["u_norm_min"]
-    u_norm_max  = problem["params"]["mission"]["u_norm_max"]
-    theta_max   = np.deg2rad(problem["params"]["mission"]["theta_max"])
-    mass        = problem["params"]["mission"]["mass"] / problem["params"]["method"]["nondim"]["nm"]
-    m           = problem["params"]["model"]["m"]
+
+    mission = problem.mission
+    model = problem.model
+    method = problem.method
+
+    u_norm_min  = mission.custom_input_dict["u_norm_min"]
+    u_norm_max  = mission.custom_input_dict["u_norm_max"]
+    theta_max   = np.deg2rad(mission.custom_input_dict["theta_max"])
+    mass        = mission.mass / method.nondim["nm"]
+    m           = model.m
     ehat_u      = np.eye(m)
-    u1          = problem["params"]["mission"]["ui"]
-    uN          = problem["params"]["mission"]["uf"]
+    u1          = mission.ui
+    uN          = mission.uf
+
+    ncost = method.nondim["ncost"]
 
     local_vars.update(locals())
 
     return local_vars 
 
-def custom_subprob_variables(problem,local_vars): 
+def custom_variables(problem,local_vars):
+    method = problem.method
     
-    N           = problem["params"]["method"]["N"]
+    N           = method.N
 
     u_slack     = cp.Variable((N,1))  # 1×N variable
     w_jerk      = 1e-1
@@ -87,7 +93,7 @@ def custom_subprob_variables(problem,local_vars):
 
     return local_vars 
 
-def custom_subprob_constraints(CNST,local_vars):
+def custom_constraints(CNST,local_vars):
 
     us_ref     = local_vars["us_ref"]
     du         = local_vars["sol_vars"]["du"]
@@ -116,7 +122,7 @@ def custom_subprob_constraints(CNST,local_vars):
 
     return CNST
 
-def custom_subprob_cost(PTR_COST,local_vars):
+def custom_cost(PTR_COST,local_vars):
 
     # Extract variables from local_vars
     ts_ref    = local_vars["ts_ref"]
@@ -124,13 +130,13 @@ def custom_subprob_cost(PTR_COST,local_vars):
     u_slack   = local_vars["u_slack"]
     us_ref    = local_vars["us_ref"]
     du        = local_vars["sol_vars"]["du"]
+    ncost     = local_vars["ncost"]
     # w_jerk  = local_vars["w_jerk"]  # Uncomment if you include JERK_COST term
 
     # Compute dts_ref (time step differences)
     dts_ref = np.diff(ts_ref)  # shape: (N-1,)
 
-    params = local_vars["params"]
-    w_true = params["method"]["nondim"]["ncost"]
+    w_true = ncost
 
     TRUE_COST = 0
     JERK_COST = 0

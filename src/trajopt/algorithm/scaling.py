@@ -68,22 +68,26 @@ def dim_vars(ts, xs, us, params):
 
 def subprob_variable_scaling(problem, local_vars):
 
+    mission = problem.mission
+    model = problem.model
+    method = problem.method
+
     # Extract input struct
     I               = local_vars["I"]
 
     # Extract params
-    n               = problem["params"]["model"]["nz"]
-    m               = problem["params"]["model"]["m"]
-    N               = problem["params"]["method"]["N"]
-    bool_dev_var    = problem["params"]["method"]["bools"]["dev_var"]
-    var_scl_flag    = problem["params"]["method"]["bools"]["var_scl_flag"]
+    n               = model.nz
+    m               = model.m
+    N               = method.N
+    bool_dev_var    = method.bools["dev_var"]
+    var_scl_flag    = method.bools["var_scl_flag"]
 
     zs_ref          = I["zs_ref"]
     us_ref          = I["us_ref"]
-    z_max           = problem["params"]["mission"]["z_max"]
-    z_min           = problem["params"]["mission"]["z_min"]
-    u_max           = problem["params"]["mission"]["u_max"]
-    u_min           = problem["params"]["mission"]["u_min"]
+    z_max           = mission.z_max
+    z_min           = mission.z_min
+    u_max           = mission.u_max
+    u_min           = mission.u_min
 
     # DEVIATION VARIABLES
     if bool_dev_var:

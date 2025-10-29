@@ -2,7 +2,7 @@ import numpy as np
 
 # example usage: set_nondim_params(["d", "d", "d", "v", "v", "v"], ["f", "f"], [("d", 10), ("v", 10), ("m", 1)], params)
 
-def set_nondim_params(z_types, u_types, anchor_types, anchor_scales, params, base_unit_labels=["m", "s", "kg"]):
+def set_nondim_params(problem, base_unit_labels=["m", "s", "kg"]):
     """
     Initializes all nondimensional parameters
     """
@@ -10,8 +10,12 @@ def set_nondim_params(z_types, u_types, anchor_types, anchor_scales, params, bas
     # path_lim = params["mission"]["path_lim"]
     # n_path = params["n_path"]
     # n_nfz = params["mission"]["n_nfz"]
-    n = params["model"]["n"]
-    m = params["model"]["m"]
+    
+    model = problem.model
+    method = problem.method
+
+    n = model.n
+    m = model.m
 
     # this solves the following linear system to backout base scales for
     # distance, time, and mass:
@@ -27,14 +31,14 @@ def set_nondim_params(z_types, u_types, anchor_types, anchor_scales, params, bas
         "f": np.array([1, -2,  1]),
     }
 
-    A = np.vstack([exponents[key] for key in anchor_types])
-    b = np.log(np.array([val for val in anchor_scales]))
+    A = np.vstack([exponents[key] for key in model.anchor_types])
+    b = np.log(np.array([val for val in model.anchor_scales]))
 
     log_base_scales = np.linalg.solve(A, b)
     base_scales = np.exp(log_base_scales)
 
     # retrieve remaining scales from base scales
-    if params["method"]["bools"]["nondim"]:
+    if method.bools["nondim"]:
         nd = base_scales[0]
         nt = base_scales[1]
         nm = base_scales[2]
@@ -72,62 +76,60 @@ def set_nondim_params(z_types, u_types, anchor_types, anchor_scales, params, bas
     print("scales: ")
     print(", ".join(f"{k}: {v:.2f}" for k, v in scales.items()))
 
-    nd_state = np.array([scales[z_types[i]] for i in range(n)])
-    nd_ctrl  = np.array([scales[u_types[i]] for i in range(m)])
+    nd_state = np.array([scales[model.z_types[i]] for i in range(n)])
+    nd_ctrl  = np.array([scales[model.u_types[i]] for i in range(m)])
 
-    if "nondim" not in params["method"]: # initialize if it doesn"t already exist
-       params["method"]["nondim"] = {}
-       params["method"]["nondim"]["M"] = {}
-       params["method"]["nondim"]["M"]["state"] = {}
-       params["method"]["nondim"]["M"]["ctrl"] = {}
-       params["method"]["nondim"]["M"]["cnst"] = {}
-       params["method"]["nondim"]["M"]["nfz"] = {}
-       params["method"]["nondim"]["M"]["dyn"] = {}
-       params["method"]["nondim"]["M"]["cost"] = {}
-       params["method"]["nondim"]["M"]["term"] = {}
+    method.nondim = {}
+    method.nondim["M"] = {}
+    method.nondim["M"]["state"] = {}
+    method.nondim["M"]["ctrl"] = {}
+    method.nondim["M"]["cnst"] = {}
+    method.nondim["M"]["nfz"] = {}
+    method.nondim["M"]["dyn"] = {}
+    method.nondim["M"]["cost"] = {}
+    method.nondim["M"]["term"] = {}
 
-       params["method"]["nondim"]["labels"]  = {}
+    method.nondim["labels"]  = {}
 
-    params["method"]["nondim"]["M"]["state"]["d2nd"] = np.diag(1 / nd_state).copy()
-    params["method"]["nondim"]["M"]["state"]["nd2d"] = np.diag(nd_state).copy()
-    
-    params["method"]["nondim"]["M"]["ctrl"]["d2nd"] = np.diag(1 / nd_ctrl).copy()
-    params["method"]["nondim"]["M"]["ctrl"]["nd2d"] = np.diag(nd_ctrl).copy()
+    method.nondim["M"]["state"]["d2nd"] = np.diag(1 / nd_state).copy()
+    method.nondim["M"]["state"]["nd2d"] = np.diag(nd_state).copy()
+    method.nondim["M"]["ctrl"]["d2nd"] = np.diag(1 / nd_ctrl).copy()
+    method.nondim["M"]["ctrl"]["nd2d"] = np.diag(nd_ctrl).copy()
 
     nd_dyn = nd_state / scales["t"]
-    params["method"]["nondim"]["M"]["dyn"]["d2nd"] = np.diag(1 / nd_dyn).copy()
-    params["method"]["nondim"]["M"]["dyn"]["nd2d"] = np.diag(nd_dyn).copy()
-
-    params["method"]["nondim"]["M"]["term"]["d2nd"] = np.diag(1 / nd_state).copy()
-    params["method"]["nondim"]["M"]["term"]["nd2d"] = np.diag(nd_state).copy()
-
-    params["method"]["nondim"]["nu_rad_ind"] = []
+    method.nondim["M"]["dyn"]["d2nd"] = np.diag(1 / nd_dyn).copy()
+    method.nondim["M"]["dyn"]["nd2d"] = np.diag(nd_dyn).copy()
+    method.nondim["M"]["term"]["d2nd"] = np.diag(1 / nd_state).copy()
+    method.nondim["M"]["term"]["nd2d"] = np.diag(nd_state).copy()
+    method.nondim["nu_rad_ind"] = []
 
     # add scalar nondim variables to nondim substruct
-    params["method"]["nondim"]["scales"] = scales
-    params["method"]["nondim"]["nd"] = scales["d"]
-    params["method"]["nondim"]["na"] = scales["a"]
-    params["method"]["nondim"]["nt"] = scales["t"]
-    params["method"]["nondim"]["nt_inv"] = 1 / scales["t"]
-    params["method"]["nondim"]["nv"] = scales["v"]
-    params["method"]["nondim"]["nm"] = scales["m"]
-    params["method"]["nondim"]["nm_dot"] = scales["m"] / scales["t"]
-    params["method"]["nondim"]["nf"] = scales["f"]
+    method.nondim["scales"] = scales
+    method.nondim["nd"] = scales["d"]
+    method.nondim["na"] = scales["a"]
+    method.nondim["nt"] = scales["t"]
+    method.nondim["nt_inv"] = 1 / scales["t"]
+    method.nondim["nv"] = scales["v"]
+    method.nondim["nm"] = scales["m"]
+    method.nondim["nm_dot"] = scales["m"] / scales["t"]
+    method.nondim["nf"] = scales["f"]
+    method.nondim["labels"]["state"] = [scale_labels[model.z_types[i]] for i in range(n)]
+    method.nondim["labels"]["ctrl"]  = [scale_labels[model.u_types[i]] for i in range(m)]
 
-    params["method"]["nondim"]["labels"]["state"] = [scale_labels[z_types[i]] for i in range(n)]
-    params["method"]["nondim"]["labels"]["ctrl"]  = [scale_labels[u_types[i]] for i in range(m)]
+def set_cost_cnst_nondim_params(problem):
 
-    return params
+    mission = problem.mission
+    method = problem.method
 
-def set_cost_cnst_nondim_params(np_ineq, ncost, params):
+    # set nondim for cost and constraints
+    np_ineq = np.ones(mission.n_nfz) * method.nondim["nd"]**2
+    ncost = method.nondim["nf"] ** 2 * method.nondim["nt"]
 
-    params["method"]["nondim"]["M"]["cnst"]["d2nd"] = np.diag(np_ineq ** -1).copy()
-    params["method"]["nondim"]["M"]["cnst"]["nd2d"] = np.diag(np_ineq).copy()
+    method.nondim["M"]["cnst"]["d2nd"] = np.diag(np_ineq ** -1).copy()
+    method.nondim["M"]["cnst"]["nd2d"] = np.diag(np_ineq).copy()
 
-    params["method"]["nondim"]["M"]["nfz"]["d2nd"] = np.diag(1 / np_ineq[params["mission"]["nfz_idx"]]).copy()
-    params["method"]["nondim"]["M"]["nfz"]["nd2d"] = np.diag(np_ineq[params["mission"]["nfz_idx"]]).copy()
-    params["method"]["nondim"]["M"]["cost"]["d2nd"] = 1 / ncost
-    params["method"]["nondim"]["np_ineq"] = np_ineq
-    params["method"]["nondim"]["ncost"] = ncost
-
-    return params
+    method.nondim["M"]["nfz"]["d2nd"] = np.diag(1 / np_ineq[mission.nfz_idx]).copy()
+    method.nondim["M"]["nfz"]["nd2d"] = np.diag(np_ineq[mission.nfz_idx]).copy()
+    method.nondim["M"]["cost"]["d2nd"] = 1 / ncost
+    method.nondim["np_ineq"] = np_ineq
+    method.nondim["ncost"] = ncost

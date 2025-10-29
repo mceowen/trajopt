@@ -14,20 +14,37 @@ import trajopt.utils.nondim as nondim
 
 class Model:
 
-    def __init__(self, problem):
+    def __init__(self, problem, config):
 
         self.problem = problem
-        self.params = problem["params"]
+
+        # ===============================================================
+        # load config parameters
+        # ===============================================================
+
+        model_config = config["model"]
+        self.model_name       = model_config["model_name"]
+        self.n                = model_config["n"]
+        self.m                = model_config["m"]
+        self.z_types          = model_config["z_types"]
+        self.u_types          = model_config["u_types"]
+        self.anchor_types     = model_config["anchor_types"]
+        self.anchor_scales    = model_config["anchor_scales"]
+        self.base_unit_labels = model_config["base_unit_labels"]
+        self.bools            = model_config["bools"]
+
+        # =================================================================
+        # point to module containing corresponding methods based on configs
+        # =================================================================
 
         # point to selected model module
-        model_name = self.params["model"]["model_name"]
-        model_module = importlib.import_module(f"trajopt.model_modules.{model_name}")
+        model_module = importlib.import_module(f"trajopt.model_modules.{self.model_name}")
 
         # set dynamics
         self._dynamics = model_module.system_dynamics
 
         # set ltv dynamics
-        if self.params["method"]["bools"]["auto_jac"]:
+        if config["method"]["bools"]["auto_jac"]:
             self._lin_dyn = convexify.generate_jacobians(self.dynamics)
         else:
             self._lin_dyn = model_module.analytical_linsys
@@ -36,7 +53,7 @@ class Model:
         self._nonlinear_inequality_constraints = (model_module.nonlinear_inequality_constraints)
 
         # set linearized constraints
-        if self.params["method"]["bools"]["auto_jac_cnst"]:
+        if config["method"]["bools"]["auto_jac_cnst"]:
             self._lin_constr = convexify.generate_jacobians(
                 self.nonlinear_inequality_constraints
             )
@@ -48,13 +65,13 @@ class Model:
     # ===============================================================
 
     def dynamics(self, ts, zs, us, t_vec=None):
-        return self._dynamics(ts, zs, us, self, t_vec)
+        return self._dynamics(ts, zs, us, self.problem, t_vec)
 
     def lin_dyn(self, ts, zs, us):
-        return self._lin_dyn(ts, zs, us, self)
+        return self._lin_dyn(ts, zs, us, self.problem)
 
     def nonlinear_inequality_constraints(self, ts, zs, us):
-        return self._nonlinear_inequality_constraints(ts, zs, us, self)
+        return self._nonlinear_inequality_constraints(ts, zs, us, self.problem)
 
     def lin_constr(self, ts, zs, us):
-        return self._lin_constr(ts, zs, us, self)
+        return self._lin_constr(ts, zs, us, self.problem)

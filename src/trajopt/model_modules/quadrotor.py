@@ -8,20 +8,21 @@ import trajopt.algorithm.convergence        as convergence
 import trajopt.algorithm.convexification    as convexify
 import trajopt.utils.nondim                 as nondim
 
-def system_dynamics(ts, zs, us, model, t_vec=None):
+def system_dynamics(ts, zs, us, problem, t_vec=None):
     """
     x1, x2: r (position)
     u1, u2: v (velocity)
     """
     # extracts params if "problem" parent struct is passed in
-    problem = model.problem
-    params = problem["params"]
+    mission = problem.mission
+    model = problem.model
+    method = problem.method
 
     # extract constant param values
-    m       = int( params["model"]["m"] )
-    n       = int( params["model"]["n"] )
-    mass    = params["mission"]["mass"] / params["method"]["nondim"]["nm"]
-    ge      = params["mission"]["ge"] / params["method"]["nondim"]["na"]
+    m       = int( model.m )
+    n       = int( model.n )
+    mass    = mission.mass / method.nondim["nm"]
+    ge      = mission.ge / method.nondim["na"]
 
     # extract states
     r = zs[0:3]
@@ -49,16 +50,17 @@ def system_dynamics(ts, zs, us, model, t_vec=None):
         
     return xDot
 
-def analytical_linsys(ts, zs, us, model):
+def analytical_linsys(ts, zs, us, problem):
 
-    problem = model.problem 
-    params = problem["params"]
+    mission = problem.mission
+    model = problem.model
+    method = problem.method
     
     # Extract parameters
 
-    n       = params["model"]["n"]
-    m       = params["model"]["m"]
-    mass    = params["mission"]["mass"] / params["method"]["nondim"]["nm"]
+    n       = model.n
+    m       = model.m
+    mass    = mission.mass / method.nondim["nm"]
 
     # Sanity check for vector shapes
     zs = np.asarray(zs).flatten()
@@ -81,7 +83,7 @@ def analytical_linsys(ts, zs, us, model):
     ]) * (1.0 / mass)
 
     # Evaluate nonlinear dynamics
-    fc = system_dynamics(ts, zs, us, model)
+    fc = system_dynamics(ts, zs, us, problem)
 
     # Return in dictionary format
     linsys = {
@@ -92,14 +94,15 @@ def analytical_linsys(ts, zs, us, model):
 
     return linsys
 
-def nonlinear_inequality_constraints(ts, zs, us, model):
+def nonlinear_inequality_constraints(ts, zs, us, problem):
 
-    problem = model.problem
-    params  = problem["params"]
+    mission = problem.mission
+    model = problem.model
+    method = problem.method
 
     N       = tools.num_timesteps(zs)
-    n_nfz   = params["mission"].get("n_nfz", 0)
-    n_path  = params["mission"].get("n_path", 0)  # placeholder
+    n_nfz   = mission.n_nfz
+    n_path  = mission.n_path  # placeholder
 
     # Handle state unpacking
     if zs.ndim == 2:
@@ -113,9 +116,9 @@ def nonlinear_inequality_constraints(ts, zs, us, model):
 
     # === NFZ constraints ===
     if n_nfz > 0:
-        xc = params["mission"]["obs"]["posc"][0]
-        yc = params["mission"]["obs"]["posc"][1]
-        rc = params["mission"]["obs"]["rc"]
+        xc = mission.obs["posc"][0]
+        yc = mission.obs["posc"][1]
+        rc = mission.obs["rc"]
 
         P_nfz = np.stack([
             rc[i]**2 - (rx - xc[i])**2 - (ry - yc[i])**2
@@ -135,27 +138,28 @@ def nonlinear_inequality_constraints(ts, zs, us, model):
 
     return P
 
-def analytical_inequality_constraints(ts, zs, us, model):
+def analytical_inequality_constraints(ts, zs, us, problem):
 
-    problem = model.problem
-    params = problem["params"]
+    mission = problem.mission
+    model = problem.model
+    method = problem.method
 
     N         = tools.num_timesteps(zs)
-    n         = params["model"]["n"]
-    m         = params["model"]["m"]
-    n_path    = params["mission"]["n_path"]
-    n_nfz     = params["mission"]["n_nfz"]
-    path_idx  = params["mission"]["path_idx"]
+    n         = model.n
+    m         = model.m
+    n_path    = mission.n_path
+    n_nfz     = mission.n_nfz
+    path_idx  = mission.path_idx
 
     # Scale path limits using nondimensional constraint weights
-    scale = params["method"]["nondim"]["np_ineq"][:n_path]
-    path_lim_scaled = np.linalg.solve(np.diag(scale), params["mission"]["path_lim"])
+    scale = method.nondim["np_ineq"][:n_path]
+    path_lim_scaled = np.linalg.solve(np.diag(scale), mission.path_lim)
 
     # Obstacle info (broadcasted for speed)
     if n_nfz > 0:
-        xc = params["mission"]["obs"]["posc"][0]
-        yc = params["mission"]["obs"]["posc"][1]
-        rc = params["mission"]["obs"]["rc"]
+        xc = mission.obs["posc"][0]
+        yc = mission.obs["posc"][1]
+        rc = mission.obs["rc"]
 
     # === Preallocate flattened output arrays ===
     fcn_all   = np.zeros((N, n_path + n_nfz))
@@ -178,7 +182,7 @@ def analytical_inequality_constraints(ts, zs, us, model):
         rx_k, ry_k = zk[0], zk[1]
 
         # Evaluate all inequality constraints
-        P_full = nonlinear_inequality_constraints(tk, zk, uk, model)
+        P_full = nonlinear_inequality_constraints(tk, zk, uk, problem)
 
         # === Path constraints ===
         if n_path > 0:

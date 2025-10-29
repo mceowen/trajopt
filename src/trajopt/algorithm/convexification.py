@@ -7,7 +7,7 @@ import jax.numpy as jnp
 
 
 def compute_cost(ts, zs, us, problem):
-    lin_info    = problem["mission"].lin_cost(ts, zs, us)
+    lin_info    = problem.mission.lin_cost(ts, zs, us)
     dcostdz     = lin_info["dfcn_dz"]
     dcostdu     = lin_info["dfcn_du"]
     cost        = lin_info["fcn"]
@@ -16,7 +16,7 @@ def compute_cost(ts, zs, us, problem):
 
 
 def compute_aero(ts, zs, us, problem):
-    lin_info = problem["mission"].lin_aero(ts, zs, us)
+    lin_info = problem.mission.lin_aero(ts, zs, us)
     daero_dx = lin_info["dfcn_dz"]
     daero_du = lin_info["dfcn_du"]
     aero     = lin_info["fcn"]
@@ -25,7 +25,7 @@ def compute_aero(ts, zs, us, problem):
 
 
 def compute_path_constraints(ts, zs, us, problem):
-    lin_info    = problem["model"].lin_constr(ts, zs, us)
+    lin_info    = problem.model.lin_constr(ts, zs, us)
     dPdz        = lin_info["dfcn_dz"]
     dPdu        = lin_info["dfcn_du"]
     P           = lin_info["fcn"]
@@ -34,7 +34,7 @@ def compute_path_constraints(ts, zs, us, problem):
 
 
 def compute_linsys_continuous(ts, zs, us, problem):
-    lin_info    = problem["model"].lin_dyn(ts, zs, us)
+    lin_info    = problem.model.lin_dyn(ts, zs, us)
     Ac          = lin_info["dfcn_dz"]
     Bc          = lin_info["dfcn_du"]
     fc          = lin_info["fcn"]
@@ -43,20 +43,23 @@ def compute_linsys_continuous(ts, zs, us, problem):
 
 
 def compute_ctcs_jacobians(ts, zs, us, problem):
-    params = problem["params"]
-    n = params["model"]["n"]
-    n_ineq = params["mission"]["n_ineq"]
+    mission = problem.mission
+    model = problem.model
+    method = problem.method
+
+    n = model.n
+    n_ineq = mission.n_ineq
 
     # Evaluate linearized dynamics
-    lin_dyn_info    = problem["lin_dyn"](ts, zs[:n], us)
+    lin_dyn_info    = problem.lin_dyn(ts, zs[:n], us)
     f_xu = lin_dyn_info["fcn"]
     dfdx = lin_dyn_info["dfcn_dz"]
     dfdu = lin_dyn_info["dfcn_du"]
 
     # Evaluate linearized path constraints
-    lin_constr_info = problem["lin_constr"](ts, zs, us)
-    g_xu = lin_constr_info["fcn"][0] * params["method"]["weights"]["w_ctcs"]
-    dgdx = lin_constr_info["dfcn_dz"][0] * params["method"]["weights"]["w_ctcs"]
+    lin_constr_info = problem.lin_constr(ts, zs, us)
+    g_xu = lin_constr_info["fcn"][0] * method.weights["w_ctcs"]
+    dgdx = lin_constr_info["dfcn_dz"][0] * method.weights["w_ctcs"]
     dgdu = lin_constr_info["dfcn_du"][0]
 
     # Conditional constraint smoothing
@@ -92,9 +95,9 @@ def compute_ctcs_jacobians(ts, zs, us, problem):
 def generate_jacobians(fcn_hdl, problem):
 
     # Extract params
-    params = problem.get("params", problem)
-    n = params["model"]["n"]
-    m = params["model"]["m"]
+    model = problem.model
+    n = model.n
+    m = model.m
 
     # Symbolic variables
     t = sp.Symbol("t")
@@ -125,8 +128,8 @@ def generate_jacobians(fcn_hdl, problem):
 
 def generate_jacobians_jax(fcn_hdl, problem):
     
-    params = problem.get("params", problem)
-    n, m = params["model"]["n"], params["model"]["m"]
+    model = problem.model
+    n, m = model.n, model.m
 
     # Wrap function to make t, z, u separate JAX arguments
     def wrapped(z_u, t):
@@ -153,10 +156,10 @@ def generate_jacobians_jax(fcn_hdl, problem):
 
     return lin_hdl
 
-def generate_lin_sys_jax(fcn, params):
+def generate_lin_sys_jax(fcn, problem):
 
     def wrapped_dyn(zs, us):
-        return fcn(0, zs, us, params)
+        return fcn(0, zs, us, problem)
 
     dfcn_dz = jax.jit(jax.jacrev(wrapped_dyn, argnums=0))
     dfcn_du = jax.jit(jax.jacrev(wrapped_dyn, argnums=1))
@@ -172,7 +175,7 @@ def generate_lin_sys_jax(fcn, params):
 
     return lin_sys
 
-def generate_jacobians2(func_nl, params):
+def generate_jacobians2(func_nl, problem):
     """
     Generate symbolic Jacobian function handles from a nonlinear symbolic function.
 
@@ -186,8 +189,9 @@ def generate_jacobians2(func_nl, params):
                     "dfcn_dx"  - ∂f/∂z function handle
                     "dfcn_du"  - ∂f/∂u function handle
     """
-    n = params["model"]["n"]
-    m = params["model"]["m"]
+    model = problem.model
+    n = model.n
+    m = model.m
 
     # Define symbolic variables
     t = sp.Symbol("t")

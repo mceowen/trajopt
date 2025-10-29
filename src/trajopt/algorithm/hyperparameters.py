@@ -2,6 +2,9 @@ import numpy as np
 
 def autotune1(problem, local_vars, O):
     
+    mission = problem.mission
+    method = problem.method
+    
     # Access iter_num from local_vars
     iter_num = local_vars["iter_num"]
 
@@ -20,11 +23,11 @@ def autotune1(problem, local_vars, O):
     dual_term = local_vars["dual_term"]
 
     # Hyperparameters
-    if problem["params"]["bools"]["stepsize_auto_dual"]:
+    if method.bools["stepsize_auto_dual"]:
         beta = gamma = 1 / iter_num
     else:
-        beta = problem["params"]["method"]["weights"]["beta"]
-        gamma = problem["params"]["method"]["weights"]["gamma"]
+        beta = method.weights["beta"]
+        gamma = method.weights["gamma"]
 
     # Inequality updates
     dual_path_plus = np.maximum(0, gamma * vb_path + dual_path)
@@ -36,7 +39,7 @@ def autotune1(problem, local_vars, O):
     dual_term_plus = beta * vb_term + dual_term
 
     # Constraint feasibility thresholds
-    conv = problem["params"]["method"]["conv"]
+    conv = method.conv
     eps_path = conv["eps_path"]
     eps_nfz = conv["eps_nfz"]
     eps_aux = conv["eps_aux"]
@@ -72,6 +75,9 @@ def autotune1(problem, local_vars, O):
 
 
 def autotune2(problem, local_vars, O):
+
+    mission = problem.mission
+    method = problem.method
     
     # Extract variables from local_vars
     N = local_vars["N"]
@@ -89,20 +95,20 @@ def autotune2(problem, local_vars, O):
     W_term = local_vars["W_term"]
 
     # Extract parameters for autotuning
-    eps_feas_path = problem["params"]["method"]["conv"]["eps_path"]
-    eps_feas_nfz = problem["params"]["method"]["conv"]["eps_nfz"]
-    eps_feas_aux = problem["params"]["method"]["conv"]["eps_aux"]
-    eps_feas_term = problem["params"]["method"]["conv"]["eps_term"]
-    eps_feas_dyn = problem["params"]["method"]["conv"]["eps_dyn"]
+    eps_feas_path = method.conv["eps_path"]
+    eps_feas_nfz = method.conv["eps_nfz"]
+    eps_feas_aux = method.conv["eps_aux"]
+    eps_feas_term = method.conv["eps_term"]
+    eps_feas_dyn = method.conv["eps_dyn"]
 
-    eps_nonzero2 = problem["params"]["method"]["weights"]["eps_nonzero2"]
-    flag_Wmemory = problem["params"]["bools"]["method"]["bools"]["flag_Wauto_memory"]
+    eps_nonzero2 = method.weights["eps_nonzero2"]
+    flag_Wmemory = method["bools"]["flag_Wauto_memory"]
 
-    buff_dyn = problem["params"]["bools"]["method"]["bools"]["buff_dyn"]
+    buff_dyn = method["bools"]["buff_dyn"]
 
-    path_idx = problem["params"]["mission"]["path_idx"]
-    nfz_idx = problem["params"]["mission"]["nfz_idx"]
-    aux_idx = problem["params"]["mission"]["aux_idx"]
+    path_idx = mission.path_idx
+    nfz_idx = mission.nfz_idx
+    aux_idx = mission.aux_idx
     
     dual_ineq = []
     dual_path_buff = []
@@ -123,12 +129,12 @@ def autotune2(problem, local_vars, O):
         dual_nfz_buff.append(np.diag(W_nfz[:, k]) @ vb_nfz[:, k].flatten())
         dual_aux_buff.append(np.diag(W_aux[:, k]) @ vb_aux[:, k].flatten())
 
-        if problem["params"]["mission"]["n_ineq"] > 0:
-            if problem["params"]["n_path"] > 0:
+        if mission.n_ineq > 0:
+            if mission.n_path > 0:
                 Wh_path.append(np.abs(dual_path_buff[-1] / eps_feas_path))
-            if problem["params"]["mission"]["n_nfz"] > 0:
+            if mission.n_nfz > 0:
                 Wh_nfz.append(np.abs(dual_nfz_buff[-1] / eps_feas_nfz))
-            if problem["params"]["mission"]["n_aux"] > 0:
+            if mission.n_aux > 0:
                 Wh_aux.append(np.abs(dual_aux_buff[-1] / eps_feas_aux))
         else:
             Wh_path.append(np.abs(dual_path_buff[-1]))
@@ -142,12 +148,12 @@ def autotune2(problem, local_vars, O):
             else:
                 Wh_dyn.append(np.sum(np.abs(dual_dyn_buff[-1])))
 
-    if (problem["params"]["mission"]["n_term"] + problem["params"]["mission"]["n_term_ineq"]) > 0:
+    if (mission.n_term + mission.n_term_ineq) > 0:
         dual_term_buff = np.diag(W_term.flatten()) @ vb_term
         Wh_term = np.abs(dual_term_buff / eps_feas_term)
 
     # Extract field names and create buffer nametags
-    W_fn = [key for key in problem["params"]["method"]["weights"].keys() if key.startswith("W")]
+    W_fn = [key for key in method.weights.keys() if key.startswith("W")]
     nametags = [key.split("_")[1] for key in W_fn if key.startswith("W")]
 
     for i_field in nametags:
@@ -157,7 +163,7 @@ def autotune2(problem, local_vars, O):
         eps_feas = f"eps_feas_{i_field}"
         Wconv_field = f"Wconv_{i_field}"
 
-        if np.sum(problem["params"]["method"]["weights"][W_field]) == 0:
+        if np.sum(method.weights[W_field]) == 0:
             O["method"]["weights"][W_field] = eval(W_field)
         else:
             if flag_Wmemory == 0:

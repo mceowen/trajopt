@@ -16,6 +16,6 @@ solver_opts:
   solver: "qoco"
 
 T_init: 7.0
-Ts_min: 1.0
-Ts_max: 20.0
-ddts_max: 0.13
+T_min: 1.0
+T_max: 20.0
+dT_max: 5.0

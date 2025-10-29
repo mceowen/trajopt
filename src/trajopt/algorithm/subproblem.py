@@ -15,24 +15,25 @@ import trajopt.utils.tools                      as tools
 
 
 def solve_subproblem(problem):
+    method = problem.method
 
     local_vars = baseline_subprob_inputs(problem)
-    problem["custom_inputs"](problem, local_vars)
+    problem.mission.custom_inputs(problem, local_vars)
 
     local_vars = baseline_subprob_variables(problem,local_vars)
-    problem["custom_variables"](problem, local_vars)
+    problem.mission.custom_variables(problem, local_vars)
 
     constraints = baseline_subprob_constraints(problem, local_vars)
-    constraints = problem["custom_constraints"](constraints, local_vars)
+    constraints = problem.mission.custom_constraints(constraints, local_vars)
 
     PTR_COST    = 0.0
     PTR_COST    = baseline_subprob_cost(problem, local_vars)
-    PTR_COST    = problem["custom_cost"](PTR_COST, local_vars)
+    PTR_COST    = problem.mission.custom_cost(PTR_COST, local_vars)
 
     # TODO(Skye): vectorize cost computation for speedup
     objective   = cp.Minimize(PTR_COST)
     subprob     = cp.Problem(objective, constraints)
-    subprob.solve(solver=problem["params"]["method"]["solver_opts"]["solver"])
+    subprob.solve(solver=method.solver_opts["solver"])
 
     O = baseline_subprob_outputs(
         problem,
@@ -53,9 +54,13 @@ def solve_subproblem(problem):
 
 def baseline_subprob_inputs(problem):
 
-    I               = problem["I"][-1]
+    mission = problem.mission
+    model = problem.model
+    method = problem.method
+
+    I               = problem.I[-1]
     iter_num        = I["iter_num"]
-    case_flag       = problem["params"]["case_flag"]
+    case_flag       = problem.case_flag
 
     # Dynamics and cost
     start                   = time.time()
@@ -78,78 +83,78 @@ def baseline_subprob_inputs(problem):
     vb_term_ref     = I["conv_data"]["vb_term"]
 
     # Dimensions and problem parameters
-    params          = problem["params"]
-    N               = params["method"]["N"]
-    n               = params["model"]["n"]
-    m               = params["model"]["m"]
-    nz              = params["model"]["nz"]
+    # params          = params
+    N               = method.N
+    n               = model.n
+    m               = model.m
+    nz              = model.nz
 
-    nt              = params["method"]["nondim"]["nt"]
-    nd              = params["method"]["nondim"]["nd"]
-    nv              = params["method"]["nondim"]["nv"]
-    na              = params["method"]["nondim"]["na"]
-    ncost           = params["method"]["nondim"]["ncost"]
+    nt              = method.nondim["nt"]
+    nd              = method.nondim["nd"]
+    nv              = method.nondim["nv"]
+    na              = method.nondim["na"]
+    ncost           = method.nondim["ncost"]
 
     # Boundary conditions
-    z1              = params["mission"]["zi"]
-    z1_idx          = params["mission"]["zi_idx"]
-    z1_min          = params["mission"]["zi_min"]
-    z1_min_idx      = params["mission"]["zi_min_idx"]
-    z1_max          = params["mission"]["zi_max"]
-    z1_max_idx      = params["mission"]["zi_max_idx"]
-    n_init          = params["mission"]["n_init"]
-    n_init_ineq     = params["mission"]["n_init_ineq"]
+    z1              = mission.zi
+    z1_idx          = mission.zi_idx
+    z1_min          = mission.zi_min
+    z1_min_idx      = mission.zi_min_idx
+    z1_max          = mission.zi_max
+    z1_max_idx      = mission.zi_max_idx
+    n_init          = mission.n_init
+    n_init_ineq     = mission.n_init_ineq
 
-    zN              = params["mission"]["zf"]
-    zN_idx          = params["mission"]["zf_idx"]
-    zN_min          = params["mission"]["zf_min"]
-    zN_min_idx      = params["mission"]["zf_min_idx"]
-    zN_max          = params["mission"]["zf_max"]
-    zN_max_idx      = params["mission"]["zf_max_idx"]
-    n_term          = params["mission"]["n_term"]
-    n_term_ineq     = params["mission"]["n_term_ineq"]
+    zN              = mission.zf
+    zN_idx          = mission.zf_idx
+    zN_min          = mission.zf_min
+    zN_min_idx      = mission.zf_min_idx
+    zN_max          = mission.zf_max
+    zN_max_idx      = mission.zf_max_idx
+    n_term          = mission.n_term
+    n_term_ineq     = mission.n_term_ineq
 
     vb_N_idx = list(range(n_term))
     vb_N_ineq_idx   = list(range(n_term, n_term + n_term_ineq))
 
     # State and control constraints
-    z_min           = params["mission"]["z_min"]
-    z_min_idx       = params["mission"]["z_min_idx"]
-    z_max           = params["mission"]["z_max"]
-    z_max_idx       = params["mission"]["z_max_idx"]
-    n_state         = params["mission"]["n_state"]
+    z_min           = mission.z_min
+    z_min_idx       = mission.z_min_idx
+    z_max           = mission.z_max
+    z_max_idx       = mission.z_max_idx
+    n_state         = mission.n_state
 
-    u_min           = params["mission"]["u_min"]
-    u_min_idx       = params["mission"]["u_min_idx"]
-    u_max           = params["mission"]["u_max"]
-    u_max_idx       = params["mission"]["u_max_idx"]
-    n_ctrl          = params["mission"]["n_ctrl"]
-    udot_max        = params["mission"]["udot_max"]
-    udot_max_idx    = params["mission"]["udot_max_idx"]
-    n_udot          = params["mission"]["n_udot"]
-    bool_init_ctrl  = params["method"]["bools"]["init_ctrl"]
+    u_min           = mission.u_min
+    u_min_idx       = mission.u_min_idx
+    u_max           = mission.u_max
+    u_max_idx       = mission.u_max_idx
+    n_ctrl          = mission.n_ctrl
+    udot_max        = mission.udot_max
+    udot_max_idx    = mission.udot_max_idx
+    n_udot          = mission.n_udot
+    bool_init_ctrl  = method.bools["init_ctrl"]
 
     # Time settings
-    bools           = params["method"]["bools"]
+    bools           = method.bools
     free_final_time = bools["free_final_time"]
     equal_dt_bool   = bools["equal_dt"]
 
     dts_min = dts_max = ddts_max = None
     if free_final_time:
-        dts_min     = params["method"]["dts_min"]
-        dts_max     = params["method"]["dts_max"]
-        ddts_max    = params["method"]["ddts_max"]
+        dts_min     = method.dts_min
+        dts_max     = method.dts_max
+        ddts_max    = method.ddts_max
 
     # Contact constraints
     ctcs            = bools["ctcs"]
-    eps_ctcs        = params["eps_ctcs"]
+    eps_ctcs        = method.conv["eps_ctcs"]
 
     # Constraint structure
-    n_path          = params["mission"]["n_path"]
-    n_nfz           = params["mission"]["n_nfz"]
-    n_aux           = params["mission"]["n_aux"]
+    n_path          = mission.n_path
+    n_nfz           = mission.n_nfz
+    n_aux           = mission.n_aux
     n_ineq          = n_path + n_nfz + n_aux
-    n_dyn           = params["mission"]["n_dyn"]
+    n_dyn           = mission.n_dyn
     n_eq            = n_dyn
 
     # Weighting and duals
@@ -178,7 +183,7 @@ def baseline_subprob_inputs(problem):
     dual_minus      = weights["dual_minus"]
     dual_term       = weights["dual_term"]
 
-    opts            = params["method"]["solver_opts"]
+    opts            = method.solver_opts
 
     local_vars = dict(locals())
 
@@ -228,33 +233,37 @@ def subprob_virtual_variables(problem, local_vars):
     term is zero, then the variables are set to the zero vector.
     """
 
+    mission = problem.mission
+    model = problem.model
+    method = problem.method
+
     # Extract autotune flag and dynamics buffer toggle
-    flag_autotune   = problem["params"]["method"]["bools"]["flag_autotune"]
-    buff_dyn        = problem["params"]["method"]["bools"]["buff_dyn"]
+    flag_autotune   = method.bools["flag_autotune"]
+    buff_dyn        = method.bools["buff_dyn"]
 
     # Extract dimensions
     n = {
-        "path":  problem["params"]["mission"]["n_path"],
-        "nfz":   problem["params"]["mission"]["n_nfz"],
-        "aux":   problem["params"]["mission"]["n_aux"],
-        "dyn":   problem["params"]["model"]["nz"],
-        "term":  problem["params"]["mission"]["n_term"] + problem["params"]["mission"]["n_term_ineq"],
-        "plus":  problem["params"]["method"]["n_plus"],
-        "minus": problem["params"]["method"]["n_minus"]
+        "path":  mission.n_path,
+        "nfz":   mission.n_nfz,
+        "aux":   mission.n_aux,
+        "dyn":   model.nz,
+        "term":  mission.n_term + mission.n_term_ineq,
+        "plus":  method.n_plus,
+        "minus": method.n_minus
     }
 
     N = {
-        "path":  problem["params"]["method"]["N"],
-        "nfz":   problem["params"]["method"]["N"],
-        "aux":   problem["params"]["method"]["N"],
-        "dyn":   problem["params"]["method"]["N"] - 1,
+        "path":  method.N,
+        "nfz":   method.N,
+        "aux":   method.N,
+        "dyn":   method.N - 1,
         "term":  1,
-        "plus":  problem["params"]["method"]["Npm"],
-        "minus": problem["params"]["method"]["Npm"]
+        "plus":  method.Npm,
+        "minus": method.Npm
     }
 
     # Extract weight and dual variable fields
-    weights     = problem["I"][-1]["weights"]
+    weights     = problem.I[-1]["weights"]
     wght_keys   = weights.keys()
     W_keys      = [k for k in wght_keys if "W" in k]
     dual_keys   = [k for k in wght_keys if "dual" in k]
@@ -311,6 +320,11 @@ def subprob_virtual_variables(problem, local_vars):
 
 
 def baseline_subprob_constraints(problem,local_vars):
+
+    mission = problem.mission
+    model = problem.model
+    method = problem.method
+
     dz                  = local_vars["sol_vars"]["dz"]
     du                  = local_vars["sol_vars"]["du"]
     dt                  = local_vars["sol_vars"]["dt"]
@@ -324,7 +338,7 @@ def baseline_subprob_constraints(problem,local_vars):
     vb_minus            = local_vars["sol_vars"]["vb_minus"]
 
     I                   = local_vars["I"]
-    params              = local_vars["params"]
+    # params              = local_vars["params"]
     Ak                  = local_vars["Ak"]
     Bk                  = local_vars["Bk"]
     Bkp                 = local_vars["Bkp"]
@@ -335,7 +349,7 @@ def baseline_subprob_constraints(problem,local_vars):
     g                   = local_vars["g"]
 
     CNST                = []
-    bools               = params["method"]["bools"]
+    bools               = method.bools
     flag_autotune       = bools["flag_autotune"]
     buff_dyn            = bools["buff_dyn"]
 
@@ -356,8 +370,8 @@ def baseline_subprob_constraints(problem,local_vars):
     zN_min, zN_min_idx  = local_vars["zN_min"], local_vars["zN_min_idx"]
     zN_max, zN_max_idx  = local_vars["zN_max"], local_vars["zN_max_idx"]
 
-    vb_N_idx            = list(range(params["mission"]["n_term"]))
-    vb_N_ineq_idx       = list(range(params["mission"]["n_term"], params["mission"]["n_term"] + params["mission"]["n_term_ineq"]))
+    vb_N_idx            = list(range(mission.n_term))
+    vb_N_ineq_idx       = list(range(mission.n_term, mission.n_term + mission.n_term_ineq))
 
     z_min, z_min_idx    = local_vars["z_min"], local_vars["z_min_idx"]
     z_max, z_max_idx    = local_vars["z_max"], local_vars["z_max_idx"]
@@ -377,18 +391,18 @@ def baseline_subprob_constraints(problem,local_vars):
         CNST.append(du[:, 0] == 0)
 
     # Initial state 
-    if params["mission"]["n_init"] > 0:
+    if mission.n_init > 0:
         CNST.append(dz[0,z1_idx] + zs_ref[0,z1_idx] == z1)
 
-    if params["mission"]["n_init_ineq"] > 0:
+    if mission.n_init_ineq > 0:
         M_sel = tools.constraint_index_selector(z1_min_idx, z1_max_idx, n)
         CNST.append(M_sel @ (dz[0,:n] + zs_ref[0,:n]) <= np.concatenate([-z1_min, z1_max]))
 
     # Terminal state
-    if params["mission"]["n_term"] > 0:
+    if mission.n_term > 0:
         CNST.append(dz[-1,zN_idx] + zs_ref[-1,zN_idx] - vb_term[vb_N_idx] == zN[zN_idx])
 
-    if params["mission"]["n_term_ineq"] > 0:
+    if mission.n_term_ineq > 0:
         M_sel = tools.constraint_index_selector(zN_min_idx, zN_max_idx, n)
         CNST.append(M_sel @ (dz[-1, :n] + zs_ref[-1, :n]) - vb_term[vb_N_ineq_idx] <= np.concatenate([-zN_min, zN_max]))
 
@@ -455,6 +469,11 @@ def baseline_subprob_constraints(problem,local_vars):
 
 
 def baseline_subprob_cost(problem, local_vars):
+
+    mission = problem.mission
+    model = problem.model
+    method = problem.method
+
     dz          = local_vars["sol_vars"]["dz"]
     du          = local_vars["sol_vars"]["du"]
     dt          = local_vars["sol_vars"]["dt"]
@@ -467,10 +486,10 @@ def baseline_subprob_cost(problem, local_vars):
     vb_plus     = local_vars["sol_vars"]["vb_plus"]
     vb_minus    = local_vars["sol_vars"]["vb_minus"]
 
-    params        = local_vars["params"]
-    N             = params["method"]["N"]
-    n             = params["model"]["n"]
-    solver_type   = params.get("solver_type", "osqp")
+    # params        = local_vars["params"]
+    N             = method.N
+    n             = model.n
+    solver   = method.solver_opts["solver"]
     flag_autotune = local_vars["bools"]["flag_autotune"]
     buff_dyn      = local_vars["bools"]["buff_dyn"]
 
@@ -543,9 +562,9 @@ def baseline_subprob_cost(problem, local_vars):
     # ---- DUAL COST ----
     DUAL_COST = 0.0
     if flag_autotune in {"1", "3", "al-scvx"}:
-        n_ineq = params["mission"]["n_ineq"]
-        n_eq   = params["mission"]["n_eq"]
-        n_term = params["mission"]["n_term"]
+        n_ineq = mission.n_ineq
+        n_eq   = mission.n_eq
+        n_term = mission.n_term
 
         if n_ineq > 0:
             for k in range(N):
@@ -572,7 +591,9 @@ def baseline_subprob_cost(problem, local_vars):
 
 
 def baseline_autotune(problem, local_vars, O):
-    match problem["params"]["method"]["bools"]["flag_autotune"]:
+
+    method = problem.method
+    match method.bools["flag_autotune"]:
         case 1:
             O = hp.autotune1(problem, local_vars, O)
         case 2:
@@ -584,9 +605,13 @@ def baseline_autotune(problem, local_vars, O):
 
 def baseline_subprob_outputs(problem, local_vars, subprob):
 
-    N = problem["params"]["method"]["N"]
-    n = problem["params"]["model"]["n"]
-    m = problem["params"]["model"]["m"]
+    mission = problem.mission
+    model = problem.model
+    method = problem.method
+
+    N = method.N
+    n = model.n
+    m = model.m
 
     dz          = local_vars["sol_vars"]["dz"]
     du          = local_vars["sol_vars"]["du"]
@@ -656,8 +681,8 @@ def baseline_subprob_outputs(problem, local_vars, subprob):
     O["ts_ref"]         = ts_ref
 
     # Hyperparameter weights
-    O["weights"]        = problem["params"]["method"]["weights"]
-    O["weights_ref"]    = problem["params"]["method"]["weights"]
+    O["weights"]        = method.weights
+    O["weights_ref"]    = method.weights
 
     # Convergence data
     conv                = {}
@@ -718,7 +743,7 @@ def display_baseline_subprob_status(problem, local_vars, O):
     log_vb_dyn      = np.log10(max(chk_feas_dyn, 1e-12))
 
     solve_stat      = conv.get("status", "UNKNOWN")
-    iter_num        = problem["I"][-1]["iter_num"]
+    iter_num        = problem.I[-1]["iter_num"]
     nt              = local_vars["nt"]
     ncost           = local_vars["ncost"]
 
