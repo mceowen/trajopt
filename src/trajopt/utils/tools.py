@@ -54,6 +54,39 @@ def get_val(var, rows=1, cols=1, fallback=0.0):
 def safe_array(M):
     return np.array([0.0]) if M is None or np.size(M) == 0 else M
 
+def ensure_shape(M, shape):
+    """
+    Safely broadcast, pad, or trim an array to the requested shape.
+    Works with scalars, empty arrays, and mismatched shapes.
+    """
+    if M is None:
+        return np.zeros(shape)
+
+    if np.isscalar(M):
+        return np.full(shape, float(M))
+
+    M = np.asarray(M)
+
+    # Empty or zero-column arrays → zeros
+    if M.size == 0 or 0 in M.shape:
+        return np.zeros(shape)
+
+    # Perfect match → return directly
+    if M.shape == shape:
+        return M
+
+    # Oversized array → safely trim
+    if np.prod(M.shape) > np.prod(shape):
+        return M[: shape[0], : shape[1]] if M.ndim == 2 else M[: shape[0]]
+
+    # Broadcast smaller array up to shape
+    try:
+        return np.broadcast_to(M, shape)
+    except ValueError:
+        # Fallback reshape + broadcast
+        return np.broadcast_to(M.reshape(-1, 1) if M.ndim == 1 else M, shape)
+
+
 def constraint_index_selector(min_idx, max_idx, n_elem):
     M_min = -np.eye(n_elem)[min_idx, :]
     M_max = np.eye(n_elem)[max_idx, :]

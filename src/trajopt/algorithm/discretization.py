@@ -26,7 +26,7 @@ def set_ltv_indices(params):
     params['Ak']        = np.zeros((params['N'] - 1,params['nz'], params['nz']))
     params['Bk']        = np.zeros((params['N'] - 1, params['nz'], params['m']))
     params['Bkp']       = np.zeros((params['N'] - 1, params['nz'], params['m']))
-    params['Sk']        = np.zeros((params['N'] - 1, params['nz'], 1))
+    params['Sk']        = np.zeros((params['N'] - 1, params['nz']))
 
     params['lds0_size'] = params['Sk_ind'][-1] + 1
     params['lds0']      = np.zeros( params['lds0_size'] )
@@ -84,7 +84,7 @@ def discretize_inv_foh(zs_ref, us_ref, dts_ref, problem):
         Ak_bar  = lds_end[base + params['Ak_ind']].reshape(params['n'], params['n'])
         Bk_bar  = lds_end[base + params['Bk_ind']].reshape(params['n'], params['m'])
         Bkp_bar = lds_end[base + params['Bkp_ind']].reshape(params['n'], params['m'])
-        Sk_bar  = lds_end[base + params['Sk_ind']]
+        Sk_bar  = lds_end[base + params['Sk_ind']].reshape(params['n'])
 
         Ak[k]   = Ak_bar
         Bk[k]   = Ak_bar @ Bk_bar
@@ -337,10 +337,10 @@ def discretize_ctcs(zs_ref, us_ref, dts_ref, problem):
     sol = solve_ivp(derivs_step, [0, 1], lds0_stack, atol=1E-12, rtol=1E-12)
     lds_out_stack = sol.y
 
-    Ak = np.zeros((N-1, params['nz'], params['nz']))
-    Bk = np.zeros((N-1, params['nz'], params['m']))
-    Bkp = np.zeros((N-1,params['nz'], params['m']))
-    Sk = np.zeros((N-1, params['nz']))
+    Ak  = np.zeros((N-1, params['nz'],  params['nz']))
+    Bk  = np.zeros((N-1, params['nz'],  params['m']))
+    Bkp = np.zeros((N-1, params['nz'],   params['m']))
+    Sk  = np.zeros((N-1, params['nz']))
 
     # Extract dense values
     for k in range(N - 1):
@@ -349,13 +349,13 @@ def discretize_ctcs(zs_ref, us_ref, dts_ref, problem):
             lds_end[k * params['lds0_size'] + params['z_ind']])
 
         # Reshape matrices
-        Ak_bar = np.reshape(lds_end[k * params['lds0_size'] + params['Ak_ind']],
+        Ak_bar  = np.reshape(lds_end[k * params['lds0_size'] + params['Ak_ind']],
                             (params['nz'], params['nz']))
-        Bk_bar = np.reshape(lds_end[k * params['lds0_size'] + params['Bk_ind']],
+        Bk_bar  = np.reshape(lds_end[k * params['lds0_size'] + params['Bk_ind']],
                             (params['nz'], params['m']))
         Bkp_bar = np.reshape(lds_end[k * params['lds0_size'] + params['Bkp_ind']],
                              (params['nz'], params['m']))
-        Sk_bar = lds_end[k * params['lds0_size'] + params['Sk_ind']]
+        Sk_bar  = lds_end[k * params['lds0_size'] + params['Sk_ind']]
 
         # Fill in the next STM
         Ak[k]   = Ak_bar

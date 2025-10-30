@@ -55,7 +55,7 @@ def config_main():
     config['params']['N'] = 40  # timesteps; 40 for no ctcs, 10 for ctcs
 
     config['params']['bools'] = {
-        'flag_nfz': 2,          # 0, 1, 2
+        'flag_nfz': 1,          # 0, 1, 2
         'free_final_time': 1,   # 0, 1
         'equal_dt': 1,          # 0, 1
         'flag_autotune': '0',   # '0', '1', '2', '3', 'al-scvx'
@@ -71,7 +71,7 @@ def config_main():
 
     # --- Solver options - TODO:expand ---
     config['params']['solver_opts'] = {
-        'solver': 'qoco',
+        'solver': 'ECOS', # 'ECOS', 'QOCO', 'OSQP'
     }
 
     # --- Paths for problem-specific model and data ---
