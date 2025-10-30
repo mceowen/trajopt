@@ -1,13 +1,5 @@
 import numpy as np
 import cvxpy as cp
-import importlib
-
-import trajopt.utils.set_defaults           as defaults
-import trajopt.utils.tools                  as tools
-import trajopt.algorithm.initial_guess      as guess
-import trajopt.algorithm.convergence        as convergence
-import trajopt.algorithm.convexification    as convexify
-import trajopt.utils.nondim                 as nondim
 
 def cost(ts, zs, us, problem):
     
@@ -69,7 +61,7 @@ def custom_inputs(problem,local_vars):
     u_norm_min  = mission.custom_input_dict["u_norm_min"]
     u_norm_max  = mission.custom_input_dict["u_norm_max"]
     theta_max   = np.deg2rad(mission.custom_input_dict["theta_max"])
-    mass        = mission.mass / method.nondim["nm"]
+    mass        = mission.vehicle["mass"] / method.nondim["nm"]
     m           = model.m
     ehat_u      = np.eye(m)
     u1          = mission.ui
@@ -150,3 +142,26 @@ def custom_cost(PTR_COST,local_vars):
     PTR_COST        = PTR_COST + w_true * TRUE_COST + JERK_COST
 
     return PTR_COST
+
+def get_cost_cnstr_nondim(problem):
+    mission = problem.mission
+    method = problem.method
+
+    ncost = method.nondim["nf"] ** 2 * method.nondim["nt"]
+    np_ineq = np.ones(mission.n_nfz) * method.nondim["nd"] ** 2
+
+    return ncost, np_ineq
+
+def set_derived_params(problem):
+    mission = problem.mission
+    method  = problem.method
+
+    mission.ui = method.nondim["M"]["ctrl"]["d2nd"] @ np.array([0, 0, mission.planet["g"]]) * mission.vehicle["mass"] 
+    mission.uf = method.nondim["M"]["ctrl"]["d2nd"] @ np.array([0, 0, mission.planet["g"]]) * mission.vehicle["mass"] 
+
+def set_custom_params(problem):
+    mission = problem.mission
+    method  = problem.method
+
+    mission.u_norm_min = mission.custom_input_dict["u_norm_min"] / method.nondim["nf"]
+    mission.u_norm_max = mission.custom_input_dict["u_norm_max"] / method.nondim["nf"]

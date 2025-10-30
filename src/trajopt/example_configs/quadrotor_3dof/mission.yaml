@@ -1,8 +1,8 @@
 # Dimensional mission configuration (no nondim)
 mission_name: "quadrotor"
 
-ge: [0.0, 0.0, -9.81]
-mass: 0.35
+planet_name: "earth"
+vehicle_name: "quadrotor"
 
 bools:
   flag_nfz: 2           # 0, 1, 2
@@ -40,6 +40,9 @@ zf_min_idx: []
 zf_max: []
 zf_max_idx: []
 
+ui: []
+uf: []
+
 u_min: []
 u_max: []
 
@@ -57,5 +60,3 @@ custom_input_dict:
   u_norm_min: 0.21
   u_norm_max: 8.12
   theta_max : 100.0
-
-

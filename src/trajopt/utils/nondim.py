@@ -6,11 +6,8 @@ def set_nondim_params(problem, base_unit_labels=["m", "s", "kg"]):
     """
     Initializes all nondimensional parameters
     """
-    # Extract dimension constants
-    # path_lim = params["mission"]["path_lim"]
-    # n_path = params["n_path"]
-    # n_nfz = params["mission"]["n_nfz"]
-    
+
+    mission = problem.mission
     model = problem.model
     method = problem.method
 
@@ -116,20 +113,16 @@ def set_nondim_params(problem, base_unit_labels=["m", "s", "kg"]):
     method.nondim["labels"]["state"] = [scale_labels[model.z_types[i]] for i in range(n)]
     method.nondim["labels"]["ctrl"]  = [scale_labels[model.u_types[i]] for i in range(m)]
 
-def set_cost_cnst_nondim_params(problem):
-
-    mission = problem.mission
-    method = problem.method
-
     # set nondim for cost and constraints
-    np_ineq = np.ones(mission.n_nfz) * method.nondim["nd"]**2
-    ncost = method.nondim["nf"] ** 2 * method.nondim["nt"]
+    ncost, np_ineq = mission.get_cost_cnstr_nondim()
 
+    method.nondim["ncost"] = ncost
+    method.nondim["M"]["cost"]["d2nd"] = 1 / ncost
+
+    method.nondim["np_ineq"] = np_ineq
     method.nondim["M"]["cnst"]["d2nd"] = np.diag(np_ineq ** -1).copy()
     method.nondim["M"]["cnst"]["nd2d"] = np.diag(np_ineq).copy()
 
     method.nondim["M"]["nfz"]["d2nd"] = np.diag(1 / np_ineq[mission.nfz_idx]).copy()
     method.nondim["M"]["nfz"]["nd2d"] = np.diag(np_ineq[mission.nfz_idx]).copy()
-    method.nondim["M"]["cost"]["d2nd"] = 1 / ncost
-    method.nondim["np_ineq"] = np_ineq
-    method.nondim["ncost"] = ncost
+    

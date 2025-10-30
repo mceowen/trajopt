@@ -84,6 +84,11 @@ def convert_list(dictionary):
     temp_dict = {}
 
     for key, value in dictionary.items():
+        if isinstance(value, str) and value == "inf":
+            value = np.inf
+        elif isinstance(value, str) and value == "-inf":
+            value = -np.inf
+        
         if isinstance(value, dict):
             temp_dict[key] = convert_list(value)
         elif isinstance(value, list):
@@ -102,7 +107,7 @@ def convert_list(dictionary):
 
 def load_yaml(pkg, file_name):
     path = importlib.resources.files(pkg).joinpath(file_name)
-    return convert_list(load_dict(path))
+    return load_dict(path)
 
 def num_timesteps(zs):
     if zs.ndim == 1:

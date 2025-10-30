@@ -1,12 +1,6 @@
 import numpy as np
-import importlib
 
-import trajopt.utils.set_defaults           as defaults
 import trajopt.utils.tools                  as tools
-import trajopt.algorithm.initial_guess      as guess
-import trajopt.algorithm.convergence        as convergence
-import trajopt.algorithm.convexification    as convexify
-import trajopt.utils.nondim                 as nondim
 
 def system_dynamics(ts, zs, us, problem, t_vec=None):
     """
@@ -21,8 +15,8 @@ def system_dynamics(ts, zs, us, problem, t_vec=None):
     # extract constant param values
     m       = int( model.m )
     n       = int( model.n )
-    mass    = mission.mass / method.nondim["nm"]
-    ge      = mission.ge / method.nondim["na"]
+    mass    = mission.vehicle["mass"] / method.nondim["nm"]
+    g_vec      = np.array([0,0, -mission.planet["g"]]) / method.nondim["na"]
 
     # extract states
     r = zs[0:3]
@@ -40,7 +34,7 @@ def system_dynamics(ts, zs, us, problem, t_vec=None):
     # compute velocity and acceleration
     xDot        = np.empty(6) # initialize
     xDot[0:3]   = v
-    xDot[3:6]   = T/mass + ge
+    xDot[3:6]   = T/mass + g_vec
 
     if np.issubdtype(r.dtype, np.number):
         if r[2] <= -1: # set xDot = 0 if the vehicle hits the ground
@@ -60,7 +54,7 @@ def analytical_linsys(ts, zs, us, problem):
 
     n       = model.n
     m       = model.m
-    mass    = mission.mass / method.nondim["nm"]
+    mass    = mission.vehicle["mass"] / method.nondim["nm"]
 
     # Sanity check for vector shapes
     zs = np.asarray(zs).flatten()
@@ -225,3 +219,17 @@ def analytical_inequality_constraints(ts, zs, us, problem):
             "nfz": nfz_data,
         }
     }
+
+def get_initial_guess_control(problem):
+    mission = problem.mission
+    model   = problem.model
+    method  = problem.method
+
+    g = np.array([0, 0, mission.planet["g"]])
+    mass = mission.vehicle["mass"]
+
+    # method initial guess depends on the model, maybe there is a cleaner way to do this?
+    nl_guess_us_range  = np.ones((2, 1)) @ ((g.reshape(1, -1) * mass) + np.array([0.08, 0.08, 0.0])) / method.nondim["nf"]
+    line_guess_us_init = np.tile(g * mass, (method.N, 1)) / method.nondim["nf"]
+
+    return nl_guess_us_range, line_guess_us_init

@@ -168,9 +168,6 @@ def ctcs_initial_guess(problem):
     # Extend zs_init with zeros for the inequality constraints
     method.zs_init = np.hstack([method.zs_init, np.zeros((method.zs_init.shape[0], mission.n_ineq))])
 
-
-    return params
-
 # Example usage
 if __name__ == "__main__":
     # Define dummy data for testing

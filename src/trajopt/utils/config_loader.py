@@ -1,9 +1,4 @@
-import trajopt.utils.set_defaults           as defaults
 import trajopt.utils.tools                  as tools
-import trajopt.algorithm.initial_guess      as guess
-import trajopt.algorithm.convergence        as convergence
-import trajopt.algorithm.convexification    as convexify
-import trajopt.utils.nondim                 as nondim
 import numpy as np
 
 def load_configs(example_name):
@@ -11,8 +6,8 @@ def load_configs(example_name):
     config = {}
 
     config["mission"] = {}
-    config["model"] = {}
-    config["method"] = {}
+    config["model"]   = {}
+    config["method"]  = {}
 
     # example configs
     example_pkg = f"trajopt.example_configs.{example_name}"
@@ -48,9 +43,13 @@ def load_configs(example_name):
     # update config with defaults -> base -> example config
     for param_type in ['mission', 'model', 'method']:
         for update_type in [default, base, example]:
-            if f'{update_type}' == 'default':
-                config[param_type].update(default[param_type])
-            else:
-                config[param_type] = tools.deep_update(config[param_type], update_type[param_type])
+            config[param_type] = tools.deep_update(config[param_type], update_type[param_type])
+
+        # update mission config with planet and vehicle dicts
+        if param_type == "mission":
+            planet_name = config["mission"]["planet_name"]
+            vehicle_name = config["mission"]["vehicle_name"]
+            config["mission"]["planet"]  = tools.load_yaml(f"{base_pkgs['mission']}.planet", f"{planet_name}.yaml")
+            config["mission"]["vehicle"] = tools.load_yaml(f"{base_pkgs['mission']}.vehicle", f"{vehicle_name}.yaml")
 
     return config

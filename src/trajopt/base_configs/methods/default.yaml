@@ -22,9 +22,17 @@ bools:
 
 # Convergence settings
 conv:
-  eps_feas_conv: 1.0e-1
-  eps_conv: 1.0e-1
-  eps_cost_conv: 1.0e-1
+  eps_cost: 0.0
+  eps_state: 0.0
+  eps_path: 0.0
+  eps_nfz: 0.0
+  eps_auz: 0.0
+  eps_term: 0.0
+  eps_dyn: 0.0
+  ctcs_mult_state: 1.0
+  ctcs_mult_cnst: 1.0
+  eps+ctcs: 1e-5
+  iter_max: 20
 
 # Weight structure
 weights: {}
