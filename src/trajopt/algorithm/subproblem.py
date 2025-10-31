@@ -97,37 +97,41 @@ class Subproblem:
         # Compile the CVXPY problem once
         self.subproblem = cp.Problem(cp.Minimize(self.cost_expr), self.constraints)
 
-    # ------------------------------------------------------------------------------
-    # Variable & Parameter creation (static symbolic structure)
-    # ------------------------------------------------------------------------------
     def _create_variables(self) -> None:
+        """Create CVXPY variables once, or zeros for inactive modules."""
         N, n, m, nz = self.N, self.n, self.m, self.nz
+        bools = self.params["bools"]
 
-        # Primary variables
-        self.dz = cp.Variable((N, n), name="dz")
-        self.du = cp.Variable((N, m), name="du")
+        # Core variables
+        self.dz, self.du = cp.Variable((N, n), name="dz"), cp.Variable((N, m), name="du")
 
         # Time variables
         if self.free_T:
             self.dT = cp.Variable(name="dT") if self.equal_dt else None
-            self.dt = cp.Variable((N - 1, 1), name="dt")
+            self.dt = (1 / (N - 1)) * self.dT * np.ones((N - 1, 1)) if self.equal_dt else cp.Variable((N - 1, 1), name="dt")
         else:
-            self.dT = None
-            self.dt = cp.Variable((N - 1, 1), name="dt")  # will be constrained = 0
+            self.dT, self.dt = None, np.zeros((N - 1, 1))
 
-        # Virtual buffers (always allocate; gating via weights/flags)
+        # Virtual buffers
         self.vb_path  = cp.Variable((N,  self.n_path), name="vb_path")  if self.n_path  > 0 else None
         self.vb_nfz   = cp.Variable((N,  self.n_nfz),  name="vb_nfz")   if self.n_nfz   > 0 else None
         self.vb_aux   = cp.Variable((N,  self.n_aux),  name="vb_aux")   if self.n_aux   > 0 else None
         self.vb_term  = cp.Variable(self.n_term,       name="vb_term")  if self.n_term  > 0 else None
 
-        # Dynamics buffers (per-stage, n_z components)
-        self.vb_dyn_p = cp.Variable((N - 1, nz), name="vb_dyn_p")
-        self.vb_dyn_m = cp.Variable((N - 1, nz), name="vb_dyn_m")
+        # Dynamics buffers (zeros if buff_dyn == 'term')
+        self.vb_dyn_p, self.vb_dyn_m = (
+            (np.zeros((N - 1, nz)), np.zeros((N - 1, nz)))
+            if bools.get("buff_dyn") == "term"
+            else (
+                cp.Variable((N - 1, nz), name="vb_dyn_p"),
+                cp.Variable((N - 1, nz), name="vb_dyn_m")
+            )
+        )
 
-        # Aggregate buffers for quad-1/2/3 modes
+        # Aggregate buffers
         self.vb_plus  = cp.Variable((self.Npm, self.n_plus),  name="vb_plus")  if self.n_plus  > 0 else None
         self.vb_minus = cp.Variable((self.Npm, self.n_minus), name="vb_minus") if self.n_minus > 0 else None
+
 
     def _create_parameters(self) -> None:
         N, n, m, nz = self.N, self.n, self.m, self.nz
