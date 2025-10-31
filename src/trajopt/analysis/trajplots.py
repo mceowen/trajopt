@@ -1,5 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.rcParams['text.usetex'] = True
 import numpy.linalg as mat
 import scipy.linalg as smat
 
@@ -8,11 +10,14 @@ class SCVXPLOTS:
         self.data = data;
         self.scenarios = list(self.data); self.methods = {};
         for tag in self.scenarios: self.methods[tag] = list(self.data[tag]);
-        self.base_pen = {'frgba':[0,0,0,0.1],'lrgba':[0,0,0,0.1],'lw':2,'ls':'-'}
+        self.base_pen = {'frgba':[0,0,0,0.1],'lrgba':[0,0,0,0.1]}
+        self.base_pen = {**self.base_pen,'lw':2,'ls':'-'}
+        self.base_pen = {**self.base_pen,'msty':'','msz':1}
         self.legends = {};
 
 
-        
+
+    ########### BASIC 2D-PLOTTING ###############
     def addPlot2D(self,ax,pen={},typ='line',ins={}):
         if len(pen)==0: penn = self.base_pen.copy();
         else: penn = {**self.base_pen,**pen}
@@ -23,11 +28,9 @@ class SCVXPLOTS:
         runs = [0]; iters = [0];
         if 'runs' in ins: runs = ins['runs'];
         if 'iters' in ins: iters = ins['iters'];
-
         xtag = None; ytag = None;
         if 'x' in ins: xtag = ins['x'];
         if 'y' in ins: ytag = ins['y'];
-
         leg = None;
         if 'legend' in ins: leg = ins['legend'];
         if not(leg in self.legends):  self.legends[leg] = {};
@@ -60,20 +63,19 @@ class SCVXPLOTS:
                                         label=label,color=lrgba[:3],alpha=lrgba[3],
                                         linewidth=lw,linestyle = ls,marker=msty,markersize=msz)[0]
 
-    def addLegend(self,ax,leg,labels=[]):
+
+    ######## LABELS AND LEGENDS ############
+    def setLabels(self,ax,xlabel='',ylabel='',ins={}):
+        ax.set_xlabel(xlabel,**ins)
+        ax.set_ylabel(ylabel,**ins);
+    def setTitle(self,ax,title = '',ins={}):
+        ax.set_title(title,**ins)
+    def addLegend(self,ax,leg,labels=[],ins={}):
         if len(labels) == 0: labels = list(self.legends[leg]);
         handles = [self.legends[leg][label] for label in labels];
-        ax.legend(handles,labels)
+        ax.legend(handles,labels,**ins)
 
-    def setLabels(self,ax,xlabel='',ylabel=''):
-        ax.set_xlabel(xlabel)
-        ax.set_ylabel(ylabel);
-
-    def setTitle(self,ax,title = ''):
-        ax.set_title(title)
-
-    # PLTS1.setTitle(ax,title='State Trajectories for State z['+str(sind)+'] over SCVX Iterations');      
-
+    ########## CONSTRUCT SUBPLOTS ##########
     def genGridTags(self,fig,typ=None,params={}):
         return self.createGrid(fig,typ=typ,grid=self.specGrid(typ=typ,params=params));
     def specGrid(self,typ=None,params={}):
