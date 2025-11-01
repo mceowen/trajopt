@@ -58,8 +58,8 @@ def custom_inputs(problem,local_vars):
     model = problem.model
     method = problem.method
 
-    u_norm_min  = mission.custom_input_dict["u_norm_min"]
-    u_norm_max  = mission.custom_input_dict["u_norm_max"]
+    u_norm_min  = mission.u_norm_min
+    u_norm_max  = mission.u_norm_max
     theta_max   = np.deg2rad(mission.custom_input_dict["theta_max"])
     mass        = mission.vehicle["mass"] / method.nondim["nm"]
     m           = model.m
@@ -89,8 +89,6 @@ def custom_constraints(CNST,local_vars):
 
     us_ref     = local_vars["us_ref"]
     du         = local_vars["sol_vars"]["du"]
-    u1         = local_vars["u1"]
-    uN         = local_vars["uN"]
     u_slack    = local_vars["u_slack"]
     u_norm_min = local_vars["u_norm_min"]
     u_norm_max = local_vars["u_norm_max"]
@@ -98,10 +96,6 @@ def custom_constraints(CNST,local_vars):
     mass       = local_vars["mass"]
     ehat_u     = local_vars["ehat_u"]
     N          = local_vars["N"]
-
-    # Boundary constraints
-    CNST.append(us_ref[0] + du[0] == u1)
-    CNST.append(us_ref[N-1] + du[N-1] == uN)
 
     for k in range(N):
         u_k     = us_ref[k] + du[k]
@@ -151,13 +145,6 @@ def get_cost_cnstr_nondim(problem):
     np_ineq = np.ones(mission.n_nfz) * method.nondim["nd"] ** 2
 
     return ncost, np_ineq
-
-def set_derived_params(problem):
-    mission = problem.mission
-    method  = problem.method
-
-    mission.ui = method.nondim["M"]["ctrl"]["d2nd"] @ np.array([0, 0, mission.planet["g"]]) * mission.vehicle["mass"] 
-    mission.uf = method.nondim["M"]["ctrl"]["d2nd"] @ np.array([0, 0, mission.planet["g"]]) * mission.vehicle["mass"] 
 
 def set_custom_params(problem):
     mission = problem.mission

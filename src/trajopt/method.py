@@ -26,6 +26,11 @@ class Method:
         self.conv        = method_config["conv"]
         self.weights     = method_config["weights"]
 
+        self.nl_guess_u_start = method_config["nl_guess_u_start"]
+        self.nl_guess_u_stop  = method_config["nl_guess_u_stop"]
+
+        self.line_guess_u_init = method_config["line_guess_u_init"]
+
         self.nondim      = {}
         self.conv_data   = {}
 
@@ -41,14 +46,17 @@ class Method:
         mission = problem.mission
         model   = problem.model
 
-        nl_guess_us_range, line_guess_us_init = model.get_initial_guess_control()
+        self.nl_guess_u_start = self.nondim["M"]["ctrl"]["d2nd"] @ self.nl_guess_u_start
+        self.nl_guess_u_stop  = self.nondim["M"]["ctrl"]["d2nd"] @ self.nl_guess_u_stop
+
+        self.line_guess_u_init = self.line_guess_u_init @ self.nondim["M"]["ctrl"]["d2nd"]
 
         if self.bools["free_final_time"] and (self.bools.get("buff_dyn")=="term"):
-            us_range = nl_guess_us_range
+            us_range = np.vstack([self.nl_guess_u_start, self.nl_guess_u_stop])
             guess.nonlinear_initial_guess(us_range, problem)
         else:
             guess.straight_line_initial_guess(problem)
-            self.us_init = line_guess_us_init
+            self.us_init = self.line_guess_u_init
 
         if self.bools["ctcs"]:
             guess.ctcs_initial_guess(problem)
@@ -59,6 +67,10 @@ class Method:
         problem = self.problem
         mission = problem.mission
         model = problem.model
+
+        # precompile discretization functions for jax
+        if self.bools['jax_dyn'] == 1:
+            discretize.jit_jax_discretization(problem)
 
         buff_dyn = str(self.bools.get("buff_dyn", "term"))
 
@@ -152,8 +164,13 @@ class Method:
             # w_path: weight for path constraint buffer cost
             # w_nfz: weight for path constraint buffer cost
 
-        M_state  = self.nondim["M"]["state"]["nd2d"]
-        avg_state_nd_sq = np.mean(np.diag(M_state)**2)
+
+        # TODO (carlos): this is a temporary fix to keep quadrotor converging the same, will remove soon!
+        if self.bools["match_dim_nondim_weights"]:
+            M_state  = self.nondim["M"]["state"]["nd2d"]
+            avg_state_nd_sq = np.mean(np.diag(M_state)**2)
+        else:
+            avg_state_nd_sq = 1
 
         self.weights["wtr_z"] = avg_state_nd_sq  * 1 / (2 * self.weights["alpha_z"])
         self.weights["wtr_u"] = 0 if np.isinf(self.weights["alpha_u"]) else 1 / (2 * self.weights["alpha_u"])
@@ -177,14 +194,21 @@ class Method:
                         w_dyn_dim  = 1e5 * wbuff / self.weights["w_fac_Nm1"]
                         w_term_dim = 1e2 * wbuff
 
-                        # scaled nondim weights to approximately preserve relative scaling between cost terms
-                        M_nfz  = self.nondim["M"]["nfz"]["nd2d"]
-                        M_dyn  = self.nondim["M"]["dyn"]["nd2d"]
-                        M_term = self.nondim["M"]["term"]["nd2d"]
+                        # TODO (carlos): this is a temporary fix to keep quadrotor converging the same
+                        # will remove soon!
+                        if self.bools["match_dim_nondim_weights"]:
+                            # scaled nondim weights to approximately preserve relative scaling between cost terms
+                            M_nfz  = self.nondim["M"]["nfz"]["nd2d"]
+                            M_dyn  = self.nondim["M"]["dyn"]["nd2d"]
+                            M_term = self.nondim["M"]["term"]["nd2d"]
 
-                        avg_nfz_nd_sq  = np.mean(np.diag(M_nfz)**2)
-                        avg_dyn_nd_sq  = np.mean(np.diag(M_dyn)**2)
-                        avg_term_nd_sq = np.mean(np.diag(M_term)**2)
+                            avg_nfz_nd_sq  = np.mean(np.diag(M_nfz)**2)
+                            avg_dyn_nd_sq  = np.mean(np.diag(M_dyn)**2)
+                            avg_term_nd_sq = np.mean(np.diag(M_term)**2)
+                        else:
+                            avg_nfz_nd_sq  = 1
+                            avg_dyn_nd_sq  = 1
+                            avg_term_nd_sq = 1
 
                         w_nfz   = avg_nfz_nd_sq  * w_nfz_dim
                         w_dyn   = avg_dyn_nd_sq  * w_dyn_dim

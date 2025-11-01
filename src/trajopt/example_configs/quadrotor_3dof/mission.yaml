@@ -6,6 +6,9 @@ vehicle_name: "quadrotor"
 
 bools:
   flag_nfz: 2           # 0, 1, 2
+  init_ctrl: 1
+  final_ctrl: 1
+  aero_type: "none"  # "exponential", "jax_lookup", "spline", "none"
 
 # no fly zones options
 nfz_option_list:
@@ -40,8 +43,10 @@ zf_min_idx: []
 zf_max: []
 zf_max_idx: []
 
-ui: []
-uf: []
+ui: "eval: np.array([0, 0, mission['planet']['g']]) * mission['vehicle']['mass']"
+uf: "eval: np.array([0, 0, mission['planet']['g']]) * mission['vehicle']['mass']"
+ui_idx: [0, 1, 2]
+uf_idx: [0, 1, 2]
 
 u_min: []
 u_max: []
@@ -54,7 +59,7 @@ u_max_idx: []
 
 path_lim: []
 path_idx: []
-aux_idx: []
+aux_idx:  []
 
 custom_input_dict:
   u_norm_min: 0.21

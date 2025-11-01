@@ -78,16 +78,18 @@ def load_dict(yaml_file):
 
 def convert_list(dictionary):
     '''
-    Converts all lists to arrays with exception of lists of tuples and strings.
+    Converts all lists to arrays with exception of lists with strings.
     '''
 
     temp_dict = {}
 
     for key, value in dictionary.items():
-        if isinstance(value, str) and value == "inf":
-            value = np.inf
-        elif isinstance(value, str) and value == "-inf":
-            value = -np.inf
+
+        if isinstance(value, str):
+            if value == "inf":
+                value = np.inf
+            elif value == "-inf":
+                value = -np.inf
         
         if isinstance(value, dict):
             temp_dict[key] = convert_list(value)
@@ -96,7 +98,7 @@ def convert_list(dictionary):
                 temp_dict[key] = np.array([], dtype=int)
             elif all(isinstance(item, dict) for item in value):
                 temp_dict[key] = [convert_list(item) for item in value]
-            elif all(isinstance(item, (tuple, str)) for item in value):
+            elif all(isinstance(item, str) for item in value):
                 temp_dict[key] = value
             else:
                 temp_dict[key] = np.array(value)
@@ -124,3 +126,15 @@ def deep_update(dst, src):
         else:
             dst[k] = v
     return dst
+
+def eval_expressions(param_type, config):
+
+    # config = {"mission": {}, "model": {}, "method": {}}
+    dictionary = config[param_type]
+
+    for key, value in dictionary.items():
+        
+        if isinstance(value, str):
+            if value.startswith("eval:"):
+                eval_str = value.split(":", 1)[1].strip()
+                dictionary[key] = eval(eval_str, {"np": np}, config)

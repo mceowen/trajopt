@@ -33,27 +33,7 @@ class Model:
         # =================================================================
 
         # point to selected model module
-        model_module = importlib.import_module(f"trajopt.model_modules.{self.model_name}")
-
-        # set dynamics
-        self._dynamics = model_module.system_dynamics
-
-        # set ltv dynamics
-        if config["method"]["bools"]["auto_jac"]:
-            self._lin_dyn = convexify.generate_jacobians(self.dynamics)
-        else:
-            self._lin_dyn = model_module.analytical_linsys
-
-        # set nonlinear inequality constraints
-        self._nonlinear_inequality_constraints = (model_module.nonlinear_inequality_constraints)
-
-        # set linearized constraints
-        if config["method"]["bools"]["auto_jac_cnst"]:
-            self._lin_constr = convexify.generate_jacobians(self.nonlinear_inequality_constraints)
-        else:
-            self._lin_constr = model_module.analytical_inequality_constraints
-
-        self._get_initial_guess_control = model_module.get_initial_guess_control
+        self.model_module = importlib.import_module(f"trajopt.model_modules.{self.model_name}")
 
     # ===============================================================
     # member functions point to selected fcns from selected module
@@ -63,7 +43,14 @@ class Model:
         return self._dynamics(ts, zs, us, self.problem, t_vec)
 
     def lin_dyn(self, ts, zs, us):
-        return self._lin_dyn(ts, zs, us, self.problem)
+
+        method = self.problem.method
+
+        if method.bools["jax_dyn"] == 1:
+            return self._lin_dyn(ts, zs, us)
+
+        else:
+            return self._lin_dyn(ts, zs, us, self.problem)
 
     def nonlinear_inequality_constraints(self, ts, zs, us):
         return self._nonlinear_inequality_constraints(ts, zs, us, self.problem)
@@ -71,13 +58,31 @@ class Model:
     def lin_constr(self, ts, zs, us):
         return self._lin_constr(ts, zs, us, self.problem)
     
-    def get_initial_guess_control(self):
-        return self._get_initial_guess_control(self.problem)
-    
     def update_model_params(self):
         problem = self.problem
         method = problem.method
         mission = problem.mission
+
+        # set dynamics
+        if method.bools["jax_dyn"]:
+            self._dynamics = self.model_module.system_dynamics_jax
+        else:
+            self._dynamics = self.model_module.system_dynamics
+
+        # set ltv dynamics
+        if method.bools["jax_dyn"]:
+            self._lin_dyn = convexify.generate_lin_sys_jax(self._dynamics, problem)
+        else:
+            self._lin_dyn = self.model_module.analytical_linsys
+
+        # set nonlinear inequality constraints
+        self._nonlinear_inequality_constraints = (self.model_module.nonlinear_inequality_constraints)
+
+        # set linearized constraints
+        if method.bools["auto_jac_cnst"]:
+            self._lin_constr = convexify.generate_jacobians(self.nonlinear_inequality_constraints)
+        else:
+            self._lin_constr = self.model_module.analytical_inequality_constraints
         
         # ctcs state vector update 
         # (this couples mission, model and method, maybe it can be done in a cleaner way)

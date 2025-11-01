@@ -13,8 +13,8 @@ def system_dynamics(ts, zs, us, problem, t_vec=None):
     method = problem.method
 
     # extract constant param values
-    m       = int( model.m )
-    n       = int( model.n )
+    m       = model.m
+    n       = model.n
     mass    = mission.vehicle["mass"] / method.nondim["nm"]
     g_vec      = np.array([0,0, -mission.planet["g"]]) / method.nondim["na"]
 
@@ -219,17 +219,3 @@ def analytical_inequality_constraints(ts, zs, us, problem):
             "nfz": nfz_data,
         }
     }
-
-def get_initial_guess_control(problem):
-    mission = problem.mission
-    model   = problem.model
-    method  = problem.method
-
-    g = np.array([0, 0, mission.planet["g"]])
-    mass = mission.vehicle["mass"]
-
-    # method initial guess depends on the model, maybe there is a cleaner way to do this?
-    nl_guess_us_range  = np.ones((2, 1)) @ ((g.reshape(1, -1) * mass) + np.array([0.08, 0.08, 0.0])) / method.nondim["nf"]
-    line_guess_us_init = np.tile(g * mass, (method.N, 1)) / method.nondim["nf"]
-
-    return nl_guess_us_range, line_guess_us_init

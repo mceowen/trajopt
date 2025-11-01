@@ -12,5 +12,3 @@ anchor_types : ["d", "v", "m"]
 anchor_scales: [10.0, 10.0, 1.0]
 
 base_unit_labels: ["m", "s", "kg"]
-
-theta_max_deg: 100.0    # degrees, loader will convert to radians

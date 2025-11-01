@@ -45,11 +45,14 @@ def load_configs(example_name):
         for update_type in [default, base, example]:
             config[param_type] = tools.deep_update(config[param_type], update_type[param_type])
 
-        # update mission config with planet and vehicle dicts
+        # update mission config first with planet and vehicle dicts
         if param_type == "mission":
             planet_name = config["mission"]["planet_name"]
             vehicle_name = config["mission"]["vehicle_name"]
             config["mission"]["planet"]  = tools.load_yaml(f"{base_pkgs['mission']}.planet", f"{planet_name}.yaml")
             config["mission"]["vehicle"] = tools.load_yaml(f"{base_pkgs['mission']}.vehicle", f"{vehicle_name}.yaml")
+
+        # evaluate expressions
+        tools.eval_expressions(param_type, config)
 
     return config

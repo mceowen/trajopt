@@ -114,6 +114,12 @@ def baseline_subprob_inputs(problem):
     n_term          = mission.n_term
     n_term_ineq     = mission.n_term_ineq
 
+    u1              = mission.ui
+    u1_idx          = mission.ui_idx
+
+    uN              = mission.uf
+    uN_idx          = mission.uf_idx
+
     vb_N_idx = list(range(n_term))
     vb_N_ineq_idx   = list(range(n_term, n_term + n_term_ineq))
 
@@ -132,12 +138,11 @@ def baseline_subprob_inputs(problem):
     udot_max        = mission.udot_max
     udot_max_idx    = mission.udot_max_idx
     n_udot          = mission.n_udot
-    bool_init_ctrl  = method.bools["init_ctrl"]
+    bool_init_ctrl  = mission.bools["init_ctrl"]
 
     # Time settings
-    bools           = method.bools
-    free_final_time = bools["free_final_time"]
-    equal_dt_bool   = bools["equal_dt"]
+    free_final_time = method.bools["free_final_time"]
+    equal_dt_bool   = method.bools["equal_dt"]
 
     dts_min = dts_max = ddts_max = None
     if free_final_time:
@@ -146,7 +151,7 @@ def baseline_subprob_inputs(problem):
         ddts_max    = method.ddts_max
 
     # Contact constraints
-    ctcs            = bools["ctcs"]
+    ctcs            = method.bools["ctcs"]
     eps_ctcs        = method.conv["eps_ctcs"]
 
     # Constraint structure
@@ -158,9 +163,9 @@ def baseline_subprob_inputs(problem):
     n_eq            = n_dyn
 
     # Weighting and duals
-    flag_autotune   = bools["flag_autotune"]
-    buff_dyn        = bools["buff_dyn"]
-    buff_dyn_dual   = bools.get("buff_dyn_dual", None)
+    flag_autotune   = method.bools["flag_autotune"]
+    buff_dyn        = method.bools["buff_dyn"]
+    buff_dyn_dual   = method.bools.get("buff_dyn_dual", None)
 
     weights         = I["weights"]
     W_path          = weights["W_path"]
@@ -191,15 +196,15 @@ def baseline_subprob_inputs(problem):
 
 
 def baseline_subprob_variables(problem, local_vars):
-    bools   = local_vars["bools"]
     N       = local_vars["N"]
+    method = problem.method
 
     # Variation in state and control
     dz, du = scaling.subprob_variable_scaling(problem, local_vars)
 
     # Time-step or time-horizon dilation
-    if bools["free_final_time"]:
-        if not bools["equal_dt"]:
+    if method.bools["free_final_time"]:
+        if not method.bools["equal_dt"]:
             dt = cp.Variable((N-1,1))  # Variable timestep
         else:
             dT = cp.Variable()       # Time horizon scalar
@@ -349,9 +354,8 @@ def baseline_subprob_constraints(problem,local_vars):
     g                   = local_vars["g"]
 
     CNST                = []
-    bools               = method.bools
-    flag_autotune       = bools["flag_autotune"]
-    buff_dyn            = bools["buff_dyn"]
+    flag_autotune       = method.bools["flag_autotune"]
+    buff_dyn            = method.bools["buff_dyn"]
 
     # Extract dimensions and references
     N                   = local_vars["N"]
@@ -370,6 +374,9 @@ def baseline_subprob_constraints(problem,local_vars):
     zN_min, zN_min_idx  = local_vars["zN_min"], local_vars["zN_min_idx"]
     zN_max, zN_max_idx  = local_vars["zN_max"], local_vars["zN_max_idx"]
 
+    u1, u1_idx          = local_vars["u1"],     local_vars["u1_idx"]
+    uN, uN_idx          = local_vars["uN"],     local_vars["uN_idx"]
+
     vb_N_idx            = list(range(mission.n_term))
     vb_N_ineq_idx       = list(range(mission.n_term, mission.n_term + mission.n_term_ineq))
 
@@ -385,10 +392,14 @@ def baseline_subprob_constraints(problem,local_vars):
 
     eps_ctcs            = local_vars["eps_ctcs"]
     dts_min, dts_max, ddts_max = local_vars["dts_min"], local_vars["dts_max"], local_vars["ddts_max"]
-
+ 
     # Initial control
-    if bools["init_ctrl"]:
-        CNST.append(du[:, 0] == 0)
+    if mission.bools["init_ctrl"]:
+        CNST.append(du[0,u1_idx] + us_ref[0,u1_idx] == u1)
+
+    # Final control
+    if mission.bools["final_ctrl"]:
+        CNST.append(du[N-1,uN_idx] + us_ref[N-1,uN_idx] == uN)
 
     # Initial state 
     if mission.n_init > 0:
@@ -432,10 +443,10 @@ def baseline_subprob_constraints(problem,local_vars):
                 CNST.append(cp.sum(vb_dyn_plus[k])  == vb_plus[k])
                 CNST.append(cp.sum(vb_dyn_minus[k]) == vb_minus[k])
 
-            if bools["ctcs"] and not n == nz:
+            if method.bools["ctcs"] and not n == nz:
                 CNST.append(zs_ref[k + 1, n:nz] + dz[k + 1, n:nz] - (zs_ref[k,n:nz] + dz[k,n:nz]) <= eps_ctcs)
 
-            if bools["free_final_time"]:
+            if method.bools["free_final_time"]:
                 CNST.append(dts_ref[k] + dt[k] <= dts_max)
                 CNST.append(dts_ref[k] + dt[k] >= dts_min)
                 CNST.append(cp.abs(dt[k]) <= ddts_max)
@@ -455,7 +466,7 @@ def baseline_subprob_constraints(problem,local_vars):
             CNST.append(M_sel @ (us_ref[k] + du[k]) <= np.concatenate([-u_min, u_max]))
 
         # Linearized inequality constraints
-        if n_ineq > 0 and not bools["ctcs"]:
+        if n_ineq > 0 and not method.bools["ctcs"]:
             vb_combined = cp.vstack([
                     x for x in [vb_path[k], vb_nfz[k], vb_aux[k]]
                     if getattr(x, "shape", (0,))[0] > 0
@@ -490,8 +501,8 @@ def baseline_subprob_cost(problem, local_vars):
     N             = method.N
     n             = model.n
     solver   = method.solver_opts["solver"]
-    flag_autotune = local_vars["bools"]["flag_autotune"]
-    buff_dyn      = local_vars["bools"]["buff_dyn"]
+    flag_autotune = method.bools["flag_autotune"]
+    buff_dyn      = method.bools["buff_dyn"]
 
     dcostdz = local_vars["dcostdz"][:,0,:]    # (N,n)
     dcostdu = local_vars["dcostdu"][:,0,:]    # (N,m)
@@ -644,7 +655,7 @@ def baseline_subprob_outputs(problem, local_vars, subprob):
     # Extract primal variables
     dz_val      = dz.value
     du_val      = du.value
-    dt_val      = dt.value if local_vars["bools"]["free_final_time"] else dt
+    dt_val      = dt.value if method.bools["free_final_time"] else dt
 
     if subprob.solver_stats is not None:
         soln_stats = {
