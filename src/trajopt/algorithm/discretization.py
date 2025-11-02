@@ -174,7 +174,7 @@ def jit_jax_discretization(problem):
     Sk_ind0   = Bkp_ind0 + n*m
 
     # pull ltv dynamics
-    lin_sys = method.lin_dyn
+    lin_sys = model.lin_dyn
 
     # nsub defines the number of sub *nodes* between knot points
     nsub_nodes = 30
@@ -263,8 +263,6 @@ def jit_jax_discretization(problem):
     propagate = jax.jit(jax.vmap(propagate_k, in_axes=(0, None, None, None)))
 
     method.propagate_jax = propagate
-
-    return problem
 
 # inverse free discretization with jax
 def discretize_inv_free_jax(zs_ref_np, us_ref_np, dts_ref_np, problem):

@@ -11,9 +11,11 @@ bools:
   ctcs: 0               # 0, 1
   ode_fixed_dt: 0       # 0, 1
   nondim: 1             # 0, 1
+  jax_dyn: 0            # 0, 1
+  match_dim_nondim_weights: 1  # 0, 1 # this is temporary, to be removed later
 
 solver_opts:
-  solver: "QOCO"
+  solver: "CLARABEL"
 
 T_init: 7.0
 T_min: 1.0
@@ -40,5 +42,9 @@ weights:
   eps_nonzero2: 0.0000000001
   alpha_z: 0.5
   alpha_u: "inf"
-  
-  
+
+
+nl_guess_u_start: "eval: (np.array([0, 0, mission['planet']['g']]) * mission['vehicle']['mass']) + np.array([0.08, 0.08, 0.0])"
+nl_guess_u_stop:  "eval: (np.array([0, 0, mission['planet']['g']]) * mission['vehicle']['mass']) + np.array([0.08, 0.08, 0.0])"
+
+line_guess_u_init: "eval: np.tile(np.array([0, 0, mission['planet']['g']]) * mission['vehicle']['mass'], (method['N'], 1))"

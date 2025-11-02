@@ -1,0 +1,4 @@
+bools:
+  auto_jac: 0
+  auto_jac_aero: 0
+  auto_jac_cnst: 0

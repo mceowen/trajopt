@@ -51,8 +51,8 @@ def set_nondim_params(problem, base_unit_labels=["m", "s", "kg"]):
         "v"    : nd / nt,
         "a"    : nd / (nt**2),
         "f"    : nm * nd / (nt**2),
-        "ang"  : 1.0,
-        "angv" : 1.0 / nt 
+        "ang"  : 180 / np.pi,
+        "angv" : (180 / np.pi) / nt 
     }
 
     d_lbl = base_unit_labels[0]
@@ -66,27 +66,27 @@ def set_nondim_params(problem, base_unit_labels=["m", "s", "kg"]):
         "v"    : f"{d_lbl} / {t_lbl}" ,
         "a"    : f"{d_lbl} / ({t_lbl}^2)",
         "f"    : f"{m_lbl} * {d_lbl} / ({t_lbl}^2)",
-        "ang"  : "rad",
-        "angv" : f"rad / {t_lbl}"
+        "ang"  : "deg",
+        "angv" : f"deg / {t_lbl}"
     }
 
     print("scales: ")
-    print(", ".join(f"{k}: {v:.2f}" for k, v in scales.items()))
+    print(", ".join(f"{k}: {v:.4f}" for k, v in scales.items()))
 
     nd_state = np.array([scales[model.z_types[i]] for i in range(n)])
     nd_ctrl  = np.array([scales[model.u_types[i]] for i in range(m)])
 
-    method.nondim = {}
-    method.nondim["M"] = {}
+    method.nondim               = {}
+    method.nondim["M"]          = {}
     method.nondim["M"]["state"] = {}
-    method.nondim["M"]["ctrl"] = {}
-    method.nondim["M"]["cnst"] = {}
-    method.nondim["M"]["nfz"] = {}
-    method.nondim["M"]["dyn"] = {}
-    method.nondim["M"]["cost"] = {}
-    method.nondim["M"]["term"] = {}
+    method.nondim["M"]["ctrl"]  = {}
+    method.nondim["M"]["cnst"]  = {}
+    method.nondim["M"]["nfz"]   = {}
+    method.nondim["M"]["dyn"]   = {}
+    method.nondim["M"]["cost"]  = {}
+    method.nondim["M"]["term"]  = {}
 
-    method.nondim["labels"]  = {}
+    method.nondim["labels"]     = {}
 
     method.nondim["M"]["state"]["d2nd"] = np.diag(1 / nd_state).copy()
     method.nondim["M"]["state"]["nd2d"] = np.diag(nd_state).copy()
@@ -110,6 +110,8 @@ def set_nondim_params(problem, base_unit_labels=["m", "s", "kg"]):
     method.nondim["nm"] = scales["m"]
     method.nondim["nm_dot"] = scales["m"] / scales["t"]
     method.nondim["nf"] = scales["f"]
+    method.nondim["nang"] = scales["ang"]
+    method.nondim["nangv"] = scales["ang"] / scales["t"]
     method.nondim["labels"]["state"] = [scale_labels[model.z_types[i]] for i in range(n)]
     method.nondim["labels"]["ctrl"]  = [scale_labels[model.u_types[i]] for i in range(m)]
 

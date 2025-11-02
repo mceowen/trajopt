@@ -17,7 +17,6 @@ bools:
   ctcs: 0
   ode_fixed_dt: 0
   aoa_vb: 0
-  init_ctrl: 1
   jax_dyn: 0
 
 # Convergence settings
