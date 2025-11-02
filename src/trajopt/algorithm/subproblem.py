@@ -1,21 +1,5 @@
 """
-High-fidelity, faster SCP subproblem: builds the CVXPY graph ONCE (DPP),
-then updates Parameters each iteration and warm-starts the solver.
-
-This version treats `problem` as the single source of truth.
-Access all settings through:
-  - problem.mission  (boundary/box constraints, path structure)
-  - problem.model    (state/control sizes)
-  - problem.method   (N, flags, nondim, solver_opts, weights, etc.)
-
-It re-creates the baseline functionality:
-  * Fixed, DPP-safe CVXPY graph (no zero-sized Variables/Parameters)
-  * Conditional creation of buffers and bounds
-  * Full constraints: dynamics, boxes, slew, CTCS, linearized ineqs
-  * DCP-safe VB cost: row-weighted sum of squares (no quad_form on Parameters)
-  * Dual cost terms (autotune modes)
-  * Convergence data packing (cost_ref, VB, defects, Jtr)
-  * Custom model hooks via `invoke_custom_functions`
+Subproblem module: SCP subproblem with DPP updates.
 """
 
 from __future__ import annotations
@@ -373,40 +357,55 @@ class Subproblem:
     # COST FUNCTION (DCP-safe)
     # ============================================================
     def _build_cost_once(self) -> cp.Expression:
-        # TRUE cost (linearized objective)
+        """Full baseline cost: TRUE + TR + 0.5*VIRTUAL + DUAL; gated via flags & autotune."""
+
+        # === TRUE cost (linearized objective) ===
         TRUE = self.flag_true * self.w_cost * (
             cp.sum(cp.multiply(self.dcostdz, self.dz))
             + cp.sum(cp.multiply(self.dcostdu, self.du))
             + cp.sum(self.cost0)
         )
 
-        # Trust-region
+        # === Trust-region penalties ===
         TR = self.flag_tr * (
             self.wtr_z * cp.sum_squares(self.dz) + self.wtr_u * cp.sum_squares(self.du)
         )
 
-        # Virtual-buffer penalties (row-weighted sum of squares; DCP-safe)
+        # === Virtual-buffer quadratic penalties ===
         VB = 0.0
         if self.flag_autotune in {"0", "2", "3", "al-scvx"}:
-            # Terminal: elementwise weighted squares
+
+            # Terminal term: weighted quadratic
             if self.vb_term is not None and self.n_term > 0:
-                VB += cp.sum(cp.multiply(self.W_term, cp.square(self.vb_term)))
+                VB += cp.quad_form(self.vb_term, cp.diag(self.W_term))
 
-            # Per-row quadratic penalties (no quad_form with Parameter)
+            # Path / NFZ / AUX (loop over time steps)
             if self.vb_path is not None and self.n_path > 0:
-                VB += cp.sum(cp.multiply(self.w_path_row, cp.sum_squares(self.vb_path, axis=1)))
+                for k in range(self.N):
+                    VB += cp.quad_form(self.vb_path[k], cp.diag(self.W_path[k]))
             if self.vb_nfz is not None and self.n_nfz > 0:
-                VB += cp.sum(cp.multiply(self.w_nfz_row,  cp.sum_squares(self.vb_nfz,  axis=1)))
+                for k in range(self.N):
+                    VB += cp.quad_form(self.vb_nfz[k], cp.diag(self.W_nfz[k]))
             if self.vb_aux is not None and self.n_aux > 0:
-                VB += cp.sum(cp.multiply(self.w_aux_row,  cp.sum_squares(self.vb_aux,  axis=1)))
+                for k in range(self.N):
+                    VB += cp.quad_form(self.vb_aux[k], cp.diag(self.W_aux[k]))
 
-            # Dynamics diff
+            # Dynamics (quadratic penalties)
             diff = self.vb_dyn_p - self.vb_dyn_m
-            VB += cp.sum(cp.multiply(self.w_dyn_row, cp.sum_squares(diff, axis=1)))
+            if self.buff_dyn in {"l1", "l2"}:
+                for k in range(self.N - 1):
+                    VB += cp.quad_form(diff[k], cp.diag(self.W_dyn[k]))
+            elif self.buff_dyn in {"quad-1", "quad-2"}:
+                if self.vb_plus is not None and self.n_plus > 0:
+                    for k in range(max(self.Npm, 1)):
+                        VB += cp.quad_form(self.vb_plus[k], cp.diag(self.W_plus[k]))
+                if self.vb_minus is not None and self.n_minus > 0:
+                    for k in range(max(self.Npm, 1)):
+                        VB += cp.quad_form(self.vb_minus[k], cp.diag(self.W_minus[k]))
 
         VB = 0.5 * self.flag_vb * VB
 
-        # Dual costs (autotune modes 1/3/al-scvx)
+        # === Dual costs ===
         DUAL = 0.0
         if self.flag_autotune in {"1", "3", "al-scvx"}:
             if self.vb_path  is not None and self.n_path  > 0: DUAL += cp.sum(cp.multiply(self.vb_path,  self.dual_path))
@@ -419,6 +418,7 @@ class Subproblem:
             if self.vb_term  is not None and self.n_term  > 0: DUAL += self.dual_term @ self.vb_term
 
         return TRUE + TR + VB + DUAL
+
 
     # ============================================================
     # CUSTOM MODEL HOOKS
@@ -575,11 +575,14 @@ class Subproblem:
         O: Dict[str, Any] = {"subprob": self.subproblem}
 
         if self.subproblem.solver_stats is not None:
-            O["solve_time"] = float(self.subproblem.solver_stats.solve_time) * 1000.0
-            O["parse_time"] = float(self.subproblem.solver_stats.setup_time) * 1000.0
+            solve_time = getattr(self.subproblem.solver_stats, "solve_time", None)
+            setup_time = getattr(self.subproblem.solver_stats, "setup_time", None)
+            O["solve_time"] = float(solve_time or 0.0) * 1000.0
+            O["parse_time"] = float(setup_time or 0.0) * 1000.0
         else:
             O["solve_time"] = None
             O["parse_time"] = None
+
 
         O["dz_s"] = dz_val
         O["du_s"] = du_val

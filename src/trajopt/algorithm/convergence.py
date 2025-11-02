@@ -201,52 +201,54 @@ def set_convergence_tolerance(problem):
     method.conv["Wconv_dyn"]     = Wconv_dyn
     method.conv["Wconv_dyn_vec"] = np.diag(Wconv_dyn).copy()
 
-def check_convergence_tolerance(problem, local_vars, O):
+def check_convergence_tolerance(problem, subprob, O):
+    """Check convergence using new Subproblem + OO problem structure."""
 
     mission = problem.mission
-    model = problem.model
-    method = problem.method
+    model   = problem.model
+    method  = problem.method
 
     # --- Load convergence data
     conv_data = O["conv_data"]
     soln      = conv_data["soln"]
 
-    # --- Extract dimensions
-    n = subprob.nz
+    # --- Extract dimensions from Subproblem
+    n = subprob.n
     N = subprob.N
 
     # --- Extract optimization variables
-    dz       = O['dz_s']
-    dcost    = O['cost'] - conv_data['cost_ref']
-    defect   = conv_data['defect']
-    vb_dyn   = conv_data['vb_dyn']
-    vb_path  = conv_data['vb_path']
-    vb_nfz   = conv_data['vb_nfz']
-    vb_aux   = conv_data['vb_aux']
-    vb_term  = conv_data['vb_term']
+    dz       = O["dz_s"]
+    dcost    = O["cost"] - conv_data["cost_ref"]
+    defect   = conv_data["defect"]
+    vb_dyn   = conv_data["vb_dyn"]
+    vb_path  = conv_data["vb_path"]
+    vb_nfz   = conv_data["vb_nfz"]
+    vb_aux   = conv_data["vb_aux"]
+    vb_term  = conv_data["vb_term"]
 
     # --- Extract convergence criteria
-    eps_state   = method.conv["eps_state"]
-    eps_cost    = method.conv["eps_cost"]
-    eps_path    = method.conv["eps_path"]
-    eps_nfz     = method.conv["eps_nfz"]
-    eps_aux     = method.conv["eps_aux"]
-    eps_term    = method.conv["eps_term"]
-    eps_defect  = method.conv["eps_defect"]
-    eps_dyn     = method.conv["eps_dyn"]
+    eps_state  = method.conv["eps_state"]
+    eps_cost   = method.conv["eps_cost"]
+    eps_path   = method.conv["eps_path"]
+    eps_nfz    = method.conv["eps_nfz"]
+    eps_aux    = method.conv["eps_aux"]
+    eps_term   = method.conv["eps_term"]
+    eps_defect = method.conv["eps_defect"]
+    eps_dyn    = method.conv["eps_dyn"]
 
-    W_state   = method.conv["Wconv_state"]
-    W_path    = method.conv["Wconv_path"]
-    W_nfz     = method.conv["Wconv_nfz"]
-    W_aux     = method.conv["Wconv_aux"]
-    W_term    = method.conv["Wconv_term"]
-    W_dyn     = method.conv["Wconv_dyn"]
-    W_defect  = method.conv["Wconv_defect"]
+    W_state  = method.conv["Wconv_state"]
+    W_path   = method.conv["Wconv_path"]
+    W_nfz    = method.conv["Wconv_nfz"]
+    W_aux    = method.conv["Wconv_aux"]
+    W_term   = method.conv["Wconv_term"]
+    W_dyn    = method.conv["Wconv_dyn"]
+    W_defect = method.conv["Wconv_defect"]
 
     # --- Extract linear constraints
-    conv_path_nl = np.maximum(0.0, O["cnst_path"][:, mission.path_idx]) if mission.path_idx.size > 0 else np.zeros((O["cnst_path"].shape[0], 0))
-    conv_nfz_nl  = np.maximum(0.0, O["cnst_path"][:, mission.nfz_idx])  if mission.nfz_idx.size  > 0 else np.zeros((O["cnst_path"].shape[0], 0))
-    conv_aux_nl  = np.maximum(0.0, O["cnst_path"][:, mission.aux_idx])  if mission.aux_idx.size  > 0 else np.zeros((O["cnst_path"].shape[0], 0))
+    cnst_path = O["cnst_path"]
+    conv_path_nl = np.maximum(0.0, cnst_path[:, mission.path_idx]) if getattr(mission, "path_idx", np.array([])).size > 0 else np.zeros((cnst_path.shape[0], 0))
+    conv_nfz_nl  = np.maximum(0.0, cnst_path[:, mission.nfz_idx])  if getattr(mission, "nfz_idx", np.array([])).size  > 0 else np.zeros((cnst_path.shape[0], 0))
+    conv_aux_nl  = np.maximum(0.0, cnst_path[:, mission.aux_idx])  if getattr(mission, "aux_idx", np.array([])).size  > 0 else np.zeros((cnst_path.shape[0], 0))
 
     # === Optimality ===
     dz_array = tools.safe_val(dz, rows=N, cols=n)
@@ -267,8 +269,8 @@ def check_convergence_tolerance(problem, local_vars, O):
     chk_aux_2  = np.max([np.max(W_aux  @ conv_aux_nl[k].reshape(-1, 1))  for k in range(N)]) if conv_aux_nl.size  else 0.0
 
     # === Convergence mode selection
-    ctcs        = method.bools["ctcs"]
-    flag_conv   = method.bools["flag_conv"]
+    ctcs      = method.bools["ctcs"]
+    flag_conv = method.bools["flag_conv"]
 
     if ctcs:
         chk_feas_1 = np.array([chk_vb_term, chk_vb_dyn])
@@ -311,8 +313,8 @@ def check_convergence_tolerance(problem, local_vars, O):
         "status": O["subprob"].status,
     })
 
-    O['converged'] = bool_conv
-    O['conv_data'] = conv_data
+    O["converged"] = bool_conv
+    O["conv_data"] = conv_data
     return O
 
 
