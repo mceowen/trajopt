@@ -25,12 +25,12 @@ problem["I"] = [{
     "ts_ref": np.linspace(0, problem["params"]["T_init"], N),
     "conv_data": {
         "vb_path": np.zeros((N, problem["params"]["n_path"])),
-        "vb_nfz": np.zeros((N,problem["params"]["n_nfz"])),
+        "vb_nfz": np.zeros((N,problem["params"]["mission"]["n_nfz"])),
         "vb_aux": np.zeros((N,problem["params"].get("n_aux", 0))),
-        "vb_dyn": np.zeros((N-1,problem["params"]["nz"])),
-        "vb_term": np.zeros((problem["params"]["n_term"] + problem["params"]["n_term_ineq"], 1)),
+        "vb_dyn": np.zeros((N-1,problem["params"]["model"]["nz"])),
+        "vb_term": np.zeros((problem["params"]["mission"]["n_term"] + problem["params"]["mission"]["n_term_ineq"], 1)),
     },
-    "weights": problem["params"]["weights"]
+    "weights": problem["params"]["method"]["weights"]
 }]
 problem["O"] = []
 
@@ -58,7 +58,7 @@ for ii in range( problem['params']['conv']['iter_max']+1 ):
     problem["I"][ii+1]["zs_ref"]    = problem["O"][ii]["zs"]
     problem["I"][ii+1]["us_ref"]    = problem["O"][ii]["us"]
     problem["I"][ii+1]["Ts_ref"]    = problem["O"][ii]["Ts"]
-    problem["I"][ii+1]["weights"]   = problem["O"][ii]["weights"]
+    problem["I"][ii+1]["method"]["weights"]   = problem["O"][ii]["method"]["weights"]
     problem["I"][ii+1]["conv_data"] = problem["O"][ii]["conv_data"]
 
 

@@ -23,12 +23,12 @@ def nondim_vars(t, x, u, params):
     # Extract scaling constants
     nx_ind          = np.arange(x.shape[0])
     nu_ind          = np.arange(u.shape[0])
-    nu_rad_ind      = params['nondim']['nu_rad_ind']
-    M_state_d2nd    = params['nondim']['M']['state']['d2nd'][np.ix_(nx_ind, nx_ind)]
-    M_ctrl_d2nd     = params['nondim']['M']['ctrl']['d2nd'][np.ix_(nu_ind, nu_ind)]
+    nu_rad_ind      = params["nondim"]["nu_rad_ind"]
+    M_state_d2nd    = params["nondim"]["M"]["state"]["d2nd"][np.ix_(nx_ind, nx_ind)]
+    M_ctrl_d2nd     = params["nondim"]["M"]["ctrl"]["d2nd"][np.ix_(nu_ind, nu_ind)]
     
     # Rescale time to physical units of seconds
-    ts              = params['nondim']['nt'] * t
+    ts              = params["nondim"]["nt"] * t
     
     # Return dimensionalized x and u
     xs              = M_state_d2nd @ x
@@ -50,14 +50,14 @@ def dim_vars(ts, xs, us, params):
     tuple: Tuple containing dimensionalized time, state variables, and control variables
     """
     # Extract scaling constants
-    nx_ind          = np.arange(params['n'])
-    nu_ind          = np.arange(params['m'])
-    nu_rad_ind      = [idx for idx in params['nondim']['nu_rad_ind'] if idx <= nu_ind[-1]]
-    M_state_nd2d    = np.linalg.pinv(params['nondim']['M']['state']['d2nd'][np.ix_(nx_ind, nx_ind)])
-    M_ctrl_nd2d     = np.linalg.pinv(params['nondim']['M']['ctrl']['d2nd'][np.ix_(nu_ind, nu_ind)])
+    nx_ind          = np.arange(params["model"]["n"])
+    nu_ind          = np.arange(params["model"]["m"])
+    nu_rad_ind      = [idx for idx in params["nondim"]["nu_rad_ind"] if idx <= nu_ind[-1]]
+    M_state_nd2d    = np.linalg.pinv(params["nondim"]["M"]["state"]["d2nd"][np.ix_(nx_ind, nx_ind)])
+    M_ctrl_nd2d     = np.linalg.pinv(params["nondim"]["M"]["ctrl"]["d2nd"][np.ix_(nu_ind, nu_ind)])
     
     # Rescale time to physical units of seconds
-    t               = params['nondim']['nt'] * ts
+    t               = params["nondim"]["nt"] * ts
     
     # Return dimensionalized x and u
     x                   = M_state_nd2d @ xs[nx_ind, :]
@@ -68,22 +68,26 @@ def dim_vars(ts, xs, us, params):
 
 def subprob_variable_scaling(problem, local_vars):
 
+    mission = problem.mission
+    model = problem.model
+    method = problem.method
+
     # Extract input struct
-    I               = local_vars['I']
+    I               = local_vars["I"]
 
     # Extract params
-    n               = problem['params']['nz']
-    m               = problem['params']['m']
-    N               = problem['params']['N']
-    bool_dev_var    = problem['params']['bools']['dev_var']
-    var_scl_flag    = problem['params']['bools']['var_scl_flag']
+    n               = model.nz
+    m               = model.m
+    N               = method.N
+    bool_dev_var    = method.bools["dev_var"]
+    var_scl_flag    = method.bools["var_scl_flag"]
 
-    zs_ref          = I['zs_ref']
-    us_ref          = I['us_ref']
-    z_max           = problem['params']['z_max']
-    z_min           = problem['params']['z_min']
-    u_max           = problem['params']['u_max']
-    u_min           = problem['params']['u_min']
+    zs_ref          = I["zs_ref"]
+    us_ref          = I["us_ref"]
+    z_max           = mission.z_max
+    z_min           = mission.z_min
+    u_max           = mission.u_max
+    u_min           = mission.u_min
 
     # DEVIATION VARIABLES
     if bool_dev_var:
@@ -132,11 +136,11 @@ def subprob_variable_scaling(problem, local_vars):
                 b_u[k] = np.zeros(m)
 
         else:
-            raise ValueError('Undefined var_scl_flag!')
+            raise ValueError("Undefined var_scl_flag!")
 
-        dz = cp.vstack(cp.reshape(M_x[k] @ dzhat[k] + b_x[k], (1, n), order='C') for k in range(N))
+        dz = cp.vstack(cp.reshape(M_x[k] @ dzhat[k] + b_x[k], (1, n), order="C") for k in range(N))
         
-        du = cp.vstack(cp.reshape(M_u[k] @ duhat[k] + b_u[k], (1, m), order='C') for k in range(N))
+        du = cp.vstack(cp.reshape(M_u[k] @ duhat[k] + b_u[k], (1, m), order="C") for k in range(N))
 
     # FULL STATE VARIABLES
     else:
@@ -173,7 +177,7 @@ def subprob_variable_scaling(problem, local_vars):
                 b_u[k] = np.zeros(m)
 
         else:
-            raise ValueError('Undefined var_scl_flag!')
+            raise ValueError("Undefined var_scl_flag!")
 
         x = np.zeros((N, n))
         u = np.zeros((N, m))
@@ -191,11 +195,11 @@ if __name__ == "__main__":
 
     # Define a dummy params dictionary for testing
     params = {
-        'nondim': {
-            'nu_rad_ind': [0, 1, 2],
-            'M_state_d2nd': np.eye(3),
-            'M_ctrl_d2nd': np.eye(3),
-            'nt': 0.1
+        "nondim": {
+            "nu_rad_ind": [0, 1, 2],
+            "M_state_d2nd": np.eye(3),
+            "M_ctrl_d2nd": np.eye(3),
+            "nt": 0.1
         }
     }
     
@@ -210,13 +214,13 @@ if __name__ == "__main__":
 
     # Define a dummy params dictionary for testing
     params = {
-        'n': 3,
-        'm': 2,
-        'nondim': {
-            'nu_rad_ind': [0, 1],
-            'M_state_d2nd': np.eye(3),
-            'M_ctrl_d2nd': np.eye(2),
-            'nt': 0.1
+        "n": 3,
+        "m": 2,
+        "nondim": {
+            "nu_rad_ind": [0, 1],
+            "M_state_d2nd": np.eye(3),
+            "M_ctrl_d2nd": np.eye(2),
+            "nt": 0.1
         }
     }
     
@@ -231,16 +235,16 @@ if __name__ == "__main__":
 
     # Define a dummy problem for testing
     problem = {
-        'I': [{'zs_ref': np.random.rand(3, 4), 'us_ref': np.random.rand(2, 4)}],
-        'params': {
-            'nz': 3,
-            'm': 2,
-            'N': 4,
-            'bools': {'dev_var': True, 'var_scl_flag': 1},
-            'z_max': np.array([1, 1, 1]),
-            'z_min': np.array([0, 0, 0]),
-            'u_max': np.array([1, 1]),
-            'u_min': np.array([0, 0])
+        "I": [{"zs_ref": np.random.rand(3, 4), "us_ref": np.random.rand(2, 4)}],
+        "params": {
+            "nz": 3,
+            "m": 2,
+            "N": 4,
+            "bools": {"dev_var": True, "var_scl_flag": 1},
+            "z_max": np.array([1, 1, 1]),
+            "z_min": np.array([0, 0, 0]),
+            "u_max": np.array([1, 1]),
+            "u_min": np.array([0, 0])
         }
     }
     dz, du = subproblem_variable_scaling(problem)

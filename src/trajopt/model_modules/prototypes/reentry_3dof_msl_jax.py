@@ -136,7 +136,7 @@ def ocp(config):
     problem["cost"]     = params["cost"]
     problem["cost_init"] = problem["cost"](params["ts_init"], params["zs_init"], params["us_init"])
 
-    if params["bools"]["auto_jac"]:
+    if params["method"]["bools"]["auto_jac"]:
         problem["lin_cost"] = convexify.generate_jacobians(
             lambda ts, zs, us: problem["cost"](ts, zs, us, problem),
             problem
@@ -147,7 +147,7 @@ def ocp(config):
     # Dynamics
     # problem["xdot"] = lambda ts, zs, us, t_vec: system_dynamics(ts, zs, us, problem, t_vec)
 
-    # if params["bools"]["auto_jac"]:
+    # if params["method"]["bools"]["auto_jac"]:
     #     problem["lin_dyn"] = convexify.generate_jacobians(
     #         lambda ts, zs, us: system_dynamics(ts, zs, us, problem),
     #         problem
@@ -158,10 +158,10 @@ def ocp(config):
     problem["lin_dyn"] = convexify.generate_lin_sys_jax(system_dynamics, params)
 
     # # Nonconvex inequality constraints
-    problem["path_lim"] = params["path_lim"]
+    problem["mission"]["path_lim"] = params["mission"]["path_lim"]
     problem["P"] = lambda ts, zs, us, t_vec: nonlinear_inequality_constraints(ts, zs, us, problem)
 
-    if params["bools"]["auto_jac_cnst"]:
+    if params["method"]["bools"]["auto_jac_cnst"]:
         problem["lin_constr"] = convexify.generate_jacobians(
             lambda ts, zs, us: nonlinear_inequality_constraints(ts, zs, us, problem),
             problem
@@ -627,15 +627,15 @@ def nonlinear_inequality_constraints(ts, zs, us, params):
 def analytical_inequality_constraints(ts, zs, us, problem):
     params    = problem.get("params", problem)
     N         = tools.num_timesteps(zs)
-    n         = params["n"]
-    m         = params["m"]
+    n         = params["model"]["n"]
+    m         = params["model"]["m"]
     n_path    = params["n_path"]
-    n_nfz     = params["n_nfz"]
-    path_idx  = params["path_idx"]
+    n_nfz     = params["mission"]["n_nfz"]
+    path_idx  = params["mission"]["path_idx"]
 
     # Scale path limits using nondimensional constraint weights
     scale = params["nondim"]["np_ineq"][:n_path]
-    path_lim_scaled = np.linalg.solve(np.diag(scale), params["path_lim"])
+    path_lim_scaled = np.linalg.solve(np.diag(scale), params["mission"]["path_lim"])
 
     # Obstacle info (broadcasted for speed)
     if n_nfz > 0:
@@ -713,8 +713,8 @@ def analytical_cost(ts, zs, us, problem):
 
     # Extract params
     params = problem.get("params", problem)
-    n               = params["n"]
-    m               = params["m"]
+    n               = params["model"]["n"]
+    m               = params["model"]["m"]
     N               = params["N"]
 
     ts              = np.asarray(ts).flatten()
