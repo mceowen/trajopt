@@ -108,28 +108,74 @@ class Subproblem:
 
     def __init__(self, problem) -> None:
         self.problem = problem
+        mission = self.problem.mission
+        model   = self.problem.model
+        method  = self.problem.method
 
         # derive canonical sizes for quick reuse
-        self.N  = int(self.problem.method.N)
-        self.n  = int(self.problem.model.n)
-        self.m  = int(self.problem.model.m)
-        self.nz = int(self.problem.model.nz)
+        self.N  = int(method.N)
+        self.n  = int(model.n)
+        self.m  = int(model.m)
+        self.nz = int(model.nz)
 
-        self.bools         = self.problem.method.bools
+        self.bools         = method.bools
         self.free_T        = bool(self.bools["free_final_time"])
         self.equal_dt      = bool(self.bools["equal_dt"])
         self.buff_dyn      = self.bools["buff_dyn"]
         self.flag_autotune = self.bools["flag_autotune"]
 
         # module sizes
-        self.n_path  = int(self.problem.mission.n_path)
-        self.n_nfz   = int(self.problem.mission.n_nfz)
-        self.n_aux   = int(getattr(self.problem.mission, "n_aux", 0))
-        self.n_term  = int(self.problem.mission.n_term + self.problem.mission.n_term_ineq)
-        self.n_dyn   = int(getattr(self.problem.mission, "n_dyn", self.problem.model.nz))
-        self.Npm     = int(getattr(self.problem.method, "Npm", 0))
-        self.n_plus  = int(getattr(self.problem.method, "n_plus", 0))
-        self.n_minus = int(getattr(self.problem.method, "n_minus", 0))
+        self.n_path  = int(mission.n_path)
+        self.n_nfz   = int(mission.n_nfz)
+        self.n_aux   = int(getattr(mission, "n_aux", 0))
+        self.n_term  = int(mission.n_term + mission.n_term_ineq)
+        self.n_dyn   = int(getattr(mission, "n_dyn", model.nz))
+        self.Npm     = int(getattr(method, "Npm", 0))
+        self.n_plus  = int(getattr(method, "n_plus", 0))
+        self.n_minus = int(getattr(method, "n_minus", 0))
+
+        # Optional module flags as Parameters (enable gating)
+        self.flag_path = method.bools.get("flag_path", 1.0)
+        self.flag_nfz  = method.bools.get("flag_nfz", 1.0)
+        self.flag_aux  = method.bools.get("flag_aux", 1.0)
+        self.flag_term = method.bools.get("flag_term", 1.0)
+        self.flag_dyn  = method.bools.get("flag_dyn", 1.0)
+        self.flag_tr   = method.bools.get("flag_tr", 1.0)
+        self.flag_true = method.bools.get("flag_true", 1.0)
+        self.flag_dual = method.bools.get("flag_dual", 1.0)
+        self.flag_vb   = method.bools.get("flag_vb", 1.0)
+
+        # Bounds (only create when nonzero-length)
+        self.z1     = mission.zi if mission.n_init > 0 else None
+        if mission.n_init_ineq > 0:
+            self.z1_min = mission.zi_min
+            self.z1_max = mission.zi_max
+        else:
+            self.z1_min = self.z1_max = None
+
+        self.zN     = mission.zf if mission.n_term > 0 else None
+        if mission.n_term_ineq > 0:
+            self.zN_min = mission.zf_min
+            self.zN_max = mission.zf_max
+        else:
+            self.zN_min = self.zN_max = None
+
+        self.u1 = mission.ui if mission.n_init_ctrl > 0 else None
+        self.uN = mission.uf if mission.n_term_ctrl > 0 else None
+
+        self.z_min = mission.z_min if hasattr(mission, "z_min") and len(mission.z_min) > 0 else None
+        self.z_max = mission.z_max if hasattr(mission, "z_max") and len(mission.z_max) > 0 else None
+
+        if mission.n_ctrl > 0:
+            self.u_min  = mission.u_min
+            self.u_max  = mission.u_max
+        else:
+            self.u_min = self.u_max = None
+
+        if mission.n_udot > 0:
+            self.udot_max = mission.udot_max
+        else:
+            self.udot_max = None
 
         # Build the DPP graph once
         self._create_variables()
@@ -195,9 +241,9 @@ class Subproblem:
         self.Sk     = cp.Parameter((N - 1, n),    name="Sk")
         self.zs_m   = cp.Parameter((N, n),        name="zs_minus")
 
-        self.dcostdz = cp.Parameter((N, n), name="dcostdz")
-        self.dcostdu = cp.Parameter((N, m), name="dcostdu")
-        self.cost0   = cp.Parameter(N,      name="cost0")
+        self.w_cost_times_dcostdz = cp.Parameter((N, n), name="dcostdz")
+        self.w_cost_times_dcostdu = cp.Parameter((N, m), name="dcostdu")
+        self.w_cost_times_cost0   = cp.Parameter(N,      name="cost0")
 
         self.zs_ref  = cp.Parameter((N, n),    name="zs_ref")
         self.us_ref  = cp.Parameter((N, m),    name="us_ref")
@@ -211,39 +257,6 @@ class Subproblem:
             self.g0   = cp.Parameter((N, n_ineq_cols),    name="g0")
         else:
             self.dgdz = self.dgdu = self.g0 = None
-
-        # Bounds (only create when nonzero-length)
-        self.z1     = cp.Parameter(mission.n_init, name="z1") if mission.n_init > 0 else None
-        if mission.n_init_ineq > 0:
-            self.z1_min = cp.Parameter(mission.n_init_ineq, name="z1_min")
-            self.z1_max = cp.Parameter(mission.n_init_ineq, name="z1_max")
-        else:
-            self.z1_min = self.z1_max = None
-
-        self.zN     = cp.Parameter(mission.n_term, name="zN") if mission.n_term > 0 else None
-        if mission.n_term_ineq > 0:
-            self.zN_min = cp.Parameter(mission.n_term_ineq, name="zN_min")
-            self.zN_max = cp.Parameter(mission.n_term_ineq, name="zN_max")
-        else:
-            self.zN_min = self.zN_max = None
-
-        self.u1 = cp.Parameter(mission.n_init_ctrl, name="u1") if mission.n_init_ctrl > 0 else None
-        self.uN = cp.Parameter(mission.n_term_ctrl, name="uN") if mission.n_term_ctrl > 0 else None
-
-        self.z_min = cp.Parameter(len(getattr(mission, "z_min", [])), name="z_min") if hasattr(mission, "z_min") and len(mission.z_min) > 0 else None
-        self.z_max = cp.Parameter(len(getattr(mission, "z_max", [])), name="z_max") if hasattr(mission, "z_max") and len(mission.z_max) > 0 else None
-
-        if mission.n_ctrl > 0:
-            self.u_min = cp.Parameter(len(mission.u_min_idx), name="u_min") 
-            self.u_max = cp.Parameter(len(mission.u_max_idx), name="u_max") 
-        else:
-            self.u_min = self.u_max = None
-
-
-        if mission.n_udot > 0:
-            self.udot_max = cp.Parameter(mission.n_udot, name="udot_max")
-        else:
-            self.udot_max = None
 
         # time-step scalar bounds
         if self.free_T:
@@ -259,13 +272,13 @@ class Subproblem:
         self.wtr_u  = cp.Parameter(nonneg=True, name="wtr_u")
 
         # Elementwise weights (kept with at least 1 column for DPP)
-        self.W_path  = cp.Parameter((N,  max(self.n_path, 1)),  nonneg=True, name="W_path")
-        self.W_nfz   = cp.Parameter((N,  max(self.n_nfz, 1)),   nonneg=True, name="W_nfz")
-        self.W_aux   = cp.Parameter((N,  max(self.n_aux, 1)),   nonneg=True, name="W_aux")
-        self.W_term  = cp.Parameter((max(self.n_term, 1),),     nonneg=True, name="W_term")
-        self.W_dyn   = cp.Parameter((N - 1, max(nz, 1)),        nonneg=True, name="W_dyn")
-        self.W_plus  = cp.Parameter((max(self.Npm, 1), max(self.n_plus, 1)),  nonneg=True, name="W_plus")
-        self.W_minus = cp.Parameter((max(self.Npm, 1), max(self.n_minus, 1)), nonneg=True, name="W_minus")
+        self.W_path_sqrt  = cp.Parameter((N,  max(self.n_path, 1)),  nonneg=True, name="W_path_sqrt")
+        self.W_nfz_sqrt   = cp.Parameter((N,  max(self.n_nfz, 1)),   nonneg=True, name="W_nfz_sqrt")
+        self.W_aux_sqrt   = cp.Parameter((N,  max(self.n_aux, 1)),   nonneg=True, name="W_aux_sqrt")
+        self.W_term_sqrt  = cp.Parameter((max(self.n_term, 1),),     nonneg=True, name="W_term_sqrt")
+        self.W_dyn_sqrt   = cp.Parameter((N - 1, max(nz, 1)),        nonneg=True, name="W_dyn_sqrt")
+        self.W_plus_sqrt  = cp.Parameter((max(self.Npm, 1), max(self.n_plus, 1)),  nonneg=True, name="W_plus_sqrt")
+        self.W_minus_sqrt = cp.Parameter((max(self.Npm, 1), max(self.n_minus, 1)), nonneg=True, name="W_minus_sqrt")
 
         # Row weights (DCP-safe convex weighting of row norms)
         self.w_path_row = cp.Parameter(N,  nonneg=True, name="w_path_row")  if self.n_path > 0 else None
@@ -284,17 +297,6 @@ class Subproblem:
 
         # CTCS epsilon (scalar)
         self.eps_ctcs = cp.Parameter(nonneg=True, name="eps_ctcs")
-
-        # Optional module flags as Parameters (enable gating)
-        self.flag_path = cp.Parameter(nonneg=True, value=1.0, name="flag_path")
-        self.flag_nfz  = cp.Parameter(nonneg=True, value=1.0, name="flag_nfz")
-        self.flag_aux  = cp.Parameter(nonneg=True, value=1.0, name="flag_aux")
-        self.flag_term = cp.Parameter(nonneg=True, value=1.0, name="flag_term")
-        self.flag_dyn  = cp.Parameter(nonneg=True, value=1.0, name="flag_dyn")
-        self.flag_tr   = cp.Parameter(nonneg=True, value=1.0, name="flag_tr")
-        self.flag_true = cp.Parameter(nonneg=True, value=1.0, name="flag_true")
-        self.flag_dual = cp.Parameter(nonneg=True, value=1.0, name="flag_dual")
-        self.flag_vb   = cp.Parameter(nonneg=True, value=1.0, name="flag_vb")
 
     # ============================================================
     # CONSTRAINTS (build-once)
@@ -418,48 +420,42 @@ class Subproblem:
         """Full baseline cost: TRUE + TR + 0.5*VIRTUAL + DUAL; gated via flags & autotune."""
 
         # === TRUE cost (linearized objective) ===
-        TRUE = self.flag_true * self.w_cost * (
-            cp.sum(cp.multiply(self.dcostdz, self.dz))
-            + cp.sum(cp.multiply(self.dcostdu, self.du))
-            + cp.sum(self.cost0)
-        )
+        TRUE = self.flag_true * (cp.sum(cp.multiply(self.w_cost_times_dcostdz, self.dz)) + cp.sum(cp.multiply(self.w_cost_times_dcostdu, self.du)) + cp.sum(self.w_cost_times_cost0))
 
         # === Trust-region penalties ===
-        TR = self.flag_tr * (
-            self.wtr_z * cp.sum_squares(self.dz) + self.wtr_u * cp.sum_squares(self.du)
-        )
+        TR = self.flag_tr * (self.wtr_z * cp.sum_squares(self.dz) + self.wtr_u * cp.sum_squares(self.du))
 
-        # === Virtual-buffer quadratic penalties ===
+        # # === Virtual-buffer quadratic penalties ===
         VB = 0.0
         if self.flag_autotune in {"0", "2", "3", "al-scvx"}:
 
             # Terminal term: weighted quadratic
             if self.vb_term is not None and self.n_term > 0:
-                VB += cp.quad_form(self.vb_term, cp.diag(self.W_term))
+                VB += cp.sum_squares(cp.diag(self.W_term_sqrt) @ self.vb_term)
 
             # Path / NFZ / AUX (loop over time steps)
             if self.vb_path is not None and self.n_path > 0:
                 for k in range(self.N):
-                    VB += cp.quad_form(self.vb_path[k], cp.diag(self.W_path[k]))
+                    VB += cp.sum_squares(cp.diag(self.W_path_sqrt[k, :]) @ self.vb_path[k])
             if self.vb_nfz is not None and self.n_nfz > 0:
                 for k in range(self.N):
-                    VB += cp.quad_form(self.vb_nfz[k], cp.diag(self.W_nfz[k]))
+                    VB += cp.sum_squares(cp.diag(self.W_nfz_sqrt[k, :]) @ self.vb_nfz[k])
             if self.vb_aux is not None and self.n_aux > 0:
                 for k in range(self.N):
-                    VB += cp.quad_form(self.vb_aux[k], cp.diag(self.W_aux[k]))
+                    VB += cp.sum_squares(cp.diag(self.W_aux_sqrt[k, :]) @ self.vb_aux[k])
 
             # Dynamics (quadratic penalties)
             diff = self.vb_dyn_p - self.vb_dyn_m
             if self.buff_dyn in {"l1", "l2"}:
                 for k in range(self.N - 1):
-                    VB += cp.quad_form(diff[k], cp.diag(self.W_dyn[k]))
+                    VB += cp.sum_squares(cp.diag(self.W_dyn_sqrt[k, :]) @ diff[k])
             elif self.buff_dyn in {"quad-1", "quad-2"}:
                 if self.vb_plus is not None and self.n_plus > 0:
                     for k in range(max(self.Npm, 1)):
-                        VB += cp.quad_form(self.vb_plus[k], cp.diag(self.W_plus[k]))
+                        VB += cp.sum_squares(cp.diag(self.W_plus_sqrt[k, :]) @ self.vb_plus[k])
                 if self.vb_minus is not None and self.n_minus > 0:
                     for k in range(max(self.Npm, 1)):
-                        VB += cp.quad_form(self.vb_minus[k], cp.diag(self.W_minus[k]))
+                        VB += cp.sum_squares(cp.diag(self.W_minus_sqrt[k, :]) @ self.vb_minus[k])
 
         VB = 0.5 * self.flag_vb * VB
 
@@ -535,9 +531,15 @@ class Subproblem:
         self._set_param(self.Sk,   Sk)
         self._set_param(self.zs_m, zs_minus)
 
-        self.dcostdz.value = dcostdz[:, 0, :]
-        self.dcostdu.value = dcostdu[:, 0, :]
-        self.cost0.value   = cost[:, 0, 0]
+        # Weights/duals (ensure shapes, fill any scalars/empties)
+        W = I["weights"]
+        self.w_cost = W.get("w_cost", 1.0)
+        self.wtr_z.value  = W.get("wtr_z", 1e-2)
+        self.wtr_u.value  = W.get("wtr_u", 1e-2)
+
+        self.w_cost_times_dcostdz.value = self.w_cost * dcostdz[:, 0, :]
+        self.w_cost_times_dcostdu.value = self.w_cost * dcostdu[:, 0, :]
+        self.w_cost_times_cost0.value   = self.w_cost * cost[:, 0, 0]
         self.zs_ref.value  = I["zs_ref"]
         self.us_ref.value  = I["us_ref"]
         self.dts_ref.value = I["dts_ref"].reshape(self.N - 1, 1)
@@ -546,33 +548,11 @@ class Subproblem:
             self.dgdz.value = dgdz
             self.dgdu.value = dgdu
             self.g0.value   = g
-
-        # Bounds
-        if mission.n_init > 0 and self.z1 is not None: self.z1.value = mission.zi
-        if mission.n_init_ineq > 0 and self.z1_min is not None and self.z1_max is not None:
-            self.z1_min.value = mission.zi_min; self.z1_max.value = mission.zi_max
-        if mission.n_term > 0 and self.zN is not None: self.zN.value = mission.zf
-        if mission.n_term_ineq > 0 and self.zN_min is not None and self.zN_max is not None:
-            self.zN_min.value = mission.zf_min; self.zN_max.value = mission.zf_max
-        if mission.n_state > 0 and self.z_min is not None and self.z_max is not None:
-            self.z_min.value = mission.z_min; self.z_max.value  = mission.z_max
-        if mission.n_ctrl  > 0 and self.u_min is not None and self.u_max is not None:
-            self.u_min.value = mission.u_min; self.u_max.value  = mission.u_max
-        if mission.n_udot > 0 and self.udot_max is not None:
-            self.udot_max.value = mission.udot_max
-        if mission.n_init_ctrl > 0 and self.u1 is not None: self.u1.value = mission.ui
-        if mission.n_term_ctrl > 0 and self.uN is not None: self.uN.value = mission.uf
         
         if self.free_T:
             self.dts_min.value  = float(method.dts_min)
             self.dts_max.value  = float(method.dts_max)
             self.ddts_max.value = float(method.ddts_max)
-
-        # Weights/duals (ensure shapes, fill any scalars/empties)
-        W = I["weights"]
-        self.w_cost.value = W.get("w_cost", 1.0)
-        self.wtr_z.value  = W.get("wtr_z", 1e-2)
-        self.wtr_u.value  = W.get("wtr_u", 1e-2)
 
         W_path_arr  = tools.ensure_shape(W.get("W_path",  0.0), (self.N,  max(self.n_path, 1)))
         W_nfz_arr   = tools.ensure_shape(W.get("W_nfz",   0.0), (self.N,  max(self.n_nfz,  1)))
@@ -582,13 +562,13 @@ class Subproblem:
         W_plus_arr  = tools.ensure_shape(W.get("W_plus",  0.0), (max(self.Npm, 1), max(self.n_plus,  1)))
         W_minus_arr = tools.ensure_shape(W.get("W_minus", 0.0), (max(self.Npm, 1), max(self.n_minus, 1)))
 
-        self.W_path.value  = W_path_arr
-        self.W_nfz.value   = W_nfz_arr
-        self.W_aux.value   = W_aux_arr
-        self.W_term.value  = W_term_arr
-        self.W_dyn.value   = W_dyn_arr
-        self.W_plus.value  = W_plus_arr
-        self.W_minus.value = W_minus_arr
+        self.W_path_sqrt.value  = np.sqrt(W_path_arr)
+        self.W_nfz_sqrt.value   = np.sqrt(W_nfz_arr)
+        self.W_aux_sqrt.value   = np.sqrt(W_aux_arr)
+        self.W_term_sqrt.value  = np.sqrt(W_term_arr)
+        self.W_dyn_sqrt.value   = np.sqrt(W_dyn_arr)
+        self.W_plus_sqrt.value  = np.sqrt(W_plus_arr)
+        self.W_minus_sqrt.value = np.sqrt(W_minus_arr)
 
         # Row weights from elementwise weights (numeric; DCP-safe usage in objective)
         if self.w_path_row is not None: self.w_path_row.value = np.max(W_path_arr, axis=1)
