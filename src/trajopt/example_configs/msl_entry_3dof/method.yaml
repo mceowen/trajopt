@@ -15,7 +15,7 @@ bools:
   match_dim_nondim_weights: 0  # 0, 1 # this is temporary, to be removed later
 
 solver_opts:
-  solver: "CLARABEL"
+  solver: "QOCO"
 
 T_init: 200.0
 T_min: 180.0

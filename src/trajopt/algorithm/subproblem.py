@@ -23,13 +23,15 @@ from trajopt.utils import tools
 # =====================================================================================
 
 def solve_subproblem(problem) -> Dict[str, Any]:
-    if not hasattr(problem, "algorithm"):
-        problem.algorithm = {}
+    """
+    Build or reuse a DPP-compiled Subproblem instance stored in problem.method.
+    """
+    # Check if Subproblem already exists inside problem.method
+    subprob: Optional[Subproblem] = getattr(problem.method, "subprob", None)
 
-    subprob: Optional[Subproblem] = problem.algorithm.get("subprob", None)
     if subprob is None:
         subprob = Subproblem(problem)
-        problem.algorithm["subprob"] = subprob
+        problem.method.subprob = subprob  # store under method, not algorithm
 
     return subprob.solve_iteration()
 
@@ -553,7 +555,7 @@ class Subproblem:
         prop_time_ms = self._update_parameters_from_iterate()
 
         solver_name = self.problem.method.solver_opts.get("solver", "ECOS")
-        self.subproblem.solve(solver=solver_name, warm_start=True)
+        self.subproblem.solve(solver=solver_name, warm_start=True,ignore_dpp=True)
 
         O = self._collect_outputs(prop_time_ms)
         O = convergence.check_convergence_tolerance(self.problem, self, O)
