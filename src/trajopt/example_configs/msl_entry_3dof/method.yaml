@@ -37,7 +37,7 @@ conv:
   iter_max: 10
 
 weights:
-  w_cost: 1e3
+  w_cost: 1000.0
   eps_nonzero1: 0.2
   eps_nonzero2: 0.0000000001
   alpha_z: 0.5

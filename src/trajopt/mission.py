@@ -135,8 +135,11 @@ class Mission:
         # TODO (carlos): this only contains things necessary for quadrotor example
         # need to add setup for all non-custom params soon
 
-        self.zi = method.nondim["M"]["state"]["d2nd"] @ self.zi
-        self.zf = method.nondim["M"]["state"]["d2nd"] @ self.zf  
+        self.M_zi = method.nondim["M"]["state"]["d2nd"][np.ix_(self.zi_idx, self.zi_idx)]
+        self.M_zf = method.nondim["M"]["state"]["d2nd"][np.ix_(self.zf_idx, self.zf_idx)]
+
+        self.zi = self.M_zi @ self.zi
+        self.zf = self.M_zf @ self.zf  
 
         M_z_min = method.nondim["M"]["state"]["d2nd"][np.ix_(self.z_min_idx, self.z_min_idx)]
         M_z_max = method.nondim["M"]["state"]["d2nd"][np.ix_(self.z_max_idx, self.z_max_idx)]

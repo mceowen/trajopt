@@ -6,7 +6,7 @@ import time
 
 # trajopt imports
 import trajopt.problem_models.double_integrator_2dof    as double_int
-import trajopt.algorithm.subproblem                     as subproblem
+import trajopt.algorithm.scp                     as scp
 
 # Step 1: Define configuration
 config = double_int.config_main()
@@ -43,7 +43,7 @@ print("-" * 152)
 
 for ii in range( problem['params']['conv']['iter_max']+1 ):
 
-    output = subproblem.solve_subproblem( problem )
+    output = scp.solve_subproblem( problem )
 
     problem["O"].append(output)
     problem["O"][ii]["iter_num"]    = ii + 1

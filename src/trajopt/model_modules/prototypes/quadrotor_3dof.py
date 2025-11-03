@@ -739,7 +739,7 @@ def analytical_inequality_constraints(ts, zs, us, problem):
 
 <<<<<<< HEAD:src/trajopt/problem_models/quadrotor_3dof.py
 # ============================================================
-# Custom subproblem extensions for quadrotor_3dof
+# Custom scp extensions for quadrotor_3dof
 # ============================================================
 import cvxpy as cp
 import numpy as np
@@ -795,7 +795,7 @@ def custom_subprob_variables(problem, ctx):
 # --------------------------------------
 def custom_subprob_constraints(problem, constraints, ctx):
     """
-    Append additional model-specific convex constraints to the subproblem.
+    Append additional model-specific convex constraints to the scp.
     """
     us_ref     = ctx["us_ref"]
     du         = ctx["du"]

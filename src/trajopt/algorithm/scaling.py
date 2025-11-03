@@ -247,6 +247,6 @@ if __name__ == "__main__":
             "u_min": np.array([0, 0])
         }
     }
-    dz, du = subproblem_variable_scaling(problem)
+    dz, du = scp_variable_scaling(problem)
     print(f"dz: {dz}")
     print(f"du: {du}")

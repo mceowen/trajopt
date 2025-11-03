@@ -39,7 +39,7 @@ zi_max: []
 zi_max_idx: []
 
 # final state constraints
-zf: "eval: np.array([(mission['planet']['r'] + 10e3), 0.0, 10.5768, 406.0, -10.0, 0.0])"
+zf: "eval: np.array([(mission['planet']['r'] + 10e3), 0.0, 10.5768])" # , final 3 states: 406.0, -10.0, 0.0])"
 zf_idx: [0, 1, 2]
 zf_min: []
 zf_min_idx: []

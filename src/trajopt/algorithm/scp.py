@@ -1,5 +1,5 @@
 """
-Subproblem module: SCP subproblem with DPP updates.
+Subproblem module: SCP scp with DPP updates.
 """
 
 from __future__ import annotations
@@ -19,21 +19,69 @@ from trajopt.utils import tools
 
 
 # =====================================================================================
-# Public API (single-entry): caches/reuses one compiled Subproblem per `problem`
+# Public API: full Sequential Convex Programming (SCP) loop with DPP reuse
 # =====================================================================================
 
-def solve_subproblem(problem) -> Dict[str, Any]:
+def run_scp(problem, epsilon: float = 1e-5):
     """
-    Build or reuse a DPP-compiled Subproblem instance stored in problem.method.
-    """
-    # Check if Subproblem already exists inside problem.method
-    subprob: Optional[Subproblem] = getattr(problem.method, "subprob", None)
+    Run the full Sequential Convex Programming (SCP) loop for a given problem.
 
+    This function builds or reuses a DPP-compiled Subproblem instance stored in
+    problem.method, runs the convex subproblems sequentially, and updates the
+    trajectory references across iterations.
+
+    Parameters
+    ----------
+    problem : trajopt.Problem
+        Fully initialized problem instance (with mission, model, method).
+    epsilon : float, optional
+        ∞-norm convergence tolerance on zs_ref (default = 1e-5).
+
+    Returns
+    -------
+    problem : trajopt.Problem
+        Updated problem object containing all SCP iteration outputs.
+    """
+
+    print("-" * 152)
+    print(f"                                              ..:: {problem.mission.mission_name}: PTR with Virtual Buffer ::..")
+    print("-" * 152)
+    print("  Iteration |  Propagation |   Solve   |    Parse   |  log(dz)  |      log(VB)    |   log(VB)   |  log(VB)    | Solve status |  Time of    |   Cost    ")
+    print("            |   time [ms]  | time [ms] |  time [ms] |           |  (path + NFZ)   |  (terminal) |  (dynamics) |              |  Flight [s] |           ")
+    print("-" * 152)
+
+    # Get or create the compiled Subproblem (DPP)
+    subprob: Optional[Subproblem] = getattr(problem.method, "subprob", None)
     if subprob is None:
         subprob = Subproblem(problem)
-        problem.method.subprob = subprob  # store under method, not algorithm
+        problem.method.subprob = subprob
 
-    return subprob.solve_iteration()
+    max_iter = problem.method.conv["iter_max"]
+
+    for ii in range(max_iter + 1):
+        output = subprob.solve_iteration()
+        problem.O.append(output)
+        problem.O[ii]["iter_num"] = ii + 1
+
+        if problem.O[-1].get("converged", False):
+            print("Terminated from convergence criteria!")
+            break
+
+        # Advance reference trajectories for next iteration
+        problem.I.append(problem.I[ii])
+        problem.I[ii + 1]["iter_num"]  = ii + 2
+        problem.I[ii + 1]["ts_ref"]    = problem.O[ii]["ts"]
+        problem.I[ii + 1]["dts_ref"]   = problem.O[ii]["dts"]
+        problem.I[ii + 1]["zs_ref"]    = problem.O[ii]["zs"]
+        problem.I[ii + 1]["us_ref"]    = problem.O[ii]["us"]
+        problem.I[ii + 1]["Ts_ref"]    = problem.O[ii]["Ts"]
+        problem.I[ii + 1]["weights"]   = problem.O[ii]["weights"]
+        problem.I[ii + 1]["conv_data"] = problem.O[ii]["conv_data"]
+
+    if not problem.O[-1].get("converged", False):
+        print("Terminated from hitting maximum iterations!")
+
+    return problem
 
 
 # ===================================
@@ -56,7 +104,7 @@ class ModuleFlags:
 # Subproblem (build-once)
 # =========================
 class Subproblem:
-    """Reusable convex subproblem with full baseline functionality & DPP updates."""
+    """Reusable convex scp with full baseline functionality & DPP updates."""
 
     def __init__(self, problem) -> None:
         self.problem = problem
@@ -94,7 +142,7 @@ class Subproblem:
         self.invoke_custom_functions()
 
         # Compile CVXPY problem once
-        self.subproblem = cp.Problem(cp.Minimize(self.cost_expr), self.constraints)
+        self.scp = cp.Problem(cp.Minimize(self.cost_expr), self.constraints)
 
     # ============================================================
     # VARIABLE & PARAMETER CREATION
@@ -186,10 +234,11 @@ class Subproblem:
         self.z_max = cp.Parameter(len(getattr(mission, "z_max", [])), name="z_max") if hasattr(mission, "z_max") and len(mission.z_max) > 0 else None
 
         if mission.n_ctrl > 0:
-            self.u_min  = cp.Parameter(mission.n_ctrl, name="u_min")
-            self.u_max  = cp.Parameter(mission.n_ctrl, name="u_max")
+            self.u_min = cp.Parameter(len(mission.u_min_idx), name="u_min") 
+            self.u_max = cp.Parameter(len(mission.u_max_idx), name="u_max") 
         else:
             self.u_min = self.u_max = None
+
 
         if mission.n_udot > 0:
             self.udot_max = cp.Parameter(mission.n_udot, name="udot_max")
@@ -565,7 +614,7 @@ class Subproblem:
         prop_time_ms = self._update_parameters_from_iterate()
 
         solver_name = self.problem.method.solver_opts.get("solver", "ECOS")
-        self.subproblem.solve(solver=solver_name, warm_start=True) # ignore_dpp=True
+        self.scp.solve(solver=solver_name, warm_start=True) # ignore_dpp=True
 
         O = self._collect_outputs(prop_time_ms)
         O = convergence.check_convergence_tolerance(self.problem, self, O)
@@ -584,11 +633,11 @@ class Subproblem:
         dz_val, du_val = self.dz.value, self.du.value
         dt_val = self.dt.value if isinstance(self.dt, cp.expressions.expression.Expression) else self.dt
 
-        O: Dict[str, Any] = {"subprob": self.subproblem}
+        O: Dict[str, Any] = {"subprob": self.scp}
 
-        if self.subproblem.solver_stats is not None:
-            solve_time = getattr(self.subproblem.solver_stats, "solve_time", None)
-            setup_time = getattr(self.subproblem.solver_stats, "setup_time", None)
+        if self.scp.solver_stats is not None:
+            solve_time = getattr(self.scp.solver_stats, "solve_time", None)
+            setup_time = getattr(self.scp.solver_stats, "setup_time", None)
             O["solve_time"] = float(solve_time or 0.0) * 1000.0
             O["parse_time"] = float(setup_time or 0.0) * 1000.0
         else:
@@ -625,7 +674,7 @@ class Subproblem:
 
         # Convergence data
         conv = {}
-        conv["soln"]    = self.subproblem
+        conv["soln"]    = self.scp
         conv["vb_path"] = tools.get_val(self.vb_path,  rows=self.n_path, cols=self.N) if self.vb_path  is not None else np.zeros((self.n_path,  self.N))
         conv["vb_nfz"]  = tools.get_val(self.vb_nfz,   rows=self.n_nfz,  cols=self.N) if self.vb_nfz   is not None else np.zeros((self.n_nfz,   self.N))
         conv["vb_aux"]  = tools.get_val(self.vb_aux,   rows=self.n_aux,  cols=self.N) if self.vb_aux   is not None else np.zeros((self.n_aux,   self.N))
