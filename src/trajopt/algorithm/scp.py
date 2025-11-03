@@ -22,25 +22,9 @@ from trajopt.utils import tools
 # Public API: full Sequential Convex Programming (SCP) loop with DPP reuse
 # =====================================================================================
 
-def run_scp(problem, epsilon: float = 1e-5):
+def run_scp(problem):
     """
     Run the full Sequential Convex Programming (SCP) loop for a given problem.
-
-    This function builds or reuses a DPP-compiled Subproblem instance stored in
-    problem.method, runs the convex subproblems sequentially, and updates the
-    trajectory references across iterations.
-
-    Parameters
-    ----------
-    problem : trajopt.Problem
-        Fully initialized problem instance (with mission, model, method).
-    epsilon : float, optional
-        ∞-norm convergence tolerance on zs_ref (default = 1e-5).
-
-    Returns
-    -------
-    problem : trajopt.Problem
-        Updated problem object containing all SCP iteration outputs.
     """
 
     print("-" * 152)
