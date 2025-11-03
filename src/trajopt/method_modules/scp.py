@@ -27,6 +27,28 @@ def run_scp(problem):
     Run the full Sequential Convex Programming (SCP) loop for a given problem.
     """
 
+    # INITIALIZE ITERATION DATA
+
+    problem.I = [{
+        "iter_num": 1,
+        "zs_ref": problem.method.zs_init,
+        "us_ref": problem.method.us_init,
+        "dts_ref": problem.method.dts_init,
+        "ts_ref": problem.method.ts_init,
+        "conv_data": {
+            "vb_path": np.zeros((problem.method.N, problem.mission.n_path)),
+            "vb_nfz": np.zeros((problem.method.N,problem.mission.n_nfz)),
+            "vb_aux": np.zeros((problem.method.N,problem.mission.n_aux)),
+            "vb_dyn": np.zeros((problem.method.N-1,problem.model.nz)),
+            "vb_term": np.zeros((problem.mission.n_term + problem.mission.n_term_ineq, 1)),
+        },
+        "weights": problem.method.weights
+    }]
+    problem.O = []
+
+
+    # START SUBPROBLEM CONSTRUCTION
+
     print("-" * 152)
     print(f"                                              ..:: {problem.mission.mission_name}: PTR with Virtual Buffer ::..")
     print("-" * 152)
