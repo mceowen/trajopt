@@ -6,7 +6,7 @@ import time
 
 # trajopt imports
 import trajopt.problem_models.double_integrator_2dof    as double_int
-import trajopt.algorithm.scp                     as scp
+import trajopt.method_modules.scp                     as scp
 
 # Step 1: Define configuration
 config = double_int.config_main()

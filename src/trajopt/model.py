@@ -5,7 +5,7 @@ from typing import Dict, Any, Optional, List
 import numpy as np
 import importlib
 
-import trajopt.algorithm.convexification as convexify
+import trajopt.method_modules.convexification as convexify
 
 class Model:
 

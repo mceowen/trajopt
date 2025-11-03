@@ -2,9 +2,9 @@ import numpy as np
 import importlib
 
 import trajopt.utils.tools as tools
-import trajopt.algorithm.initial_guess as guess
-import trajopt.algorithm.convergence as convergence
-import trajopt.algorithm.convexification as convexify
+import trajopt.method_modules.initial_guess as guess
+import trajopt.method_modules.convergence as convergence
+import trajopt.method_modules.convexification as convexify
 import trajopt.utils.nondim as nondim
 
 class Mission:

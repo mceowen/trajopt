@@ -1,9 +1,9 @@
 import trajopt.utils.set_defaults           as defaults
 import trajopt.utils.tools                  as tools
-import trajopt.algorithm.initial_guess      as guess
-import trajopt.algorithm.convergence        as convergence
-import trajopt.algorithm.convexification    as convexify
-import trajopt.algorithm.discretization     as discretize
+import trajopt.method_modules.initial_guess      as guess
+import trajopt.method_modules.convergence        as convergence
+import trajopt.method_modules.convexification    as convexify
+import trajopt.method_modules.discretization     as discretize
 
 # TODO consolidate imports 
 from scipy.interpolate  import interp1d

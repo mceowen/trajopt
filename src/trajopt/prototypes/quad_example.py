@@ -6,7 +6,7 @@ import time
 
 # trajopt imports
 import trajopt.problem_models.quadrotor_3dof    as quad3dof
-import trajopt.algorithm.scp             as scp
+import trajopt.method_modules.scp             as scp
 
 # Step 1: Define configuration
 config = quad3dof.config_main()
