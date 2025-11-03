@@ -423,7 +423,7 @@ class Subproblem:
 
 
     # ============================================================
-    # CUSTOM MODEL HOOKS
+    # CUSTOM SUBPROBLEM INPUTS
     # ============================================================
     def invoke_custom_functions(self) -> None:
         """Invoke user-defined custom functions in trajopt.problem_models.<model_name>"""
@@ -555,7 +555,7 @@ class Subproblem:
         prop_time_ms = self._update_parameters_from_iterate()
 
         solver_name = self.problem.method.solver_opts.get("solver", "ECOS")
-        self.subproblem.solve(solver=solver_name, warm_start=True,ignore_dpp=True)
+        self.subproblem.solve(solver=solver_name, warm_start=True) # ignore_dpp=True
 
         O = self._collect_outputs(prop_time_ms)
         O = convergence.check_convergence_tolerance(self.problem, self, O)
