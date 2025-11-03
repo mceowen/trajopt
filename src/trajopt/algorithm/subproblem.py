@@ -179,6 +179,9 @@ class Subproblem:
         else:
             self.zN_min = self.zN_max = None
 
+        self.u1 = cp.Parameter(mission.n_init_ctrl, name="u1") if mission.n_init_ctrl > 0 else None
+        self.uN = cp.Parameter(mission.n_term_ctrl, name="uN") if mission.n_term_ctrl > 0 else None
+
         self.z_min = cp.Parameter(len(getattr(mission, "z_min", [])), name="z_min") if hasattr(mission, "z_min") and len(mission.z_min) > 0 else None
         self.z_max = cp.Parameter(len(getattr(mission, "z_max", [])), name="z_max") if hasattr(mission, "z_max") and len(mission.z_max) > 0 else None
 
@@ -255,8 +258,12 @@ class Subproblem:
         C: List[cp.Constraint] = []
 
         # Initial control (optional)
-        if method.bools.get("init_ctrl", False) and mission.n_ctrl > 0:
-            C.append(self.du[:, 0] == 0)
+        if mission.bools.get("init_ctrl", False) and mission.n_init_ctrl > 0:
+            C.append(self.du[0,mission.ui_idx] + self.us_ref[0, mission.ui_idx] == self.u1)
+
+        # Terminal control (optional)
+        if mission.bools.get("final_ctrl", False) and mission.n_term_ctrl > 0:
+            C.append(self.du[-1,mission.uf_idx] + self.us_ref[-1, mission.uf_idx] == self.uN)
 
         # Initial equalities / inequalities
         if mission.n_init > 0 and self.z1 is not None:
@@ -504,6 +511,9 @@ class Subproblem:
             self.u_min.value = mission.u_min; self.u_max.value  = mission.u_max
         if mission.n_udot > 0 and self.udot_max is not None:
             self.udot_max.value = mission.udot_max
+        if mission.n_init_ctrl > 0 and self.u1 is not None: self.u1.value = mission.ui
+        if mission.n_term_ctrl > 0 and self.uN is not None: self.uN.value = mission.uf
+        
         if self.free_T:
             self.dts_min.value  = float(method.dts_min)
             self.dts_max.value  = float(method.dts_max)

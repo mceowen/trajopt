@@ -173,6 +173,8 @@ class Mission:
         self.n_path       = len(self.path_idx)
         self.n_nfz        = len(self.nfz_idx)
         self.n_aux        = len(self.aux_idx)
+        self.n_init_ctrl  = len(self.ui_idx)
+        self.n_term_ctrl  = len(self.uf_idx)
         self.n_ineq       = self.n_path + self.n_nfz + self.n_aux
 
         self.set_custom_params()
