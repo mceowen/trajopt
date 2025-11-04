@@ -31,6 +31,8 @@ def perform_default_analysis(problem):
     iters = [{} for _ in range(len(O))]
 
     # extract final optimized trajectory
+    # O -> problem.method.subprob.iter_data[-1]
+    # O[-1] -> problem.solution
     ts_opt = O[-1]['ts']
     zs_opt = O[-1]['zs']
     us_opt = O[-1]['us']
