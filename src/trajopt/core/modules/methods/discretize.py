@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 from scipy.integrate import solve_ivp
-import trajopt.core.modules.methods.convexification as convexify
+import trajopt.core.modules.methods.convexify as convexify
 import time
 
 def set_ltv_indices(problem):
@@ -36,7 +36,7 @@ def set_ltv_indices(problem):
     method.lds0[method.Ak_ind] = np.reshape(np.eye(model.nz), -1)
     method.N_dens    = 20
 
-    # convert indeces to jax arrays for jax discretization option
+    # convert indeces to jax arrays for jax discretize option
     method.lds0_size_jax = int(method.lds0_size)
     method.z_ind_jax     = jnp.asarray(method.z_ind)  
     method.Ak_ind_jax    = jnp.asarray(method.Ak_ind)
@@ -44,7 +44,7 @@ def set_ltv_indices(problem):
     method.Bkp_ind_jax   = jnp.asarray(method.Bkp_ind)
     method.Sk_ind_jax    = jnp.asarray(method.Sk_ind)
 
-# Compute exact discretization for linear dynamic system
+# Compute exact discretize for linear dynamic system
 def discretize_inv_foh(zs_ref, us_ref, dts_ref, problem):
     model = problem.model
     method = problem.method
@@ -158,7 +158,7 @@ def RHS_ltv(tau, lds, us_ref, dts_ref, problem):
 
     return lds_dot
 
-def jit_jax_discretization(problem):
+def jit_jax_discretize(problem):
 
     model = problem.model
     method = problem.method
@@ -264,7 +264,7 @@ def jit_jax_discretization(problem):
 
     method.propagate_jax = propagate
 
-# inverse free discretization with jax
+# inverse free discretize with jax
 def discretize_inv_free_jax(zs_ref_np, us_ref_np, dts_ref_np, problem):
 
     method = problem.method
@@ -312,7 +312,7 @@ def compute_linsys_discrete(zs_ref, us_ref, dts_ref, problem):
 
 def discretize_ctcs(zs_ref, us_ref, dts_ref, problem):
     """
-    Compute exact discretization for linear dynamic system.
+    Compute exact discretize for linear dynamic system.
 
     Parameters:
     zs_ref (numpy.ndarray): Reference state trajectory.

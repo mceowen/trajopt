@@ -11,8 +11,8 @@ import numpy as np
 import cvxpy as cp
 
 # trajopt imports
-from trajopt.core.modules.methods import discretization as discretize
-from trajopt.core.modules.methods import convexification as convexify
+from trajopt.core.modules.methods import discretize as discretize
+from trajopt.core.modules.methods import convexify as convexify
 from trajopt.core.modules.methods import hyperparameters as hp
 from trajopt.core.modules.methods import convergence
 from trajopt.utils import tools

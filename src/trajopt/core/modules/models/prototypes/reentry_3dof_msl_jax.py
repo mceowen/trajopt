@@ -2,8 +2,8 @@ import trajopt.utils.set_defaults           as defaults
 import trajopt.utils.tools                  as tools
 import trajopt.core.modules.methods.initial_guess      as guess
 import trajopt.core.modules.methods.convergence        as convergence
-import trajopt.core.modules.methods.convexification    as convexify
-import trajopt.core.modules.methods.discretization     as discretize
+import trajopt.core.modules.methods.convexify    as convexify
+import trajopt.core.modules.methods.discretize     as discretize
 import trajopt.utils.nondim                 as nondim
 
 # TODO consolidate imports 
@@ -169,9 +169,9 @@ def ocp(config):
     else:
         problem["lin_constr"] = lambda ts, zs, us: analytical_inequality_constraints(ts, zs, us, problem)
 
-    # precompile discretization functions for jax
+    # precompile discretize functions for jax
     if problem['params']['bools']['jax_dyn'] == 1:
-        problem = discretize.jit_jax_discretization(problem)
+        problem = discretize.jit_jax_discretize(problem)
 
     # Algorithm - custom formulation
     problem["custom_inputs"]        = lambda problem,   local_vars:     custom_inputs(problem, local_vars)

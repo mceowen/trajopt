@@ -4,7 +4,7 @@ import importlib
 import trajopt.utils.tools as tools
 import trajopt.core.modules.methods.initial_guess as guess
 import trajopt.core.modules.methods.convergence as convergence
-import trajopt.core.modules.methods.convexification as convexify
+import trajopt.core.modules.methods.convexify as convexify
 import trajopt.utils.nondim as nondim
 
 class Mission:
