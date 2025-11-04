@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 from scipy.integrate import solve_ivp
-import trajopt.method_modules.convexification as convexify
+import trajopt.core.modules.methods.convexification as convexify
 import time
 
 def set_ltv_indices(problem):

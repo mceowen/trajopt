@@ -5,7 +5,7 @@ from typing import Dict, Any, Optional, List
 import numpy as np
 import importlib
 
-import trajopt.method_modules.convexification as convexify
+import trajopt.core.modules.methods.convexification as convexify
 
 class Model:
 
@@ -33,7 +33,7 @@ class Model:
         # =================================================================
 
         # point to selected model module
-        self.model_module = importlib.import_module(f"trajopt.model_modules.{self.model_name}")
+        self.model_module = importlib.import_module(f"trajopt.core.modules.models.{self.model_name}")
 
     # ===============================================================
     # member functions point to selected fcns from selected module

@@ -2,9 +2,9 @@ import numpy as np
 import importlib
 
 import trajopt.utils.tools as tools
-import trajopt.method_modules.initial_guess as guess
-import trajopt.method_modules.convergence as convergence
-import trajopt.method_modules.convexification as convexify
+import trajopt.core.modules.methods.initial_guess as guess
+import trajopt.core.modules.methods.convergence as convergence
+import trajopt.core.modules.methods.convexification as convexify
 import trajopt.utils.nondim as nondim
 
 class Mission:
@@ -61,7 +61,7 @@ class Mission:
         # point to module and corresponding methods based on configs
         # ===============================================================
 
-        self.mission_module = importlib.import_module(f"trajopt.mission_modules.{self.mission_name}")
+        self.mission_module = importlib.import_module(f"trajopt.core.modules.missions.{self.mission_name}")
 
         # set cost/constraint nondim setter function (needed for nondim initialization)
         self._get_cost_cnstr_nondim = self.mission_module.get_cost_cnstr_nondim

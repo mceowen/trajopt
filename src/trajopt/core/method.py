@@ -1,7 +1,7 @@
 import numpy as np
-import trajopt.method_modules.initial_guess      as guess
-import trajopt.method_modules.convergence        as convergence
-import trajopt.method_modules.discretization     as discretize
+import trajopt.core.modules.methods.initial_guess      as guess
+import trajopt.core.modules.methods.convergence        as convergence
+import trajopt.core.modules.methods.discretization     as discretize
 
 class Method:
 

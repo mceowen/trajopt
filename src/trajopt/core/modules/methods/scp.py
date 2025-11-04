@@ -11,10 +11,10 @@ import numpy as np
 import cvxpy as cp
 
 # trajopt imports
-from trajopt.method_modules import discretization as discretize
-from trajopt.method_modules import convexification as convexify
-from trajopt.method_modules import hyperparameters as hp
-from trajopt.method_modules import convergence
+from trajopt.core.modules.methods import discretization as discretize
+from trajopt.core.modules.methods import convexification as convexify
+from trajopt.core.modules.methods import hyperparameters as hp
+from trajopt.core.modules.methods import convergence
 from trajopt.utils import tools
 
 
@@ -484,12 +484,12 @@ class Subproblem:
     # CUSTOM SUBPROBLEM INPUTS
     # ============================================================
     def invoke_custom_functions(self) -> None:
-        """Invoke user-defined custom functions in trajopt.problem_models.<model_name>"""
+        """Invoke user-defined custom functions in trajopt.core.problem_models.<model_name>"""
         model_name = getattr(self.problem.method, "model_name", None)
         if not model_name:
             return
         try:
-            model_module = importlib.import_module(f"trajopt.problem_models.{model_name}")
+            model_module = importlib.import_module(f"trajopt.core.problem_models.{model_name}")
         except ImportError:
             return
         for fn_name in (

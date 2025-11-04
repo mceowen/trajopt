@@ -1,9 +1,10 @@
+import trajopt; importlib.reload(trajopt)
 import trajopt.utils.config_loader          as cfg
 import trajopt.utils.nondim                 as nondim
 
-from trajopt.mission import Mission
-from trajopt.model import Model
-from trajopt.method import Method
+from trajopt.core.mission import Mission
+from trajopt.core.model import Model
+from trajopt.core.method import Method
 import numpy as np
 
 class Problem:

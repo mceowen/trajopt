@@ -10,7 +10,7 @@ def load_configs(example_name):
     config["method"]  = {}
 
     # example configs
-    example_pkg = f"trajopt.example_configs.{example_name}"
+    example_pkg = f"trajopt.examples.{example_name}"
     example = {
         k: tools.load_yaml(example_pkg, f"{k}.yaml")
         for k in [
@@ -20,9 +20,9 @@ def load_configs(example_name):
 
     # base configs
     base_pkgs = {
-        "mission": "trajopt.base_configs.missions",
-        "model":  "trajopt.base_configs.models",
-        "method": "trajopt.base_configs.methods",
+        "mission": "trajopt.core.configs.missions",
+        "model":  "trajopt.core.configs.models",
+        "method": "trajopt.core.configs.methods",
     }
 
     base = {
