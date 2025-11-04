@@ -1,5 +1,5 @@
 """
-Subproblem module: SCP scp with DPP updates.
+Subproblem module: SCP with DPP updates 
 """
 
 from __future__ import annotations
@@ -21,40 +21,14 @@ from trajopt.utils import tools
 # =====================================================================================
 # Public API: full Sequential Convex Programming (SCP) loop with DPP reuse
 # =====================================================================================
-
 def run_scp(problem):
     """
     Run the full Sequential Convex Programming (SCP) loop for a given problem.
+
+    Subproblem maintains iteration history internally:
+      - subprob.iter_data[0]: initialization inputs only
+      - subprob.iter_data[k>=1]: inputs used at iter k + outputs from that iter
     """
-
-    # INITIALIZE ITERATION DATA
-
-    problem.I = [{
-        "iter_num": 1,
-        "zs_ref": problem.method.zs_init,
-        "us_ref": problem.method.us_init,
-        "dts_ref": problem.method.dts_init,
-        "ts_ref": problem.method.ts_init,
-        "conv_data": {
-            "vb_path": np.zeros((problem.method.N, problem.mission.n_path)),
-            "vb_nfz": np.zeros((problem.method.N,problem.mission.n_nfz)),
-            "vb_aux": np.zeros((problem.method.N,problem.mission.n_aux)),
-            "vb_dyn": np.zeros((problem.method.N-1,problem.model.nz)),
-            "vb_term": np.zeros((problem.mission.n_term + problem.mission.n_term_ineq, 1)),
-        },
-        "weights": problem.method.weights
-    }]
-    problem.O = []
-
-
-    # START SUBPROBLEM CONSTRUCTION
-
-    print("-" * 152)
-    print(f"                                              ..:: {problem.mission.mission_name}: PTR with Virtual Buffer ::..")
-    print("-" * 152)
-    print("  Iteration |  Propagation |   Solve   |    Parse   |  log(dz)  |      log(VB)    |   log(VB)   |  log(VB)    | Solve status |  Time of    |   Cost    ")
-    print("            |   time [ms]  | time [ms] |  time [ms] |           |  (path + NFZ)   |  (terminal) |  (dynamics) |              |  Flight [s] |           ")
-    print("-" * 152)
 
     # Get or create the compiled Subproblem (DPP)
     subprob: Optional[Subproblem] = getattr(problem.method, "subprob", None)
@@ -62,30 +36,30 @@ def run_scp(problem):
         subprob = Subproblem(problem)
         problem.method.subprob = subprob
 
-    max_iter = problem.method.conv["iter_max"]
+    # START SUBPROBLEM CONSTRUCTION / HEADER
+    print("-" * 152)
+    print(f"                                              ..:: {problem.mission.mission_name}: PTR with Virtual Buffer ::..")
+    print("-" * 152)
+    print("  Iteration |  Propagation |   Solve   |    Parse   |  log(dz)  |      log(VB)    |   log(VB)   |  log(VB)    | Solve status |  Time of    |   Cost    ")
+    print("            |   time [ms]  | time [ms] |  time [ms] |           |  (path + NFZ)   |  (terminal) |  (dynamics) |              |  Flight [s] |           ")
+    print("-" * 152)
 
-    for ii in range(max_iter + 1):
-        output = subprob.solve_iteration()
-        problem.O.append(output)
-        problem.O[ii]["iter_num"] = ii + 1
+    max_iter = int(problem.method.conv["iter_max"])
 
-        if problem.O[-1].get("converged", False):
+    for _ in range(max_iter + 1):
+        subprob.solve_iteration()  # appends a new unified record for this iteration
+
+        latest = subprob.iter_data[-1]
+        display_subprob_status(problem, latest)
+
+        if latest.get("converged", False):
             print("Terminated from convergence criteria!")
             break
 
-        # Advance reference trajectories for next iteration
-        problem.I.append(problem.I[ii])
-        problem.I[ii + 1]["iter_num"]  = ii + 2
-        problem.I[ii + 1]["ts_ref"]    = problem.O[ii]["ts"]
-        problem.I[ii + 1]["dts_ref"]   = problem.O[ii]["dts"]
-        problem.I[ii + 1]["zs_ref"]    = problem.O[ii]["zs"]
-        problem.I[ii + 1]["us_ref"]    = problem.O[ii]["us"]
-        problem.I[ii + 1]["Ts_ref"]    = problem.O[ii]["Ts"]
-        problem.I[ii + 1]["weights"]   = problem.O[ii]["weights"]
-        problem.I[ii + 1]["conv_data"] = problem.O[ii]["conv_data"]
-
-    if not problem.O[-1].get("converged", False):
+    if not subprob.iter_data[-1].get("converged", False):
         print("Terminated from hitting maximum iterations!")
+
+    problem.solution = problem.method.subprob.iter_data[-1]
 
     return problem
 
@@ -110,7 +84,8 @@ class ModuleFlags:
 # Subproblem (build-once)
 # =========================
 class Subproblem:
-    """Reusable convex scp with full baseline functionality & DPP updates."""
+    """Reusable convex SCP with full baseline functionality & DPP updates.
+    """
 
     def __init__(self, problem) -> None:
         self.problem = problem
@@ -127,7 +102,7 @@ class Subproblem:
         self.bools         = method.bools
         self.free_T        = bool(self.bools["free_final_time"])
         self.equal_dt      = bool(self.bools["equal_dt"])
-        self.buff_dyn      = self.bools["buff_dyn"]
+        self.buff_dyn      = self.bools["buff_dyn"]                  # e.g., "l1", "l2", "term", "quad-1", "quad-2"
         self.flag_autotune = self.bools["flag_autotune"]
 
         # module sizes
@@ -152,6 +127,44 @@ class Subproblem:
         self.flag_vb   = method.bools.get("flag_vb", 1.0)
 
         # Bounds (only create when nonzero-length)
+        self._init_bounds(mission)
+
+        # Build the DPP graph once
+        self._create_variables()
+        self._create_parameters()
+        self.constraints: List[cp.constraints.constraint.Constraint] = []
+        self._build_constraints_once()
+        self.cost_expr = self._build_cost_once()
+
+        # Optional custom hooks from model package
+        self._invoke_custom_functions()
+
+        # Compile CVXPY problem once
+        self.subproblem = cp.Problem(cp.Minimize(self.cost_expr), self.constraints)
+
+        # --------------------------
+        # Initialize unified history
+        # --------------------------
+        self.iter_data: List[Dict[str, Any]] = [{
+            "iter_num": 0,  # init only (no outputs yet)
+            "zs_ref": problem.method.zs_init,
+            "us_ref": problem.method.us_init,
+            "dts_ref": problem.method.dts_init,
+            "ts_ref": problem.method.ts_init,
+            "conv_data": {
+                "vb_path": np.zeros((self.N, mission.n_path)),
+                "vb_nfz":  np.zeros((self.N, mission.n_nfz)),
+                "vb_aux":  np.zeros((self.N, self.n_aux)),
+                "vb_dyn":  np.zeros((self.N - 1, self.nz)),
+                "vb_term": np.zeros((self.n_term, 1)),
+            },
+            "weights": problem.method.weights,
+        }]
+
+    # -------------------------
+    # Helper: init bounds
+    # -------------------------
+    def _init_bounds(self, mission):
         self.z1     = mission.zi if mission.n_init > 0 else None
         if mission.n_init_ineq > 0:
             self.z1_min = mission.zi_min
@@ -182,19 +195,6 @@ class Subproblem:
             self.udot_max = mission.udot_max
         else:
             self.udot_max = None
-
-        # Build the DPP graph once
-        self._create_variables()
-        self._create_parameters()
-        self.constraints: List[cp.constraints.constraint.Constraint] = []
-        self._build_constraints_once()
-        self.cost_expr = self._build_cost_once()
-
-        # Optional custom hooks from model package
-        self.invoke_custom_functions()
-
-        # Compile CVXPY problem once
-        self.scp = cp.Problem(cp.Minimize(self.cost_expr), self.constraints)
 
     # ============================================================
     # VARIABLE & PARAMETER CREATION
@@ -426,12 +426,16 @@ class Subproblem:
         """Full baseline cost: TRUE + TR + 0.5*VIRTUAL + DUAL; gated via flags & autotune."""
 
         # === TRUE cost (linearized objective) ===
-        TRUE = self.flag_true * (cp.sum(cp.multiply(self.w_cost_times_dcostdz, self.dz)) + cp.sum(cp.multiply(self.w_cost_times_dcostdu, self.du)) + cp.sum(self.w_cost_times_cost0))
+        TRUE = self.flag_true * (
+            cp.sum(cp.multiply(self.w_cost_times_dcostdz, self.dz))
+          + cp.sum(cp.multiply(self.w_cost_times_dcostdu, self.du))
+          + cp.sum(self.w_cost_times_cost0)
+        )
 
         # === Trust-region penalties ===
         TR = self.flag_tr * (self.wtr_z * cp.sum_squares(self.dz) + self.wtr_u * cp.sum_squares(self.du))
 
-        # # === Virtual-buffer quadratic penalties ===
+        # === Virtual-buffer quadratic penalties ===
         VB = 0.0
         if self.flag_autotune in {"0", "2", "3", "al-scvx"}:
 
@@ -479,11 +483,10 @@ class Subproblem:
 
         return TRUE + TR + VB + DUAL
 
-
     # ============================================================
     # CUSTOM SUBPROBLEM INPUTS
     # ============================================================
-    def invoke_custom_functions(self) -> None:
+    def _invoke_custom_functions(self) -> None:
         """Invoke user-defined custom functions in trajopt.core.problem_models.<model_name>"""
         model_name = getattr(self.problem.method, "model_name", None)
         if not model_name:
@@ -503,30 +506,61 @@ class Subproblem:
                 fn(self.problem, self)
 
     # ============================================================
-    # PARAMETER UPDATES AND SOLVE
+    # PARAMETER UPDATES AND SOLVE (UNIFIED HISTORY)
     # ============================================================
-    def _set_param(self, param: cp.Parameter, val: np.ndarray) -> None:
-        val = np.asarray(val)
-        if param is self.zs_m and val.shape != (self.N, self.n):
-            val = val.reshape(self.N, self.n)
-        param.value = val
+    def _set_param(self, param: Optional[cp.Parameter], val: np.ndarray) -> None:
+        if param is None:
+            return
+        arr = np.asarray(val)
+        if param is self.zs_m and arr.shape != (self.N, self.n):
+            arr = arr.reshape(self.N, self.n)
+        param.value = arr
 
-    def _update_parameters_from_iterate(self) -> float:
+    def _load_inputs(self) -> Dict[str, Any]:
+        last_rec = self.iter_data[-1]
+        k_prev = int(last_rec.get("iter_num", 0))
+
+        if all(key in last_rec for key in ("zs", "us", "dts", "ts")):
+            refs = {
+                "zs_ref": last_rec["zs"],
+                "us_ref": last_rec["us"],
+                "dts_ref": last_rec["dts"],
+                "ts_ref": last_rec["ts"],
+            }
+            weights = last_rec.get("weights", self.problem.method.weights)
+            conv_data = last_rec.get("conv_data", {})
+        else:
+            refs = {
+                "zs_ref": last_rec["zs_ref"],
+                "us_ref": last_rec["us_ref"],
+                "dts_ref": last_rec["dts_ref"],
+                "ts_ref": last_rec["ts_ref"],
+            }
+            weights = last_rec.get("weights", self.problem.method.weights)
+            conv_data = last_rec.get("conv_data", {})
+
+        next_inputs = {
+            "iter_num": k_prev + 1,
+            **refs,
+            "weights": weights,
+            "conv_data": conv_data,
+        }
+        return next_inputs
+
+    def _load_parameters(self, inputs: Dict[str, Any]) -> float:
         mission, model, method = self.problem.mission, self.problem.model, self.problem.method
-        N, nz = self.N, self.nz
-        I = self.problem.I[-1]
 
         start = time.time()
         Ak, Bk, Bkp, Sk, zs_minus = discretize.compute_linsys_discrete(
-            I["zs_ref"], I["us_ref"], I["dts_ref"], self.problem
+            inputs["zs_ref"], inputs["us_ref"], inputs["dts_ref"], self.problem
         )
         prop_time_ms = (time.time() - start) * 1000.0
 
-        dcostdz, dcostdu, cost = convexify.compute_cost(I["ts_ref"], I["zs_ref"], I["us_ref"], self.problem)
+        dcostdz, dcostdu, cost = convexify.compute_cost(inputs["ts_ref"], inputs["zs_ref"], inputs["us_ref"], self.problem)
 
         n_ineq_cols = int(self.n_path + self.n_nfz + self.n_aux)
         if n_ineq_cols > 0:
-            dgdz, dgdu, g = convexify.compute_path_constraints(I["ts_ref"], I["zs_ref"], I["us_ref"], self.problem)
+            dgdz, dgdu, g = convexify.compute_path_constraints(inputs["ts_ref"], inputs["zs_ref"], inputs["us_ref"], self.problem)
         else:
             dgdz = dgdu = g = None
 
@@ -538,7 +572,7 @@ class Subproblem:
         self._set_param(self.zs_m, zs_minus)
 
         # Weights/duals (ensure shapes, fill any scalars/empties)
-        W = I["weights"]
+        W = inputs["weights"]
         self.w_cost = W.get("w_cost", 1.0)
         self.wtr_z.value  = W.get("wtr_z", 1e-2)
         self.wtr_u.value  = W.get("wtr_u", 1e-2)
@@ -546,9 +580,9 @@ class Subproblem:
         self.w_cost_times_dcostdz.value = self.w_cost * dcostdz[:, 0, :]
         self.w_cost_times_dcostdu.value = self.w_cost * dcostdu[:, 0, :]
         self.w_cost_times_cost0.value   = self.w_cost * cost[:, 0, 0]
-        self.zs_ref.value  = I["zs_ref"]
-        self.us_ref.value  = I["us_ref"]
-        self.dts_ref.value = I["dts_ref"].reshape(self.N - 1, 1)
+        self.zs_ref.value  = inputs["zs_ref"]
+        self.us_ref.value  = inputs["us_ref"]
+        self.dts_ref.value = inputs["dts_ref"].reshape(self.N - 1, 1)
 
         if dgdz is not None:
             self.dgdz.value = dgdz
@@ -560,6 +594,7 @@ class Subproblem:
             self.dts_max.value  = float(method.dts_max)
             self.ddts_max.value = float(method.ddts_max)
 
+        # Elementwise weights -> sqrt parameters
         W_path_arr  = tools.ensure_shape(W.get("W_path",  0.0), (self.N,  max(self.n_path, 1)))
         W_nfz_arr   = tools.ensure_shape(W.get("W_nfz",   0.0), (self.N,  max(self.n_nfz,  1)))
         W_aux_arr   = tools.ensure_shape(W.get("W_aux",   0.0), (self.N,  max(self.n_aux,  1)))
@@ -594,109 +629,121 @@ class Subproblem:
         # ctcs eps
         self.eps_ctcs.value = float(self.problem.method.conv["eps_ctcs"])
 
+        # cache for optional debug
+        inputs["_linsys_cache"] = (Ak, Bk, Bkp, Sk, zs_minus)
         return prop_time_ms
 
-    def solve_iteration(self) -> Dict[str, Any]:
-        prop_time_ms = self._update_parameters_from_iterate()
+    def solve_iteration(self) -> None:
+        """
+        Single SCP iteration (no return):
+          - builds inputs for the iteration from self.iter_data[-1],
+          - loads Parameters and solves,
+          - assembles a unified record (inputs used + outputs),
+          - appends it to self.iter_data.
+        """
+        # Build inputs for this iteration (refs/weights/conv_data, iter_num)
+        inputs_for_iter = self._load_inputs()
 
+        # Parameter propagation and linearization
+        prop_time_ms = self._load_parameters(inputs_for_iter)
+
+        # Solve subproblem
         solver_name = self.problem.method.solver_opts.get("solver", "ECOS")
-        self.scp.solve(solver=solver_name, warm_start=True) # ignore_dpp=True
+        self.subproblem.solve(solver=solver_name, warm_start=True)  # ignore_dpp=True if desired
 
-        O = self._collect_outputs(prop_time_ms)
-        O = convergence.check_convergence_tolerance(self.problem, self, O)
-        O = baseline_autotune(self.problem, {}, O)
-        display_baseline_subprob_status(self.problem, {}, O)
-        return O
+        # Create unified record for this iteration and append
+        iter_record = self._load_outputs(inputs_for_iter, prop_time_ms)
+        iter_record = convergence.check_convergence_tolerance(self.problem, self, iter_record)
+        iter_record = baseline_autotune(self.problem, {}, iter_record)
+        self.iter_data.append(iter_record)
 
     # ============================================================
-    # OUTPUT PACKING
+    # OUTPUT PACKING (UNIFIED RECORD)
     # ============================================================
-    def _collect_outputs(self, prop_time_ms: float) -> Dict[str, Any]:
+    def _load_outputs(self, inputs_for_iter: Dict[str, Any], prop_time_ms: float) -> Dict[str, Any]:
         mission, model, method = self.problem.mission, self.problem.model, self.problem.method
         N, n, m = self.N, self.n, self.m
-        I = self.problem.I[-1]
 
         dz_val, du_val = self.dz.value, self.du.value
         dt_val = self.dt.value if isinstance(self.dt, cp.expressions.expression.Expression) else self.dt
 
-        O: Dict[str, Any] = {"subprob": self.scp}
+        rec: Dict[str, Any] = dict(inputs_for_iter)  # include exact inputs used this iteration
+        rec["subprob"] = self.subproblem
 
-        if self.scp.solver_stats is not None:
-            solve_time = getattr(self.scp.solver_stats, "solve_time", None)
-            setup_time = getattr(self.scp.solver_stats, "setup_time", None)
-            O["solve_time"] = float(solve_time or 0.0) * 1000.0
-            O["parse_time"] = float(setup_time or 0.0) * 1000.0
+        if self.subproblem.solver_stats is not None:
+            solve_time = getattr(self.subproblem.solver_stats, "solve_time", None)
+            setup_time = getattr(self.subproblem.solver_stats, "setup_time", None)
+            rec["solve_time"] = float(solve_time or 0.0) * 1000.0
+            rec["parse_time"] = float(setup_time or 0.0) * 1000.0
         else:
-            O["solve_time"] = None
-            O["parse_time"] = None
+            rec["solve_time"] = None
+            rec["parse_time"] = None
 
+        # raw solver variables (useful for diagnostics)
+        rec["dz_s"] = dz_val
+        rec["du_s"] = du_val
+        rec["dt_s"] = dt_val
 
-        O["dz_s"] = dz_val
-        O["du_s"] = du_val
-        O["dt_s"] = dt_val
+        # outputs (absolute trajectories)
+        rec["zs"]  = tools.safe_val(dz_val, rows=N, cols=n) + inputs_for_iter["zs_ref"]
+        rec["us"]  = tools.safe_val(du_val, rows=N, cols=m) + inputs_for_iter["us_ref"]
+        rec["dts"] = tools.safe_val(dt_val).squeeze() + inputs_for_iter["dts_ref"].squeeze()
+        rec["ts"]  = np.concatenate(([0], np.cumsum(rec["dts"])))
+        rec["Ts"]  = float(np.sum(rec["dts"]))
 
-        O["zs_ref"]  = I["zs_ref"]
-        O["us_ref"]  = I["us_ref"]
-        O["dts_ref"] = I["dts_ref"]
-        O["ts_ref"]  = I["ts_ref"]
-
-        O["zs"]  = tools.safe_val(dz_val, rows=N, cols=n) + I["zs_ref"]
-        O["us"]  = tools.safe_val(du_val, rows=N, cols=m) + I["us_ref"]
-        O["dts"] = tools.safe_val(dt_val).squeeze() + I["dts_ref"].squeeze()
-        O["ts"]  = np.concatenate(([0], np.cumsum(O["dts"])))
-        O["Ts"]  = float(np.sum(O["dts"]))
-
-        # Discretization model
-        O["zs_minus"] = self.zs_m.value
-        O["Ak"] = self.Ak.value
-        O["Bk"] = self.Bk.value
-        O["Bkp"] = self.Bkp.value
-        O["Sk"]  = self.Sk.value
+        # Discretization model (expose for debug/analysis)
+        Ak, Bk, Bkp, Sk, zs_minus = inputs_for_iter.get("_linsys_cache", (None, None, None, None, None))
+        rec["zs_minus"] = self.zs_m.value if zs_minus is None else zs_minus
+        rec["Ak"] = self.Ak.value if Ak is None else Ak
+        rec["Bk"] = self.Bk.value if Bk is None else Bk
+        rec["Bkp"] = self.Bkp.value if Bkp is None else Bkp
+        rec["Sk"]  = self.Sk.value if Sk is None else Sk
 
         # Path residuals and reference cost
-        _, _, cnst_path = convexify.compute_path_constraints(O["ts"], O["zs"], O["us"], self.problem)
-        O["cnst_path"] = cnst_path
-        O["cost"]      = convexify.compute_cost(O["ts"], O["zs"], O["us"], self.problem)[2].sum().item()
+        _, _, cnst_path = convexify.compute_path_constraints(rec["ts"], rec["zs"], rec["us"], self.problem)
+        rec["cnst_path"] = cnst_path
+        rec["cost"]      = convexify.compute_cost(rec["ts"], rec["zs"], rec["us"], self.problem)[2].sum().item()
 
-        # Convergence data
+        # Convergence data (buffers, defects, TR cost, ref cost)
         conv = {}
-        conv["soln"]    = self.scp
+        conv["soln"]    = self.subproblem
         conv["vb_path"] = tools.get_val(self.vb_path,  rows=self.n_path, cols=self.N) if self.vb_path  is not None else np.zeros((self.n_path,  self.N))
         conv["vb_nfz"]  = tools.get_val(self.vb_nfz,   rows=self.n_nfz,  cols=self.N) if self.vb_nfz   is not None else np.zeros((self.n_nfz,   self.N))
         conv["vb_aux"]  = tools.get_val(self.vb_aux,   rows=self.n_aux,  cols=self.N) if self.vb_aux   is not None else np.zeros((self.n_aux,   self.N))
         conv["vb_term"] = tools.get_val(self.vb_term,  rows=self.n_term, cols=1)      if self.vb_term  is not None else np.zeros((self.n_term,  1))
         conv["vb_dyn"]  = tools.get_val(self.vb_dyn_p, rows=self.n_dyn,  cols=self.N-1) - tools.get_val(self.vb_dyn_m, rows=self.n_dyn, cols=self.N-1)
-        conv["defect"]  = tools.safe_val(self.dz, rows=N, cols=n) + I["zs_ref"] - self.zs_m.value
+
+        conv["defect"]  = tools.safe_val(self.dz, rows=N, cols=n) + inputs_for_iter["zs_ref"] - self.zs_m.value
         conv["Jtr"]     = ( float(self.wtr_z.value) * np.sum(tools.safe_val(self.dz, rows=N, cols=n)**2)
                           + float(self.wtr_u.value) * np.sum(tools.safe_val(self.du, rows=N, cols=m)**2) )
-        conv["cost_ref"] = convexify.compute_cost(I["ts_ref"], I["zs_ref"], I["us_ref"], self.problem)[2].sum().item()
+        ref_cost = convexify.compute_cost(inputs_for_iter["ts_ref"], inputs_for_iter["zs_ref"], inputs_for_iter["us_ref"], self.problem)[2].sum().item()
+        conv["cost_ref"] = ref_cost
 
-        O["conv_data"]  = conv
-        O["weights"]    = I["weights"]
-        O["prop_time"]  = prop_time_ms
+        rec["conv_data"]  = conv
+        rec["prop_time"]  = prop_time_ms
 
-        return O
+        return rec
 
 
 # ===========================
 # Baseline autotune wrapper
 # ===========================
-def baseline_autotune(problem, _unused, O: Dict[str, Any]) -> Dict[str, Any]:
+def baseline_autotune(problem, _unused, rec: Dict[str, Any]) -> Dict[str, Any]:
     flag = problem.method.bools["flag_autotune"]
     if flag == 1:
-        O = hp.autotune1(problem, {}, O)
+        rec = hp.autotune1(problem, {}, rec)
     elif flag == 2:
-        O = hp.autotune2(problem, {}, O)
+        rec = hp.autotune2(problem, {}, rec)
     elif flag == 3:
-        O = hp.autotune3(problem, {}, O)
-    return O
+        rec = hp.autotune3(problem, {}, rec)
+    return rec
 
 
 # ==========================================
-# Iteration status printout (kept)
+# Iteration status printout (unified record)
 # ==========================================
-def display_baseline_subprob_status(problem, _unused, O: Dict[str, Any]) -> None:
-    conv = O.get("conv_data", {})
+def display_subprob_status(problem, rec: Dict[str, Any]) -> None:
+    conv = rec.get("conv_data", {})
 
     chk_feas_path = conv.get("chk_feas_path", 0.0)
     chk_feas_nfz  = conv.get("chk_feas_nfz", 0.0)
@@ -712,30 +759,30 @@ def display_baseline_subprob_status(problem, _unused, O: Dict[str, Any]) -> None
     log_vb_dyn  = np.log10(max(chk_feas_dyn, 1e-12))
 
     solve_stat  = conv.get("status", "UNKNOWN")
-    iter_num    = problem.I[-1].get("iter_num", -1)
+    iter_num    = int(rec.get("iter_num", -1))
 
-    nt    = problem.method.nondim["nt"]
-    ncost = problem.method.nondim["ncost"]
+    nt    = float(problem.method.nondim.get("nt", 1.0))
+    ncost = float(problem.method.nondim.get("ncost", 1.0))
 
-    Ts   = O.get("Ts", 0.0)
-    cost = O.get("cost", 0.0)
+    Ts   = float(rec.get("Ts", 0.0))
+    cost = float(rec.get("cost", 0.0))
 
-    prop_ms = O.get("prop_time", 0.0)
-    solve_ms= float(O.get("solve_time", 0.0) or 0.0)
-    parse_ms= float(O.get("parse_time", 0.0) or 0.0)
+    prop_ms = float(rec.get("prop_time", 0.0) or 0.0)
+    solve_ms= float(rec.get("solve_time", 0.0) or 0.0)
+    parse_ms= float(rec.get("parse_time", 0.0) or 0.0)
 
     print(
         "     {:02d}     |    {:07.1f}   |   {:06.1f}  |   {:06.1f}   |   {:+04.1f}    |      {:+05.1f}      |    {:+05.1f}    |     {:+05.1f}   |    {:s}    |   {:4.2f}   |  {:4.1f}".format(
-            int(iter_num),
-            float(prop_ms),
+            iter_num,
+            prop_ms,
             solve_ms,
             parse_ms,
-            float(log_dz),
-            float(log_vb_ineq),
-            float(log_vb_term),
-            float(log_vb_dyn),
+            log_dz,
+            log_vb_ineq,
+            log_vb_term,
+            log_vb_dyn,
             str(solve_stat),
-            float(Ts * nt),
-            float(cost * ncost)
+            Ts * nt,
+            cost * ncost
         )
     )
