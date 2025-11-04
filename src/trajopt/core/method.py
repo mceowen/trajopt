@@ -1,7 +1,7 @@
 import numpy as np
 import trajopt.core.modules.methods.initial_guess      as guess
 import trajopt.core.modules.methods.convergence        as convergence
-import trajopt.core.modules.methods.discretization     as discretize
+import trajopt.core.modules.methods.discretize     as discretize
 
 class Method:
 
@@ -39,7 +39,7 @@ class Method:
         # ===============================================================
 
         # TODO:
-        # will probably point to discretization, convergence, subprob functions etc
+        # will probably point to discretize, convergence, subprob functions etc
 
     def get_initial_guess(self):
         problem = self.problem
@@ -68,9 +68,9 @@ class Method:
         mission = problem.mission
         model = problem.model
 
-        # precompile discretization functions for jax
+        # precompile discretize functions for jax
         if self.bools['jax_dyn'] == 1:
-            discretize.jit_jax_discretization(problem)
+            discretize.jit_jax_discretize(problem)
 
         buff_dyn = str(self.bools.get("buff_dyn", "term"))
 
