@@ -5,10 +5,10 @@ import trajopt.core.modules.methods.scaling as scaling
 def initialize_plot_struct():
 
     plt = {}
-    plt['scenario1'] = {}
+    plt['scenario1'] = {}                       # model and nominal mission
     plt['scenario1']['method1'] = {}
-    plt['scenario1']['method1']['params'] = {}
-    plt['scenario1']['method1']['runs'] = []
+    plt['scenario1']['method1']['params'] = {}  # params[<mission/model/method>]
+    plt['scenario1']['method1']['runs'] = []    # monte carlo runs, only dispersed params
     
     return plt
 
