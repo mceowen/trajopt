@@ -1,0 +1,39 @@
+bools:
+  auto_jac: 1
+  auto_jac_aero: 1
+  auto_jac_cnst: 1
+  dev_var: 1
+  var_scl_flag: 0
+  free_final_time: 0
+  equal_dt: 0
+  flag_autotune: 3
+  flag_Wauto_memory: 0
+  weight_zero: 0
+  stepsize_auto_primal: 0
+  stepsize_auto_dual: 0
+  flag_conv: 0
+  buff_dyn: "l2"
+  buff_dyn_dual: "l1"
+  ctcs: 0
+  ode_fixed_dt: 0
+  aoa_vb: 0
+  jax_dyn: 0
+
+# Convergence settings
+conv:
+  eps_cost: 0.0
+  eps_state: 0.0
+  eps_path: 0.0
+  eps_nfz: 0.0
+  eps_auz: 0.0
+  eps_term: 0.0
+  eps_dyn: 0.0
+  ctcs_mult_state: 1.0
+  ctcs_mult_cnst: 1.0
+  eps+ctcs: 1e-5
+  iter_max: 20
+
+# Weight structure
+weights: {}
+
+N: 40

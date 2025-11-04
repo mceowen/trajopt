@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.integrate import solve_ivp
-import trajopt.algorithm.scaling as scaling
+import trajopt.core.modules.methods.scaling as scaling
 
 def initialize_plot_struct():
 

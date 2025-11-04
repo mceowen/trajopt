@@ -1,0 +1,67 @@
+# Dimensional mission configuration (no nondim)
+mission_name: "quadrotor"
+
+planet_name: "earth"
+vehicle_name: "quadrotor"
+
+bools:
+  flag_nfz: 2           # 0, 1, 2
+  init_ctrl: 1
+  final_ctrl: 1
+  aero_type: "none"  # "exponential", "jax_lookup", "spline", "none"
+
+# no fly zones options
+nfz_option_list:
+- xc: []
+  yc: []
+  rc: []
+
+- xc: [5]
+  yc: [4.0]
+  rc: [2.0]
+
+- xc: [2.5, 5.0, 2.5, 5.5, 8.0, 5.5]
+  yc: [2.0, 2.5, 5.0, 5.25, 5.5, 8.0]
+  rc: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+
+z_min: [0.0, 0.0, 0.25]
+z_min_idx: [0, 1, 2]
+z_max: [12.0, 12.0, 10.0]
+z_max_idx: [0, 1, 2]
+
+zi: [0.0, 0.0, 5.0, 0.0, 0.5, 0.0]
+zi_idx: [0, 1, 2, 3, 4, 5]
+zi_min: []
+zi_min_idx: []
+zi_max: []
+zi_max_idx: []
+
+zf: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
+zf_idx: [0, 1, 2, 3, 4, 5]
+zf_min: []
+zf_min_idx: []
+zf_max: []
+zf_max_idx: []
+
+ui: "eval: np.array([0, 0, mission['planet']['g']]) * mission['vehicle']['mass']"
+uf: "eval: np.array([0, 0, mission['planet']['g']]) * mission['vehicle']['mass']"
+ui_idx: [0, 1, 2]
+uf_idx: [0, 1, 2]
+
+u_min: []
+u_max: []
+
+udot_max: [5.0, 5.0, 5.0]
+udot_max_idx: [0, 1, 2]
+
+u_min_idx: []
+u_max_idx: []
+
+path_lim: []
+path_idx: []
+aux_idx:  []
+
+custom_input_dict:
+  u_norm_min: 0.21
+  u_norm_max: 8.12
+  theta_max : 100.0
