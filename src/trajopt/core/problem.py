@@ -1,4 +1,4 @@
-import trajopt; importlib.reload(trajopt)
+import trajopt; import importlib; importlib.reload(trajopt)
 import trajopt.utils.config_loader          as cfg
 import trajopt.utils.nondim                 as nondim
 
