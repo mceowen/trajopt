@@ -5,10 +5,10 @@ import trajopt.core.modules.methods.scaling as scaling
 def initialize_plot_struct():
 
     plt = {}
-    plt['scenario1'] = {}
+    plt['scenario1'] = {}                       # model and nominal mission
     plt['scenario1']['method1'] = {}
-    plt['scenario1']['method1']['params'] = {}
-    plt['scenario1']['method1']['runs'] = []
+    plt['scenario1']['method1']['params'] = {}  # params[<mission/model/method>]
+    plt['scenario1']['method1']['runs'] = []    # monte carlo runs, only dispersed params
     
     return plt
 
@@ -31,6 +31,8 @@ def perform_default_analysis(problem):
     iters = [{} for _ in range(len(O))]
 
     # extract final optimized trajectory
+    # O -> problem.method.subprob.iter_data[-1]
+    # O[-1] -> problem.solution
     ts_opt = O[-1]['ts']
     zs_opt = O[-1]['zs']
     us_opt = O[-1]['us']
