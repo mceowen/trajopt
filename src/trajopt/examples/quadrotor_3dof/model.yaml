@@ -1,5 +1,5 @@
 # Dimensional model configuration (no nondim)
-model_name: "quadrotor"
+model_name: "quadrotor_3dof"
 
 # State/control dimensions
 n: 6
