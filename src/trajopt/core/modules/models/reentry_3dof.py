@@ -15,7 +15,7 @@ def system_dynamics_jax(ts, zs, us, problem, t_vec=None):
 
     # Extract constant param values from struct
     Om = mission.planet["omega"] / (method.nondim["nang"] / method.nondim["nt"])
-    Kg = mission.planet["mu"] / (method.nondim["na"] * method.nondim["nd"] ** 2)
+    Kg = mission.planet["mu"]    / (method.nondim["na"] * method.nondim["nd"] ** 2)
 
     # Extract states
     rs, theta, phi, vs, gamma, psi = zs
@@ -35,7 +35,7 @@ def system_dynamics_jax(ts, zs, us, problem, t_vec=None):
     if ctrl_type == 'bank_aoa':
         alpha   = us2[1]
     
-    sigma   = us2[0]
+    sigma       = us2[0]
 
     # Extract sines and cosines of various values
     cp  = jnp.cos(phi)
@@ -79,6 +79,7 @@ def nonlinear_inequality_constraints(ts, zs, us, problem):
     # === Path constraints (explicit) ===
     # Example: dynamic pressure and heating limits
     if n_path > 0:
+        pass
         # TODO -> fillme
     else:
         P_path = np.empty((N, 0))
