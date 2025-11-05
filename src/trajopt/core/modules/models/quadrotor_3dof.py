@@ -1,6 +1,8 @@
 import numpy as np
 
 import trajopt.utils.tools                  as tools
+import trajopt.core.modules.models.constraints     as constraints
+
 
 def system_dynamics(ts, zs, us, problem, t_vec=None):
     """
@@ -89,133 +91,33 @@ def analytical_linsys(ts, zs, us, problem):
     return linsys
 
 def nonlinear_inequality_constraints(ts, zs, us, problem):
+    N = tools.num_timesteps(zs)
+    P_blocks = []
 
-    mission = problem.mission
-    model = problem.model
-    method = problem.method
+    # path constraints (placeholder)
+    P_path = np.empty((N, 0))
+    P_blocks.append(P_path)
 
-    N       = tools.num_timesteps(zs)
-    n_nfz   = mission.n_nfz
-    n_path  = mission.n_path  # placeholder
+    # add NFZ block
+    P_blocks.append(constraints.nfz_nonlinear(ts, zs, us, problem))
 
-    # Handle state unpacking
-    if zs.ndim == 2:
-        rx = zs[:, 0]
-        ry = zs[:, 1]
-    elif zs.ndim == 1:
-        rx = np.full(N, zs[0])
-        ry = np.full(N, zs[1])
-    else:
-        raise ValueError(f"Unhandled zs shape {zs.shape}")
-
-    # === NFZ constraints ===
-    if n_nfz > 0:
-        xc = mission.obs["posc"][0]
-        yc = mission.obs["posc"][1]
-        rc = mission.obs["rc"]
-
-        P_nfz = np.stack([
-            rc[i]**2 - (rx - xc[i])**2 - (ry - yc[i])**2
-            for i in range(n_nfz)
-        ], axis=1)  # shape: (N, n_nfz)
-    else:
-        P_nfz = np.empty((N, 0))
-
-    # === Path constraints (placeholder) ===
-    P_path = np.empty((N, 0))  # currently unused
-
-    # === Stack all inequality constraints ===
-    P = np.hstack([P_path, P_nfz]) if P_path.size or P_nfz.size else np.empty((N, 0))
-
-    if zs.ndim == 1:
-        P = P.flatten()
+    # stack all constraint blocks horizontally
+    P = np.hstack([P for P in P_blocks if P.size > 0])
 
     return P
 
 def analytical_inequality_constraints(ts, zs, us, problem):
-
-    mission = problem.mission
+    N = tools.num_timesteps(zs)
     model = problem.model
-    method = problem.method
+    n = model.n
+    m = model.m
 
-    N         = tools.num_timesteps(zs)
-    n         = model.n
-    m         = model.m
-    n_path    = mission.n_path
-    n_nfz     = mission.n_nfz
-    path_idx  = mission.path_idx
+    # NFZ block
+    nfz = constraints.nfz_analytical(ts, zs, us, problem)
 
-    # Scale path limits using nondimensional constraint weights
-    scale = method.nondim["np_ineq"][:n_path]
-    path_lim_scaled = np.linalg.solve(np.diag(scale), mission.path_lim)
+    # preallocate total constraint arrays
+    fcn_all   = nfz["fcn"]
+    dPdz_all  = nfz["dfcn_dz"]
+    dPdu_all  = nfz["dfcn_du"]
 
-    # Obstacle info (broadcasted for speed)
-    if n_nfz > 0:
-        xc = mission.obs["posc"][0]
-        yc = mission.obs["posc"][1]
-        rc = mission.obs["rc"]
-
-    # === Preallocate flattened output arrays ===
-    fcn_all   = np.zeros((N, n_path + n_nfz))
-    dPdz_all  = np.zeros((N, n_path + n_nfz, n))
-    dPdu_all  = np.zeros((N, n_path + n_nfz, m))
-
-    # Also collect detailed path and NFZ constraint data if needed
-    path_data = {"P": [], "Praw": [], "dPdz": [], "dPdu": []}
-    nfz_data  = {"P": [], "dPdz": [], "dPdu": []}
-
-    if zs.ndim == 1:
-        ts = np.array([ts])
-        zs = zs.reshape((1, -1))
-        us = us.reshape((1, -1))
-
-    for k in range(N):
-        tk = ts[k]
-        zk = zs[k]
-        uk = us[k]
-        rx_k, ry_k = zk[0], zk[1]
-
-        # Evaluate all inequality constraints
-        P_full = nonlinear_inequality_constraints(tk, zk, uk, problem)
-
-        # === Path constraints ===
-        if n_path > 0:
-            P_path = P_full[path_idx]
-            fcn_all[k, :n_path] = P_path - path_lim_scaled
-            dPdz_all[k, :n_path, :] = np.zeros((n_path, n))  # Placeholder
-            dPdu_all[k, :n_path, :] = np.zeros((n_path, m))
-
-            # Append to raw data
-            path_data["P"].append(P_path - path_lim_scaled)
-            path_data["Praw"].append(P_path)
-            path_data["dPdz"].append(np.zeros((n_path, n)))
-            path_data["dPdu"].append(np.zeros((n_path, m)))
-
-        # === No-fly zone constraints ===
-        if n_nfz > 0:
-            P_nfz = P_full[n_path:n_path + n_nfz]
-            fcn_all[k, n_path:n_path + n_nfz] = P_nfz
-
-            dPdz_nfz = np.zeros((n_nfz, n))
-            dPdz_nfz[:, 0] = - 2 * (rx_k - xc)
-            dPdz_nfz[:, 1] = - 2 * (ry_k - yc)
-
-            dPdu_nfz = np.zeros((n_nfz, m))
-
-            dPdz_all[k, n_path:n_path + n_nfz, :] = dPdz_nfz
-            dPdu_all[k, n_path:n_path + n_nfz, :] = dPdu_nfz
-
-            # Store full data
-            nfz_data["P"].append(P_nfz)
-            nfz_data["dPdz"].append(dPdz_nfz)
-            nfz_data["dPdu"].append(dPdu_nfz)
-
-    return {
-        "fcn": fcn_all,
-        "dfcn_dz": dPdz_all,
-        "dfcn_du": dPdu_all,
-        "data": {
-            "path": path_data,
-            "nfz": nfz_data,
-        }
-    }
+    return {"fcn": fcn_all, "dfcn_dz": dPdz_all, "dfcn_du": dPdu_all}
