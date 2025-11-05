@@ -1,5 +1,4 @@
 import trajopt; import importlib; importlib.reload(trajopt)
-import trajopt.utils.config_loader          as cfg
 import trajopt.utils.nondim                 as nondim
 
 from trajopt.core.mission   import Mission
@@ -8,18 +7,19 @@ from trajopt.core.method    import Method
 import numpy as np
 
 class Problem:
-    def __init__(self, example_name):
+    def __init__(self, config, subprob=None):
 
-        config = cfg.load_configs(example_name)
-
+        # construct mission / model / method objects from configs
         self.mission = Mission(self, config)
         self.model   = Model(self, config)
         self.method  = Method(self, config)
 
+        # complete the mission / model / method object setup with interdependent definitions
         self._initialize_problem()
-        self.method.get_initial_guess()
 
-        self.case_flag = 1
+        # use precompiled cvxpy subproblem if provided
+        if subprob is not None:
+            self.method.subprob = subprob
 
     def _initialize_problem(self):
 
@@ -35,6 +35,4 @@ class Problem:
         mission.update_mission_params()
         model.update_model_params()
         method.update_method_params()
-
-        # Save variable names
-        self.save_var_names    = ["ts_opt", "zs_opt", "us_opt", "params", "O"]
+        method.get_initial_guess()

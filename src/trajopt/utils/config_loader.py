@@ -47,7 +47,7 @@ def load_configs(example_name):
 
         # update mission config first with planet and vehicle dicts
         if param_type == "mission":
-            planet_name = config["mission"]["planet_name"]
+            planet_name  = config["mission"]["planet_name"]
             vehicle_name = config["mission"]["vehicle_name"]
             config["mission"]["planet"]  = tools.load_yaml(f"{base_pkgs['mission']}.planet", f"{planet_name}.yaml")
             config["mission"]["vehicle"] = tools.load_yaml(f"{base_pkgs['mission']}.vehicle", f"{vehicle_name}.yaml")
@@ -56,3 +56,34 @@ def load_configs(example_name):
         tools.eval_expressions(param_type, config)
 
     return config
+
+def load_variations(example_name):
+
+    variations = {}
+
+    # load the variations for mission / model / methods
+    for param_type in ["mission", "model", "method"]:
+        variations[param_type] = tools.load_yaml(f"trajopt.examples.{example_name}.variations", f"{param_type}.yaml")
+
+    # generate the realizations for the mission variations
+    variations["mission"]["realizations"] = []
+    for i in range(0, variations["mission"]["num_variations"]):
+        realization_dict = {}
+        for rv_name, rv_properties in variations["mission"]["random_vars"].items():
+            
+            rv_var_type = rv_properties.get("variation_type", "uniform")
+
+            if rv_var_type == "uniform":
+                lb = rv_properties["lb"]
+                ub = rv_properties["ub"]
+                
+                realization = lb + (ub - lb) * np.random.random(lb.shape)
+            
+            # TODO (carlos): add normal dispersions as well
+            # elif rv_var_type == "normal":
+            #     realization = 
+            
+            realization_dict[rv_name] = realization
+        
+        variations["mission"]["realizations"].append(realization_dict)
+    return variations
