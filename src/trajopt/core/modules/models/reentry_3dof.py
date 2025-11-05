@@ -10,6 +10,8 @@ def system_dynamics_jax(ts, zs, us, problem, t_vec=None):
     model = problem.model
     method = problem.method
 
+    ctrl_type = model.bools['ctrl_type']
+
     # Extract constant param values from struct
     Om = mission.planet["omega"] / (method.nondim["nang"] / method.nondim["nt"])
     Kg = mission.planet["mu"] / (method.nondim["na"] * method.nondim["nd"] ** 2)
@@ -29,8 +31,10 @@ def system_dynamics_jax(ts, zs, us, problem, t_vec=None):
         us2 = np.array([jnp.interp(ts, t_vec, us[:, i]) for i in range(model.m)])
 
     # Extract bank angle
+    if ctrl_type == 'bank_aoa':
+        alpha   = us2[1]
+    
     sigma   = us2[0]
-    alpha   = us2[1]
 
     # Extract sines and cosines of various values
     cp  = jnp.cos(phi)

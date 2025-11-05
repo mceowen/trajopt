@@ -112,16 +112,17 @@ def nonlinear_aero_jax(ts, zs, us, problem):
     model = problem.model
     method = problem.method
 
-    ctrl_type = model['ctrl_type']
+
+    ctrl_type = model.bools['ctrl_type']
 
     # Extract key params
-    nv = method['nv']
-    rhoe = mission['planet']['rho']
-    re = mission['planet']['r']
+    nv = method.nondim['nv']
+    rhoe = mission.planet['rho']
+    re = mission.planet['r']
     N = extract_N(ts)
-    mass_nd = mission['vehicle']['mass'] / method['nondim']['nm']
+    mass_nd = mission.vehicle['mass'] / method.nondim['nm']
 
-    B = (mission['planet']['r'] / mission['vehicle']['mass']) * (mission['vehicle']['sref'] / 2)
+    B = (mission.planet['r'] / mission.vehicle['mass']) * (mission.vehicle['sref'] / 2)
     
     # Initialize output vectors
     Cl      = jnp.zeros(N)
@@ -162,31 +163,34 @@ def nonlinear_aero_jax(ts, zs, us, problem):
         Kl2h    = kl2 * d2r**2
         Kl3h    = kl3 * d2r**3
 
+    # pre-allocate rho if you want it per step
+    rho = jnp.zeros(N)
+
     for k in range(N):
-        # Extract states and controls
+        # reads
         tk = ts if N == 1 else ts[k]
         zk = zs if N == 1 else zs[k]
         uk = us if N == 1 else us[k]
-        r, theta, phi, v, gamma, psi = zs if N == 1 else zs[k]
 
+        rs, _, _, vs, _, _ = zk
 
-        # Extract control
-        if ctrl_type == 'bank_only':
-            # Velocity-dependent coefficients
-            v_sat       = min(v * nv, vlim)
-            Cl[k]       = Kl1 + Kl2 * (v_sat - vlim)**2 + Kl3 * (v_sat - vlim)**4
-            Cd[k]       = Kd1 + Kd2 * Cl[k] + Kd3 * Cl[k]**2
-            alpha[k]    = jnp.deg2rad(alphlim_deg - kalph * (min(v * nv, vlim) - vlim)**2)
-        elif ctrl_type in 'bank_aoa':
-            alpha[k]    = us if N == 1 else us[k,1]
-            alpha_deg   = jnp.rad2deg(alpha[k])
-            Cl[k]       = Kl1h + Kl2h * alpha_deg + Kl3h * alpha_deg**2
-            Cd[k]       = Kd1h + Kd2h * alpha_deg + Kd3h * alpha_deg**2 + Kd4h * alpha_deg**3 + Kd5h * alpha_deg**4
+        # compute v_sat with jnp
+        v_sat = jnp.minimum(vs * nv, vlim)
 
-        # Compute lift and drag
-        rho = atmosphere_model_jax(rs, problem)
-        L[k]    = (B / mass_nd) * rho * Cl[k] * v**2
-        D[k]    = (B / mass_nd) * rho * Cd[k] * v**2
+        # compute Cl/Cd locally then set into arrays
+        val_Cl = Kl1 + Kl2 * (v_sat - vlim)**2 + Kl3 * (v_sat - vlim)**4
+        val_Cd = Kd1 + Kd2 * val_Cl + Kd3 * val_Cl**2
+        val_alpha = jnp.deg2rad(alphlim_deg - kalph * (jnp.minimum(vs * nv, vlim) - vlim)**2)
+
+        Cl = Cl.at[k].set(val_Cl)
+        Cd = Cd.at[k].set(val_Cd)
+        alpha = alpha.at[k].set(val_alpha)
+
+        rho_k = atmosphere_model_jax(rs, problem)
+        rho = rho.at[k].set(rho_k)
+
+        L = L.at[k].set((B / mass_nd) * rho_k * val_Cl * vs**2)
+        D = D.at[k].set((B / mass_nd) * rho_k * val_Cd * vs**2)
 
     return {
         'L': L,
