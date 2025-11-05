@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 import trajopt.utils.tools as tools
 jax.config.update("jax_enable_x64", True)
-import trajopt.core.modules.models.constraints     as constraints
+import trajopt.core.modules.models.obstacles     as obstacles
 
 def system_dynamics_jax(ts, zs, us, problem, t_vec=None):
 

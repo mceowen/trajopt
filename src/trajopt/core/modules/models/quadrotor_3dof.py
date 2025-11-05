@@ -1,7 +1,7 @@
 import numpy as np
 
 import trajopt.utils.tools                  as tools
-import trajopt.core.modules.models.constraints     as constraints
+import trajopt.core.modules.models.obstacles     as obstacles
 
 
 def system_dynamics(ts, zs, us, problem, t_vec=None):
@@ -99,7 +99,7 @@ def nonlinear_inequality_constraints(ts, zs, us, problem):
     P_blocks.append(P_path)
 
     # add NFZ block
-    P_blocks.append(constraints.nfz_nonlinear(ts, zs, us, problem))
+    P_blocks.append(obstacles.nfz_nonlinear(ts, zs, us, problem))
 
     # stack all constraint blocks horizontally
     P = np.hstack([P for P in P_blocks if P.size > 0])
@@ -113,7 +113,7 @@ def analytical_inequality_constraints(ts, zs, us, problem):
     m = model.m
 
     # NFZ block
-    nfz = constraints.nfz_analytical(ts, zs, us, problem)
+    nfz = obstacles.nfz_analytical(ts, zs, us, problem)
 
     # preallocate total constraint arrays
     fcn_all   = nfz["fcn"]
