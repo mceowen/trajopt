@@ -6,4 +6,4 @@ m: 1
 bools:
   earth_rot: 0
   nondim: 0
-  ctrl_type: []
+  ctrl_type: ''
