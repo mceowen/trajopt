@@ -1,58 +1,22 @@
 import numpy as np
 from scipy.integrate import solve_ivp
-import types
+import trajopt.utils.tools as tools
 
-def initialize_plot_struct():
-    plt = {}
-    plt['scenario1'] = {}
-    plt['scenario1']['method1'] = {}
-    plt['scenario1']['method1']['params'] = {}
-    plt['scenario1']['method1']['runs'] = []
-    return plt
+'''
+outline of plt_data structure
+scenario_data = {
+    "method1": {
+        "run_data": [{"iters": {}, "params": {}}, {"iters": {}, "params": {}}, ...]
+    },
 
-def extract_non_function_params(obj):
-    """
-    Extract all non-function parameters from an object.
-    Returns a dictionary of attribute name -> value pairs, excluding:
-    - Methods/functions
-    - Private attributes starting with '__'
-    - The 'problem' attribute 
-    """
-    params = {}
-    for attr_name in dir(obj):
-        # skip private attributes and methods
-        if attr_name.startswith('__'):
-            continue
-        
-        # skip the 'problem' attribute to avoid circular references
-        if attr_name == 'problem':
-            continue
-        
-        try:
-            attr_value = getattr(obj, attr_name)
-            # skip if it's a function/method
-            if isinstance(attr_value, types.MethodType) or isinstance(attr_value, types.FunctionType):
-                continue
-            # skip if it's a callable
-            if callable(attr_value) and not isinstance(attr_value, (np.ndarray, list, dict, str, int, float)):
-                continue
-            
-            params[attr_name] = attr_value
-        except:
-            # skip attributes that can't be accessed
-            continue
-    
-    return params
+    "method2": {
+        "run_data": []
+    }, 
+}
+'''
 
-def perform_default_analysis(problem, plt=None, scenario='scenario1', method='method1'):
-    if plt is None:
-        plt = initialize_plot_struct()
-    
-    if scenario not in plt:
-        plt[scenario] = {}
-    if method not in plt[scenario]:
-        plt[scenario][method] = {'params': {}, 'runs': []}
-    
+def perform_default_analysis(problem):
+
     iter_data = problem.method.subprob.iter_data
     n = problem.model.n
     m = problem.model.m
@@ -60,17 +24,20 @@ def perform_default_analysis(problem, plt=None, scenario='scenario1', method='me
     nondim = problem.method.nondim
 
     # Extract non-function parameters from mission, model, and method
-    mission_params = extract_non_function_params(problem.mission)
-    model_params = extract_non_function_params(problem.model)
-    method_params = extract_non_function_params(problem.method)
+    mission_params = tools.extract_non_function_params(problem.mission, exclude=['mission_module'])
+    model_params = tools.extract_non_function_params(problem.model, exclude=['model_module'])
     
+    method_exclude = ['method_module', 'subprob', 'Ak', 'Ak_ind', 'Ak_ind_jax', 'Bk', 'Bk_ind', 'Bk_ind_jax', 'Bkp', 'Bkp_ind', 'Bkp_ind_jax',
+                      'Sk', 'Sk_ind', 'Sk_ind_jax', 'lds0', 'lds0_size', 'lds0_size_jax', 'z_ind_jax']
+    method_params = tools.extract_non_function_params(problem.method, exclude=method_exclude)
+
     model_params['n'] = n
     model_params['m'] = m
     
     method_params['N'] = N
     method_params['nondim'] = nondim
 
-    plt[scenario][method]['params'] = {
+    params_dict = {
         'mission': mission_params,
         'model': model_params,
         'method': method_params
@@ -125,5 +92,22 @@ def perform_default_analysis(problem, plt=None, scenario='scenario1', method='me
 
         iters.append(iter_dict)
 
-    plt[scenario][method]['runs'].append({'iters': iters, 'delta_params': {}})
-    return plt
+    return {'iters': iters, 'params': params_dict}
+
+
+# contents of iters dict from subproblem
+# self.iter_data: List[Dict[str, Any]] = [{
+#     "iter_num": 0,  # init only (no outputs yet)
+#     "zs_ref": problem.method.zs_init,
+#     "us_ref": problem.method.us_init,
+#     "dts_ref": problem.method.dts_init,
+#     "ts_ref": problem.method.ts_init,
+#     "conv_data": {
+#         "vb_path": np.zeros((self.N, mission.n_path)),
+#         "vb_nfz":  np.zeros((self.N, mission.n_nfz)),
+#         "vb_aux":  np.zeros((self.N, self.n_aux)),
+#         "vb_dyn":  np.zeros((self.N - 1, self.nz)),
+#         "vb_term": np.zeros((self.n_term, 1)),
+#     },
+#     "weights": problem.method.weights,
+# }]

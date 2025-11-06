@@ -59,19 +59,17 @@ def load_configs(example_name):
 
     return config
 
-def load_variations(example_name):
+def gen_mc_variations(example_name):
 
-    variations = {}
+    mc_variations = {}
 
-    # load the variations for mission / model / methods
-    for param_type in ["mission", "model", "method"]:
-        variations[param_type] = tools.load_yaml(f"trajopt.examples.{example_name}.variations", f"{param_type}.yaml")
+    mc_variations = tools.load_yaml(f"trajopt.examples.{example_name}.variations", "mission.yaml")
 
     # generate the realizations for the mission variations
-    variations["mission"]["realizations"] = []
-    for i in range(0, variations["mission"]["num_variations"]):
+    mc_variations["realizations"] = [{}]
+    for i in range(0, mc_variations["num_variations"]):
         realization_dict = {}
-        for rv_name, rv_properties in variations["mission"]["random_vars"].items():
+        for rv_name, rv_properties in mc_variations["random_vars"].items():
             
             rv_var_type = rv_properties.get("variation_type", "uniform")
 
@@ -87,5 +85,9 @@ def load_variations(example_name):
             
             realization_dict[rv_name] = realization
         
-        variations["mission"]["realizations"].append(realization_dict)
-    return variations
+        mc_variations["realizations"].append(realization_dict)
+    return mc_variations
+
+def load_mv_variations(example_name):
+
+    return tools.load_yaml(f"trajopt.examples.{example_name}.variations", "method.yaml")
