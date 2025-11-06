@@ -73,7 +73,8 @@ class POLYTOPE_IN:
 
 class POLYTOPE_OUT:  ### NOT FINISHED 
     # -- defines polytope keep out region with polytope Cx >= d
-    def __init__(self,offset,linear)
+    # uses a softmax approximation
+    def __init__(self,C,d)
         self.type = 'polytope_out'
         self.convex = False;
         self.category = 'nonconvex'
@@ -81,9 +82,33 @@ class POLYTOPE_OUT:  ### NOT FINISHED
         self.linear = linear
         self.d = offset
         self.C = linear
+        self.alpha = 10;
+
+    def g(self,x):
+        # implements keep out region g(x) = max(Cx - d) <= 0
+        # with the soft max version max_j z_j = (1/\sum_j e^{alpha z_j})*(\sum_j z_j e^{alpha z_j})
+        z = Cx - d; 
+        # version1: exact max 
+        out1 = np.max(Cx - d); 
+        # version2: softmax
+        exps = np.exp(self.alpha*z)
+        out2 = (1./np.sum(exps))*exps*z
+        return out2;
+    def dgdx(self,x):
+        z = Cx - d;
+        exps = np.exp(self.alpha*z)
+        summ = np.sum(exps);
+        dzdx = C;
+        dgdz = (1./summ)*exps
+        dgdz = dgdz + (1./summ)*z*exps*self.alpha
+        dgdz = dgdz + (z@exps)*(-1./summ**2)*alpha*exps
+        dgdx = dgdz@dzdx;
+        return dgdx
+
     def calcAffine(self,x):
         ## --- needs to be added 
-        ## Not obvious how to do this correctly
+        ## Not obvious how to do this correctly 
+        ## z0 = 
         pass 
 
 # =========================================================
