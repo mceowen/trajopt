@@ -1,6 +1,16 @@
 import numpy as np
-
 import trajopt.utils.tools                      as tools
+
+# ===============================================================
+# MISSION
+# ===============================================================
+
+def cost2(ts, zs, us, problem):
+    return np.dot(np.transpose(us), us)
+
+# ===============================================================
+# MODEL
+# ===============================================================
 
 def system_dynamics(ts, zs, us, problem, t_vec=None):
     """
