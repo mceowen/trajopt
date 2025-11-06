@@ -2,6 +2,7 @@ import numpy as np
 import cvxpy as cp
 import importlib 
 import yaml
+import types
 
 # TODO: just condense into a single function (not both get_val, safe_val)
 
@@ -171,3 +172,43 @@ def eval_expressions(param_type, config):
             if value.startswith("eval:"):
                 eval_str = value.split(":", 1)[1].strip()
                 dictionary[key] = eval(eval_str, {"np": np}, config)
+
+def extract_non_function_params(obj, exclude=None):
+    """
+    Extract all non-function parameters from an object.
+    Returns a dictionary of attribute name -> value pairs, excluding:
+    - Methods/functions
+    - Private attributes starting with '__'
+    - The 'problem' attribute 
+    """
+    params = {}
+
+    if exclude is None:
+        exclude = []
+    for attr_name in dir(obj):
+        # skip private attributes and methods
+        if attr_name.startswith('__'):
+            continue
+        
+        # skip the 'problem' attribute to avoid circular references
+        if attr_name == 'problem':
+            continue
+
+        if attr_name in exclude:
+            continue
+        
+        try:
+            attr_value = getattr(obj, attr_name)
+            # skip if it's a function/method
+            if isinstance(attr_value, types.MethodType) or isinstance(attr_value, types.FunctionType):
+                continue
+            # skip if it's a callable
+            if callable(attr_value) and not isinstance(attr_value, (np.ndarray, list, dict, str, int, float)):
+                continue
+            
+            params[attr_name] = attr_value
+        except:
+            # skip attributes that can't be accessed
+            continue
+    
+    return params
