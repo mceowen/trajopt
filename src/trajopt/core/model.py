@@ -62,31 +62,68 @@ class Model:
         problem = self.problem
         method = problem.method
         mission = problem.mission
+        import importlib
 
-        # set dynamics
+        # ------------------------------------------------------------
+        # Try to import a custom override module if it exists
+        # ------------------------------------------------------------
+        custom_model_module = None
+        try:
+            example_name        = getattr(self.problem, "name", None)
+            custom_model_module = importlib.import_module(f"trajopt.examples.{example_name}.custom")
+        except ModuleNotFoundError:
+            pass  # no custom module — use defaults
+
+        # ------------------------------------------------------------
+        # system dynamics
+        # ------------------------------------------------------------
         if method.bools["jax_dyn"]:
-            self._dynamics = self.model_module.system_dynamics_jax
+            if custom_model_module and hasattr(custom_model_module, "system_dynamics_jax"):
+                self._dynamics = custom_model_module.system_dynamics_jax
+            else:
+                self._dynamics = self.model_module.system_dynamics_jax
         else:
-            self._dynamics = self.model_module.system_dynamics
+            if custom_model_module and hasattr(custom_model_module, "system_dynamics"):
+                self._dynamics = custom_model_module.system_dynamics
+            else:
+                self._dynamics = self.model_module.system_dynamics
 
-        # set ltv dynamics
+        # ------------------------------------------------------------
+        # linearized dynamics
+        # ------------------------------------------------------------
         if method.bools["jax_dyn"]:
-            self._lin_dyn = convexify.generate_lin_sys_jax(self._dynamics, problem)
+            if custom_model_module and hasattr(custom_model_module, "analytical_linsys_jax"):
+                self._lin_dyn = custom_model_module.analytical_linsys_jax
+            else:
+                self._lin_dyn = convexify.generate_lin_sys_jax(self._dynamics, problem)
         else:
-            self._lin_dyn = self.model_module.analytical_linsys
+            if custom_model_module and hasattr(custom_model_module, "analytical_linsys"):
+                self._lin_dyn = custom_model_module.analytical_linsys
+            else:
+                self._lin_dyn = self.model_module.analytical_linsys
 
-        # set nonlinear inequality constraints
-        self._nonlinear_inequality_constraints = (self.model_module.nonlinear_inequality_constraints)
+        # ------------------------------------------------------------
+        # nonlinear inequality constraints
+        # ------------------------------------------------------------
+        if custom_model_module and hasattr(custom_model_module, "nonlinear_inequality_constraints"):
+            self._nonlinear_inequality_constraints = custom_model_module.nonlinear_inequality_constraints
+        else:
+            self._nonlinear_inequality_constraints = self.model_module.nonlinear_inequality_constraints
 
-        # set linearized constraints
+        # ------------------------------------------------------------
+        # linearized constraints
+        # ------------------------------------------------------------
         if method.bools["auto_jac_cnst"]:
             self._lin_constr = convexify.generate_jacobians(self.nonlinear_inequality_constraints)
         else:
-            self._lin_constr = self.model_module.analytical_inequality_constraints
-        
-        # ctcs state vector update 
-        # (this couples mission, model and method, maybe it can be done in a cleaner way)
+            if custom_model_module and hasattr(custom_model_module, "analytical_inequality_constraints"):
+                self._lin_constr = custom_model_module.analytical_inequality_constraints
+            else:
+                self._lin_constr = self.model_module.analytical_inequality_constraints
 
+        # ------------------------------------------------------------
+        # CTCS / state vector update
+        # ------------------------------------------------------------
         if method.bools.get("ctcs", False):
             self.nz = self.n + mission.n_ineq
         else:

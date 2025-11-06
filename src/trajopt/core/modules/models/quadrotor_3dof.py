@@ -1,8 +1,7 @@
 import numpy as np
 
-import trajopt.utils.tools                  as tools
-import trajopt.core.modules.models.obstacles     as obstacles
-
+import trajopt.utils.tools                      as tools
+import trajopt.core.modules.models.obstacles    as obstacles
 
 def system_dynamics(ts, zs, us, problem, t_vec=None):
     """
