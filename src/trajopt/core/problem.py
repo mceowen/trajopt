@@ -9,6 +9,9 @@ import numpy as np
 class Problem:
     def __init__(self, config, subprob=None):
 
+        # example
+        self.name = config.get("example_name", "unnamed_problem")
+
         # construct mission / model / method objects from configs
         self.mission = Mission(self, config)
         self.model   = Model(self, config)

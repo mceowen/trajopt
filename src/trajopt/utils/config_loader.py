@@ -5,6 +5,8 @@ def load_configs(example_name):
 
     config = {}
 
+    config["example_name"] = example_name
+
     config["mission"] = {}
     config["model"]   = {}
     config["method"]  = {}
