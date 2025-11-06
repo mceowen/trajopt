@@ -11,7 +11,7 @@ def system_dynamics_jax(ts, zs, us, problem, t_vec=None):
     model = problem.model
     method = problem.method
 
-    ctrl_type = model.bools['ctrl_type']
+    ctrl_type = model.flags['ctrl_type']
 
     # Extract constant param values from struct
     Om = mission.planet["omega"] / (method.nondim["nang"] / method.nondim["nt"])

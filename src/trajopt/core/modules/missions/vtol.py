@@ -90,10 +90,10 @@ def atmosphere_model_jax(rs, problem):
     hdim = rdim - mission.planet["r"]
     
     # TODO (carlos): add the remaining options for atmosphere model
-    if mission.bools["aero_type"] == "lookup":
+    if mission.flags["aero_type"] == "lookup":
         rho = jnp.interp(hdim/1e3, dens.h_grid, dens.rho_vals)
 
-    elif mission.bools["aero_type"] == "exponential":
+    elif mission.flags["aero_type"] == "exponential":
         rho = mission.planet["rho"] * jnp.exp(-hdim / mission.planet["H"])
 
     return rho
@@ -113,7 +113,7 @@ def nonlinear_aero_jax(ts, zs, us, problem):
     method = problem.method
 
 
-    ctrl_type = model.bools['ctrl_type']
+    ctrl_type = model.flags['ctrl_type']
 
     # Extract key params
     nv = method.nondim['nv']

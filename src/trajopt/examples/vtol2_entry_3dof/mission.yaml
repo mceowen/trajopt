@@ -4,7 +4,7 @@ mission_name: "vtol"
 planet_name: "earth"
 vehicle_name: "vtol"
 
-bools:
+flags:
   flag_nfz: 0
   init_ctrl: 0
   final_ctrl: 0

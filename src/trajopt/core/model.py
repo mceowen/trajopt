@@ -26,7 +26,7 @@ class Model:
         self.anchor_types     = model_config["anchor_types"]
         self.anchor_scales    = model_config["anchor_scales"]
         self.base_unit_labels = model_config["base_unit_labels"]
-        self.bools            = model_config["bools"]
+        self.flags            = model_config['flags']
 
         self.custom_modules   = model_config.get("custom_modules", None)
 
@@ -48,7 +48,7 @@ class Model:
 
         method = self.problem.method
 
-        if method.bools["jax_dyn"] == 1:
+        if method.flags["jax_dyn"] == 1:
             return self._lin_dyn(ts, zs, us)
 
         else:
@@ -126,7 +126,7 @@ class Model:
         # ------------------------------------------------------------
         # System Dynamics
         # ------------------------------------------------------------
-        if method.bools.get("jax_dyn", 0):
+        if method.flags.get("jax_dyn", 0):
             self._dynamics = _resolve_function("system_dynamics_jax")
         else:
             self._dynamics = _resolve_function("system_dynamics")
@@ -134,7 +134,7 @@ class Model:
         # ------------------------------------------------------------
         # Linearized Dynamics
         # ------------------------------------------------------------
-        if method.bools.get("jax_dyn", 0):
+        if method.flags.get("jax_dyn", 0):
             self._lin_dyn = convexify.generate_lin_sys_jax(self._dynamics, problem)
         else:
             self._lin_dyn = _resolve_function("analytical_linsys")
@@ -149,7 +149,7 @@ class Model:
         # ------------------------------------------------------------
         # Linearized Inequality Constraints
         # ------------------------------------------------------------
-        if method.bools.get("auto_jac_cnst", 0):
+        if method.flags.get("auto_jac_cnst", 0):
             self._lin_constr = convexify.generate_jacobians(
                 self.nonlinear_inequality_constraints
             )
@@ -159,7 +159,7 @@ class Model:
         # ------------------------------------------------------------
         # CTCS / state bookkeeping
         # ------------------------------------------------------------
-        if method.bools.get("ctcs", False):
+        if method.flags.get("ctcs", False):
             self.nz = self.n + mission.n_ineq
         else:
             self.nz = self.n

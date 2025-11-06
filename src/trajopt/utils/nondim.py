@@ -35,7 +35,7 @@ def set_nondim_params(problem, base_unit_labels=["m", "s", "kg"]):
     base_scales = np.exp(log_base_scales)
 
     # retrieve remaining scales from base scales
-    if method.bools["nondim"]:
+    if method.flags["nondim"]:
         nd = base_scales[0]
         nt = base_scales[1]
         nm = base_scales[2]

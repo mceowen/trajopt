@@ -18,5 +18,5 @@ anchor_scales: >
 
 base_unit_labels: ["m", "s", "kg"]
 
-bools:
+flags:
   ctrl_type: "bank_only"

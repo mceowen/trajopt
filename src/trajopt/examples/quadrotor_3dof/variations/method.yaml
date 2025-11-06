@@ -1,9 +1,9 @@
 # this defines the variations to the nominal method 
 
 method1_name:
-  bools:
+  flags:
     "equal_dt"        : 1
 
 method2_name:
-  bools:
+  flags:
     "equal_dt"        : 0

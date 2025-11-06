@@ -2,7 +2,7 @@ method_name : "quadrotor"
 
 'N': 40
 
-bools:
+flags:
   free_final_time: 1    # 0, 1
   equal_dt: 1           # 0, 1
   flag_autotune: "0"    # '0', '1', '2

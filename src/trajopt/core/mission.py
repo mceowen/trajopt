@@ -18,7 +18,7 @@ class Mission:
         
         mission_config         = config["mission"]
         self.mission_name      = mission_config["mission_name"]
-        self.bools             = mission_config["bools"]
+        self.flags             = mission_config['flags']
         self.nfz_option_list   = mission_config["nfz_option_list"]
         self.zi                = mission_config["zi"]
         self.zi_idx            = mission_config["zi_idx"]
@@ -109,13 +109,13 @@ class Mission:
         self._analytical_cost = self.mission_module.analytical_cost
 
         # set linearized cost function
-        if method.bools["auto_jac"]:
+        if method.flags["auto_jac"]:
             self._lin_cost = convexify.generate_jacobians(self._cost)
         else:
             self._lin_cost = self._analytical_cost
 
-        if self.bools["aero_type"] != 'none':
-            if method.bools["jax_dyn"]:
+        if self.flags["aero_type"] != 'none':
+            if method.flags["jax_dyn"]:
                 self._nonlinear_aero = self.mission_module.nonlinear_aero_jax
             else:
                 self._nonlinear_aero = self.mission_module.nonlinear_aero
@@ -147,7 +147,7 @@ class Mission:
         self.z_min = M_z_min @ self.z_min
         self.z_max = M_z_max @ self.z_max
 
-        if self.bools["init_ctrl"] == 1:
+        if self.flags["init_ctrl"] == 1:
             self.ui = method.nondim["M"]["ctrl"]["d2nd"] @ self.ui
             self.uf = method.nondim["M"]["ctrl"]["d2nd"] @ self.uf
 
@@ -185,7 +185,7 @@ class Mission:
     # TODO: maybe this can be cleaner
     def initialize_nfz(self):
         # extracts nfz_idx which is neces
-        nfz_option     = self.bools["flag_nfz"]
+        nfz_option     = self.flags["flag_nfz"]
         xc             = self.nfz_option_list[nfz_option]["xc"]
         yc             = self.nfz_option_list[nfz_option]["yc"]
 

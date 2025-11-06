@@ -99,11 +99,11 @@ class Subproblem:
         self.m  = int(model.m)
         self.nz = int(model.nz)
 
-        self.bools         = method.bools
-        self.free_T        = bool(self.bools["free_final_time"])
-        self.equal_dt      = bool(self.bools["equal_dt"])
-        self.buff_dyn      = self.bools["buff_dyn"]                  # e.g., "l1", "l2", "term", "quad-1", "quad-2"
-        self.flag_autotune = self.bools["flag_autotune"]
+        self.flags         = method.flags
+        self.free_T        = bool(self.flags["free_final_time"])
+        self.equal_dt      = bool(self.flags["equal_dt"])
+        self.buff_dyn      = self.flags["buff_dyn"]                  # e.g., "l1", "l2", "term", "quad-1", "quad-2"
+        self.flag_autotune = self.flags["flag_autotune"]
 
         # module sizes
         self.n_path  = int(mission.n_path)
@@ -116,15 +116,15 @@ class Subproblem:
         self.n_minus = int(getattr(method, "n_minus", 0))
 
         # Optional module flags as Parameters (enable gating)
-        self.flag_path = method.bools.get("flag_path", 1.0)
-        self.flag_nfz  = method.bools.get("flag_nfz", 1.0)
-        self.flag_aux  = method.bools.get("flag_aux", 1.0)
-        self.flag_term = method.bools.get("flag_term", 1.0)
-        self.flag_dyn  = method.bools.get("flag_dyn", 1.0)
-        self.flag_tr   = method.bools.get("flag_tr", 1.0)
-        self.flag_true = method.bools.get("flag_true", 1.0)
-        self.flag_dual = method.bools.get("flag_dual", 1.0)
-        self.flag_vb   = method.bools.get("flag_vb", 1.0)
+        self.flag_path = method.flags.get("flag_path", 1.0)
+        self.flag_nfz  = method.flags.get("flag_nfz", 1.0)
+        self.flag_aux  = method.flags.get("flag_aux", 1.0)
+        self.flag_term = method.flags.get("flag_term", 1.0)
+        self.flag_dyn  = method.flags.get("flag_dyn", 1.0)
+        self.flag_tr   = method.flags.get("flag_tr", 1.0)
+        self.flag_true = method.flags.get("flag_true", 1.0)
+        self.flag_dual = method.flags.get("flag_dual", 1.0)
+        self.flag_vb   = method.flags.get("flag_vb", 1.0)
 
         # Bounds (only create when nonzero-length)
         self._init_bounds(mission)
@@ -225,7 +225,7 @@ class Subproblem:
         self.vb_term  = cp.Variable(self.n_term,          name="vb_term")  if self.n_term     > 0 else None
 
         # Dynamics buffers (zeros if 'term')
-        if method.bools.get("buff_dyn") == "term":
+        if method.flags.get("buff_dyn") == "term":
             self.vb_dyn_p = np.zeros((N - 1, nz))
             self.vb_dyn_m = np.zeros((N - 1, nz))
         else:
@@ -310,16 +310,16 @@ class Subproblem:
     def _build_constraints_once(self) -> None:
         mission, model, method = self.problem.mission, self.problem.model, self.problem.method
         N, n, m, nz = self.N, self.n, self.m, self.nz
-        bools = method.bools
+        flags = method.flags
 
         C: List[cp.Constraint] = []
 
         # Initial control (optional)
-        if mission.bools.get("init_ctrl", False) and mission.n_init_ctrl > 0:
+        if mission.flags.get("init_ctrl", False) and mission.n_init_ctrl > 0:
             C.append(self.du[0,mission.ui_idx] + self.us_ref[0, mission.ui_idx] == self.u1)
 
         # Terminal control (optional)
-        if mission.bools.get("final_ctrl", False) and mission.n_term_ctrl > 0:
+        if mission.flags.get("final_ctrl", False) and mission.n_term_ctrl > 0:
             C.append(self.du[-1,mission.uf_idx] + self.us_ref[-1, mission.uf_idx] == self.uN)
 
         # Initial equalities / inequalities
@@ -359,7 +359,7 @@ class Subproblem:
                     C.append(self.vb_dyn_m[k] >= 0)
 
                 # CTCS coupling on extra components
-                if bools["ctcs"] and n < nz:
+                if flags["ctcs"] and n < nz:
                     C.append(
                         self.zs_ref[k + 1, n:nz] + self.dz[k + 1, n:nz]
                         - (self.zs_ref[k, n:nz] + self.dz[k, n:nz]) <= self.eps_ctcs
@@ -397,7 +397,7 @@ class Subproblem:
 
             # Linearized inequality constraints (path + nfz + aux)
             n_ineq_cols = int(mission.n_path + mission.n_nfz + getattr(mission, "n_aux", 0))
-            if n_ineq_cols > 0 and not bools["ctcs"] and self.dgdz is not None:
+            if n_ineq_cols > 0 and not flags["ctcs"] and self.dgdz is not None:
                 vb_parts = []
                 if self.vb_path is not None: vb_parts.append(self.vb_path[k])
                 if self.vb_nfz  is not None: vb_parts.append(self.vb_nfz[k])
@@ -729,7 +729,7 @@ class Subproblem:
 # Baseline autotune wrapper
 # ===========================
 def baseline_autotune(problem, _unused, rec: Dict[str, Any]) -> Dict[str, Any]:
-    flag = problem.method.bools["flag_autotune"]
+    flag = problem.method.flags["flag_autotune"]
     if flag == 1:
         rec = hp.autotune1(problem, {}, rec)
     elif flag == 2:

@@ -1,5 +1,5 @@
 # default mission parameters
-bools:
+flags:
   flag_nfz: 0
 
 # Constraint structure
