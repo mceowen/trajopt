@@ -1,4 +1,4 @@
-bools:
+flags:
   auto_jac: 1
   auto_jac_aero: 1
   auto_jac_cnst: 1

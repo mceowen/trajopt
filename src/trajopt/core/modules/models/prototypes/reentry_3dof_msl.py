@@ -26,7 +26,7 @@ def config_params():
     params['beta']  = 1.0 / params['H']             # Inverse scale height
     params['mue']   = params['ge'] * params['re']**2  # Gravitational parameter for Mars
     # No rotation for now (can adjust later)
-    params['bools'] = {'earth_rot': 0}
+    params['flags'] = {'earth_rot': 0}
     params['Omega'] = 0.0
 
     # === Vehicle mass & reference geometry ===

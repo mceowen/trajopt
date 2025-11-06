@@ -21,7 +21,7 @@ def analyze_quality_metrics():
     table_cell  = generate_statistic_table(config, stats)
 
     plot_tables(config, table_cell)
-    
+
     return {
         "config": config,
         "data": data,
@@ -56,8 +56,13 @@ def load_configuration():
         ],
     }
 
+
+    # NOTE:
+    # This dictionary maps each variable index to the set of metric indices to evaluate.
+    # Alternatively, you can explicitly specify metric names (e.g., "max", "mean", etc.)
+    # for each variable instead of using index-based mappings.
     config["metric_groups"] = {
-        "n_iter_metric": list(range(1, 8)),
+        "n_iter_metric": list(range(1, 8)), # e.g. number of iterations to converge uses the first 8 metrics above (up to 1-norm)
         "time_per_iter_metric": list(range(1, 8)),
         "total_parse_time_metric": list(range(1, 8)),
         "total_solve_time_metric": list(range(1, 8)),

@@ -2,7 +2,7 @@ method_name : "vtol1"
 
 'N': 40
 
-bools:
+flags:
   free_final_time: 1      # 0, 1
   equal_dt: 1             # 0, 1
   flag_autotune: "0"      # '0', '1', '2
@@ -43,7 +43,7 @@ weights:
   alpha_z: 0.5
   alpha_u: 0.5
   
-nl_guess_u_start: [5.0, 0.0]
-nl_guess_u_stop: [5.0, 0.0]
+nl_guess_u_start: [5.0]
+nl_guess_u_stop: [5.0]
 
-line_guess_u_init: "eval: np.tile([5.0, 0.0], (method['N'], 1))"
+line_guess_u_init: "eval: np.tile([5.0], (method['N'], 1))"

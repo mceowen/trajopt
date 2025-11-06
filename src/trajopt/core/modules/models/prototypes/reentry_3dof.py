@@ -23,9 +23,9 @@ def config_params():
     params['rhoe']      = 1.3
     params['H']         = 7e3
     params['beta']      = 1.0 / params['H']
-    params['bools']     = {'earth_rot': 1}
+    params['flags']     = {'earth_rot': 1}
     sidereal_day_s      = 23 * 3600 + 56 * 60 + 4
-    params['Omega']     = 2 * np.pi / sidereal_day_s * params['bools']['earth_rot']
+    params['Omega']     = 2 * np.pi / sidereal_day_s * params['flags']['earth_rot']
 
     # === Vehicle mass & reference geometry ===
     params['mass']      = 104305.0

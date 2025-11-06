@@ -4,7 +4,7 @@ mission_name: "quadrotor"
 planet_name: "earth"
 vehicle_name: "quadrotor"
 
-bools:
+flags:
   flag_nfz: 2           # 0, 1, 2
   init_ctrl: 1
   final_ctrl: 1
@@ -24,7 +24,7 @@ nfz_option_list:
   yc: [2.0, 2.5, 5.0, 5.25, 5.5, 8.0]
   rc: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
 
-z_min: [0.0, 0.0, 0.25]
+z_min: [-0.5, -0.5, 0.25]
 z_min_idx: [0, 1, 2]
 z_max: [12.0, 12.0, 10.0]
 z_max_idx: [0, 1, 2]
@@ -65,3 +65,6 @@ custom_input_dict:
   u_norm_min: 0.21
   u_norm_max: 8.12
   theta_max : 100.0
+
+custom_modules:
+  cost: trajopt.examples.quadrotor_3dof.custom.cost2

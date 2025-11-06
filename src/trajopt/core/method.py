@@ -16,7 +16,7 @@ class Method:
         method_config    = config["method"]
         self.method_name = method_config["method_name"]
         self.N           = method_config["N"]
-        self.bools       = method_config["bools"]
+        self.flags       = method_config['flags']
         self.solver_opts = method_config["solver_opts"]
         self.T_init      = method_config["T_init"]
         self.T_min       = method_config["T_min"]
@@ -51,14 +51,14 @@ class Method:
 
         self.line_guess_u_init = self.line_guess_u_init @ self.nondim["M"]["ctrl"]["d2nd"]
 
-        if self.bools["free_final_time"] and (self.bools.get("buff_dyn")=="term"):
+        if self.flags["free_final_time"] and (self.flags.get("buff_dyn")=="term"):
             us_range = np.vstack([self.nl_guess_u_start, self.nl_guess_u_stop])
             guess.nonlinear_initial_guess(us_range, problem)
         else:
             guess.straight_line_initial_guess(problem)
             self.us_init = self.line_guess_u_init
 
-        if self.bools["ctcs"]:
+        if self.flags["ctcs"]:
             guess.ctcs_initial_guess(problem)
 
         self.cost_init = mission.cost(self.ts_init, self.zs_init, self.us_init)
@@ -69,13 +69,13 @@ class Method:
         model = problem.model
 
         # precompile discretize functions for jax
-        if self.bools['jax_dyn'] == 1:
+        if self.flags['jax_dyn'] == 1:
             discretize.jit_jax_discretize(problem)
 
-        buff_dyn = str(self.bools.get("buff_dyn", "term"))
+        buff_dyn = str(self.flags.get("buff_dyn", "term"))
 
         # --- CTCS-specific adjustment ---
-        if self.bools.get("ctcs") and buff_dyn == "term":
+        if self.flags.get("ctcs") and buff_dyn == "term":
             buff_dyn = "l1"
 
         # --- Dynamics buffering ---
@@ -166,7 +166,7 @@ class Method:
 
 
         # TODO (carlos): this is a temporary fix to keep quadrotor converging the same, will remove soon!
-        if self.bools["match_dim_nondim_weights"]:
+        if self.flags["match_dim_nondim_weights"]:
             M_state  = self.nondim["M"]["state"]["nd2d"]
             avg_state_nd_sq = np.mean(np.diag(M_state)**2)
         else:
@@ -179,16 +179,16 @@ class Method:
         self.weights["w_fac_Nm1"]    = self.N - 1
 
         # === Autotune modes (flag_autotune ∈ {0,2,3,al-scvx}) ===
-        if str(self.bools["flag_autotune"]) in {"0", "2", "3", "al-scvx"}:
+        if str(self.flags["flag_autotune"]) in {"0", "2", "3", "al-scvx"}:
 
             self.weights.setdefault("beta", 1)
             self.weights.setdefault("gamma", 1e-1)
 
             # --- Buffer weights ---
-            if str(self.bools["flag_autotune"]) in {"0", "al-scvx"}:
+            if str(self.flags["flag_autotune"]) in {"0", "al-scvx"}:
                 if "wbuff" not in self.weights:
                     wbuff = 1e2
-                    if str(self.bools["flag_autotune"]) == "0":
+                    if str(self.flags["flag_autotune"]) == "0":
 
                         w_nfz_dim  = wbuff / self.weights["w_fac_N"]
                         w_dyn_dim  = 1e5 * wbuff / self.weights["w_fac_Nm1"]
@@ -196,7 +196,7 @@ class Method:
 
                         # TODO (carlos): this is a temporary fix to keep quadrotor converging the same
                         # will remove soon!
-                        if self.bools["match_dim_nondim_weights"]:
+                        if self.flags["match_dim_nondim_weights"]:
                             # scaled nondim weights to approximately preserve relative scaling between cost terms
                             M_nfz  = self.nondim["M"]["nfz"]["nd2d"]
                             M_dyn  = self.nondim["M"]["dyn"]["nd2d"]
@@ -226,8 +226,8 @@ class Method:
 
             self.weights["W_nfz"] += w_nfz
 
-            if self.bools["free_final_time"] or self.bools["ctcs"]:
-                buff_dyn = str(self.bools.get("buff_dyn", ""))
+            if self.flags["free_final_time"] or self.flags["ctcs"]:
+                buff_dyn = str(self.flags.get("buff_dyn", ""))
                 if buff_dyn in {"l1", "l2"}:
                     self.weights["W_dyn"] += w_dyn
                 elif buff_dyn in {"quad-1", "quad-2", "quad-3"}:
@@ -237,21 +237,21 @@ class Method:
                     self.weights["W_term"] += w_term
 
         # === Autotune mode: {1,3,al-scvx} ===
-        if str(self.bools["flag_autotune"]) in {"1", "3", "al-scvx"}:
+        if str(self.flags["flag_autotune"]) in {"1", "3", "al-scvx"}:
 
             self.weights.setdefault("beta", 1)
             self.weights.setdefault("gamma", 1e-1)
 
             self.weights["dual_nfz"] += self.weights["eps_nonzero1"]
 
-            if self.bools["free_final_time"]:
-                buff_dyn = str(self.bools.get("buff_dyn", ""))
+            if self.flags["free_final_time"]:
+                buff_dyn = str(self.flags.get("buff_dyn", ""))
                 if buff_dyn == "term":
                     self.weights["dual_term"] += self.weights["eps_nonzero1"]
                 else:
                     self.weights["dual_dyn"] += self.weights["eps_nonzero1"]
 
-                    if str(self.bools.get("buff_dyn_dual", "")) == "l1":
+                    if str(self.flags.get("buff_dyn_dual", "")) == "l1":
                         self.weights["dual_plus"] += self.weights["eps_nonzero1"]
                         self.weights["dual_minus"] += self.weights["eps_nonzero1"]
 

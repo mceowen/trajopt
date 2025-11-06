@@ -5,6 +5,8 @@ def load_configs(example_name):
 
     config = {}
 
+    config["example_name"] = example_name
+
     config["mission"] = {}
     config["model"]   = {}
     config["method"]  = {}
@@ -47,7 +49,7 @@ def load_configs(example_name):
 
         # update mission config first with planet and vehicle dicts
         if param_type == "mission":
-            planet_name = config["mission"]["planet_name"]
+            planet_name  = config["mission"]["planet_name"]
             vehicle_name = config["mission"]["vehicle_name"]
             config["mission"]["planet"]  = tools.load_yaml(f"{base_pkgs['mission']}.planet", f"{planet_name}.yaml")
             config["mission"]["vehicle"] = tools.load_yaml(f"{base_pkgs['mission']}.vehicle", f"{vehicle_name}.yaml")
@@ -56,3 +58,36 @@ def load_configs(example_name):
         tools.eval_expressions(param_type, config)
 
     return config
+
+def gen_mc_variations(example_name):
+
+    mc_variations = {}
+
+    mc_variations = tools.load_yaml(f"trajopt.examples.{example_name}.variations", "mission.yaml")
+
+    # generate the realizations for the mission variations
+    mc_variations["realizations"] = [{}]
+    for i in range(0, mc_variations["num_variations"]):
+        realization_dict = {}
+        for rv_name, rv_properties in mc_variations["random_vars"].items():
+            
+            rv_var_type = rv_properties.get("variation_type", "uniform")
+
+            if rv_var_type == "uniform":
+                lb = rv_properties["lb"]
+                ub = rv_properties["ub"]
+                
+                realization = lb + (ub - lb) * np.random.random(lb.shape)
+            
+            # TODO (carlos): add normal dispersions as well
+            # elif rv_var_type == "normal":
+            #     realization = 
+            
+            realization_dict[rv_name] = realization
+        
+        mc_variations["realizations"].append(realization_dict)
+    return mc_variations
+
+def load_mv_variations(example_name):
+
+    return tools.load_yaml(f"trajopt.examples.{example_name}.variations", "method.yaml")

@@ -300,9 +300,9 @@ def compute_linsys_discrete(zs_ref, us_ref, dts_ref, problem):
     """
     method = problem.method
 
-    if method.bools["ctcs"]:
+    if method.flags["ctcs"]:
         Ak, Bk, Bkp, Sk, zs_minus = discretize_ctcs(zs_ref, us_ref, dts_ref, problem)
-    elif method.bools["jax_dyn"]:
+    elif method.flags["jax_dyn"]:
         Ak, Bk, Bkp, Sk, zs_minus = discretize_inv_free_jax(zs_ref, us_ref, dts_ref, problem)
     else:
         Ak, Bk, Bkp, Sk, zs_minus = discretize_inv_foh(zs_ref, us_ref, dts_ref, problem)
@@ -465,7 +465,7 @@ if __name__ == "__main__":
             "Bkp_ind": slice(9, 12),
             "Sk_ind": slice(12, 15),
             "lds0": np.zeros(15),
-            "bools": {"ode_fixed_dt": False}
+            'flags': {"ode_fixed_dt": False}
         }
     }
 

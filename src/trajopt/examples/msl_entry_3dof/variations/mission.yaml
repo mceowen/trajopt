@@ -1,0 +1,8 @@
+num_variations: 5
+
+# dictionary of random variables to vary
+random_vars:
+  zi:
+    variation_type: "uniform"  # "uniform", "normal"
+    lb: [-100, -1.0, -1.0, -20.0, -1.0, -1.0]
+    ub: [100, 1.0, 1.0, 20.0, 1.0, 1.0]

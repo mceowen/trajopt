@@ -20,7 +20,7 @@ def set_convergence_tolerance(problem):
         eps_state       = method.conv["eps_state"]
         M_state_d2nd    = method.nondim["M"]["state"]["d2nd"]
 
-    if method.bools["ctcs"] and mission.n_ineq > 0:
+    if method.flags["ctcs"] and mission.n_ineq > 0:
         eps_state = np.concatenate([
             ctcs_mult_state * eps_state,
             ctcs_mult_cnst  * method.conv["eps_path"],
@@ -177,7 +177,7 @@ def set_convergence_tolerance(problem):
         eps_dyn     = np.zeros((model.nz, model.nz)) # make sure we can mat-mult w/ M_dyn_d2nd and get a 1-by-nz
         M_dyn_d2nd  = np.zeros((1, model.nz))
 
-    if method.bools["ctcs"] and mission.n_ineq > 0:
+    if method.flags["ctcs"] and mission.n_ineq > 0:
         eps_dyn = np.concatenate([
             ctcs_mult_state * eps_dyn,
             ctcs_mult_cnst * method.conv["eps_path"],
@@ -269,8 +269,8 @@ def check_convergence_tolerance(problem, subprob, O):
     chk_aux_2  = np.max([np.max(W_aux  @ conv_aux_nl[k].reshape(-1, 1))  for k in range(N)]) if conv_aux_nl.size  else 0.0
 
     # === Convergence mode selection
-    ctcs      = method.bools["ctcs"]
-    flag_conv = method.bools["flag_conv"]
+    ctcs      = method.flags["ctcs"]
+    flag_conv = method.flags["flag_conv"]
 
     if ctcs:
         chk_feas_1 = np.array([chk_vb_term, chk_vb_dyn])

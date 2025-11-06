@@ -27,9 +27,9 @@ def config_params():
     params['rhoe']      = 1.3
     params['H']         = 7e3
     params['beta']      = 1.0 / params['H']
-    params['bools']     = {'earth_rot': 1}
+    params['flags']     = {'earth_rot': 1}
     sidereal_day_s      = 23 * 3600 + 56 * 60 + 4
-    params['Omega']     = 2 * np.pi / sidereal_day_s * params['bools']['earth_rot']
+    params['Omega']     = 2 * np.pi / sidereal_day_s * params['flags']['earth_rot']
 
     # === Vehicle mass & reference geometry ===
     params['mass']      = 54431.0  # C:\Users\chris\hypersonic_entry_opt\entry_problems\missions\ghame\config_params_vehicle.m    
@@ -43,7 +43,7 @@ def config_params():
     params['alpha_hardmin'] = np.deg2rad(-5)    # [rad], angle-of-attack hard lower bound
     params['alpha_slack']   = np.deg2rad(0)     # [rad], angle-of-attack slack from given f(v)
     params['alpha_dot_max'] = np.deg2rad(1)     # deg per sec
-    params['bools']         = {'aoa_vb': 0}     
+    params['flags']         = {'aoa_vb': 0}     
 
     # === Nondimensionalization ===
     if params['nondim_on']:

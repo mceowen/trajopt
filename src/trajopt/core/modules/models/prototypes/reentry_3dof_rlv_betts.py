@@ -56,7 +56,7 @@ def config_params():
     params['m']         = 2             # should this be 2  (was 1)
     params['T_init']    = 2000.0        
 
-    params['bools'] = {
+    params['flags'] = {
         'earth_rot': 1,
         'init_ctrl': 0,
         'aoa_vb': 0,
@@ -72,11 +72,11 @@ def config_params():
     params['H']         = 7254.24
     params['beta']      = 1.0 / params['H']
     params['day']       = 23*3600+56*60+4
-    params['omega']     = 2*np.pi/params['day'] * params['bools']['earth_rot']
+    params['omega']     = 2*np.pi/params['day'] * params['flags']['earth_rot']
     params['mu_earth']  = 3.986031954093051e14
 
     # === Define scaling choices === 
-    # buff_dyn is in params['bools']
+    # buff_dyn is in params['flags']
 
     # === Vehicle mass & reference geometry ===
     params['Kq']            = 1.2035e-5             # [-], htrt coeff
@@ -524,7 +524,7 @@ def generate_initial_guess(params):
     else:
         raise ValueError('Undefined case_flag!')
     
-    if params['bools']['buff_dyn'] in ['term']:
+    if params['flags']['buff_dyn'] in ['term']:
         sol = solve_ivp(lambda t, x: system_dynamics(t, x, us_init, params, ts_init), 
                         (ts_init[0], ts_init[-1]),
                         params['z0s'],
@@ -555,7 +555,7 @@ def generate_initial_guess(params):
     params['aero_init'] = aero_init
 
     """
-    if params['bools']['ctcs']:
+    if params['flags']['ctcs']:
         params = ctcs_initial_guess(params)
     """
 

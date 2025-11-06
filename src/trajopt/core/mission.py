@@ -18,7 +18,7 @@ class Mission:
         
         mission_config         = config["mission"]
         self.mission_name      = mission_config["mission_name"]
-        self.bools             = mission_config["bools"]
+        self.flags             = mission_config['flags']
         self.nfz_option_list   = mission_config["nfz_option_list"]
         self.zi                = mission_config["zi"]
         self.zi_idx            = mission_config["zi_idx"]
@@ -56,6 +56,8 @@ class Mission:
         self.vehicle           = mission_config["vehicle"]
 
         self.obs = {}
+
+        self.custom_modules   = mission_config.get("custom_modules", None)
 
         # ===============================================================
         # point to module and corresponding methods based on configs
@@ -97,75 +99,117 @@ class Mission:
     def set_custom_params(self):
         return self._set_custom_params(self.problem)
 
+    # ===============================================================
+    # UPDATE PARAMETERS
+    # ===============================================================
     def update_mission_params(self):
         method = self.problem.method
+        problem = self.problem
 
-        # ===============================================================
-        # function setup
-        # ===============================================================
+        # ------------------------------------------------------------
+        # Try to import example-level custom overrides
+        # ------------------------------------------------------------
+        custom_mission_module = None
+        try:
+            example_name = getattr(problem, "name", self.mission_name)
+            if example_name:
+                custom_mission_module = importlib.import_module(
+                    f"trajopt.examples.{example_name}.custom"
+                )
+        except ModuleNotFoundError:
+            pass
 
-        # set cost function
-        self._cost = self.mission_module.cost
-        self._analytical_cost = self.mission_module.analytical_cost
+        # ------------------------------------------------------------
+        # Load YAML custom module mappings (if present)
+        # ------------------------------------------------------------
+        custom_map = self.custom_modules
+        yaml_funcs = None
 
-        # set linearized cost function
-        if method.bools["auto_jac"]:
+        if custom_map is not None:
+            yaml_funcs = {}
+            for key, path in custom_map.items():
+                try:
+                    mod_path, attr = path.rsplit(".", 1)
+                    mod = importlib.import_module(mod_path)
+                    yaml_funcs[key] = getattr(mod, attr)
+                except Exception as e:
+                    print(f"⚠️ Could not import custom mission module for '{key}' from {path}: {e}")
+
+        # literal None if not defined
+        self.custom_modules = yaml_funcs if yaml_funcs else None
+
+        # unified resolver: YAML > custom.py > base module
+        def _resolve_function(name: str):
+            if self.custom_modules and name in self.custom_modules:
+                return self.custom_modules[name]
+            if custom_mission_module and hasattr(custom_mission_module, name):
+                return getattr(custom_mission_module, name)
+            return getattr(self.mission_module, name)
+
+        # ------------------------------------------------------------
+        # Cost & Linearized Cost
+        # ------------------------------------------------------------
+        self._cost = _resolve_function("cost")
+        self._analytical_cost = _resolve_function("analytical_cost")
+
+        if method.flags["auto_jac"]:
             self._lin_cost = convexify.generate_jacobians(self._cost)
         else:
             self._lin_cost = self._analytical_cost
 
-        if self.bools["aero_type"] != 'none':
-            if method.bools["jax_dyn"]:
-                self._nonlinear_aero = self.mission_module.nonlinear_aero_jax
+        # ------------------------------------------------------------
+        # Aerodynamics
+        # ------------------------------------------------------------
+        if self.flags["aero_type"] != "none":
+            if method.flags["jax_dyn"]:
+                self._nonlinear_aero = _resolve_function("nonlinear_aero_jax")
             else:
-                self._nonlinear_aero = self.mission_module.nonlinear_aero
+                self._nonlinear_aero = _resolve_function("nonlinear_aero")
         else:
             self._nonlinear_aero = None
 
-        # set custom inputs
-        self._set_custom_params = self.mission_module.set_custom_params
-        self._custom_inputs = self.mission_module.custom_inputs
-        self._custom_variables = self.mission_module.custom_variables
-        self._custom_constraints = self.mission_module.custom_constraints
-        self._custom_cost = self.mission_module.custom_cost
+        # ------------------------------------------------------------
+        # Custom Input/Variable/Constraint/Cost
+        # ------------------------------------------------------------
+        self._set_custom_params = _resolve_function("set_custom_params")
+        self._custom_inputs = _resolve_function("custom_inputs")
+        self._custom_variables = _resolve_function("custom_variables")
+        self._custom_constraints = _resolve_function("custom_constraints")
+        self._custom_cost = _resolve_function("custom_cost")
 
-        # ===============================================================
-        # nondim parameters
-        # ===============================================================
-        # TODO (carlos): this only contains things necessary for quadrotor example
-        # need to add setup for all non-custom params soon
-
+        # ------------------------------------------------------------
+        # Continue with the rest of nondim and constraint setup
+        # ------------------------------------------------------------
+        method = self.problem.method
+        # nondimensionalization
         self.M_zi = method.nondim["M"]["state"]["d2nd"][np.ix_(self.zi_idx, self.zi_idx)]
         self.M_zf = method.nondim["M"]["state"]["d2nd"][np.ix_(self.zf_idx, self.zf_idx)]
-
         self.zi = self.M_zi @ self.zi
-        self.zf = self.M_zf @ self.zf  
+        self.zf = self.M_zf @ self.zf
 
         M_z_min = method.nondim["M"]["state"]["d2nd"][np.ix_(self.z_min_idx, self.z_min_idx)]
         M_z_max = method.nondim["M"]["state"]["d2nd"][np.ix_(self.z_max_idx, self.z_max_idx)]
-        
         self.z_min = M_z_min @ self.z_min
         self.z_max = M_z_max @ self.z_max
 
-        if self.bools["init_ctrl"] == 1:
+        if self.flags["init_ctrl"] == 1:
             self.ui = method.nondim["M"]["ctrl"]["d2nd"] @ self.ui
             self.uf = method.nondim["M"]["ctrl"]["d2nd"] @ self.uf
 
         M_u_min = method.nondim["M"]["ctrl"]["d2nd"][np.ix_(self.u_min_idx, self.u_min_idx)]
         M_u_max = method.nondim["M"]["ctrl"]["d2nd"][np.ix_(self.u_max_idx, self.u_max_idx)]
-        
         self.u_min = M_u_min @ self.u_min
         self.u_max = M_u_max @ self.u_max
-        
+
         M_udot_max = method.nondim["M"]["ctrl"]["d2nd"][np.ix_(self.udot_max_idx, self.udot_max_idx)]
         self.udot_max = M_udot_max @ self.udot_max * method.nondim["nt"]
 
         self.obs["posc"] = self.obs["posc"] / method.nondim["nd"]
         self.obs["rc"]   = self.obs["rc"]   / method.nondim["nd"]
 
-        # ===============================================================
-        # constraint bookkeeping
-        # ===============================================================
+        # ------------------------------------------------------------
+        # Constraint bookkeeping
+        # ------------------------------------------------------------
         self.n_init       = len(self.zi_idx)
         self.n_init_ineq  = len(self.zi_min_idx) + len(self.zi_max_idx)
         self.n_term       = len(self.zf_idx)
@@ -182,10 +226,12 @@ class Mission:
 
         self.set_custom_params()
 
+    # =============================================================
+
     # TODO: maybe this can be cleaner
     def initialize_nfz(self):
         # extracts nfz_idx which is neces
-        nfz_option     = self.bools["flag_nfz"]
+        nfz_option     = self.flags["flag_nfz"]
         xc             = self.nfz_option_list[nfz_option]["xc"]
         yc             = self.nfz_option_list[nfz_option]["yc"]
 

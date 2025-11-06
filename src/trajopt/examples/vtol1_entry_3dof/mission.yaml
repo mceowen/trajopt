@@ -4,7 +4,7 @@ mission_name: "vtol"
 planet_name: "earth"
 vehicle_name: "vtol"
 
-bools:
+flags:
   flag_nfz: 0
   init_ctrl: 0
   final_ctrl: 0
@@ -60,8 +60,8 @@ uf_idx: []
 udot_max: [10]
 udot_max_idx: [0]
 
-path_lim: [15e5/45, 18e3, 2.5]
-path_idx: [0, 1, 2]
+path_lim: [] #[15e5/45, 18e3, 2.5]
+path_idx: [] #[0, 1, 2]
 aux_idx: []
 
 custom_input_dict: {}

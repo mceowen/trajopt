@@ -30,7 +30,7 @@ def config_main():
     config['model_type'] = 'quadrotor_3dof'
     config['case_flag'] = 1  # 1: single integrator
 
-    config['bools'] = {
+    config['flags'] = {
         'opt': 1,
         'plot': 1,
         'multiplot': 0,
@@ -44,7 +44,7 @@ def config_main():
     config['dataset_id'] = ''
 
     # --- Plot settings (placeholder) --- TODO
-    if config['bools']['setfig_paper']:
+    if config['flags']['setfig_paper']:
         # In Python, you would use matplotlib.rcParams or seaborn.set_context()
         pass
 
@@ -52,7 +52,7 @@ def config_main():
     config['params'] = {}
     config['params']['N'] = 40
 
-    config['params']['bools'] = {
+    config['params']['flags'] = {
         'flag_nfz': 0,          # 0, 1, 2
         'flag_autotune': '0',   # '0', '1', '2', '3', 'al-scvx'
         'free_final_time': 0,   # 0, 1
@@ -83,7 +83,7 @@ def config_main():
     config['paths']['problem_path'] = str(model_path / case_path)
     config['paths']['data_path'] = f"data/{config['model_type']}/"
 
-    if config['bools']['multiplot']:
+    if config['flags']['multiplot']:
         dataset_path = Path(config['paths']['data_path']) / f"dataset{config['dataset_id']}/iterations/"
     else:
         dataset_path = Path(config['paths']['data_path']) / f"dataset{config['dataset_id']}/standalone/"
@@ -125,7 +125,7 @@ def ocp(config):
     problem["cost"]     = params["cost"]
     problem["cost_init"] = problem["cost"](params["ts_init"], params["zs_init"], params["us_init"])
 
-    if params["method"]["bools"]["auto_jac"]:
+    if params["method"]['flags']["auto_jac"]:
         problem["lin_cost"] = convexify.generate_jacobians(
             lambda ts, zs, us: problem["cost"](ts, zs, us, problem),
             problem
@@ -136,7 +136,7 @@ def ocp(config):
     # Dynamics
     problem["xdot"] = lambda ts, zs, us, t_vec: system_dynamics(ts, zs, us, problem, t_vec)
 
-    if params["method"]["bools"]["auto_jac"]:
+    if params["method"]['flags']["auto_jac"]:
         problem["lin_dyn"] = convexify.generate_jacobians(
             lambda ts, zs, us: system_dynamics(ts, zs, us, problem),
             problem
@@ -148,7 +148,7 @@ def ocp(config):
     problem["mission"]["path_lim"] = params["mission"]["path_lim"]
     problem["P"] = lambda ts, zs, us, t_vec: nonlinear_inequality_constraints(ts, zs, us, problem)
 
-    if params["method"]["bools"]["auto_jac_cnst"]:
+    if params["method"]['flags']["auto_jac_cnst"]:
         problem["lin_constr"] = convexify.generate_jacobians(
             lambda ts, zs, us: nonlinear_inequality_constraints(ts, zs, us, problem),
             problem
@@ -176,10 +176,10 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     # Initialize
     params = defaults.set_params_default(config)
     params['case_flag']                = 1    # case1: bank angle only
-    params['bools']['auto_jac']        = 0    # (1=symbolic jacobians for dynamics, 0=analytical)
-    params['bools']['auto_jac_aero']   = 0    # (1=symbolic jacobians for aerodynamics, 0=analytical)
-    params['bools']['auto_jac_cnst']   = 0    # (1=symbolic jacobians for constraints, 0=analytical)
-    params['bools']['init_ctrl']       = 0
+    params['flags']['auto_jac']        = 0    # (1=symbolic jacobians for dynamics, 0=analytical)
+    params['flags']['auto_jac_aero']   = 0    # (1=symbolic jacobians for aerodynamics, 0=analytical)
+    params['flags']['auto_jac_cnst']   = 0    # (1=symbolic jacobians for constraints, 0=analytical)
+    params['flags']['init_ctrl']       = 0
 
     # Problem params
     params['n'] = 4
@@ -196,11 +196,11 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     # Path /NFZ constraints
     #======================
     # no fly zones, specified by position and radius [rad]
-    if params['bools']['flag_nfz'] == 1:
+    if params['flags']['flag_nfz'] == 1:
         xc = np.array([5])
         yc = np.array([4])
         rc = np.array([2])
-    elif params['bools']['flag_nfz'] == 2:
+    elif params['flags']['flag_nfz'] == 2:
         xc = np.array([2.5, 5,  2.5, 5.5,  8,  5.5])  # 5
         yc = np.array([2,   2.5,  5, 5.25, 5.5, 8])   # 4
         rc = np.ones(xc.size)  # 2, 1
@@ -270,7 +270,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     #======================================
     # Initialize trajectory (initial guess)
     #======================================
-    if params['bools']['free_final_time'] and not params['bools']['buff_dyn']:
+    if params['flags']['free_final_time'] and not params['flags']['buff_dyn']:
         us_range = np.ones((params['m'], 2)) 
         # need to manually set the left-hand side vector to a column vector for multiplication to work
         params = guess.nonlinear_initial_guess(us_range, params)
@@ -278,7 +278,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
         params = guess.waypoint_initial_guess(params) 
         params['us_init'] = np.ones((params['m'], params['N']))
 
-    if params['bools']['ctcs']:
+    if params['flags']['ctcs']:
         params = guess.ctcs_initial_guess(params)
 
     #============================================
@@ -303,16 +303,16 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     params['weights']['wtr_u'] = 0 if np.isinf(params['weights']['alpha_u']) else 1 / (2 * params['weights']['alpha_u'])
 
     # === Autotune modes (flag_autotune ∈ {0,2,3,al-scvx}) ===
-    if str(params['bools']['flag_autotune']) in {'0', '2', '3', 'al-scvx'}:
+    if str(params['flags']['flag_autotune']) in {'0', '2', '3', 'al-scvx'}:
 
         params['weights'].setdefault('beta', 1)
         params['weights'].setdefault('gamma', 1e-1)
 
         # --- Buffer weights ---
-        if str(params['bools']['flag_autotune']) in {'0', 'al-scvx'}:
+        if str(params['flags']['flag_autotune']) in {'0', 'al-scvx'}:
             if 'wbuff' not in params['weights']:
                 wbuff = 1e2
-                if str(params['bools']['flag_autotune']) == '0':
+                if str(params['flags']['flag_autotune']) == '0':
                     w_nfz = wbuff / params['weights']['w_fac_N']
                     w_dyn = 1e5 * wbuff / params['weights']['w_fac_Nm1']
                     w_term = 1e2 * wbuff
@@ -333,8 +333,8 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
 
         params['weights']['W_nfz'] += w_nfz
 
-        if params['bools']['free_final_time']:
-            buff_dyn = str(params['bools'].get('buff_dyn', ''))
+        if params['flags']['free_final_time']:
+            buff_dyn = str(params['flags'].get('buff_dyn', ''))
             if buff_dyn in {'l1', 'l2'}:
                 params['weights']['W_dyn'] += w_dyn
             elif buff_dyn in {'quad-1', 'quad-2', 'quad-3'}:
@@ -344,21 +344,21 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
                 params['weights']['W_term'] += w_term
 
     # === Autotune mode: {1,3,al-scvx} ===
-    if str(params['bools']['flag_autotune']) in {'1', '3', 'al-scvx'}:
+    if str(params['flags']['flag_autotune']) in {'1', '3', 'al-scvx'}:
 
         params['weights'].setdefault('beta', 1)
         params['weights'].setdefault('gamma', 1e-1)
 
         params['weights']['dual_nfz'] += params['weights']['eps_nonzero1']
 
-        if params['bools']['free_final_time']:
-            buff_dyn = str(params['bools'].get('buff_dyn', ''))
+        if params['flags']['free_final_time']:
+            buff_dyn = str(params['flags'].get('buff_dyn', ''))
             if buff_dyn == 'term':
                 params['weights']['dual_term'] += params['weights']['eps_nonzero1']
             else:
                 params['weights']['dual_dyn'] += params['weights']['eps_nonzero1']
 
-                if str(params['bools'].get('buff_dyn_dual', '')) == 'l1':
+                if str(params['flags'].get('buff_dyn_dual', '')) == 'l1':
                     params['weights']['dual_plus'] += params['weights']['eps_nonzero1']
                     params['weights']['dual_minus'] += params['weights']['eps_nonzero1']
 
@@ -705,7 +705,7 @@ def set_nondim_params(params): # TODO: Test
     n = params['n']
     m = params['m']
 
-    if params['bools']['nondim']:
+    if params['flags']['nondim']:
         # set nondim params
         nd = 10
         nv = 10

@@ -79,8 +79,8 @@ def subprob_variable_scaling(problem, local_vars):
     n               = model.nz
     m               = model.m
     N               = method.N
-    bool_dev_var    = method.bools["dev_var"]
-    var_scl_flag    = method.bools["var_scl_flag"]
+    bool_dev_var    = method.flags["dev_var"]
+    var_scl_flag    = method.flags["var_scl_flag"]
 
     zs_ref          = I["zs_ref"]
     us_ref          = I["us_ref"]
@@ -240,7 +240,7 @@ if __name__ == "__main__":
             "nz": 3,
             "m": 2,
             "N": 4,
-            "bools": {"dev_var": True, "var_scl_flag": 1},
+            'flags': {"dev_var": True, "var_scl_flag": 1},
             "z_max": np.array([1, 1, 1]),
             "z_min": np.array([0, 0, 0]),
             "u_max": np.array([1, 1]),

@@ -23,7 +23,7 @@ def autotune1(problem, local_vars, O):
     dual_term = local_vars["dual_term"]
 
     # Hyperparameters
-    if method.bools["stepsize_auto_dual"]:
+    if method.flags["stepsize_auto_dual"]:
         beta = gamma = 1 / iter_num
     else:
         beta = method.weights["beta"]
@@ -102,9 +102,9 @@ def autotune2(problem, local_vars, O):
     eps_feas_dyn = method.conv["eps_dyn"]
 
     eps_nonzero2 = method.weights["eps_nonzero2"]
-    flag_Wmemory = method["bools"]["flag_Wauto_memory"]
+    flag_Wmemory = method['flags']["flag_Wauto_memory"]
 
-    buff_dyn = method["bools"]["buff_dyn"]
+    buff_dyn = method['flags']["buff_dyn"]
 
     path_idx = mission.path_idx
     nfz_idx = mission.nfz_idx
@@ -249,7 +249,7 @@ if __name__ == "__main__":
 
     problem = {
         "params": {
-            "bools": {
+            'flags': {
                 "stepsize_auto_dual": True
             },
             "weights": {
@@ -300,7 +300,7 @@ if __name__ == "__main__":
 
     problem = {
         "params": {
-            "bools": {
+            'flags': {
                 "flag_Wauto_memory": 0,
                 "buff_dyn": True
             },
