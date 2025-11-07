@@ -1,15 +1,48 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.10"]
 build-backend = "hatchling.build"
 
 [project]
 name = "trajopt"
 version = "0.0.1"
-description = "TrajOpt"
+description = "Trajectory optimization research and development framework"
+readme = "README.md"
 requires-python = ">=3.8"
-authors = [{ name = "Skye Mceowen", email = "skye@mceowen.io" }]
-dependencies = ["setuptools"]
+license = { text = "MIT" }
 
+authors = [
+    { name = "Skye Mceowen", email = "skye@mceowen.io" }
+]
+
+# -------------------------------------------------------------------------
+# Core dependencies: installed automatically via pip install .
+# -------------------------------------------------------------------------
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "cvxpy>=1.4",
+    "jax>=0.4",
+    "pyyaml>=6.0",
+    "matplotlib>=3.8",
+    "setuptools>=61.0",
+]
+
+# Optional dependency groups (install via pip install .[dev])
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "mypy",
+    "ruff",
+]
+
+[project.urls]
+Homepage =      "https://github.com/skye/trajopt"
+Repository =    "https://github.com/skye/trajopt"
+
+# -------------------------------------------------------------------------
+# scikit-build optional (if you use it for compiled C/C++ extensions)
+# -------------------------------------------------------------------------
 [tool.scikit-build]
 install.components = ["python"]
 wheel.install-dir = "trajopt"
