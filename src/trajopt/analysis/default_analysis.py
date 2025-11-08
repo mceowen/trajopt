@@ -46,9 +46,7 @@ def perform_default_analysis(problem):
     odesettings = {"atol": 1e-12, "rtol": 1e-12}
     N_dense = 20 * N
 
-    iters = []
     for data in iter_data:
-        iter_dict = {}
         
         # get reference trajectory for this iteration (in nondimensional coordinates)
         ts_ref = np.asarray(data['ts_ref'])
@@ -75,24 +73,20 @@ def perform_default_analysis(problem):
             **odesettings
         )
         
-        iter_dict['t_nl'] = t_dense
-        iter_dict['z_nl'] = sol.y.T @ nondim['M']['state']['nd2d']
-        iter_dict['u_nl'] = u_ref_dense
+        data['t_nl'] = t_dense
+        data['z_nl'] = sol.y.T @ nondim['M']['state']['nd2d']
+        data['u_nl'] = u_ref_dense
 
-        iter_dict['t_ref'] = data['ts_ref'] * nondim['nt']
-        iter_dict['z_ref'] = data['zs_ref'][:, :n] @ nondim['M']['state']['nd2d']
-        iter_dict['u_ref'] = data['us_ref'] @ nondim['M']['ctrl']['nd2d']
+        data['t_ref'] = data['ts_ref'] * nondim['nt']
+        data['z_ref'] = data['zs_ref'][:, :n] @ nondim['M']['state']['nd2d']
+        data['u_ref'] = data['us_ref'] @ nondim['M']['ctrl']['nd2d']
 
         if 'ts' in data:
-            iter_dict['t'] = data['ts'] * nondim['nt']
-            iter_dict['z'] = data['zs'][:, :n] @ nondim['M']['state']['nd2d']
-            iter_dict['u'] = data['us'] @ nondim['M']['ctrl']['nd2d']
-            iter_dict['weights'] = data['weights']
-            iter_dict['conv_data'] = {k: v for k, v in data['conv_data'].items() if k != 'soln'}
+            data['t'] = data['ts'] * nondim['nt']
+            data['z'] = data['zs'][:, :n] @ nondim['M']['state']['nd2d']
+            data['u'] = data['us'] @ nondim['M']['ctrl']['nd2d']
 
-        iters.append(iter_dict)
-
-    return {'iters': iters, 'params': params_dict}
+    return {'iters': iter_data, 'params': params_dict}
 
 
 # contents of iters dict from subproblem
