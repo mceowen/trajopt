@@ -6,6 +6,7 @@ import numpy as np
 import importlib
 
 import trajopt.core.modules.methods.convexify as convexify
+import trajopt.utils.tools as tools
 
 class Model:
 
@@ -28,7 +29,10 @@ class Model:
         self.base_unit_labels = model_config["base_unit_labels"]
         self.flags            = model_config['flags']
 
-        self.custom_modules   = model_config.get("custom_modules", None)
+        self.obs              = model_config["obs"]
+
+        self.custom_modules               = model_config.get("custom_modules", None)
+        self.constraint_config_list       = model_config.get("constraints", None)
 
         # =================================================================
         # point to module containing corresponding methods based on configs
@@ -43,22 +47,6 @@ class Model:
 
     def dynamics(self, ts, zs, us, t_vec=None):
         return self._dynamics(ts, zs, us, self.problem, t_vec)
-
-    def lin_dyn(self, ts, zs, us):
-
-        method = self.problem.method
-
-        if method.flags["jax_dyn"] == 1:
-            return self._lin_dyn(ts, zs, us)
-
-        else:
-            return self._lin_dyn(ts, zs, us, self.problem)
-
-    def nonlinear_inequality_constraints(self, ts, zs, us):
-        return self._nonlinear_inequality_constraints(ts, zs, us, self.problem)
-
-    def lin_constr(self, ts, zs, us):
-        return self._lin_constr(ts, zs, us, self.problem)
     
     def update_model_params(self):
         """
@@ -127,34 +115,40 @@ class Model:
         # System Dynamics
         # ------------------------------------------------------------
         if method.flags.get("jax_dyn", 0):
-            self._dynamics = _resolve_function("system_dynamics_jax")
+            self._dynamics = _resolve_function("dynamics_jax")
         else:
-            self._dynamics = _resolve_function("system_dynamics")
+            self._dynamics = _resolve_function("dynamics")
 
         # ------------------------------------------------------------
         # Linearized Dynamics
         # ------------------------------------------------------------
         if method.flags.get("jax_dyn", 0):
-            self._lin_dyn = convexify.generate_lin_sys_jax(self._dynamics, problem)
+            f, dfcn_dz, dfcn_du = convexify.linearize_jax(self._dynamics, problem)
+
+            def lin_dyn(ts, zs, us):
+                return f(zs, us), dfcn_dz(zs, us), dfcn_du(zs, us)
+
         else:
-            self._lin_dyn = _resolve_function("analytical_linsys")
+            _lin_dyn = _resolve_function("analytical_linsys")
+
+            def lin_dyn(ts, zs, us):
+                return _lin_dyn(ts, zs, us, problem)
+
+        self.lin_dyn = lin_dyn
 
         # ------------------------------------------------------------
-        # Nonlinear Inequality Constraints
+        # get constraints from configs and convexify them
         # ------------------------------------------------------------
-        self._nonlinear_inequality_constraints = _resolve_function(
-            "nonlinear_inequality_constraints"
-        )
 
-        # ------------------------------------------------------------
-        # Linearized Inequality Constraints
-        # ------------------------------------------------------------
-        if method.flags.get("auto_jac_cnst", 0):
-            self._lin_constr = convexify.generate_jacobians(
-                self.nonlinear_inequality_constraints
-            )
-        else:
-            self._lin_constr = _resolve_function("analytical_inequality_constraints")
+        self.constraints = []
+        for constraint_config in self.constraint_config_list:
+            self.constraints.append(Constraint(yaml_config=constraint_config))
+
+        convexify.convexify_constraints(problem)
+
+        self.nonconvex_nodal_constraints = [c for c in self.constraints if not c.convex and not c.always]
+        self.nonconvex_ct_constraints    = [c for c in self.constraints if not c.convex and     c.always]
+        self.convex_constraints          = [c for c in self.constraints if     c.convex]
 
         # ------------------------------------------------------------
         # CTCS / state bookkeeping
@@ -165,4 +159,31 @@ class Model:
             self.nz = self.n
         mission.n_dyn = self.nz
 
+class Constraint:
+    def __init__(self, func=None, yaml_config=None, **kwargs):
+        
+        # constraint configs mainly pull from config files, but this class can also be used
+        # to define constraints from other places like the obstacle constraints
+        if yaml_config is not None:
+            self.convex     = yaml_config.get('convex', 0)
+            self.always     = yaml_config.get('always', 0) # "always", "now"
+            self.auto_diff  = yaml_config.get('auto_diff', 1)
+            self.type       = yaml_config.get('type', 'inequality')
+            self.dimension  = yaml_config.get('dimension', 0)
+            self.name       = yaml_config.get('analytical_affine_approximation', None).split('.')[-1]
 
+            # import functions from config strings
+            self.func                 = tools._import_from_string(yaml_config.get('function', None))
+            self.analytical_affine_approximation = tools._import_from_string(yaml_config.get('analytical_affine_approximation', None))
+        
+        else:
+            self.convex     = kwargs.get('convex', 1)
+            self.always     = kwargs.get('when', 'always_discrete') # "always", "now"
+            self.auto_diff  = kwargs.get('auto_diff', 0)
+            self.type       = kwargs.get('type', 'inequality')
+            self.dimension  = kwargs.get('dimension', 0)
+            self.name       = func.__name__
+            
+            self.func       = func
+            self.analytical_affine_approximation = kwargs.get('analytical_affine_approximation', None)
+    

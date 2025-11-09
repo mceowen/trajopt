@@ -34,7 +34,7 @@ conv:
   eps_term_max: [10.0, 1.0, 1.0, 10, 1.0, 1.0]
   eps_defect: [0.01]
   eps_dyn: [10.0, 1.0, 1.0, 10.0, 1.0, 1.0]
-  iter_max: 10
+  iter_max: 50
 
 weights:
   w_cost: 50.0

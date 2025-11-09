@@ -19,7 +19,8 @@ class Mission:
         mission_config         = config["mission"]
         self.mission_name      = mission_config["mission_name"]
         self.flags             = mission_config['flags']
-        self.nfz_option_list   = mission_config["nfz_option_list"]
+        
+        # standard constraint parameters
         self.zi                = mission_config["zi"]
         self.zi_idx            = mission_config["zi_idx"]
         self.zf                = mission_config["zf"]
@@ -34,7 +35,6 @@ class Mission:
         self.z_max_idx         = mission_config["z_max_idx"]
         self.udot_max          = mission_config["udot_max"]
         self.udot_max_idx      = mission_config["udot_max_idx"]
-        self.nfz_idx           = mission_config["nfz_idx"]
         self.zi_min            = mission_config["zi_min"]
         self.zi_max            = mission_config["zi_max"]
         self.zi_min_idx        = mission_config["zi_min_idx"]
@@ -47,17 +47,40 @@ class Mission:
         self.u_max             = mission_config["u_max"]
         self.u_min_idx         = mission_config["u_min_idx"]
         self.u_max_idx         = mission_config["u_max_idx"]
-        self.path_lim          = mission_config["path_lim"]
-        self.path_idx          = mission_config["path_idx"]
-        self.aux_idx           = mission_config["aux_idx"]
+        
+        # dictionaries
+        self.path_limits       = mission_config["path_limits"]
+        self.aux_limits        = mission_config["aux_limits"]
         self.custom_input_dict = mission_config["custom_input_dict"]
 
         self.planet            = mission_config["planet"]
         self.vehicle           = mission_config["vehicle"]
+        self.obs               = mission_config["obs"]
 
-        self.obs = {}
+        self.cost_config_list = mission_config.get("costs", None)
 
         self.custom_modules   = mission_config.get("custom_modules", None)
+
+        # ------------------------------------------------------------
+        # Constraint bookkeeping
+        # ------------------------------------------------------------
+        self.n_init       = len(self.zi_idx)
+        self.n_term       = len(self.zf_idx)
+        self.n_init_ctrl  = len(self.ui_idx)
+        self.n_term_ctrl  = len(self.uf_idx)
+        self.n_init_ineq  = len(self.zi_min_idx) + len(self.zi_max_idx)
+        self.n_term_ineq  = len(self.zf_min_idx) + len(self.zf_max_idx)
+        self.n_ctrl       = len(self.u_min_idx)  + len(self.u_max_idx)
+        self.n_state      = len(self.z_min_idx)  + len(self.z_max_idx)
+        self.n_udot       = len(self.udot_max_idx)
+        self.n_path       = sum(1 if np.isscalar(v) else len(v) for v in self.path_limits.values())
+        self.n_nfz        = len(self.obs["xc"])
+        self.n_aux        = sum(1 if np.isscalar(v) else len(v) for v in self.aux_limits.values())
+        self.n_ineq       = self.n_path + self.n_nfz + self.n_aux
+
+        self.path_idx     = np.arange(self.n_path)
+        self.nfz_idx      = np.arange(self.n_path, self.n_path + self.n_nfz)
+        self.aux_idx      = np.arange(self.n_path + self.n_nfz, self.n_ineq)
 
         # ===============================================================
         # point to module and corresponding methods based on configs
@@ -72,26 +95,14 @@ class Mission:
     # member functions point to selected fcns from selected module
     # ===============================================================
     
-    def cost(self, ts, zs, us):
-        return self._cost(ts, zs, us, self.problem)
-
-    def lin_cost(self, ts, zs, us):
-        return self._lin_cost(ts, zs, us, self.problem)
-    
     def nonlinear_aero(self, ts, zs, us):
         return self._nonlinear_aero(ts, zs, us, self.problem)
 
-    def custom_inputs(self, problem, local_vars):
-        return self._custom_inputs(problem, local_vars)
+    def custom_constraints(self, subproblem):
+        return self._custom_constraints(subproblem)
 
-    def custom_variables(self, problem, local_vars):
-        return self._custom_variables(problem, local_vars)
-
-    def custom_constraints(self, problem, local_vars):
-        return self._custom_constraints(problem, local_vars)
-
-    def custom_cost(self, problem, local_vars):
-        return self._custom_cost(problem, local_vars)
+    def custom_cost(self, subproblem):
+        return self._custom_cost(subproblem)
     
     def get_cost_cnstr_nondim(self):
         return self._get_cost_cnstr_nondim(self.problem)
@@ -149,13 +160,12 @@ class Mission:
         # ------------------------------------------------------------
         # Cost & Linearized Cost
         # ------------------------------------------------------------
-        self._cost = _resolve_function("cost")
-        self._analytical_cost = _resolve_function("analytical_cost")
 
-        if method.flags["auto_jac"]:
-            self._lin_cost = convexify.generate_jacobians(self._cost)
-        else:
-            self._lin_cost = self._analytical_cost
+        self.costs = []
+        for cost_config in self.cost_config_list:
+            self.costs.append(Cost(yaml_config=cost_config))
+
+        convexify.convexify_costs(problem)
 
         # ------------------------------------------------------------
         # Aerodynamics
@@ -172,8 +182,6 @@ class Mission:
         # Custom Input/Variable/Constraint/Cost
         # ------------------------------------------------------------
         self._set_custom_params = _resolve_function("set_custom_params")
-        self._custom_inputs = _resolve_function("custom_inputs")
-        self._custom_variables = _resolve_function("custom_variables")
         self._custom_constraints = _resolve_function("custom_constraints")
         self._custom_cost = _resolve_function("custom_cost")
 
@@ -204,41 +212,33 @@ class Mission:
         M_udot_max = method.nondim["M"]["ctrl"]["d2nd"][np.ix_(self.udot_max_idx, self.udot_max_idx)]
         self.udot_max = M_udot_max @ self.udot_max * method.nondim["nt"]
 
-        self.obs["posc"] = self.obs["posc"] / method.nondim["nd"]
-        self.obs["rc"]   = self.obs["rc"]   / method.nondim["nd"]
-
-        # ------------------------------------------------------------
-        # Constraint bookkeeping
-        # ------------------------------------------------------------
-        self.n_init       = len(self.zi_idx)
-        self.n_init_ineq  = len(self.zi_min_idx) + len(self.zi_max_idx)
-        self.n_term       = len(self.zf_idx)
-        self.n_term_ineq  = len(self.zf_min_idx) + len(self.zf_max_idx)
-        self.n_ctrl       = len(self.u_min_idx)  + len(self.u_max_idx)
-        self.n_state      = len(self.z_min_idx)  + len(self.z_max_idx)
-        self.n_udot       = len(self.udot_max_idx)
-        self.n_path       = len(self.path_idx)
-        self.n_nfz        = len(self.nfz_idx)
-        self.n_aux        = len(self.aux_idx)
-        self.n_init_ctrl  = len(self.ui_idx)
-        self.n_term_ctrl  = len(self.uf_idx)
-        self.n_ineq       = self.n_path + self.n_nfz + self.n_aux
+        # TODO (CARLOS): make nondim correct for both distances and angles
+        self.obs["xc"] = self.obs["xc"] / method.nondim["nd"]
+        self.obs["yc"] = self.obs["yc"] / method.nondim["nd"]
+        self.obs["rc"] = self.obs["rc"] / method.nondim["nd"]
 
         self.set_custom_params()
 
-    # =============================================================
+class Cost:
+    def __init__(self, func=None, yaml_config=None, **kwargs):
+        
+        # constraint configs mainly pull from config files, but this class can also be used
+        # to define constraints from other places like the obstacle constraints
+        if yaml_config is not None:
+            self.convex     = yaml_config.get('convex', 0)
+            self.auto_diff  = yaml_config.get('auto_diff', 1)
+            self.name       = yaml_config.get('analytical_affine_approximation', None).split('.')[-1]
+            self.category   = yaml_config.get('category', "running")
 
-    # TODO: maybe this can be cleaner
-    def initialize_nfz(self):
-        # extracts nfz_idx which is neces
-        nfz_option     = self.flags["flag_nfz"]
-        xc             = self.nfz_option_list[nfz_option]["xc"]
-        yc             = self.nfz_option_list[nfz_option]["yc"]
-
-        self.nfz_idx = np.arange(0, xc.size)
-        self.n_nfz   = len(self.nfz_idx)
-
-        # initializes obs dictionary with dimensional values
-        # will be nondimmed in update_mission_params()
-        self.obs["rc"] = self.nfz_option_list[nfz_option]["rc"]
-        self.obs["posc"] = np.array([xc, yc])
+            # import functions from config strings
+            self.func = tools._import_from_string(yaml_config.get('function', None))
+            self.analytical_affine_approximation = tools._import_from_string(yaml_config.get('analytical_affine_approximation', None))
+        
+        else:
+            self.convex     = kwargs.get('convex', 1)
+            self.auto_diff  = kwargs.get('auto_diff', 0)
+            self.name       = func.__name__
+            self.category   = kwargs.get('category', "running")
+            
+            self.func       = func
+            self.analytical_affine_approximation = kwargs.get('analytical_affine_approximation', None)

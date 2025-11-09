@@ -44,6 +44,91 @@ def set_ltv_indices(problem):
     method.Bkp_ind_jax   = jnp.asarray(method.Bkp_ind)
     method.Sk_ind_jax    = jnp.asarray(method.Sk_ind)
 
+def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, problem):
+    mission = problem.mission
+    model = problem.model
+    method = problem.method
+    
+    if len(model.nonconvex_nodal_constraints) > 0:
+        
+        # Convert to JAX arrays upfront if any constraint uses JAX (auto_diff=1)
+        has_jax = any(c.auto_diff == 1 for c in model.nonconvex_nodal_constraints)
+        if has_jax:
+            ts_jax = jnp.asarray(t_ref)
+            zs_jax = jnp.asarray(z_ref)
+            us_jax = jnp.asarray(u_ref)
+        
+        # Preallocate stacked arrays
+        g    = np.zeros((method.N, mission.n_ineq))
+        dgdz = np.zeros((method.N, mission.n_ineq, model.n))
+        dgdu = np.zeros((method.N, mission.n_ineq, model.m))
+        
+        # Evaluate constraints at each timestep
+        for k in range(method.N):
+            tk = ts_jax[k] if has_jax else t_ref[k]
+            zk = zs_jax[k] if has_jax else z_ref[k]
+            uk = us_jax[k] if has_jax else u_ref[k]
+            
+            col_start = 0
+            for constraint in model.nonconvex_nodal_constraints:
+                col_end = col_start + constraint.dimension
+                
+                f, dfcn_dz, dfcn_du = constraint.affine_approximation(tk, zk, uk)
+                g[k, col_start:col_end]       = np.asarray(f)
+                dgdz[k, col_start:col_end, :] = np.asarray(dfcn_dz)
+                dgdu[k, col_start:col_end, :] = np.asarray(dfcn_du)
+                
+                col_start = col_end
+    else:
+        dgdz = dgdu = g = None
+    
+    return g, dgdz, dgdu
+
+def compute_linearized_costs(t_ref, z_ref, u_ref, problem):
+
+    mission = problem.mission
+    model = problem.model
+    method = problem.method
+    
+    if len(mission.costs) > 0:
+        has_jax = any(c.auto_diff == 1 for c in mission.costs)
+        if has_jax:
+            ts_jax = jnp.asarray(t_ref)
+            zs_jax = jnp.asarray(z_ref)
+            us_jax = jnp.asarray(u_ref)
+        
+        # preallocate stacked arrays (cost per timestep)
+        cost = np.zeros((method.N, 1, 1))
+        dcostdz = np.zeros((method.N, 1, model.n))
+        dcostdu = np.zeros((method.N, 1, model.m))
+
+        # evaluate costs at each timestep
+        for cost_fn in mission.costs:
+            if cost_fn.category == "running":
+                for k in range(method.N-1):
+                    tk = ts_jax[k] if has_jax else t_ref[k]
+                    zk = zs_jax[k] if has_jax else z_ref[k]
+                    uk = us_jax[k] if has_jax else u_ref[k]
+                    
+                    f, dfcn_dz, dfcn_du = cost_fn.affine_approximation(tk, zk, uk)
+                    cost[k, 0, 0] += np.asarray(f)
+                    dcostdz[k, 0, :] += np.asarray(dfcn_dz).flatten()
+                    dcostdu[k, 0, :] += np.asarray(dfcn_du).flatten()
+                
+            elif cost_fn.category == "terminal":
+                tk = ts_jax[-1] if has_jax else t_ref[-1]
+                zk = zs_jax[-1] if has_jax else z_ref[-1]
+                uk = us_jax[-1] if has_jax else u_ref[-1]
+                
+                f, dfcn_dz, dfcn_du = cost_fn.affine_approximation(tk, zk, uk)
+                cost[-1, 0, 0] += np.asarray(f)
+                dcostdz[-1, 0, :] += np.asarray(dfcn_dz).flatten()
+                dcostdu[-1, 0, :] += np.asarray(dfcn_du).flatten()
+    else:
+        cost = dcostdz = dcostdu = None
+    
+    return cost, dcostdz, dcostdu
+
 # Compute exact discretize for linear dynamic system
 def discretize_inv_foh(zs_ref, us_ref, dts_ref, problem):
     model = problem.model
@@ -128,7 +213,7 @@ def RHS_ltv(tau, lds, us_ref, dts_ref, problem):
         x           = lds[ k * method.lds0_size + method.z_ind ]
 
         # Extract continuous time Jacobians
-        Ac, Bc, fc  = convexify.compute_linsys_continuous(tau, x, u[k], problem)
+        fc, Ac, Bc = model.lin_dyn(tau, x, u[k])
 
         # Extract STM
         Phi_tau     = lds[ k * method.lds0_size + method.Ak_ind ].reshape(model.n, model.n)
@@ -174,7 +259,7 @@ def jit_jax_discretize(problem):
     Sk_ind0   = Bkp_ind0 + n*m
 
     # pull ltv dynamics
-    lin_sys = model.lin_dyn
+    lin_dyn = model.lin_dyn
 
     # nsub defines the number of sub *nodes* between knot points
     nsub_nodes = 30
@@ -195,11 +280,7 @@ def jit_jax_discretize(problem):
         u = a * us_k + b * us_kp
         sigma = dts_k
 
-        lin_info    = lin_sys(tau, x, u)
-
-        Ac = lin_info["dfcn_dz"]
-        Bc = lin_info["dfcn_du"]
-        fc = lin_info["fcn"]
+        fc, Ac, Bc    = lin_dyn(tau, x, u)
 
         P1_dot = (sigma * fc)
         P2_dot = (sigma * Ac @ phi_a).reshape((n*n,))
@@ -435,43 +516,3 @@ def RHS_ltv_ctcs(tau, lds, us_ref, dts_ref, problem):
         lds_dot[k * method.lds0_size + method.Sk_ind] = S_tau_dot
 
     return lds_dot
-
-# Example usage
-if __name__ == "__main__":
-
-     # Define dummy data for testing
-    params = {
-        "nz": 3,
-        "m": 2,
-        "N": 10
-    }
-
-    updated_params = set_ltv_indices(params)
-    print(updated_params)
-
-    # Define dummy inputs for testing
-    zs_ref = np.random.rand(3, 4)
-    us_ref = np.random.rand(4, 3)
-    dts_ref = np.random.rand(3)
-    problem = {
-        "params": {
-            "N": 4,
-            "n": 3,
-            "m": 3,
-            "lds0_size": 9,
-            "z_ind": slice(0, 3),
-            "Ak_ind": slice(3, 6),
-            "Bk_ind": slice(6, 9),
-            "Bkp_ind": slice(9, 12),
-            "Sk_ind": slice(12, 15),
-            "lds0": np.zeros(15),
-            'flags': {"ode_fixed_dt": False}
-        }
-    }
-
-    Ak, Bk, Bkp, Sk, zs_minus = discretize_inv_foh(zs_ref, us_ref, dts_ref, problem)
-    print(f"Ak: {Ak}")
-    print(f"Bk: {Bk}")
-    print(f"Bkp: {Bkp}")
-    print(f"Sk: {Sk}")
-    print(f"zs_minus: {zs_minus}")

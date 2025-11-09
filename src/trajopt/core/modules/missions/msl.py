@@ -15,50 +15,39 @@ jax.config.update("jax_enable_x64", True)
 # import marsgram_dens_lut as dens
 # ================================================================================
 
-def cost(ts, zs, us, problem):
-    '''
-    cost function: minimize terminal velocity
-    '''
-    
-    return zs[-1, 3]
+# =============================================================================
+# terminal cost
+# =============================================================================
 
-def analytical_cost(ts, zs, us, problem):
-    '''
-    analytical linearized cost function
-    '''
-    
-    mission = problem.mission
+def terminal_cost(ts, zs, us, problem):
+    return zs[3]
+
+def analytical_affine_approximation_terminal_cost(ts, zs, us, problem):
     model = problem.model
-    method = problem.method
+    
+    cost = terminal_cost(ts, zs, us, problem)
 
-    # Extract params
-    n = model.n
-    m = model.m
-    N = method.N
+    dcostdz = np.array([0, 0, 0, 1, 0, 0]).reshape(1, -1)
+    dcostdu = np.zeros((1, model.m))
 
-    ts = np.asarray(ts).flatten()
-    zs = np.asarray(zs)
-    us = np.asarray(us)
-    dt = np.diff(ts)
+    return cost, dcostdz, dcostdu
 
-    # Preallocate outputs
-    dcostdz = np.zeros((N, 1, n))
-    dcostdu = np.zeros((N, 1, m))
-    cost    = np.zeros((N, 1, 1))
+# =============================================================================
+# running cost
+# =============================================================================
 
-    # Last step (N) (minimize terminal velocity)
-    dcostdz[-1, 0, :] = np.array([0, 0, 0, 1, 0, 0])
-    dcostdu[-1]       = 0
-    cost[-1]          = zs[-1, 3]
+def running_cost(ts, zs, us, problem):
+    return 0.0
 
-    # Package into output dict
-    lincost = {
-        "dfcn_dz": dcostdz,
-        "dfcn_du": dcostdu,
-        "fcn":     cost     
-    }
+def analytical_affine_approximation_running_cost(ts, zs, us, problem):
+    model = problem.model
+    
+    cost = running_cost(ts, zs, us, problem)
 
-    return lincost
+    dcostdz = np.zeros((1, model.n))
+    dcostdu = np.zeros((1, model.m))
+
+    return cost, dcostdz, dcostdu
 
 def get_cost_cnstr_nondim(problem):
     '''
@@ -116,9 +105,9 @@ def nonlinear_aero_jax(ts, zs, us, problem):
 
     rho = atmosphere_model_jax(rs, problem)
 
-    rho_s = rho / (method.nondim["nm"] / method.nondim["nd"]**3)
-    sref_s = mission.vehicle["sref"]   / method.nondim["nd"]**2
-    bc_s = mission.vehicle["bc"]       / (method.nondim["nm"] / (method.nondim["nd"]**2))
+    rho_s = rho / (method.nondim["nm"] / method.nondim["nd"] ** 3)
+    sref_s = mission.vehicle["sref"] / method.nondim["nd"] ** 2
+    bc_s = mission.vehicle["bc"] / (method.nondim["nm"] / (method.nondim["nd"] ** 2))
 
     D    = 0.5 * (1 / bc_s) * rho_s * vs**2
     L    = D * mission.vehicle["LD"]
@@ -127,21 +116,11 @@ def nonlinear_aero_jax(ts, zs, us, problem):
 
     return {"L": L, "D": D, "alpha": alpha, "rho": rho}
 
-def custom_inputs(problem,local_vars):
+def custom_constraints(subproblem):
+    pass
 
-    return local_vars 
-
-def custom_variables(problem,local_vars): 
-
-    return local_vars 
-
-def custom_constraints(CNST,local_vars):
-
-    return CNST
-
-def custom_cost(PTR_COST,local_vars):
-
-    return PTR_COST
+def custom_cost(subproblem):
+    pass
 
 def set_custom_params(problem):
     pass

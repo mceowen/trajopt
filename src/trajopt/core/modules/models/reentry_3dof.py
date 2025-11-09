@@ -5,7 +5,7 @@ import trajopt.utils.tools as tools
 jax.config.update("jax_enable_x64", True)
 import trajopt.core.modules.models.obstacles     as obstacles
 
-def system_dynamics_jax(ts, zs, us, problem, t_vec=None):
+def dynamics_jax(ts, zs, us, problem, t_vec=None):
 
     mission = problem.mission
     model = problem.model
@@ -62,117 +62,26 @@ def system_dynamics_jax(ts, zs, us, problem, t_vec=None):
 
     return xDot
 
-def nonlinear_inequality_constraints(ts, zs, us, problem):
-    """
-    Nonlinear inequality constraints for reentry model.
-    Path constraints are explicit; NFZ constraints are handled via obstacles.py.
-    """
-
+def max_q(ts, zs, us, problem):
     mission = problem.mission
-    model = problem.model
+    method = problem.method
+    
+    rs = zs[0]
+    vs = zs[3]
+
+    rho = mission.mission_module.atmosphere_model_jax(rs, problem)
+    nv = method.nondim["nv"]
+
+    return  0.5 * rho * (vs * nv) ** 2 - mission.path_limits['qmax']
+
+def max_Q(ts, zs, us, problem):
+    mission = problem.mission
     method = problem.method
 
-    N       = tools.num_timesteps(zs)
-    n_nfz   = mission.n_nfz
-    n_path  = mission.n_path
+    rs = zs[0]
+    vs = zs[3]
 
-    # === Path constraints (explicit) ===
-    # Example: dynamic pressure and heating limits
-    if n_path > 0:
-        pass
-        # TODO -> fillme
-    else:
-        P_path = np.empty((N, 0))
+    rho = mission.mission_module.atmosphere_model_jax(rs, problem)
+    nv = method.nondim["nv"]
 
-    # === NFZ constraints (from obstacles module) ===
-    if n_nfz > 0:
-        P_nfz = obstacles.nfz_nonlinear(ts, zs, us, problem)
-    else:
-        # keep blank if mission defines none
-        P_nfz = np.empty((N, 0))
-
-    # === Stack all inequality constraints ===
-    if P_path.size or P_nfz.size:
-        P = np.hstack([P_path, P_nfz])
-    else:
-        P = np.empty((N, 0))
-
-    if zs.ndim == 1:
-        P = P.flatten()
-
-    return P
-
-
-def analytical_inequality_constraints(ts, zs, us, problem):
-    """
-    Analytical (linearized) inequality constraints for reentry model.
-    Path constraints explicit; NFZ constraints imported from obstacles.py.
-    """
-
-    mission = problem.mission
-    model = problem.model
-    method = problem.method
-
-    N         = tools.num_timesteps(zs)
-    n         = model.n
-    m         = model.m
-    n_path    = mission.n_path
-    n_nfz     = mission.n_nfz
-    path_idx  = mission.path_idx
-
-    # --- Scale path limits ---
-    scale = method.nondim["np_ineq"][:n_path] if n_path > 0 else np.array([])
-    path_lim_scaled = (
-        np.linalg.solve(np.diag(scale), mission.path_lim) if n_path > 0 else np.array([])
-    )
-
-    # --- Preallocate ---
-    fcn_all   = np.zeros((N, n_path + n_nfz))
-    dPdz_all  = np.zeros((N, n_path + n_nfz, n))
-    dPdu_all  = np.zeros((N, n_path + n_nfz, m))
-
-    path_data = {"P": [], "Praw": [], "dPdz": [], "dPdu": []}
-    nfz_data  = {"P": [], "dPdz": [], "dPdu": []}
-
-    # --- Handle 1D inputs ---
-    if zs.ndim == 1:
-        ts = np.array([ts])
-        zs = zs.reshape((1, -1))
-        us = us.reshape((1, -1))
-
-    for k in range(N):
-        tk = ts[k]
-        zk = zs[k]
-        uk = us[k]
-        rx_k, ry_k = zk[0], zk[1]
-        v_k = zk[3]
-
-        # === Path constraints ===
-        if n_path > 0:
-            # same order as nonlinear version
-            P_path = None # TODO -> fillme
-
-            fcn_all[k, :n_path] = P_path - path_lim_scaled
-            dPdz_all[k, :n_path, :] = None # TODO -> fillme
-            dPdu_all[k, :n_path, :] = None # TODO -> fillme
-
-    # === NFZ constraints (from obstacles module) ===
-    if n_nfz > 0:
-        nfz_block = obstacles.nfz_analytical(ts, zs, us, problem)
-        fcn_all[:, n_path:n_path + n_nfz] = nfz_block["fcn"]
-        dPdz_all[:, n_path:n_path + n_nfz, :] = nfz_block["dfcn_dz"]
-        dPdu_all[:, n_path:n_path + n_nfz, :] = nfz_block["dfcn_du"]
-
-        nfz_data["P"].append(nfz_block["fcn"])
-        nfz_data["dPdz"].append(nfz_block["dfcn_dz"])
-        nfz_data["dPdu"].append(nfz_block["dfcn_du"])
-
-    return {
-        "fcn": fcn_all,
-        "dfcn_dz": dPdz_all,
-        "dfcn_du": dPdu_all,
-        "data": {
-            "path": path_data,
-            "nfz": nfz_data,
-        },
-    }
+    return mission.vehicle["kQ"] * rho ** 0.5 * (vs * nv) ** 3 - mission.path_limits["max_Q"]

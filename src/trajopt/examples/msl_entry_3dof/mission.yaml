@@ -10,17 +10,9 @@ flags:
   final_ctrl: 0
   aero_type: 'exponential'  # 'exponential', 'jax_lookup', 'spline', 'none'
 
-# no fly zones options
-nfz_option_list:
-- xc: []
-  yc: []
-  rc: []
-
-- xc: [5]
-  yc: [4.0]
-  rc: [2.0]
-
-- xc: [2.5, 5.0, 2.5, 5.5, 8.0, 5.5]
+# no fly zones positions and radii
+obs:
+  xc: [2.5, 5.0, 2.5, 5.5, 8.0, 5.5]
   yc: [2.0, 2.5, 5.0, 5.25, 5.5, 8.0]
   rc: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
 
@@ -64,8 +56,29 @@ uf_idx: []
 udot_max: []
 udot_max_idx: []
 
-path_lim: []
-path_idx: []
-aux_idx: []
+path_limits:
+  max_q: 1000
+  max_Q: 2000
 
+path_limits: {}
+
+aux_limits: {}
+
+# custom input dictionary
 custom_input_dict: {}
+
+# custom modules
+custom_modules: {}
+
+costs:
+- fcn: "trajopt.core.modules.missions.msl.terminal_cost"
+  analytical_affine_approximation: "trajopt.core.modules.missions.msl.analytical_affine_approximation_terminal_cost"
+  convex: 1
+  auto_diff: 0
+  category: "terminal"
+
+- fcn: "trajopt.core.modules.missions.msl.running_cost"
+  analytical_affine_approximation: "trajopt.core.modules.missions.msl.analytical_affine_approximation_running_cost"
+  convex: 1
+  auto_diff: 0
+  category: "running"

@@ -9,6 +9,7 @@ import importlib
 import time
 import numpy as np
 import cvxpy as cp
+import jax.numpy as jnp
 
 # trajopt imports
 from trajopt.core.modules.methods import discretize as discretize
@@ -136,8 +137,9 @@ class Subproblem:
         self._build_constraints_once()
         self.cost_expr = self._build_cost_once()
 
-        # Optional custom hooks from model package
-        self._invoke_custom_functions()
+        # apply custom constraints and cost
+        mission.custom_constraints(self)
+        mission.custom_cost(self)
 
         # Compile CVXPY problem once
         self.subproblem = cp.Problem(cp.Minimize(self.cost_expr), self.constraints)
@@ -152,9 +154,7 @@ class Subproblem:
             "dts_ref": problem.method.dts_init,
             "ts_ref": problem.method.ts_init,
             "conv_data": {
-                "vb_path": np.zeros((self.N, mission.n_path)),
-                "vb_nfz":  np.zeros((self.N, mission.n_nfz)),
-                "vb_aux":  np.zeros((self.N, self.n_aux)),
+                "vb_ineq": np.zeros((self.N, mission.n_ineq)),
                 "vb_dyn":  np.zeros((self.N - 1, self.nz)),
                 "vb_term": np.zeros((self.n_term, 1)),
             },
@@ -219,9 +219,7 @@ class Subproblem:
             self.dT, self.dt = None, np.zeros((N - 1, 1))  # constant, not a Variable
 
         # Virtual buffers (None if zero-sized)
-        self.vb_path  = cp.Variable((N,  mission.n_path), name="vb_path")  if mission.n_path  > 0 else None
-        self.vb_nfz   = cp.Variable((N,  mission.n_nfz),  name="vb_nfz")   if mission.n_nfz   > 0 else None
-        self.vb_aux   = cp.Variable((N,  self.n_aux),     name="vb_aux")   if self.n_aux      > 0 else None
+        self.vb_ineq  = cp.Variable((N, mission.n_ineq), name="vb_ineq")   if mission.n_ineq  > 0 else None 
         self.vb_term  = cp.Variable(self.n_term,          name="vb_term")  if self.n_term     > 0 else None
 
         # Dynamics buffers (zeros if 'term')
@@ -398,15 +396,10 @@ class Subproblem:
             # Linearized inequality constraints (path + nfz + aux)
             n_ineq_cols = int(mission.n_path + mission.n_nfz + getattr(mission, "n_aux", 0))
             if n_ineq_cols > 0 and not flags["ctcs"] and self.dgdz is not None:
-                vb_parts = []
-                if self.vb_path is not None: vb_parts.append(self.vb_path[k])
-                if self.vb_nfz  is not None: vb_parts.append(self.vb_nfz[k])
-                if self.vb_aux  is not None: vb_parts.append(self.vb_aux[k])
-                vb_stack = cp.hstack(vb_parts) if vb_parts else 0.0
-
-                C.append(self.dgdz[k] @ self.dz[k] + self.dgdu[k] @ self.du[k] + self.g0[k] - vb_stack <= 0)
-                if str(self.flag_autotune) in {"1", "3", "al-scvx"} and vb_parts:
-                    C.append(vb_stack >= 0)
+        
+                C.append(self.dgdz[k] @ self.dz[k] + self.dgdu[k] @ self.du[k] + self.g0[k] - self.vb_ineq[k] <= 0)
+                if str(self.flag_autotune) in {"1", "3", "al-scvx"} and self.vb_ineq[k]:
+                    C.append(self.vb_ineq[k] >= 0)
 
         # Fixed-time tying
         if not self.free_T:
@@ -423,6 +416,7 @@ class Subproblem:
     # COST FUNCTION (DCP-safe)
     # ============================================================
     def _build_cost_once(self) -> cp.Expression:
+        mission, model, method = self.problem.mission, self.problem.model, self.problem.method
         """Full baseline cost: TRUE + TR + 0.5*VIRTUAL + DUAL; gated via flags & autotune."""
 
         # === TRUE cost (linearized objective) ===
@@ -444,15 +438,26 @@ class Subproblem:
                 VB += cp.sum_squares(cp.diag(self.W_term_sqrt) @ self.vb_term)
 
             # Path / NFZ / AUX (loop over time steps)
-            if self.vb_path is not None and self.n_path > 0:
+            if self.vb_ineq is not None and self.n_path > 0:
                 for k in range(self.N):
-                    VB += cp.sum_squares(cp.diag(self.W_path_sqrt[k, :]) @ self.vb_path[k])
-            if self.vb_nfz is not None and self.n_nfz > 0:
+                    # OLD FOR REFERENCE(FEEL FREE TO DELETE)
+                    # VB += cp.sum_squares(cp.diag(self.W_path_sqrt[k, :]) @ self.vb_path[k])
+                    
+                    VB += cp.sum_squares(cp.diag(self.W_path_sqrt[k, :]) @ self.vb_ineq[k, mission.path_idx])
+            
+            if self.vb_ineq is not None and self.n_nfz > 0:
                 for k in range(self.N):
-                    VB += cp.sum_squares(cp.diag(self.W_nfz_sqrt[k, :]) @ self.vb_nfz[k])
-            if self.vb_aux is not None and self.n_aux > 0:
+                    # OLD FOR REFERENCE(FEEL FREE TO DELETE)
+                    # VB += cp.sum_squares(cp.diag(self.W_nfz_sqrt[k, :]) @ self.vb_nfz[k])
+                    
+                    VB += cp.sum_squares(cp.diag(self.W_nfz_sqrt[k, :]) @ self.vb_ineq[k, mission.nfz_idx])
+            
+            if self.vb_ineq is not None and self.n_aux > 0:
                 for k in range(self.N):
-                    VB += cp.sum_squares(cp.diag(self.W_aux_sqrt[k, :]) @ self.vb_aux[k])
+                    # OLD FOR REFERENCE(FEEL FREE TO DELETE)
+                    # VB += cp.sum_squares(cp.diag(self.W_aux_sqrt[k, :]) @ self.vb_aux[k])
+                    
+                    VB += cp.sum_squares(cp.diag(self.W_nfz_sqrt[k, :]) @ self.vb_ineq[k, mission.aux_idx])
 
             # Dynamics (quadratic penalties)
             diff = self.vb_dyn_p - self.vb_dyn_m
@@ -472,9 +477,16 @@ class Subproblem:
         # === Dual costs ===
         DUAL = 0.0
         if self.flag_autotune in {"1", "3", "al-scvx"}:
-            if self.vb_path  is not None and self.n_path  > 0: DUAL += cp.sum(cp.multiply(self.vb_path,  self.dual_path))
-            if self.vb_nfz   is not None and self.n_nfz   > 0: DUAL += cp.sum(cp.multiply(self.vb_nfz,   self.dual_nfz))
-            if self.vb_aux   is not None and self.n_aux   > 0: DUAL += cp.sum(cp.multiply(self.vb_aux,   self.dual_aux))
+
+            # OLD FOR REFERENCE(FEEL FREE TO DELETE)
+            # if self.vb_path  is not None and self.n_path  > 0: DUAL += cp.sum(cp.multiply(self.vb_path,  self.dual_path))
+            # if self.vb_nfz   is not None and self.n_nfz   > 0: DUAL += cp.sum(cp.multiply(self.vb_nfz,   self.dual_nfz))
+            # if self.vb_aux   is not None and self.n_aux   > 0: DUAL += cp.sum(cp.multiply(self.vb_aux,   self.dual_aux))
+
+            if self.vb_ineq  is not None and self.n_path  > 0: DUAL += cp.sum(cp.multiply(self.vb_ineq[:, mission.path_idx],  self.dual_path))
+            if self.vb_ineq  is not None and self.n_nfz   > 0: DUAL += cp.sum(cp.multiply(self.vb_ineq[:, mission.nfz_idx],   self.dual_nfz))
+            if self.vb_ineq  is not None and self.n_aux   > 0: DUAL += cp.sum(cp.multiply(self.vb_ineq[:, mission.aux_idx],   self.dual_aux))
+
             diff = self.vb_dyn_p - self.vb_dyn_m
             DUAL += cp.sum(cp.multiply(diff, self.dual_dyn))
             if self.vb_plus  is not None and self.n_plus  > 0: DUAL += cp.sum(cp.multiply(self.vb_plus,  self.dual_plus))
@@ -482,28 +494,6 @@ class Subproblem:
             if self.vb_term  is not None and self.n_term  > 0: DUAL += self.dual_term @ self.vb_term
 
         return TRUE + TR + VB + DUAL
-
-    # ============================================================
-    # CUSTOM SUBPROBLEM INPUTS
-    # ============================================================
-    def _invoke_custom_functions(self) -> None:
-        """Invoke user-defined custom functions in trajopt.core.problem_models.<model_name>"""
-        model_name = getattr(self.problem.method, "model_name", None)
-        if not model_name:
-            return
-        try:
-            model_module = importlib.import_module(f"trajopt.core.problem_models.{model_name}")
-        except ImportError:
-            return
-        for fn_name in (
-            "custom_inputs",
-            "custom_subprob_variables",
-            "custom_subprob_constraints",
-            "custom_subprob_cost",
-        ):
-            fn = getattr(model_module, fn_name, None)
-            if callable(fn):
-                fn(self.problem, self)
 
     # ============================================================
     # PARAMETER UPDATES AND SOLVE (UNIFIED HISTORY)
@@ -556,13 +546,9 @@ class Subproblem:
         )
         prop_time_ms = (time.time() - start) * 1000.0
 
-        dcostdz, dcostdu, cost = convexify.compute_cost(inputs["ts_ref"], inputs["zs_ref"], inputs["us_ref"], self.problem)
-
-        n_ineq_cols = int(self.n_path + self.n_nfz + self.n_aux)
-        if n_ineq_cols > 0:
-            dgdz, dgdu, g = convexify.compute_path_constraints(inputs["ts_ref"], inputs["zs_ref"], inputs["us_ref"], self.problem)
-        else:
-            dgdz = dgdu = g = None
+        # compute linearized terminal and running costs
+        cost, dcostdz, dcostdu = discretize.compute_linearized_costs(inputs["ts_ref"], inputs["zs_ref"], inputs["us_ref"], self.problem)
+        g, dgdz, dgdu = discretize.compute_nodal_inequality_constraints(inputs["ts_ref"], inputs["zs_ref"], inputs["us_ref"], self.problem)
 
         # Dynamics & references
         self._set_param(self.Ak,   Ak)
@@ -700,23 +686,22 @@ class Subproblem:
         rec["Sk"]  = self.Sk.value if Sk is None else Sk
 
         # Path residuals and reference cost
-        _, _, cnst_path = convexify.compute_path_constraints(rec["ts"], rec["zs"], rec["us"], self.problem)
-        rec["cnst_path"] = cnst_path
-        rec["cost"]      = convexify.compute_cost(rec["ts"], rec["zs"], rec["us"], self.problem)[2].sum().item()
+        g, _, _ = discretize.compute_nodal_inequality_constraints(rec["ts"], rec["zs"], rec["us"], self.problem)
 
+        rec["cnst_path"] = g
+        rec["cost"]      = discretize.compute_linearized_costs(rec["ts"], rec["zs"], rec["us"], self.problem)[0].sum().item()
+ 
         # Convergence data (buffers, defects, TR cost, ref cost)
         conv = {}
         conv["soln"]    = self.subproblem
-        conv["vb_path"] = tools.get_val(self.vb_path,  rows=self.n_path, cols=self.N) if self.vb_path  is not None else np.zeros((self.n_path,  self.N))
-        conv["vb_nfz"]  = tools.get_val(self.vb_nfz,   rows=self.n_nfz,  cols=self.N) if self.vb_nfz   is not None else np.zeros((self.n_nfz,   self.N))
-        conv["vb_aux"]  = tools.get_val(self.vb_aux,   rows=self.n_aux,  cols=self.N) if self.vb_aux   is not None else np.zeros((self.n_aux,   self.N))
+        conv["vb_ineq"] = tools.get_val(self.vb_ineq,  rows=self.n_path, cols=self.N) if self.vb_ineq  is not None else np.zeros((self.n_path,  self.N))
         conv["vb_term"] = tools.get_val(self.vb_term,  rows=self.n_term, cols=1)      if self.vb_term  is not None else np.zeros((self.n_term,  1))
         conv["vb_dyn"]  = tools.get_val(self.vb_dyn_p, rows=self.n_dyn,  cols=self.N-1) - tools.get_val(self.vb_dyn_m, rows=self.n_dyn, cols=self.N-1)
 
         conv["defect"]  = tools.safe_val(self.dz, rows=N, cols=n) + inputs_for_iter["zs_ref"] - self.zs_m.value
         conv["Jtr"]     = ( float(self.wtr_z.value) * np.sum(tools.safe_val(self.dz, rows=N, cols=n)**2)
                           + float(self.wtr_u.value) * np.sum(tools.safe_val(self.du, rows=N, cols=m)**2) )
-        ref_cost = convexify.compute_cost(inputs_for_iter["ts_ref"], inputs_for_iter["zs_ref"], inputs_for_iter["us_ref"], self.problem)[2].sum().item()
+        ref_cost = discretize.compute_linearized_costs(inputs_for_iter["ts_ref"], inputs_for_iter["zs_ref"], inputs_for_iter["us_ref"], self.problem)[0].sum().item()
         conv["cost_ref"] = ref_cost
 
         rec["conv_data"]  = conv

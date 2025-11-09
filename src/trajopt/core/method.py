@@ -61,7 +61,7 @@ class Method:
         if self.flags["ctcs"]:
             guess.ctcs_initial_guess(problem)
 
-        self.cost_init = mission.cost(self.ts_init, self.zs_init, self.us_init)
+        self.cost_init = discretize.compute_linearized_costs(self.ts_init, self.zs_init, self.us_init, problem)[0].sum().item()
 
     def update_method_params(self):
         problem = self.problem
@@ -162,7 +162,7 @@ class Method:
             # Wtr: weight for trust region cost                        
             # w_term: weight for terminal constraint buffer cost
             # w_path: weight for path constraint buffer cost
-            # w_nfz: weight for path constraint buffer cost
+            # w_nfz: weight for nfz constraint buffer cost
 
 
         # TODO (carlos): this is a temporary fix to keep quadrotor converging the same, will remove soon!

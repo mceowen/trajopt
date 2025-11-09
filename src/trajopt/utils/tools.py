@@ -212,3 +212,11 @@ def extract_non_function_params(obj, exclude=None):
             continue
     
     return params
+
+def _import_from_string(path):
+    """Import a function from a string path like 'module.submodule.function_name'"""
+    if not path:
+        return None
+    module_path, func_name = path.rsplit(".", 1)
+    module = importlib.import_module(module_path)
+    return getattr(module, func_name)

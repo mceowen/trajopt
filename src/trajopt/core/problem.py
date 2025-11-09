@@ -16,26 +16,18 @@ class Problem:
         self.mission = Mission(self, config)
         self.model   = Model(self, config)
         self.method  = Method(self, config)
+        
+        # initialize nondim
+        nondim.set_nondim_params(self)
 
-        # complete the mission / model / method object setup with interdependent definitions
-        self._initialize_problem()
+        # finish mission, model, method (this order currently matters)
+        self.mission.update_mission_params()
+        self.model.update_model_params()
+        self.method.update_method_params()
+
+        # get initial guess
+        self.method.get_initial_guess()
 
         # use precompiled cvxpy subproblem if provided
         if subprob is not None:
             self.method.subprob = subprob
-
-    def _initialize_problem(self):
-
-        mission = self.mission
-        model   = self.model
-        method  = self.method
-
-        # initialize nondim (mission.n_nfz, and mission.nfz_idx need to be set first)
-        mission.initialize_nfz()
-        nondim.set_nondim_params(self)
-
-        # finish mission, model, method (this order currently matters)
-        mission.update_mission_params()
-        model.update_model_params()
-        method.update_method_params()
-        method.get_initial_guess()

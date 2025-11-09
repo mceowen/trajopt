@@ -221,9 +221,11 @@ def check_convergence_tolerance(problem, subprob, O):
     dcost    = O["cost"] - conv_data["cost_ref"]
     defect   = conv_data["defect"]
     vb_dyn   = conv_data["vb_dyn"]
-    vb_path  = conv_data["vb_path"]
-    vb_nfz   = conv_data["vb_nfz"]
-    vb_aux   = conv_data["vb_aux"]
+
+    # TODO (Skye): consolidate these 
+    vb_path  = conv_data["vb_ineq"][:, mission.path_idx]
+    vb_nfz   = conv_data["vb_ineq"][:, mission.nfz_idx]
+    vb_aux   = conv_data["vb_ineq"][:, mission.aux_idx]
     vb_term  = conv_data["vb_term"]
 
     # --- Extract convergence criteria
@@ -246,9 +248,9 @@ def check_convergence_tolerance(problem, subprob, O):
 
     # --- Extract linear constraints
     cnst_path = O["cnst_path"]
-    conv_path_nl = np.maximum(0.0, cnst_path[:, mission.path_idx]) if getattr(mission, "path_idx", np.array([])).size > 0 else np.zeros((cnst_path.shape[0], 0))
-    conv_nfz_nl  = np.maximum(0.0, cnst_path[:, mission.nfz_idx])  if getattr(mission, "nfz_idx", np.array([])).size  > 0 else np.zeros((cnst_path.shape[0], 0))
-    conv_aux_nl  = np.maximum(0.0, cnst_path[:, mission.aux_idx])  if getattr(mission, "aux_idx", np.array([])).size  > 0 else np.zeros((cnst_path.shape[0], 0))
+    conv_path_nl = np.maximum(0.0, cnst_path[:, mission.path_idx]) if mission.n_path > 0 else np.zeros((cnst_path.shape[0], 0))
+    conv_nfz_nl  = np.maximum(0.0, cnst_path[:, mission.nfz_idx])  if mission.n_nfz  > 0 else np.zeros((cnst_path.shape[0], 0))
+    conv_aux_nl  = np.maximum(0.0, cnst_path[:, mission.aux_idx])  if mission.n_aux  > 0 else np.zeros((cnst_path.shape[0], 0))
 
     # === Optimality ===
     dz_array = tools.safe_val(dz, rows=N, cols=n)

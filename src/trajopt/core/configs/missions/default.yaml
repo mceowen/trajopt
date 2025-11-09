@@ -6,9 +6,7 @@ flags:
 path_lim: []
 path_idx: []
 n_path: 0
-nfz_idx: []
 n_nfz: 0
-aux_idx: []
 n_aux: 0
 n_ineq: 0
 n_eq: 0

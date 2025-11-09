@@ -12,7 +12,7 @@ def cost2(ts, zs, us, problem):
 # MODEL
 # ===============================================================
 
-def system_dynamics(ts, zs, us, problem, t_vec=None):
+def dynamics(ts, zs, us, problem, t_vec=None):
     """
     x1, x2: r (position)
     u1, u2: v (velocity)
@@ -54,7 +54,7 @@ def system_dynamics(ts, zs, us, problem, t_vec=None):
         
     return xDot
 
-def system_dynamics2(ts, zs, us, problem, t_vec=None):
+def dynamics2(ts, zs, us, problem, t_vec=None):
     """
     x1, x2: r (position)
     u1, u2: v (velocity)
