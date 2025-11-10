@@ -1,0 +1,17 @@
+# Dimensional model configuration (no nondim)
+model_name: "quadrotor_3dof"
+
+# State/control dimensions
+n: 6
+m: 3
+
+z_types: ["d", "d", "d", "v", "v", "v"]
+u_types: ["f", "f", "f"]
+
+anchor_types : ["d", "v", "m"]
+anchor_scales: [10.0, 10.0, 1.0]
+
+base_unit_labels: ["m", "s", "kg"]
+
+custom_modules:
+  system_dynamics: trajopt.examples.quadrotor_3dof.custom.system_dynamics2
