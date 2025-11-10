@@ -15,50 +15,39 @@ jax.config.update("jax_enable_x64", True)
 # import marsgram_dens_lut as dens
 # ================================================================================
 
-def cost(ts, zs, us, problem):
-    '''
-    cost function: minimize terminal velocity
-    '''
-    
-    return zs[-1, 3]
+# =============================================================================
+# terminal cost
+# =============================================================================
 
-def analytical_cost(ts, zs, us, problem):
-    '''
-    analytical linearized cost function
-    '''
-    
-    mission = problem.mission
+def terminal_cost(ts, zs, us, problem):
+    return zs[3]
+
+def analytical_affine_approximation_terminal_cost(ts, zs, us, problem):
     model = problem.model
-    method = problem.method
+    
+    cost = terminal_cost(ts, zs, us, problem)
 
-    # Extract params
-    n = model.n
-    m = model.m
-    N = method.N
+    dcostdz = np.array([0, 0, 0, 1, 0, 0]).reshape(1, -1)
+    dcostdu = np.zeros((1, model.m))
 
-    ts = np.asarray(ts).flatten()
-    zs = np.asarray(zs)
-    us = np.asarray(us)
-    dt = np.diff(ts)
+    return cost, dcostdz, dcostdu
 
-    # Preallocate outputs
-    dcostdz = np.zeros((N, 1, n))
-    dcostdu = np.zeros((N, 1, m))
-    cost    = np.zeros((N, 1, 1))
+# =============================================================================
+# running cost
+# =============================================================================
 
-    # Last step (N) (minimize terminal velocity)
-    dcostdz[-1, 0, :] = np.array([0, 0, 0, 1, 0, 0])
-    dcostdu[-1]       = 0
-    cost[-1]          = zs[-1, 3]
+def running_cost(ts, zs, us, problem):
+    return 0.0
 
-    # Package into output dict
-    lincost = {
-        "dfcn_dz": dcostdz,
-        "dfcn_du": dcostdu,
-        "fcn":     cost     
-    }
+def analytical_affine_approximation_running_cost(ts, zs, us, problem):
+    model = problem.model
+    
+    cost = running_cost(ts, zs, us, problem)
 
-    return lincost
+    dcostdz = np.zeros((1, model.n))
+    dcostdu = np.zeros((1, model.m))
+
+    return cost, dcostdz, dcostdu
 
 def get_cost_cnstr_nondim(problem):
     '''
@@ -119,17 +108,9 @@ def nonlinear_aero_jax(ts, zs, us, problem):
     nv = method.nondim['nv']
     rhoe = mission.planet['rho']
     re = mission.planet['r']
-    N = extract_N(ts)
     mass_nd = mission.vehicle['mass'] / method.nondim['nm']
 
     B = (mission.planet['r'] / mission.vehicle['mass']) * (mission.vehicle['sref'] / 2)
-    
-    # Initialize output vectors
-    Cl      = jnp.zeros(N)
-    Cd      = jnp.zeros(N)
-    alpha   = jnp.zeros(N)
-    L       = jnp.zeros(N)
-    D       = jnp.zeros(N)
 
     # Setup coefficient values
     kl1         = -0.041065
@@ -141,7 +122,6 @@ def nonlinear_aero_jax(ts, zs, us, problem):
     kalph       = 0.20705 / (340**2)
     vlim        = 4570
     alphlim_deg = 40
-
 
     if ctrl_type == 'bank_only':
         # Velocity-dependent polynomial coefficients
@@ -163,34 +143,20 @@ def nonlinear_aero_jax(ts, zs, us, problem):
         Kl2h    = kl2 * d2r**2
         Kl3h    = kl3 * d2r**3
 
-    # pre-allocate rho if you want it per step
-    rho = jnp.zeros(N)
+    rs, _, _, vs, _, _ = zs
 
-    for k in range(N):
-        # reads
-        tk = ts if N == 1 else ts[k]
-        zk = zs if N == 1 else zs[k]
-        uk = us if N == 1 else us[k]
+    # compute v_sat with jnp
+    v_sat = jnp.minimum(vs * nv, vlim)
 
-        rs, _, _, vs, _, _ = zk
+    # compute Cl/Cd locally then set into arrays
+    Cl = Kl1 + Kl2 * (v_sat - vlim)**2 + Kl3 * (v_sat - vlim)**4
+    Cd = Kd1 + Kd2 * Cl + Kd3 * Cl**2
+    alpha = jnp.deg2rad(alphlim_deg - kalph * (jnp.minimum(vs * nv, vlim) - vlim)**2)
 
-        # compute v_sat with jnp
-        v_sat = jnp.minimum(vs * nv, vlim)
+    rho = atmosphere_model_jax(rs, problem)
 
-        # compute Cl/Cd locally then set into arrays
-        val_Cl = Kl1 + Kl2 * (v_sat - vlim)**2 + Kl3 * (v_sat - vlim)**4
-        val_Cd = Kd1 + Kd2 * val_Cl + Kd3 * val_Cl**2
-        val_alpha = jnp.deg2rad(alphlim_deg - kalph * (jnp.minimum(vs * nv, vlim) - vlim)**2)
-
-        Cl = Cl.at[k].set(val_Cl)
-        Cd = Cd.at[k].set(val_Cd)
-        alpha = alpha.at[k].set(val_alpha)
-
-        rho_k = atmosphere_model_jax(rs, problem)
-        rho = rho.at[k].set(rho_k)
-
-        L = L.at[k].set((B / mass_nd) * rho_k * val_Cl * vs**2)
-        D = D.at[k].set((B / mass_nd) * rho_k * val_Cd * vs**2)
+    L = (B / mass_nd) * rho * Cl * vs**2
+    D = (B / mass_nd) * rho * Cd * vs**2
 
     return {
         'L': L,
@@ -201,25 +167,11 @@ def nonlinear_aero_jax(ts, zs, us, problem):
         'rho': rho
     }
 
-def extract_N(ts):
-    N = 1 if isinstance(ts, float) else (ts.shape[0] if ts.ndim == 1 else ts.shape[1])
-    return N
+def custom_constraints(subproblem):
+    pass
 
-def custom_inputs(problem,local_vars):
-
-    return local_vars 
-
-def custom_variables(problem,local_vars): 
-
-    return local_vars 
-
-def custom_constraints(CNST,local_vars):
-
-    return CNST
-
-def custom_cost(PTR_COST,local_vars):
-
-    return PTR_COST
+def custom_cost(subproblem):
+    pass
 
 def set_custom_params(problem):
     pass
