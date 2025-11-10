@@ -20,14 +20,14 @@ jax.config.update("jax_enable_x64", True)
 # =============================================================================
 
 def terminal_cost(ts, zs, us, problem):
-    return zs[3]
+    return -zs[2]
 
 def analytical_affine_approximation_terminal_cost(ts, zs, us, problem):
     model = problem.model
     
     cost = terminal_cost(ts, zs, us, problem)
 
-    dcostdz = np.array([0, 0, 0, 1, 0, 0]).reshape(1, -1)
+    dcostdz = np.array([0, 0, -1, 0, 0, 0]).reshape(1, -1)
     dcostdu = np.zeros((1, model.m))
 
     return cost, dcostdz, dcostdu
@@ -56,7 +56,7 @@ def get_cost_cnstr_nondim(problem):
     mission = problem.mission
     method = problem.method
 
-    ncost = method.nondim["nv"]
+    ncost = method.nondim["nang"]
     np_ineq = np.ones(mission.n_nfz) * method.nondim["nang"] ** 2
 
     return ncost, np_ineq
@@ -108,65 +108,39 @@ def nonlinear_aero_jax(ts, zs, us, problem):
     nv = method.nondim['nv']
     mass_nd = mission.vehicle['mass'] / method.nondim['nm']
 
-    B = (method.nondim['nd'] / method.nondim['nm']) * (mission.vehicle['sref'] / 2)
+    rs = zs[0]
+    vs = zs[3]
 
-    # Setup coefficient values
-    kl1         = -0.041065
-    kl2         = 0.016292
-    kl3         = 0.0002602
-    kd1         = 0.080505
-    kd2         = -0.03026
-    kd3         = 0.86495
-    kalph       = 0.20705 / (340**2)
-    vlim        = 4570
-    alphlim_deg = 40
-
+    # Extract control
     if ctrl_type == 'bank_only':
-        # Velocity-dependent polynomial coefficients
-        Kd1     = kd1
-        Kd2     = kd2
-        Kd3     = kd3
-        Kl1     = kl1 + kl2 * alphlim_deg + kl3 * alphlim_deg**2
-        Kl2     = -kl2 * kalph - 2 * kl3 * alphlim_deg * kalph
-        Kl3     = kl3 * kalph**2
-    
+        alpha_deg = 15
+        alpha = jnp.deg2rad(alpha_deg)
+
     elif ctrl_type == 'bank_aoa':
-        # AOA-dependent polynomial coefficients
-        d2r     = 1  # /(pi/180)
-        Kd1h    = kd1 + kd2 * kl1 + kd3 * kl1**2
-        Kd2h    = (kd2 * kl2 + 2 * kd3 * kl1 * kl2) * d2r
-        Kd3h    = (kd2 * kl3 + 2 * kd3 * kl1 * kl3 + kd3 * kl2**2) * d2r**2
-        Kd4h    = (2 * kd3 * kl2 * kl3) * d2r**3
-        Kd5h    = (kd3 * kl3**2) * d2r**4
-        Kl1h    = kl1
-        Kl2h    = kl2 * d2r**2
-        Kl3h    = kl3 * d2r**3
+        alpha = us[1]
+        alpha_deg = jnp.rad2deg(alpha)
 
-    rs, _, _, vs, _, _ = zs
+    # COEFFICIENTS
 
-    # compute v_sat with jnp
-    v_sat = jnp.minimum(vs * nv, vlim)
+    M   = vs * nv / ((1.4 * 287 * 239)**0.5)
+    cl0 = 0.0052  * jnp.log(M) - 0.0334
+    cl1 = 0.03    * (M**(-0.49))
+    cd0 = 0.0577  * jnp.exp(-0.042*M)
+    cd1 = 0.00879 * jnp.log(M) - 0.0192
+    cd2 = 0.4521  * (M**(0.4856))
 
-    # compute Cl/Cd locally then set into arrays
-    Cl = Kl1 + Kl2 * (v_sat - vlim)**2 + Kl3 * (v_sat - vlim)**4
-    Cd = Kd1 + Kd2 * Cl + Kd3 * Cl**2
-    alpha = jnp.deg2rad(alphlim_deg - kalph * (jnp.minimum(vs * nv, vlim) - vlim)**2)
+    # AoA-DEPENDENT AERO COEFFICIENTS
+    Cl = cl0 + cl1 * alpha_deg
+    Cd = cd0 + (cd1 * Cl) + (cd2 * (Cl**2))
 
     rho = atmosphere_model_jax(rs, problem)
     rho_s = rho / (method.nondim["nm"] / method.nondim["nd"] ** 3)
     sref_s = mission.vehicle["sref"] / method.nondim["nd"] ** 2
+    
+    L = 0.5 * (1 / mass_nd) * rho_s * sref_s * Cl * vs**2
+    D = 0.5 * (1 / mass_nd) * rho_s * sref_s * Cd * vs**2
 
-    L = (1 / mass_nd) * rho_s * sref_s * Cl * vs**2
-    D = (1 / mass_nd) * rho_s * sref_s * Cd * vs**2
-
-    return {
-        'L': L,
-        'D': D,
-        'Cl': Cl,
-        'Cd': Cd,
-        'alpha': alpha,
-        'rho': rho
-    }
+    return {'L': L, 'D': D, 'Cl': Cl, 'Cd': Cd, 'alpha': alpha, 'rho': rho}
 
 def custom_constraints(subproblem):
     pass

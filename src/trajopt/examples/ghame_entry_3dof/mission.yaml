@@ -1,8 +1,8 @@
 # Dimensional mission configuration (no nondim)
-mission_name: "vtol"
+mission_name: "ghame"
 
 planet_name: "earth"
-vehicle_name: "vtol"
+vehicle_name: "ghame"
 
 flags:
   flag_nfz: 0
@@ -23,7 +23,7 @@ z_max: []
 z_max_idx: []
 
 # initial state constraints
-zi: "eval: np.array([mission['planet']['r'] + 100e3, 0.0, 0.0, 7450, -0.5, 0.0])"
+zi: "eval: np.array([mission['planet']['r'] + 80e3, 0.0, 0.0, 5612, -0.5, 90.0])"
 zi_idx: [0, 1, 2, 3, 4, 5]
 zi_min: []
 zi_min_idx: []
@@ -31,16 +31,16 @@ zi_max: []
 zi_max_idx: []
 
 # final state constraints
-zf: "eval: np.array([(mission['planet']['r'] + 15e3), 12, 70, -10, 90])"
-zf_idx: [0, 1, 2, 4, 5]
+zf: "eval: np.array([(mission['planet']['r'] + 10e3)])"
+zf_idx: [0]
 zf_min: []
 zf_min_idx: []
 zf_max: []
 zf_max_idx: []
 
 # control min/max constraints
-u_min: [-80.0]
-u_max: [80.0]
+u_min: [-45]
+u_max: [45]
 
 u_min_idx: [0]
 u_max_idx: [0]
@@ -63,14 +63,14 @@ aux_limits: {}
 custom_input_dict: {}
 
 costs:
-- fcn: "trajopt.core.modules.missions.vtol.terminal_cost"
-  analytical_affine_approximation: "trajopt.core.modules.missions.vtol.analytical_affine_approximation_terminal_cost"
+- fcn: "trajopt.core.modules.missions.ghame.terminal_cost"
+  analytical_affine_approximation: "trajopt.core.modules.missions.ghame.analytical_affine_approximation_terminal_cost"
   convex: 1
   auto_diff: 0
   category: "terminal"
 
-- fcn: "trajopt.core.modules.missions.vtol.running_cost"
-  analytical_affine_approximation: "trajopt.core.modules.missions.vtol.analytical_affine_approximation_running_cost"
+- fcn: "trajopt.core.modules.missions.ghame.running_cost"
+  analytical_affine_approximation: "trajopt.core.modules.missions.ghame.analytical_affine_approximation_running_cost"
   convex: 1
   auto_diff: 0
   category: "running"
