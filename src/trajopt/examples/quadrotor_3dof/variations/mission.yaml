@@ -1,4 +1,4 @@
-num_variations: 5
+num_variations: 2
 
 # dictionary of random variables to vary
 random_vars:

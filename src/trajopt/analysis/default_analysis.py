@@ -23,13 +23,16 @@ def perform_default_analysis(problem):
     N = problem.method.N
     nondim = problem.method.nondim
 
-    # Extract non-function parameters from mission, model, and method
-    mission_params = tools.extract_non_function_params(problem.mission, exclude=['mission_module'])
-    model_params = tools.extract_non_function_params(problem.model, exclude=['model_module'])
-    
-    method_exclude = ['method_module', 'subprob', 'Ak', 'Ak_ind', 'Ak_ind_jax', 'Bk', 'Bk_ind', 'Bk_ind_jax', 'Bkp', 'Bkp_ind', 'Bkp_ind_jax',
-                      'Sk', 'Sk_ind', 'Sk_ind_jax', 'lds0', 'lds0_size', 'lds0_size_jax', 'z_ind_jax']
-    method_params = tools.extract_non_function_params(problem.method, exclude=method_exclude)
+    mission_params_exclude_list = ['_nonlinear_aero', 'costs', 'custom_modules', 'mission_module', '_get_cost_cnstr_nondim', '_set_custom_params', '_custom_constraints', '_custom_cost', 'problem'] 
+    model_params_list = ['constraint_config_list', 'flags', 'm', 'n', 'model_name', 'nz', 'obs', 'u_types', 'z_types']
+    method_params_list = ['N', 'N_dens', 'Npm', 'T_init', 'T_max', 'T_min', 'Ts_init', 'conv', 'conv_data', 'cost_init', 
+                          'dT_max', 'ddts_max', 'dt_init', 'dts_init', 'dts_max', 'dts_min', 'flags', 'line_guess_u_init',
+                          'method_name', 'n_minus', 'n_plus', 'nl_guess_u_start', 'nl_guess_u_stop', 'solver_opts',
+                          'nondim', 'ts_init', 'us_init', 'weights', 'z_ind', 'zs_init']
+
+    mission_params = tools.extract_attributes_exclude(problem.mission, exclude=mission_params_exclude_list)
+    model_params   = tools.extract_attributes(problem.model, model_params_list)
+    method_params  = tools.extract_attributes(problem.method, method_params_list)
 
     model_params['n'] = n
     model_params['m'] = m

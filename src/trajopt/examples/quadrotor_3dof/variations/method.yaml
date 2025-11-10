@@ -6,4 +6,4 @@ method1:
 
 method2:
   flags:
-    "equal_dt"        : 0
+    "equal_dt"        : 1
