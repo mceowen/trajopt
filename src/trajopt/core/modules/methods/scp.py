@@ -656,14 +656,18 @@ class Subproblem:
         rec: Dict[str, Any] = dict(inputs_for_iter)  # include exact inputs used this iteration
         rec["subprob"] = self.subproblem
 
+        if self.subproblem is not None:
+            compilation_time = getattr(self.subproblem, "compilation_time", None)
+            rec["parse_time"] = float(compilation_time or 0.0) * 1000.0
+        else:
+            rec["parse_time"] = None
+        
+
         if self.subproblem.solver_stats is not None:
             solve_time = getattr(self.subproblem.solver_stats, "solve_time", None)
-            setup_time = getattr(self.subproblem.solver_stats, "setup_time", None)
             rec["solve_time"] = float(solve_time or 0.0) * 1000.0
-            rec["parse_time"] = float(setup_time or 0.0) * 1000.0
         else:
             rec["solve_time"] = None
-            rec["parse_time"] = None
 
         # raw solver variables (useful for diagnostics)
         rec["dz_s"] = dz_val
