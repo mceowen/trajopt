@@ -1,5 +1,5 @@
 # Dimensional mission configuration (no nondim)
-mission_name: "quadrotor"
+module_path: "trajopt.core.modules.mission.quadrotor"
 
 planet_name: "earth"
 vehicle_name: "quadrotor"
@@ -73,14 +73,14 @@ custom_modules:
   cost: trajopt.examples.quadrotor_3dof.custom.cost2
 
 costs:
-- fcn: "trajopt.core.modules.missions.quadrotor.terminal_cost"
-  analytical_affine_approximation: "trajopt.core.modules.missions.quadrotor.analytical_affine_approximation_terminal_cost"
+- fcn: "trajopt.core.modules.mission.quadrotor.terminal_cost"
+  analytical_affine_approximation: "trajopt.core.modules.mission.quadrotor.analytical_affine_approximation_terminal_cost"
   convex: 1
   auto_diff: 0
   category: "terminal"
 
-- fcn: "trajopt.core.modules.missions.quadrotor.running_cost"
-  analytical_affine_approximation: "trajopt.core.modules.missions.quadrotor.analytical_affine_approximation_running_cost"
+- fcn: "trajopt.core.modules.mission.quadrotor.running_cost"
+  analytical_affine_approximation: "trajopt.core.modules.mission.quadrotor.analytical_affine_approximation_running_cost"
   convex: 1
   auto_diff: 0
   category: "running"

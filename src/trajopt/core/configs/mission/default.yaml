@@ -1,0 +1,56 @@
+# default mission parameters
+flags:
+  flag_nfz: 0
+
+# Constraint structure
+path_lim: []
+path_idx: []
+n_path: 0
+n_nfz: 0
+n_aux: 0
+n_ineq: 0
+n_eq: 0
+
+# Cost label
+cost_name: "Cost"
+
+# Initial boundary conditions
+zi: []
+zi_idx: []
+zi_min: []
+zi_min_idx: []
+zi_max: []
+zi_max_idx: []
+n_init: 0
+n_init_ineq: 0
+
+# Terminal boundary conditions
+zf: []
+zf_idx: []
+zf_min: []
+zf_min_idx: []
+zf_max: []
+zf_max_idx: []
+n_term: 0
+n_term_ineq: 0
+
+# State constraints
+z_min: []
+z_min_idx: []
+z_max: []
+z_max_idx: []
+n_state: 0
+
+# Control constraints
+u_min: []
+u_min_idx: []
+u_max: []
+u_max_idx: []
+udot_max: []
+udot_max_idx: []
+n_ctrl: 0
+n_udot: 0
+
+n_dyn: 0
+
+theta_max: 100

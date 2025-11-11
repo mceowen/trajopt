@@ -2,9 +2,9 @@ import numpy as np
 import importlib
 
 import trajopt.utils.tools as tools
-import trajopt.core.modules.methods.initial_guess as guess
-import trajopt.core.modules.methods.convergence as convergence
-import trajopt.core.modules.methods.convexify as convexify
+import trajopt.core.modules.method.initial_guess as guess
+import trajopt.core.modules.method.convergence as convergence
+import trajopt.core.modules.method.convexify as convexify
 import trajopt.utils.nondim as nondim
 
 class Mission:
@@ -17,7 +17,7 @@ class Mission:
         # ===============================================================
         
         mission_config         = config["mission"]
-        self.mission_name      = mission_config["mission_name"]
+        self.name              = mission_config["module_path"].split(".")[-1]
         self.flags             = mission_config['flags']
         
         # standard constraint parameters
@@ -85,8 +85,7 @@ class Mission:
         # ===============================================================
         # point to module and corresponding methods based on configs
         # ===============================================================
-
-        self.mission_module = importlib.import_module(f"trajopt.core.modules.missions.{self.mission_name}")
+        self.mission_module = importlib.import_module(mission_config["module_path"])
 
         # set cost/constraint nondim setter function (needed for nondim initialization)
         self._get_cost_cnstr_nondim = self.mission_module.get_cost_cnstr_nondim
@@ -114,47 +113,31 @@ class Mission:
     # UPDATE PARAMETERS
     # ===============================================================
     def update_mission_params(self):
+        """
+        Attach mission functions for costs and constraints.
+        Uses custom_modules from YAML config if specified, otherwise uses base mission.
+        """
         method = self.problem.method
         problem = self.problem
 
-        # ------------------------------------------------------------
-        # Try to import example-level custom overrides
-        # ------------------------------------------------------------
-        custom_mission_module = None
-        try:
-            example_name = getattr(problem, "name", self.mission_name)
-            if example_name:
-                custom_mission_module = importlib.import_module(
-                    f"trajopt.examples.{example_name}.custom"
-                )
-        except ModuleNotFoundError:
-            pass
-
-        # ------------------------------------------------------------
-        # Load YAML custom module mappings (if present)
-        # ------------------------------------------------------------
-        custom_map = self.custom_modules
-        yaml_funcs = None
-
-        if custom_map is not None:
+        # Load YAML custom module mappings if present
+        if self.custom_modules:
             yaml_funcs = {}
-            for key, path in custom_map.items():
+            for key, path in self.custom_modules.items():
                 try:
                     mod_path, attr = path.rsplit(".", 1)
                     mod = importlib.import_module(mod_path)
                     yaml_funcs[key] = getattr(mod, attr)
                 except Exception as e:
                     print(f"⚠️ Could not import custom mission module for '{key}' from {path}: {e}")
+            self.custom_modules = yaml_funcs
+        else:
+            self.custom_modules = {}
 
-        # literal None if not defined
-        self.custom_modules = yaml_funcs if yaml_funcs else None
-
-        # unified resolver: YAML > custom.py > base module
+        # Resolver: custom_modules > base mission
         def _resolve_function(name: str):
-            if self.custom_modules and name in self.custom_modules:
+            if name in self.custom_modules:
                 return self.custom_modules[name]
-            if custom_mission_module and hasattr(custom_mission_module, name):
-                return getattr(custom_mission_module, name)
             return getattr(self.mission_module, name)
 
         # ------------------------------------------------------------

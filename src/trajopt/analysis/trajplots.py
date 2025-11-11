@@ -8,8 +8,8 @@ import scipy.linalg as smat
 class SCVXPLOTS:
     def __init__(self,data):
         self.data = data;
-        self.scenarios = list(self.data); self.methods = {};
-        for tag in self.scenarios: self.methods[tag] = list(self.data[tag]);
+        self.scenarios = list(self.data); self.method = {};
+        for tag in self.scenarios: self.method[tag] = list(self.data[tag]);
         self.base_pen = {'frgba':[0,0,0,0.1],'lrgba':[0,0,0,0.1]}
         self.base_pen = {**self.base_pen,'lw':2,'ls':'-'}
         self.base_pen = {**self.base_pen,'msty':'','msz':1}
@@ -23,7 +23,7 @@ class SCVXPLOTS:
         else: penn = {**self.base_pen,**pen}
         scenario = self.scenarios[0];
         if 'scenario' in ins: scenario = ins['scenario'];
-        method = self.methods[scenario][0];
+        method = self.method[scenario][0];
         if 'method' in ins: method = ins['method'];
         runs = [0]; iters = [0];
         if 'runs' in ins: runs = ins['runs'];

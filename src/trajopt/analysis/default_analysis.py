@@ -24,10 +24,10 @@ def perform_default_analysis(problem):
     nondim = problem.method.nondim
 
     mission_params_exclude_list = ['_nonlinear_aero', 'costs', 'custom_modules', 'mission_module', '_get_cost_cnstr_nondim', '_set_custom_params', '_custom_constraints', '_custom_cost', 'problem'] 
-    model_params_list = ['constraint_config_list', 'flags', 'm', 'n', 'model_name', 'nz', 'obs', 'u_types', 'z_types']
+    model_params_list = ['constraint_config_list', 'flags', 'm', 'n', 'name', 'nz', 'obs', 'u_types', 'z_types']
     method_params_list = ['N', 'N_dens', 'Npm', 'T_init', 'T_max', 'T_min', 'Ts_init', 'conv', 'conv_data', 'cost_init', 
                           'dT_max', 'ddts_max', 'dt_init', 'dts_init', 'dts_max', 'dts_min', 'flags', 'line_guess_u_init',
-                          'method_name', 'n_minus', 'n_plus', 'nl_guess_u_start', 'nl_guess_u_stop', 'solver_opts',
+                          'name', 'n_minus', 'n_plus', 'nl_guess_u_start', 'nl_guess_u_stop', 'solver_opts',
                           'nondim', 'ts_init', 'us_init', 'weights', 'z_ind', 'zs_init']
 
     mission_params = tools.extract_attributes_exclude(problem.mission, exclude=mission_params_exclude_list)

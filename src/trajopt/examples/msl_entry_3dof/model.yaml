@@ -1,5 +1,5 @@
 # Dimensional model configuration (no nondim)
-model_name: "reentry_3dof"
+module_path: "trajopt.core.modules.model.reentry_3dof"
 
 # State/control dimensions
 n: 6
@@ -27,8 +27,8 @@ base_unit_labels: ["m", "s", "kg"]
 # ===============================================================
 
 constraints:
-- fcn: "trajopt.core.modules.models.obstacles.nfz_nonlinear"
-  analytical_affine_approximation: "trajopt.core.modules.models.obstacles.nfz_analytical_affine_approximation"
+- fcn: "trajopt.core.modules.model.obstacles.nfz_nonlinear"
+  analytical_affine_approximation: "trajopt.core.modules.model.obstacles.nfz_analytical_affine_approximation"
   type: "inequality"
   convex: 0
   auto_diff: 0
@@ -40,7 +40,7 @@ constraints:
 # PATH CONSTRAINTS
 # ===============================================================
 
-# - fcn: "trajopt.core.modules.models.reentry_3dof.max_q"
+# - fcn: "trajopt.core.modules.model.reentry_3dof.max_q"
 #   analytical_affine_approximation: None
 #   type: "inequality"
 #   convex: 0
@@ -49,7 +49,7 @@ constraints:
 #   dimension: 1
 #   category: "path"
 
-# - fcn: "trajopt.core.modules.models.reentry_3dof.max_Q"
+# - fcn: "trajopt.core.modules.model.reentry_3dof.max_Q"
 #   analytical_affine_approximation: None
 #   type: "inequality"
 #   convex: 0

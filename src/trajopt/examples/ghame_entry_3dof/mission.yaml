@@ -1,5 +1,5 @@
 # Dimensional mission configuration (no nondim)
-mission_name: "ghame"
+module_path: "trajopt.core.modules.mission.ghame"
 
 planet_name: "earth"
 vehicle_name: "ghame"
@@ -63,14 +63,14 @@ aux_limits: {}
 custom_input_dict: {}
 
 costs:
-- fcn: "trajopt.core.modules.missions.ghame.terminal_cost"
-  analytical_affine_approximation: "trajopt.core.modules.missions.ghame.analytical_affine_approximation_terminal_cost"
+- fcn: "trajopt.core.modules.mission.ghame.terminal_cost"
+  analytical_affine_approximation: "trajopt.core.modules.mission.ghame.analytical_affine_approximation_terminal_cost"
   convex: 1
   auto_diff: 0
   category: "terminal"
 
-- fcn: "trajopt.core.modules.missions.ghame.running_cost"
-  analytical_affine_approximation: "trajopt.core.modules.missions.ghame.analytical_affine_approximation_running_cost"
+- fcn: "trajopt.core.modules.mission.ghame.running_cost"
+  analytical_affine_approximation: "trajopt.core.modules.mission.ghame.analytical_affine_approximation_running_cost"
   convex: 1
   auto_diff: 0
   category: "running"
