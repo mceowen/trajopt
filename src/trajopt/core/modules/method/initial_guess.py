@@ -176,16 +176,14 @@ def nonlinear_initial_guess(us_range, problem):
     use_jax = method.flags.get("jax_dyn", 0)
     
     if use_jax:
-        # Use JAX RK4 integrator with FOH interpolation (much faster!)
         zs_init = rk4_propagate_jax(
-            model._dynamics,  # Use the JAX dynamics directly
+            model._dynamics,
             mission.zi,
             us_init,
             ts_init,
             problem
         )
     else:
-        # Use scipy solve_ivp with FOH interpolation wrapper (for non-JAX dynamics)
         # Wrapper that does FOH interpolation before calling dynamics
         def dynamics_wrapper_scipy(t, z):
             # FOH interpolation to get control at time t

@@ -211,7 +211,7 @@ class Subproblem:
         N, n, m, nz = self.N, self.n, self.m, self.nz
 
         # Core optimization variables
-        self.dz = cp.Variable((N, n), name="dz")
+        self.dz = cp.Variable((N, nz), name="dz")
         self.du = cp.Variable((N, m), name="du")
 
         # Time variable(s)
@@ -254,17 +254,17 @@ class Subproblem:
         N, n, m, nz = self.N, self.n, self.m, self.nz
 
         # Linearized dynamics & trajectory references
-        self.Ak     = cp.Parameter((N - 1, n, n), name="Ak")
-        self.Bk     = cp.Parameter((N - 1, n, m), name="Bk")
-        self.Bkp    = cp.Parameter((N - 1, n, m), name="Bkp")
-        self.Sk     = cp.Parameter((N - 1, n),    name="Sk")
-        self.zs_m   = cp.Parameter((N, n),        name="zs_minus")
+        self.Ak     = cp.Parameter((N - 1, nz, nz), name="Ak")
+        self.Bk     = cp.Parameter((N - 1, nz, m), name="Bk")
+        self.Bkp    = cp.Parameter((N - 1, nz, m), name="Bkp")
+        self.Sk     = cp.Parameter((N - 1, nz),    name="Sk")
+        self.zs_m   = cp.Parameter((N, nz),        name="zs_minus")
 
         self.w_cost_times_dcostdz = cp.Parameter((N, n), name="dcostdz")
         self.w_cost_times_dcostdu = cp.Parameter((N, m), name="dcostdu")
         self.w_cost_times_cost0   = cp.Parameter(N,      name="cost0")
 
-        self.zs_ref  = cp.Parameter((N, n),    name="zs_ref")
+        self.zs_ref  = cp.Parameter((N, nz),    name="zs_ref")
         self.us_ref  = cp.Parameter((N, m),    name="us_ref")
         self.dts_ref = cp.Parameter((N - 1, 1),name="dts_ref")
 
@@ -465,13 +465,13 @@ class Subproblem:
 
         # === TRUE cost (linearized objective) ===
         TRUE = self.flag_true * (
-            cp.sum(cp.multiply(self.w_cost_times_dcostdz, self.dz))
+            cp.sum(cp.multiply(self.w_cost_times_dcostdz, self.dz[:,:model.n]))
           + cp.sum(cp.multiply(self.w_cost_times_dcostdu, self.du))
           + cp.sum(self.w_cost_times_cost0)
         )
 
         # === Trust-region penalties ===
-        TR = self.flag_tr * (self.wtr_z * cp.sum_squares(self.dz) + self.wtr_u * cp.sum_squares(self.du))
+        TR = self.flag_tr * (self.wtr_z * cp.sum_squares(self.dz[:, :model.n]) + self.wtr_u * cp.sum_squares(self.du))
 
         # === Virtual-buffer quadratic penalties ===
         VB = 0.0
@@ -552,8 +552,8 @@ class Subproblem:
         if param is None:
             return
         arr = np.asarray(val)
-        if param is self.zs_m and arr.shape != (self.N, self.n):
-            arr = arr.reshape(self.N, self.n)
+        if param is self.zs_m and arr.shape != (self.N, self.nz):
+            arr = arr.reshape(self.N, self.nz)
         param.value = arr
 
     def _load_inputs(self) -> Dict[str, Any]:
