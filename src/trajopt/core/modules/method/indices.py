@@ -19,14 +19,10 @@ class Indices:
         # -------------------------------
         # STATE / CONTROL / DYNAMICS INDICES
         # -------------------------------
-        n_z   = model.n
-        n_u   = model.m
-        n_zct = getattr(model, "nz", n_z)   # augmented state
-        n_dyn = getattr(mission, "n_dyn", n_zct)
 
-        z_idx_all      = np.arange(0, n_zct)
-        z_idx_state    = np.arange(0, n_z)
-        z_idx_ctcs     = np.arange(n_z, n_zct) if n_zct > n_z else np.array([], dtype=int)
+        z_idx_all      = np.arange(0, model.nz)
+        z_idx_state    = np.arange(0, model.n)
+        z_idx_ctcs     = np.arange(model.n, model.nz) if model.nz > model.n else np.array([], dtype=int)
         z_idx_time     = np.array([], dtype=int)  # optional time variable slot
 
         self.z = {
@@ -37,8 +33,8 @@ class Indices:
         }
 
         # Controls and other inputs
-        u_idx_all = np.arange(0, n_u)
-        u_idx_dyn = np.arange(0, n_u)
+        u_idx_all = np.arange(0, model.m) # later: add other augmented inputs 
+        u_idx_dyn = np.arange(0, model.m)
         u_idx_dilation = np.array([], dtype=int)
         self.nu = {
             "all": u_idx_all,
@@ -71,11 +67,11 @@ class Indices:
             "aux": aux_idx
         }
 
-        # LTV system / dynamic matrices indices (like your example)
-        Ak_ind  = np.arange(0, n_dyn**2)
-        Bk_ind  = np.arange(Ak_ind[-1] + 1, Ak_ind[-1] + 1 + n_dyn * model.m)
-        Bkp_ind = np.arange(Bk_ind[-1] + 1, Bk_ind[-1] + 1 + n_dyn * model.m)
-        Sk_ind  = np.arange(Bkp_ind[-1] + 1, Bkp_ind[-1] + 1 + n_dyn)
+        # LTV system / dynamic matrices indices 
+        Ak_ind  = np.arange(0, model.nz**2)
+        Bk_ind  = np.arange(Ak_ind[-1] + 1, Ak_ind[-1] + 1 + model.nz * model.m)
+        Bkp_ind = np.arange(Bk_ind[-1] + 1, Bk_ind[-1] + 1 + model.nz * model.m)
+        Sk_ind  = np.arange(Bkp_ind[-1] + 1, Bkp_ind[-1] + 1 + model.nz)
 
         linear_system = {
             "Ak": Ak_ind,
