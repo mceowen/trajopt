@@ -12,8 +12,8 @@ flags:
   stepsize_auto_primal: 0
   stepsize_auto_dual: 0
   flag_conv: 0
-  buff_dyn: "l2"
-  buff_dyn_dual: "l1"
+  buff_dyn: "term"
+  buff_dyn_dual: "none"
   ctcs: 0
   ode_fixed_dt: 0
   aoa_vb: 0

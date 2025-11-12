@@ -110,6 +110,7 @@ class Subproblem:
         self.n_path  = int(mission.n_path)
         self.n_nfz   = int(mission.n_nfz)
         self.n_aux   = int(getattr(mission, "n_aux", 0))
+        self.n_ineq  = int(mission.n_ineq)
         self.n_term  = int(mission.n_term + mission.n_term_ineq)
         self.n_dyn   = int(getattr(mission, "n_dyn", model.nz))
         self.Npm     = int(getattr(method, "Npm", 0))
@@ -216,11 +217,19 @@ class Subproblem:
                 self.dT = None
                 self.dt = cp.Variable((N - 1, 1), name="dt")
         else:
-            self.dT, self.dt = None, np.zeros((N - 1, 1))  # constant, not a Variable
+            self.dT = None
+            self.dt = cp.Constant(np.zeros((N - 1, 1)))  # CVXPY constant, safe in constraints
+
 
         # Virtual buffers (None if zero-sized)
-        self.vb_ineq  = cp.Variable((N, mission.n_ineq), name="vb_ineq")   if mission.n_ineq  > 0 else None 
-        self.vb_term  = cp.Variable(self.n_term,          name="vb_term")  if self.n_term     > 0 else None
+        self.vb_ineq    = cp.Variable((N, mission.n_ineq), name="vb_ineq")   if mission.n_ineq  > 0 else None 
+        self.vb_term    = (
+                            cp.Variable(self.n_term, name="vb_term")
+                            if method.flags.get("buff_dyn") == "term" and self.n_term > 0
+                            else cp.Constant(np.zeros(self.n_term)) if self.n_term > 0
+                            else None
+                        )
+
 
         # Dynamics buffers (zeros if 'term')
         if method.flags.get("buff_dyn") == "term":
@@ -254,11 +263,10 @@ class Subproblem:
         self.dts_ref = cp.Parameter((N - 1, 1),name="dts_ref")
 
         # Path/NFZ/AUX linearized constraints
-        n_ineq_cols = self.n_path + self.n_nfz + self.n_aux
-        if n_ineq_cols > 0:
-            self.dgdz = cp.Parameter((N, n_ineq_cols, n), name="dgdz")
-            self.dgdu = cp.Parameter((N, n_ineq_cols, m), name="dgdu")
-            self.g0   = cp.Parameter((N, n_ineq_cols),    name="g0")
+        if mission.n_ineq > 0:
+            self.dgdz = cp.Parameter((N, mission.n_ineq, n), name="dgdz")
+            self.dgdu = cp.Parameter((N, mission.n_ineq, m), name="dgdu")
+            self.g0   = cp.Parameter((N, mission.n_ineq),    name="g0")
         else:
             self.dgdz = self.dgdu = self.g0 = None
 
@@ -275,7 +283,15 @@ class Subproblem:
         self.wtr_z  = cp.Parameter(nonneg=True, name="wtr_z")
         self.wtr_u  = cp.Parameter(nonneg=True, name="wtr_u")
 
-        # Elementwise weights (kept with at least 1 column for DPP)
+        # TODO(Skye): refactor these weight parameters to be less redundant later
+        self.W_path  = cp.Parameter((N,  max(self.n_path, 1)),  nonneg=True, name="W_path")
+        self.W_nfz   = cp.Parameter((N,  max(self.n_nfz, 1)),   nonneg=True, name="W_nfz")
+        self.W_aux   = cp.Parameter((N,  max(self.n_aux, 1)),   nonneg=True, name="W_aux")
+        self.W_term  = cp.Parameter((max(self.n_term, 1),),     nonneg=True, name="W_term")
+        self.W_dyn   = cp.Parameter((N - 1, max(nz, 1)),        nonneg=True, name="W_dyn")
+        self.W_plus  = cp.Parameter((max(self.Npm, 1), max(self.n_plus, 1)),  nonneg=True, name="W_plus")
+        self.W_minus = cp.Parameter((max(self.Npm, 1), max(self.n_minus, 1)), nonneg=True, name="W_minus")
+        # ----------------------------------------------------------------------------------------------------------
         self.W_path_sqrt  = cp.Parameter((N,  max(self.n_path, 1)),  nonneg=True, name="W_path_sqrt")
         self.W_nfz_sqrt   = cp.Parameter((N,  max(self.n_nfz, 1)),   nonneg=True, name="W_nfz_sqrt")
         self.W_aux_sqrt   = cp.Parameter((N,  max(self.n_aux, 1)),   nonneg=True, name="W_aux_sqrt")
@@ -283,12 +299,35 @@ class Subproblem:
         self.W_dyn_sqrt   = cp.Parameter((N - 1, max(nz, 1)),        nonneg=True, name="W_dyn_sqrt")
         self.W_plus_sqrt  = cp.Parameter((max(self.Npm, 1), max(self.n_plus, 1)),  nonneg=True, name="W_plus_sqrt")
         self.W_minus_sqrt = cp.Parameter((max(self.Npm, 1), max(self.n_minus, 1)), nonneg=True, name="W_minus_sqrt")
-
-        # Row weights (DCP-safe convex weighting of row norms)
+        # ----------------------------------------------------------------------------------------------------------
         self.w_path_row = cp.Parameter(N,  nonneg=True, name="w_path_row")  if self.n_path > 0 else None
         self.w_nfz_row  = cp.Parameter(N,  nonneg=True, name="w_nfz_row")   if self.n_nfz  > 0 else None
         self.w_aux_row  = cp.Parameter(N,  nonneg=True, name="w_aux_row")   if self.n_aux  > 0 else None
-        self.w_dyn_row  = cp.Parameter(N-1,nonneg=True, name="w_dyn_row")
+        self.w_dyn_row  = cp.Parameter(N - 1, nonneg=True, name="w_dyn_row")
+        # ----------------------------------------------------------------------------------------------------------
+        self.W_path.value  = np.ones((N,  max(self.n_path, 1)))
+        self.W_nfz.value   = np.ones((N,  max(self.n_nfz, 1)))
+        self.W_aux.value   = np.ones((N,  max(self.n_aux, 1)))
+        self.W_term.value  = np.ones((max(self.n_term, 1),))
+        self.W_dyn.value   = np.ones((N - 1, max(nz, 1)))
+        self.W_plus.value  = np.ones((max(self.Npm, 1), max(self.n_plus, 1)))
+        self.W_minus.value = np.ones((max(self.Npm, 1), max(self.n_minus, 1)))
+        # ----------------------------------------------------------------------------------------------------------
+        self.W_path_sqrt.value  = np.sqrt(self.W_path.value)
+        self.W_nfz_sqrt.value   = np.sqrt(self.W_nfz.value)
+        self.W_aux_sqrt.value   = np.sqrt(self.W_aux.value)
+        self.W_term_sqrt.value  = np.sqrt(self.W_term.value)
+        self.W_dyn_sqrt.value   = np.sqrt(self.W_dyn.value)
+        self.W_plus_sqrt.value  = np.sqrt(self.W_plus.value)
+        self.W_minus_sqrt.value = np.sqrt(self.W_minus.value)
+        # ----------------------------------------------------------------------------------------------------------
+        if self.w_path_row is not None:
+            self.w_path_row.value = np.max(self.W_path.value, axis=1)
+        if self.w_nfz_row is not None:
+            self.w_nfz_row.value  = np.max(self.W_nfz.value, axis=1)
+        if self.w_aux_row is not None:
+            self.w_aux_row.value  = np.max(self.W_aux.value, axis=1)
+        self.w_dyn_row.value = np.max(self.W_dyn.value, axis=1)
 
         # duals (same ≥1-column pattern)
         self.dual_path  = cp.Parameter((N,  max(self.n_path,1)),  name="dual_path")
@@ -394,8 +433,7 @@ class Subproblem:
                 )
 
             # Linearized inequality constraints (path + nfz + aux)
-            n_ineq_cols = int(mission.n_path + mission.n_nfz + getattr(mission, "n_aux", 0))
-            if n_ineq_cols > 0 and not flags["ctcs"] and self.dgdz is not None:
+            if mission.n_ineq > 0 and not flags["ctcs"] and self.dgdz is not None:
         
                 C.append(self.dgdz[k] @ self.dz[k] + self.dgdu[k] @ self.du[k] + self.g0[k] - self.vb_ineq[k] <= 0)
                 if str(self.flag_autotune) in {"1", "3", "al-scvx"} and self.vb_ineq[k]:
@@ -459,11 +497,16 @@ class Subproblem:
                     
                     VB += cp.sum_squares(cp.diag(self.W_nfz_sqrt[k, :]) @ self.vb_ineq[k, mission.aux_idx])
 
-            # Dynamics (quadratic penalties)
-            diff = self.vb_dyn_p - self.vb_dyn_m
-            if self.buff_dyn in {"l1", "l2"}:
+            # Dynamics (L1 / L2 / quadratic penalties)
+            diff = self.vb_dyn_p - self.vb_dyn_m 
+            if self.buff_dyn == "l1":
+                for k in range(self.N - 1):
+                    VB += self.w_dyn_row[k] * cp.norm1(diff[k])
+
+            elif self.buff_dyn == "l2":
                 for k in range(self.N - 1):
                     VB += cp.sum_squares(cp.diag(self.W_dyn_sqrt[k, :]) @ diff[k])
+
             elif self.buff_dyn in {"quad-1", "quad-2"}:
                 if self.vb_plus is not None and self.n_plus > 0:
                     for k in range(max(self.Npm, 1)):
@@ -471,6 +514,7 @@ class Subproblem:
                 if self.vb_minus is not None and self.n_minus > 0:
                     for k in range(max(self.Npm, 1)):
                         VB += cp.sum_squares(cp.diag(self.W_minus_sqrt[k, :]) @ self.vb_minus[k])
+
 
         VB = 0.5 * self.flag_vb * VB
 
@@ -580,7 +624,7 @@ class Subproblem:
             self.dts_max.value  = float(method.dts_max)
             self.ddts_max.value = float(method.ddts_max)
 
-        # Elementwise weights -> sqrt parameters
+        # TODO(Skye): refactor weight loading to reduce code duplication with autotune
         W_path_arr  = tools.ensure_shape(W.get("W_path",  0.0), (self.N,  max(self.n_path, 1)))
         W_nfz_arr   = tools.ensure_shape(W.get("W_nfz",   0.0), (self.N,  max(self.n_nfz,  1)))
         W_aux_arr   = tools.ensure_shape(W.get("W_aux",   0.0), (self.N,  max(self.n_aux,  1)))
@@ -588,7 +632,15 @@ class Subproblem:
         W_dyn_arr   = tools.ensure_shape(W.get("W_dyn",   0.0), (self.N - 1, max(self.nz, 1)))
         W_plus_arr  = tools.ensure_shape(W.get("W_plus",  0.0), (max(self.Npm, 1), max(self.n_plus,  1)))
         W_minus_arr = tools.ensure_shape(W.get("W_minus", 0.0), (max(self.Npm, 1), max(self.n_minus, 1)))
-
+        # ------------------------------------------------------------------
+        self.W_path.value  = W_path_arr
+        self.W_nfz.value   = W_nfz_arr
+        self.W_aux.value   = W_aux_arr
+        self.W_term.value  = W_term_arr
+        self.W_dyn.value   = W_dyn_arr
+        self.W_plus.value  = W_plus_arr
+        self.W_minus.value = W_minus_arr
+        # ------------------------------------------------------------------
         self.W_path_sqrt.value  = np.sqrt(W_path_arr)
         self.W_nfz_sqrt.value   = np.sqrt(W_nfz_arr)
         self.W_aux_sqrt.value   = np.sqrt(W_aux_arr)
@@ -596,12 +648,15 @@ class Subproblem:
         self.W_dyn_sqrt.value   = np.sqrt(W_dyn_arr)
         self.W_plus_sqrt.value  = np.sqrt(W_plus_arr)
         self.W_minus_sqrt.value = np.sqrt(W_minus_arr)
-
-        # Row weights from elementwise weights (numeric; DCP-safe usage in objective)
-        if self.w_path_row is not None: self.w_path_row.value = np.max(W_path_arr, axis=1)
-        if self.w_nfz_row  is not None: self.w_nfz_row.value  = np.max(W_nfz_arr,  axis=1)
-        if self.w_aux_row  is not None: self.w_aux_row.value  = np.max(W_aux_arr,  axis=1)
-        self.w_dyn_row.value = np.max(W_dyn_arr, axis=1)
+        # ------------------------------------------------------------------
+        if self.w_path_row is not None:
+            self.w_path_row.value = np.max(W_path_arr, axis=1)
+        if self.w_nfz_row is not None:
+            self.w_nfz_row.value = np.max(W_nfz_arr, axis=1)
+        if self.w_aux_row is not None:
+            self.w_aux_row.value = np.max(W_aux_arr, axis=1)
+        if self.w_dyn_row is not None:
+            self.w_dyn_row.value = np.max(W_dyn_arr, axis=1)
 
         # duals
         self.dual_path.value  = tools.ensure_shape(W.get("dual_path", 0.0), (self.N,  max(self.n_path, 1)))
@@ -698,7 +753,7 @@ class Subproblem:
         # Convergence data (buffers, defects, TR cost, ref cost)
         conv = {}
         conv["soln"]    = self.subproblem
-        conv["vb_ineq"] = tools.get_val(self.vb_ineq,  rows=self.n_path, cols=self.N) if self.vb_ineq  is not None else np.zeros((self.n_path,  self.N))
+        conv["vb_ineq"] = tools.get_val(self.vb_ineq,  rows=self.n_ineq, cols=self.N) if self.vb_ineq  is not None else np.zeros((self.n_ineq,  self.N))
         conv["vb_term"] = tools.get_val(self.vb_term,  rows=self.n_term, cols=1)      if self.vb_term  is not None else np.zeros((self.n_term,  1))
         conv["vb_dyn"]  = tools.get_val(self.vb_dyn_p, rows=self.n_dyn,  cols=self.N-1) - tools.get_val(self.vb_dyn_m, rows=self.n_dyn, cols=self.N-1)
 
