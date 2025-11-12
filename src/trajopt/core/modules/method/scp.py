@@ -31,6 +31,9 @@ def run_scp(problem):
       - subprob.iter_data[k>=1]: inputs used at iter k + outputs from that iter
     """
 
+    # Start full problem convergence timer
+    time_start = time.perf_counter()
+
     # Get or create the compiled Subproblem (DPP)
     subprob: Optional[Subproblem] = getattr(problem.method, "subprob", None)
     if subprob is None:
@@ -61,6 +64,9 @@ def run_scp(problem):
         print("Terminated from hitting maximum iterations!")
 
     problem.solution = problem.method.subprob.iter_data[-1]
+
+    # Save off convergence time (full time - parse time)
+    problem.solution['t_full'] = time.perf_counter() - time_start
 
     return problem
 

@@ -3,31 +3,45 @@ Solution quality metrics for Monte Carlo SCP runs.
 """
 
 import numpy as np
+import os
 import warnings
+import pandas as pd
 
 
 # =============================================================================
-# Main functions
+# Main function
 # =============================================================================
 
-def analyze_quality_metrics():
+def analyze_quality_metrics(mc_data, config=None, filename=None):
     """
     Monte Carlo solution quality metrics computation.
     """
-    config      = load_configuration()
-    data        = load_files(config)
-    extracted   = extract_data(config, data)
-    stats       = generate_statistics(config, extracted)
-    table_cell  = generate_statistic_table(config, stats)
 
-    plot_tables(config, table_cell)
+    # File to save LaTeX tables to
+    filename_full = os.path.expanduser(filename) if filename else None
+
+    # Define variables to find statistics of and associated metrics
+    if config is None:
+        config      = load_configuration()
+
+    # Pull out variables from each run
+    extracted   = extract_data(config, mc_data)
+
+    # Calculated associated metrics for each variable for each method across runs
+    stats       = generate_statistics(config, extracted)
+
+    # Generate tables for statistics
+    table = generate_statistic_table(stats)
+
+    # Plot tables and save LaTeX tables if filename provided
+    plot_tables(table, filename_full)
 
     return {
         "config": config,
-        "data": data,
+        "data": mc_data,
         "extracted": extracted,
         "stats": stats,
-        "table_cell": table_cell,
+        "table_cell": table,
     }
 
 
@@ -36,87 +50,202 @@ def analyze_quality_metrics():
 # =============================================================================
 
 def load_configuration():
-    """Define configuration and metric settings."""
-    config = {
-        "paths": {"shim": ""},  # e.g., 'quadrotor_3dof/'
-        "variable_names": [
-            "No. of Iteration",
-            "Solve Time/Iteration (ms/iter)",
-            "Total Parse Time (ms)",
-            "Total Solve Time (ms)",
-            "Total Convergence Time (ms)",
-            "Dynamics Defect",
-            "Constraint Violation",
-            "Cost",
-            "Converged",
-        ],
-        "metrics": [
+    """
+    Define standard data and metric settings if config not provided to function.
+
+    NOTE: Currently these are all implemented data and metric options
+
+    """
+
+    #  All metrics available for calculations
+    metrics = [
             "Max", "Mean", "Median", "Min", "Mode",
             "Std", "Var", "1-Norm", "2-Norm", "Inf-Norm",
-        ],
-    }
-
-
-    # NOTE:
-    # This dictionary maps each variable index to the set of metric indices to evaluate.
-    # Alternatively, you can explicitly specify metric names (e.g., "max", "mean", etc.)
-    # for each variable instead of using index-based mappings.
-    config["metric_groups"] = {
-        "n_iter_metric": list(range(1, 8)), # e.g. number of iterations to converge uses the first 8 metrics above (up to 1-norm)
-        "time_per_iter_metric": list(range(1, 8)),
-        "total_parse_time_metric": list(range(1, 8)),
-        "total_solve_time_metric": list(range(1, 8)),
-        "total_convergence_time_metric": list(range(1, 8)),
-        "dynamic_defct_metric": [8, 9, 10],
-        "cnst_violation_metric": list(range(1, 8)),
-        "cost_metric": list(range(1, 9)),
-        "conv_metric": list(range(1, 9)),
+        ]
+    
+    # Standard variables to be analyzed and their assocaited metrics
+    config = {
+        "variable_name": {
+            "No. of Iteration": metrics[0:7],
+            "Solve Time/Iteration (ms/iter)": metrics[0:7],
+            "Parse Time/Iteration (ms/iter)": metrics[0:7],
+            "Propagation Time/Iteration (ms/iter)": metrics[0:7],
+            "Total Solve Time (ms)": metrics[0:7],
+            "Total Parse Time (ms)": metrics[0:7],
+            "Total Propagation Time (ms)": metrics[0:7],
+            "Total Convergence Time (ms)": metrics[0:7],
+            "Dynamics Defect": metrics[8:10],
+            "Constraint Violation": metrics[0:7],
+            "Cost": metrics[0:8],
+            "Converged": metrics[0:8],
+        },
     }
 
     warnings.filterwarnings("ignore")
     return config
 
 
-def load_files(config):
-    """Template for loading Monte Carlo result files."""
-    print("Loading files...")
-    # TODO: implement file discovery and load logic
-    data = []  # placeholder for list of per-run data dictionaries
-    return data
-
-
 def extract_data(config, data):
-    """Extract key metrics from each Monte Carlo run."""
+    """Extract key variables from each Monte Carlo run."""
     print("Extracting data from runs...")
-    # TODO: iterate over data and compute metrics
-    extracted = []  # placeholder for structured metrics per run
+    extracted = {}
+
+    # Loop through each method and store extracted data
+    for method, method_data in data.items():
+        extracted[method] = {}
+        all_vars = { 
+            "No. of Iteration": [],
+            "Solve Time/Iteration (ms/iter)": [],
+            "Parse Time/Iteration (ms/iter)": [],
+            "Propagation Time/Iteration (ms/iter)": [],
+            "Total Solve Time (ms)": [],
+            "Total Parse Time (ms)": [],
+            "Total Propagation Time (ms)": [],
+            "Total Convergence Time (ms)": [],
+            "Dynamics Defect": [],
+            "Constraint Violation": [],
+            "Cost": [],
+            "Converged": [],
+        }
+
+        # Loop through all runs and store all variables as defined within config
+        for run_data in method_data['mc_data']:
+            num_iters = len(run_data['iters']) - 1
+            # Summation of all time series data across the iterations
+            for iter_data in run_data['iters']:
+                if iter_data['iter_num'] == 0:
+                    time_solve = 0
+                    time_prop = 0
+                    time_parse = 0
+                else:
+                    time_solve += iter_data['solve_time']
+                    time_prop += iter_data['prop_time']
+                    time_parse += iter_data['parse_time']
+
+            # Finding avg dynamic defect across time for each state
+            defects = np.array(run_data['iters'][-1]['conv_data']['defect'])
+            avg_state_vec = np.mean(defects, axis=0)
+
+            # Saving all variables data in a temporary dictionary
+            all_vars["Solve Time/Iteration (ms/iter)"].append(time_solve/num_iters)
+            all_vars["Parse Time/Iteration (ms/iter)"].append(time_parse/num_iters)
+            all_vars["Propagation Time/Iteration (ms/iter)"].append(time_prop/num_iters)
+            all_vars["Total Solve Time (ms)"].append(time_solve)
+            all_vars["Total Parse Time (ms)"].append(time_parse)
+            all_vars["Total Propagation Time (ms)"].append(time_prop)
+            all_vars["Total Convergence Time (ms)"].append((run_data['t_all'] * 1000) - time_parse)
+            all_vars["No. of Iteration"].append(num_iters)
+            all_vars['Cost'].append(run_data['iters'][-1]['cost'])
+            all_vars["Dynamics Defect"].append(avg_state_vec)
+            all_vars["Constraint Violation"].append(run_data['iters'][-1]['conv_data']['chk_feas'])
+            all_vars["Converged"].append(run_data['iters'][-1]['converged'])
+        
+        # Only saving variables defined in the config
+        for var in config['variable_name'].keys():
+            extracted[method][var] = all_vars[var]
+    
     return extracted
 
 
 def generate_statistics(config, extracted):
-    """Compute overall statistics across Monte Carlo runs."""
+    """Compute overall statistics across Monte Carlo runs per method."""
     print("Computing statistics across runs...")
-    # TODO: compute actual metrics such as mean, std, min, max, etc.
-    stats = {}  # placeholder for aggregated statistics
+    stats = {}
+
+    # Loop through each method
+    for method, method_data in extracted.items():
+        stats[method] = {}
+        # Loop through each variable to calculate metrics
+        for variable, data in method_data.items():
+            stats[method][variable] = {}
+            # Deal with Dynamic Defects seperatly
+            if variable == "Dynamics Defect":
+                for norm in ['1-Norm', '2-Norm', 'Inf-Norm']:
+                    stats[method][variable][norm] = {}
+                    temp = []
+                    for run_data in data:
+                        temp.append(calc_stat(run_data, norm))
+                    for stat in ["Max", "Mean", "Median", "Min", "Mode", "Std", "Var" ]:
+                        stats[method][variable][norm][stat] = calc_stat(temp, stat)
+            # Calculate the metrics for all other variables
+            else:
+                metrics_to_calc = config['variable_name'][variable]
+                for metric in metrics_to_calc:
+                    stats[method][variable][metric] = calc_stat(data, metric)
+
     return stats
 
 
-def generate_statistic_table(config, stats):
-    """Build formatted tables of metrics."""
+def generate_statistic_table(stats):
+    """Convert nested stats dict into separate DataFrames for each metric or submetric."""
     print("Generating statistic tables...")
-    # TODO: build table(s) as nested lists, pandas DataFrames, etc.
-    table_cell = []  # placeholder for table representations
-    return table_cell
+    tables = {}
+
+    for method, metrics in stats.items():
+        for metric_name, metric_values in metrics.items():
+            if isinstance(metric_values, dict) and all(isinstance(v, dict) for v in metric_values.values()):
+                # Nested submetrics (e.g. "Dynamics Defect" -> "1-Norm", "2-Norm", "Inf-Norm")
+                for sub_name, sub_values in metric_values.items():
+                    key = f"{metric_name} ({sub_name})"
+                    tables.setdefault(key, {})[method] = sub_values
+            else:
+                # Regular metrics (e.g. "No. of Iteration", "Cost", etc.)
+                tables.setdefault(metric_name, {})[method] = metric_values
+
+    # Convert each collected metric dict to a DataFrame
+    df_tables = {name: pd.DataFrame(data) for name, data in tables.items()}
+    return df_tables
 
 
-def plot_tables(config, table_cell):
-    """Plot tables or metrics (placeholder)."""
+def plot_tables(tables, filename=None):
+    """Print each metric table and optionally write all LaTeX tables to a file."""
     print("Plotting tables...")
-    for idx, table in enumerate(table_cell):
-        if table:
-            print(f"Table {idx+1}: {config['variable_names'][idx]}")
-            print(table)
+    latex_blocks = []
 
+    for name, df in tables.items():
+        print(f"\n=== {name} ===\n")
+        print(df.round(6))
+        print()
+
+        latex_code = df.to_latex(
+            float_format="%.6g",
+            escape=False,
+            caption=name,
+            label=name.replace(" ", "_")
+        )
+        latex_blocks.append(latex_code)
+
+    combined_latex = "\n\n".join(latex_blocks)
+
+    if filename:
+        with open(filename, "w") as f:
+            f.write("% Auto-generated LaTeX tables\n\n")
+            f.write(combined_latex)
+        print(f"\n✅ LaTeX tables successfully written to '{filename}'")
+
+    return latex_blocks
+
+def calc_stat(data, metric):
+        """Compute a single statistical metric on data."""
+        metric_funcs = {
+            "Max": lambda x: np.max(x),
+            "Mean": lambda x: np.mean(x),
+            "Median": lambda x: np.median(x),
+            "Min": lambda x: np.min(x),
+            "Mode": lambda x: np.unique(x, return_counts=True)[0][
+                np.argmax(np.unique(x, return_counts=True)[1])
+            ],
+            "Std": lambda x: np.std(x, ddof=1),
+            "Var": lambda x: np.var(x, ddof=1),
+            "1-Norm": lambda x: np.linalg.norm(x, ord=1),
+            "2-Norm": lambda x: np.linalg.norm(x, ord=2),
+            "Inf-Norm": lambda x: np.linalg.norm(x, ord=np.inf),
+        }
+
+        if metric not in metric_funcs:
+            raise ValueError(f"Unknown metric: {metric}")
+
+        return metric_funcs[metric](data)
 
 # =============================================================================
 # main() testing function
