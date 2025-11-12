@@ -21,13 +21,13 @@ flags:
 
 # Convergence settings
 conv:
-  eps_cost: 0.0
-  eps_state: 0.0
-  eps_path: 0.0
-  eps_nfz: 0.0
-  eps_aux: 0.0
-  eps_term: 0.0
-  eps_dyn: 0.0
+  eps_cost:   []
+  eps_state:  []
+  eps_path:   []
+  eps_nfz:    []
+  eps_aux:    []
+  eps_term:   []
+  eps_dyn:    []
   ctcs_mult_state: 1.0
   ctcs_mult_cnst: 1.0
   eps_ctcs: 1e-5

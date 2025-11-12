@@ -36,9 +36,7 @@ conv:
   eps_ctcs: 1e-4
   eps_state: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
   eps_cost: 1.0
-  eps_path: [0.1]
   eps_nfz: [0.1]
-  eps_aux: [0.1]
   eps_term: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
   eps_term_min: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
   eps_term_max: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
