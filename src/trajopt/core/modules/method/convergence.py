@@ -7,6 +7,10 @@ def set_convergence_tolerance(problem):
     mission = problem.mission
     model   = problem.model
     method  = problem.method
+
+    eps_path_config = method.conv["eps_path"]
+    eps_nfz_config  = method.conv["eps_nfz"]
+    eps_aux_config  = method.conv["eps_aux"]
     
     # STATE CONVERGENCE
     n                   = model.nz
@@ -23,9 +27,9 @@ def set_convergence_tolerance(problem):
     if method.flags["ctcs"] and mission.n_ineq > 0:
         eps_state = np.concatenate([
             ctcs_mult_state * eps_state,
-            ctcs_mult_cnst  * method.conv["eps_path"],
-            ctcs_mult_cnst  * method.conv["eps_nfz"],
-            ctcs_mult_cnst  * method.conv["eps_aux"]
+            ctcs_mult_cnst  * eps_path_config,
+            ctcs_mult_cnst  * eps_nfz_config,
+            ctcs_mult_cnst  * eps_aux_config
         ])
         M_state_d2nd = np.diag(np.concatenate([
             np.diag(M_state_d2nd),
@@ -180,9 +184,9 @@ def set_convergence_tolerance(problem):
     if method.flags["ctcs"] and mission.n_ineq > 0:
         eps_dyn = np.concatenate([
             ctcs_mult_state * eps_dyn,
-            ctcs_mult_cnst * method.conv["eps_path"],
-            ctcs_mult_cnst * method.conv["eps_nfz"],
-            ctcs_mult_cnst * method.conv["eps_aux"]
+            ctcs_mult_cnst * eps_path_config,
+            ctcs_mult_cnst * eps_nfz_config,
+            ctcs_mult_cnst * eps_aux_config
         ])
         M_dyn_d2nd = np.diag(np.concatenate([
             np.diag(M_dyn_d2nd),

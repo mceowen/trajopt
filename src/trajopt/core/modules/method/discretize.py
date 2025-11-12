@@ -49,10 +49,10 @@ def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, problem):
     model = problem.model
     method = problem.method
     
-    if len(model.nonconvex_nodal_constraints) > 0:
+    if len(model.nonconvex_inequality_constraints) > 0:
         
         # Convert to JAX arrays upfront if any constraint uses JAX (auto_diff=1)
-        has_jax = any(c.auto_diff == 1 for c in model.nonconvex_nodal_constraints)
+        has_jax = any(c.auto_diff == 1 for c in model.nonconvex_inequality_constraints)
         if has_jax:
             ts_jax = jnp.asarray(t_ref)
             zs_jax = jnp.asarray(z_ref)
@@ -70,7 +70,7 @@ def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, problem):
             uk = us_jax[k] if has_jax else u_ref[k]
             
             col_start = 0
-            for constraint in model.nonconvex_nodal_constraints:
+            for constraint in model.nonconvex_inequality_constraints:
                 col_end = col_start + constraint.dimension
                 
                 f, dfcn_dz, dfcn_du = constraint.affine_approximation(tk, zk, uk)
@@ -381,12 +381,14 @@ def compute_linsys_discrete(zs_ref, us_ref, dts_ref, problem):
     """
     method = problem.method
 
-    if method.flags["ctcs"]:
-        Ak, Bk, Bkp, Sk, zs_minus = discretize_ctcs(zs_ref, us_ref, dts_ref, problem)
-    elif method.flags["jax_dyn"]:
+
+    if method.flags.get("jax_dyn", 0):
         Ak, Bk, Bkp, Sk, zs_minus = discretize_inv_free_jax(zs_ref, us_ref, dts_ref, problem)
     else:
-        Ak, Bk, Bkp, Sk, zs_minus = discretize_inv_foh(zs_ref, us_ref, dts_ref, problem)
+        if method.flags["ctcs"]:
+            Ak, Bk, Bkp, Sk, zs_minus = discretize_ctcs(zs_ref, us_ref, dts_ref, problem)
+        else:
+            Ak, Bk, Bkp, Sk, zs_minus = discretize_inv_foh(zs_ref, us_ref, dts_ref, problem)
     
     return Ak, Bk, Bkp, Sk, zs_minus
 

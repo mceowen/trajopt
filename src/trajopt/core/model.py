@@ -41,6 +41,10 @@ class Model:
         # point to selected model module
         self.model_module = importlib.import_module(model_config["module_path"])
 
+        self.constraints = []
+        for constraint_config in self.constraint_config_list:
+            self.constraints.append(Constraint(yaml_config=constraint_config))
+
     # ===============================================================
     # member functions point to selected fcns from selected module
     # ===============================================================
@@ -108,15 +112,12 @@ class Model:
         # get constraints from configs and convexify them
         # ------------------------------------------------------------
 
-        self.constraints = []
-        for constraint_config in self.constraint_config_list:
-            self.constraints.append(Constraint(yaml_config=constraint_config))
-
         convexify.convexify_constraints(problem)
 
-        self.nonconvex_nodal_constraints = [c for c in self.constraints if not c.convex and not c.always]
-        self.nonconvex_ct_constraints    = [c for c in self.constraints if not c.convex and     c.always]
-        self.convex_constraints          = [c for c in self.constraints if     c.convex]
+        # TODO (CARLOS): all nonconvex constraints assumed to be inequality and linearized for now
+        # will update to more granular classifcations soon
+        self.nonconvex_inequality_constraints = [c for c in self.constraints if not c.convex]
+        self.convex_constraints               = [c for c in self.constraints if     c.convex]
 
         # ------------------------------------------------------------
         # CTCS / state bookkeeping
@@ -128,7 +129,7 @@ class Model:
         mission.n_dyn = self.nz
 
 class Constraint:
-    def __init__(self, func=None, yaml_config=None, **kwargs):
+    def __init__(self, fcn=None, yaml_config=None, **kwargs):
         
         # constraint configs mainly pull from config files, but this class can also be used
         # to define constraints from other places like the obstacle constraints
@@ -138,11 +139,19 @@ class Constraint:
             self.auto_diff  = yaml_config.get('auto_diff', 1)
             self.type       = yaml_config.get('type', 'inequality')
             self.dimension  = yaml_config.get('dimension', 0)
-            self.name       = yaml_config.get('analytical_affine_approximation', None).split('.')[-1]
+            self.jax        = yaml_config.get('jax', 0)
+            self.sympy      = yaml_config.get('sympy', 0)
+            self.name       = yaml_config.get('fcn', None).split('.')[-1]
+            self.units      = yaml_config.get('units', None)
 
             # import functions from config strings
-            self.func                 = tools._import_from_string(yaml_config.get('function', None))
-            self.analytical_affine_approximation = tools._import_from_string(yaml_config.get('analytical_affine_approximation', None))
+            # Handle YAML parsing where None might be parsed as string "None"
+            analytical_affine_approx_str = yaml_config.get('analytical_affine_approximation', None)
+            if analytical_affine_approx_str == "None" or analytical_affine_approx_str is None:
+                analytical_affine_approx_str = None
+            
+            self.fcn                            = tools._import_from_string(yaml_config.get('fcn', None))
+            self.analytical_affine_approximation = tools._import_from_string(analytical_affine_approx_str)
         
         else:
             self.convex     = kwargs.get('convex', 1)
@@ -150,8 +159,11 @@ class Constraint:
             self.auto_diff  = kwargs.get('auto_diff', 0)
             self.type       = kwargs.get('type', 'inequality')
             self.dimension  = kwargs.get('dimension', 0)
-            self.name       = func.__name__
+            self.jax        = kwargs.get('jax', 0)
+            self.sympy      = kwargs.get('sympy', 0)
+            self.name       = fcn.__name__
+            self.units      = kwargs.get('units', None)
             
-            self.func       = func
+            self.fcn       = fcn
             self.analytical_affine_approximation = kwargs.get('analytical_affine_approximation', None)
     
