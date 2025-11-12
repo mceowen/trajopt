@@ -1,5 +1,5 @@
 # Dimensional model configuration (no nondim)
-model_name: "reentry_3dof"
+module_path: "trajopt.core.modules.model.reentry_3dof"
 
 # State/control dimensions
 n: 6

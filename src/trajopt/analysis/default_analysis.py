@@ -24,10 +24,10 @@ def perform_default_analysis(problem):
     nondim = problem.method.nondim
 
     mission_params_exclude_list = ['_nonlinear_aero', 'costs', 'custom_modules', 'mission_module', '_get_cost_cnstr_nondim', '_set_custom_params', '_custom_constraints', '_custom_cost', 'problem'] 
-    model_params_list = ['constraint_config_list', 'flags', 'm', 'n', 'model_name', 'nz', 'obs', 'u_types', 'z_types']
+    model_params_list = ['constraint_config_list', 'flags', 'm', 'n', 'name', 'nz', 'obs', 'u_types', 'z_types']
     method_params_list = ['N', 'N_dens', 'Npm', 'T_init', 'T_max', 'T_min', 'Ts_init', 'conv', 'conv_data', 'cost_init', 
                           'dT_max', 'ddts_max', 'dt_init', 'dts_init', 'dts_max', 'dts_min', 'flags', 'line_guess_u_init',
-                          'method_name', 'n_minus', 'n_plus', 'nl_guess_u_start', 'nl_guess_u_stop', 'solver_opts',
+                          'name', 'n_minus', 'n_plus', 'nl_guess_u_start', 'nl_guess_u_stop', 'solver_opts',
                           'nondim', 'ts_init', 'us_init', 'weights', 'z_ind', 'zs_init']
 
     mission_params = tools.extract_attributes_exclude(problem.mission, exclude=mission_params_exclude_list)
@@ -63,11 +63,17 @@ def perform_default_analysis(problem):
         # create dense control interpolation for this iteration
         us_ref_dense = np.hstack([np.interp(ts_dense, ts_ref, us_ref[:, i]).reshape((-1, 1)) for i in range(m)])
         u_ref_dense = us_ref_dense @ nondim['M']['ctrl']['nd2d']
+
+        # Wrapper that does FOH interpolation before calling dynamics
+        def FOH_dynamics(t, z):
+            # FOH interpolation to get control at time t
+            u = np.array([np.interp(t, ts_ref, us_ref[:, i]) for i in range(m)])
+            return problem.model.dynamics(t, z, u)
         
         # nonlinear propagation
         zs_ref_np = np.asarray(zs_ref)
         sol = solve_ivp(
-            problem.model.dynamics,
+            FOH_dynamics,
             [ts_ref[0], ts_ref[-1]],
             zs_ref_np[0, :n],
             args=(us_ref, ts_ref),
@@ -90,21 +96,3 @@ def perform_default_analysis(problem):
             data['u'] = data['us'] @ nondim['M']['ctrl']['nd2d']
 
     return {'iters': iter_data, 'params': params_dict}
-
-
-# contents of iters dict from subproblem
-# self.iter_data: List[Dict[str, Any]] = [{
-#     "iter_num": 0,  # init only (no outputs yet)
-#     "zs_ref": problem.method.zs_init,
-#     "us_ref": problem.method.us_init,
-#     "dts_ref": problem.method.dts_init,
-#     "ts_ref": problem.method.ts_init,
-#     "conv_data": {
-#         "vb_path": np.zeros((self.N, mission.n_path)),
-#         "vb_nfz":  np.zeros((self.N, mission.n_nfz)),
-#         "vb_aux":  np.zeros((self.N, self.n_aux)),
-#         "vb_dyn":  np.zeros((self.N - 1, self.nz)),
-#         "vb_term": np.zeros((self.n_term, 1)),
-#     },
-#     "weights": problem.method.weights,
-# }]

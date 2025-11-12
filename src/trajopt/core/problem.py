@@ -1,10 +1,13 @@
+import numpy as np
+
 import trajopt; import importlib; importlib.reload(trajopt)
-import trajopt.utils.nondim                 as nondim
+import trajopt.utils.nondim as nondim
 
 from trajopt.core.mission   import Mission
 from trajopt.core.model     import Model
 from trajopt.core.method    import Method
-import numpy as np
+from trajopt.core.modules.method.indices import Indices  
+
 
 class Problem:
     def __init__(self, config, subprob=None):
@@ -27,6 +30,9 @@ class Problem:
 
         # get initial guess
         self.method.get_initial_guess()
+
+        # set problem indices
+        self.indices = Indices(self)
 
         # use precompiled cvxpy subproblem if provided
         if subprob is not None:

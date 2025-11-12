@@ -1,0 +1,9 @@
+# default model params
+
+n: 1
+m: 1
+
+flags:
+  earth_rot: 0
+  nondim: 0
+  ctrl_type: ''

@@ -32,14 +32,8 @@ def dynamics(ts, zs, us, problem, t_vec=None):
     r = zs[0:3]
     v = zs[3:6]
 
-    # extract controls 
-    if t_vec is None:
-        us2 = us
-    else:
-        us2 = np.array([np.interp(ts, t_vec, us[:, i]) for i in range(m)])
-            
-    # extract control
-    T = us2
+    # extract control (us is now a single control vector, not a trajectory)
+    T = us
 
     # compute velocity and acceleration
     xDot        = np.empty(6) # initialize
@@ -73,15 +67,8 @@ def dynamics2(ts, zs, us, problem, t_vec=None):
     # extract states
     r = zs[0:3]
     v = zs[3:6]
-
-    # extract controls 
-    if t_vec is None:
-        us2 = us
-    else:
-        us2 = np.array([np.interp(ts, t_vec, us[:, i]) for i in range(m)])
-            
-    # extract control
-    T = us2
+    
+    T = us
 
     # compute velocity and acceleration
     xDot        = np.empty(6) # initialize

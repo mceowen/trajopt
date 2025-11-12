@@ -1,62 +1,42 @@
-import trajopt.utils.tools                  as tools
+import trajopt.utils.tools as tools
 import numpy as np
 
-def load_configs(example_name):
-
-    config = {}
-
-    config["example_name"] = example_name
-
-    config["mission"] = {}
-    config["model"]   = {}
-    config["method"]  = {}
-
-    # example configs
-    example_pkg = f"trajopt.examples.{example_name}"
-    example = {
-        k: tools.load_yaml(example_pkg, f"{k}.yaml")
-        for k in [
-            "mission", "model", "method"
-            ]
-        }
-
-    # base configs
-    base_pkgs = {
-        "mission": "trajopt.core.configs.missions",
-        "model":  "trajopt.core.configs.models",
-        "method": "trajopt.core.configs.methods",
-    }
-
-    base = {
-        k: tools.load_yaml(base_pkgs[k], f"{name}.yaml")
-        for k, name in {
-            "mission": example["mission"]["mission_name"],
-            "model":   example["model"]["model_name"],
-            "method":  example["method"]["method_name"],
-        }.items()
-    }
-
-    # general default configs
-    default = {
-        k: tools.load_yaml(base_pkgs[k], "default.yaml")
-        for k in base_pkgs
-        }
-
-    # update config with defaults -> base -> example config
-    for param_type in ['mission', 'model', 'method']:
-        for update_type in [default, base, example]:
-            config[param_type] = tools.deep_update(config[param_type], update_type[param_type])
-
-        # update mission config first with planet and vehicle dicts
-        if param_type == "mission":
-            planet_name  = config["mission"]["planet_name"]
-            vehicle_name = config["mission"]["vehicle_name"]
-            config["mission"]["planet"]  = tools.load_yaml(f"{base_pkgs['mission']}.planet", f"{planet_name}.yaml")
-            config["mission"]["vehicle"] = tools.load_yaml(f"{base_pkgs['mission']}.vehicle", f"{vehicle_name}.yaml")
-
-        # evaluate expressions
-        tools.eval_expressions(param_type, config)
-
+def load_configs(example_name, local=False):
+    
+    # Define paths based on local flag
+    if local:
+        example_pkg = f"trajopt.local.examples.{example_name}"
+        config_base = "trajopt.local.configs"
+    else:
+        example_pkg = f"trajopt.examples.{example_name}"
+        config_base = "trajopt.core.configs"
+    
+    config = {"example_name": example_name}
+    
+    # Load configs for mission, model, method
+    for config_type in ["mission", "model", "method"]:
+        # Load default and example configs
+        default_cfg = tools.load_yaml(f"{config_base}.{config_type}", "default.yaml")
+        example_cfg = tools.load_yaml(example_pkg, f"{config_type}.yaml")
+        
+        # Merge default -> example
+        config[config_type] = tools.deep_update({}, default_cfg)
+        config[config_type] = tools.deep_update(config[config_type], example_cfg)
+        
+        # Load planet and vehicle for mission
+        if config_type == "mission":
+            config["mission"]["planet"] = tools.load_yaml(
+                f"{config_base}.mission.planet", 
+                f"{config['mission']['planet_name']}.yaml"
+            )
+            config["mission"]["vehicle"] = tools.load_yaml(
+                f"{config_base}.mission.vehicle",
+                f"{config['mission']['vehicle_name']}.yaml"
+            )
+        
+        # Evaluate expressions
+        tools.eval_expressions(config_type, config)
+    
     return config
 
 def gen_mc_variations(example_name):

@@ -1,0 +1,65 @@
+# Dimensional model configuration (no nondim)
+module_path: "trajopt.core.modules.model.reentry_3dof"
+
+# State/control dimensions
+n: 6
+m: 1
+
+obs:
+  x_idx: 1
+  y_idx: 2
+
+z_types: ["d", "ang", "ang", "v", "ang", "ang"]
+u_types: ["ang"]
+
+anchor_types : ["t", "v", "m"]
+
+anchor_scales: > 
+  eval:
+  np.array([(mission['planet']['r']/mission['planet']['g'])**0.5,
+  (mission['planet']['r']*mission['planet']['g'])**0.5,
+  mission['vehicle']['mass']])
+
+base_unit_labels: ["m", "s", "kg"]
+
+flags:
+  ctrl_type: "bank_only"
+
+# ===============================================================
+# NFZ CONSTRAINTS
+# ===============================================================
+
+constraints:
+- fcn: "trajopt.core.modules.model.obstacles.nfz_nonlinear"
+  analytical_affine_approximation: "trajopt.core.modules.model.obstacles.nfz_analytical_affine_approximation"
+  type: "inequality"
+  convex: 0
+  auto_diff: 0
+  always: 0
+  dimension: 6
+  category: "nfz"
+
+# ===============================================================
+# PATH CONSTRAINTS
+# ===============================================================
+
+# - fcn: "trajopt.core.modules.model.reentry_3dof.max_q"
+#   analytical_affine_approximation: None
+#   type: "inequality"
+#   convex: 0
+#   auto_diff: 1
+#   always: 0
+#   dimension: 1
+#   category: "path"
+
+# - fcn: "trajopt.core.modules.model.reentry_3dof.max_Q"
+#   analytical_affine_approximation: None
+#   type: "inequality"
+#   convex: 0
+#   auto_diff: 1
+#   always: 0
+#   dimension: 1
+
+# ===============================================================
+# AUXILIARY CONSTRAINTS
+# ===============================================================

@@ -1,5 +1,5 @@
 # Dimensional mission configuration (no nondim)
-mission_name: "vtol"
+module_path: "trajopt.core.modules.mission.vtol"
 
 planet_name: "earth"
 vehicle_name: "vtol"

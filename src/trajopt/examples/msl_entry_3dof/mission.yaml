@@ -1,5 +1,5 @@
 # Dimensional mission configuration (no nondim)
-mission_name: "msl"
+module_path: "trajopt.core.modules.mission.msl"
 
 planet_name: "mars"
 vehicle_name: "msl"
@@ -71,14 +71,14 @@ custom_input_dict: {}
 custom_modules: {}
 
 costs:
-- fcn: "trajopt.core.modules.missions.msl.terminal_cost"
-  analytical_affine_approximation: "trajopt.core.modules.missions.msl.analytical_affine_approximation_terminal_cost"
+- fcn: "trajopt.core.modules.mission.msl.terminal_cost"
+  analytical_affine_approximation: "trajopt.core.modules.mission.msl.analytical_affine_approximation_terminal_cost"
   convex: 1
   auto_diff: 0
   category: "terminal"
 
-- fcn: "trajopt.core.modules.missions.msl.running_cost"
-  analytical_affine_approximation: "trajopt.core.modules.missions.msl.analytical_affine_approximation_running_cost"
+- fcn: "trajopt.core.modules.mission.msl.running_cost"
+  analytical_affine_approximation: "trajopt.core.modules.mission.msl.analytical_affine_approximation_running_cost"
   convex: 1
   auto_diff: 0
   category: "running"

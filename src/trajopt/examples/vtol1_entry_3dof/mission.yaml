@@ -1,5 +1,5 @@
 # Dimensional mission configuration (no nondim)
-mission_name: "vtol"
+module_path: "trajopt.core.modules.mission.vtol"
 
 planet_name: "earth"
 vehicle_name: "vtol"
@@ -63,14 +63,14 @@ aux_limits: {}
 custom_input_dict: {}
 
 costs:
-- fcn: "trajopt.core.modules.missions.vtol.terminal_cost"
-  analytical_affine_approximation: "trajopt.core.modules.missions.vtol.analytical_affine_approximation_terminal_cost"
+- fcn: "trajopt.core.modules.mission.vtol.terminal_cost"
+  analytical_affine_approximation: "trajopt.core.modules.mission.vtol.analytical_affine_approximation_terminal_cost"
   convex: 1
   auto_diff: 0
   category: "terminal"
 
-- fcn: "trajopt.core.modules.missions.msl.running_cost"
-  analytical_affine_approximation: "trajopt.core.modules.missions.vtol.analytical_affine_approximation_running_cost"
+- fcn: "trajopt.core.modules.mission.vtol.running_cost"
+  analytical_affine_approximation: "trajopt.core.modules.mission.vtol.analytical_affine_approximation_running_cost"
   convex: 1
   auto_diff: 0
   category: "running"

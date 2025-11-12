@@ -1,7 +1,7 @@
 import numpy as np
-import trajopt.core.modules.methods.initial_guess      as guess
-import trajopt.core.modules.methods.convergence        as convergence
-import trajopt.core.modules.methods.discretize     as discretize
+import trajopt.core.modules.method.initial_guess      as guess
+import trajopt.core.modules.method.convergence        as convergence
+import trajopt.core.modules.method.discretize     as discretize
 
 class Method:
 
@@ -14,7 +14,6 @@ class Method:
         # ===============================================================
 
         method_config    = config["method"]
-        self.method_name = method_config["method_name"]
         self.N           = method_config["N"]
         self.flags       = method_config['flags']
         self.solver_opts = method_config["solver_opts"]
