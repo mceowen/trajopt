@@ -83,6 +83,8 @@ def set_nondim_params(problem, base_unit_labels=["m", "s", "kg"]):
     method.nondim["M"]["cnst"]  = {}
     method.nondim["M"]["nfz"]   = {}
     method.nondim["M"]["dyn"]   = {}
+    method.nondim["M"]["path"]  = {}
+    method.nondim["M"]["aux"]   = {}
     method.nondim["M"]["cost"]  = {}
     method.nondim["M"]["term"]  = {}
 
@@ -127,4 +129,10 @@ def set_nondim_params(problem, base_unit_labels=["m", "s", "kg"]):
 
     method.nondim["M"]["nfz"]["d2nd"] = np.diag(1 / np_ineq[mission.nfz_idx]).copy()
     method.nondim["M"]["nfz"]["nd2d"] = np.diag(np_ineq[mission.nfz_idx]).copy()
+
+    method.nondim["M"]["path"]["d2nd"] = np.diag(1 / np_ineq[mission.path_idx]).copy()
+    method.nondim["M"]["path"]["nd2d"] = np.diag(np_ineq[mission.path_idx]).copy()
+
+    method.nondim["M"]["aux"]["d2nd"] = np.diag(1 / np_ineq[mission.aux_idx]).copy()
+    method.nondim["M"]["aux"]["nd2d"] = np.diag(np_ineq[mission.aux_idx]).copy()
     

@@ -62,7 +62,7 @@ def set_convergence_tolerance(problem):
             eps_min_path    = float(np.min(eps_path_nd))
         else:
             eps_path        = method.conv["eps_path"]
-            M_path_d2nd     = method.nondim["M_path_d2nd"]
+            M_path_d2nd     = method.nondim["M"]["path"]["d2nd"]
             eps_path_nd     = M_path_d2nd @ eps_path
             eps_min_path    = float(np.min(eps_path_nd))
     else:
@@ -321,5 +321,6 @@ def check_convergence_tolerance(problem, subprob, O):
 
     O["converged"] = bool_conv
     O["conv_data"] = conv_data
+
     return O
 

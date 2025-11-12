@@ -75,7 +75,7 @@ def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, problem):
                 
                 f, dfcn_dz, dfcn_du = constraint.affine_approximation(tk, zk, uk)
                 g[k, col_start:col_end]       = np.asarray(f)
-                dgdz[k, col_start:col_end, :] = np.asarray(dfcn_dz)
+                dgdz[k, col_start:col_end, :] = np.asarray(dfcn_dz)[:, :model.n]
                 dgdu[k, col_start:col_end, :] = np.asarray(dfcn_du)
                 
                 col_start = col_end
@@ -235,11 +235,11 @@ def RHS_ltv(tau, lds, us_ref, dts_ref, problem):
         S_tau_dot   = Phi_tau_inv @ S_tau
 
         # Setup linear system properly
-        lds_dot[ k * method.lds0_size + method.z_ind]     = x_dot
-        lds_dot[ k * method.lds0_size + method.Ak_ind]    = A_tau_dot.flatten()
-        lds_dot[ k * method.lds0_size + method.Bk_ind]    = B_tau_dot.flatten()
-        lds_dot[ k * method.lds0_size + method.Bkp_ind]   = Bp_tau_dot.flatten()
-        lds_dot[ k * method.lds0_size + method.Sk_ind]    = S_tau_dot
+        lds_dot[ k * method.lds0_size + method.z_ind  ] = x_dot
+        lds_dot[ k * method.lds0_size + method.Ak_ind ] = A_tau_dot.flatten()
+        lds_dot[ k * method.lds0_size + method.Bk_ind ] = B_tau_dot.flatten()
+        lds_dot[ k * method.lds0_size + method.Bkp_ind] = Bp_tau_dot.flatten()
+        lds_dot[ k * method.lds0_size + method.Sk_ind ] = S_tau_dot
 
     return lds_dot
 
@@ -248,18 +248,22 @@ def jit_jax_discretize(problem):
     model = problem.model
     method = problem.method
     
-    n = int(model.nz)
+    n = int(model.n)
+    nz = int(model.nz)
     m = int(model.m)
     N = int(method.N)
 
     # define static indices for stacked RHS vector 
-    Ak_ind0   = n
-    Bk_ind0   = Ak_ind0  + n*n
-    Bkp_ind0  = Bk_ind0  + n*m
-    Sk_ind0   = Bkp_ind0 + n*m
+    Ak_ind0   = nz
+    Bk_ind0   = Ak_ind0  + nz*nz
+    Bkp_ind0  = Bk_ind0  + nz*m
+    Sk_ind0   = Bkp_ind0 + nz*m
 
     # pull ltv dynamics
-    lin_dyn = model.lin_dyn
+    if method.flags["ctcs"]:
+        lin_dyn = model.lin_dyn_ctcs
+    else:
+        lin_dyn = model.lin_dyn
 
     # nsub defines the number of sub *nodes* between knot points
     nsub_nodes = 30
@@ -272,9 +276,9 @@ def jit_jax_discretize(problem):
         b = tau
 
         x       = lds_k[         : Ak_ind0]
-        phi_a   = lds_k[Ak_ind0  : Bk_ind0].reshape((n, n))
-        phi_b_m = lds_k[Bk_ind0  : Bkp_ind0].reshape((n, m))
-        phi_b_p = lds_k[Bkp_ind0 : Sk_ind0].reshape((n, m))
+        phi_a   = lds_k[Ak_ind0  : Bk_ind0].reshape((nz, nz))
+        phi_b_m = lds_k[Bk_ind0  : Bkp_ind0].reshape((nz, m))
+        phi_b_p = lds_k[Bkp_ind0 : Sk_ind0].reshape((nz, m))
         phi_s   = lds_k[Sk_ind0  : ]
 
         u = a * us_k + b * us_kp
@@ -283,9 +287,9 @@ def jit_jax_discretize(problem):
         fc, Ac, Bc    = lin_dyn(tau, x, u)
 
         P1_dot = (sigma * fc)
-        P2_dot = (sigma * Ac @ phi_a).reshape((n*n,))
-        P3_dot = (sigma * Ac @ phi_b_m + sigma * Bc * a).reshape((n*m,))
-        P4_dot = (sigma * Ac @ phi_b_p + sigma * Bc * b).reshape((n*m,))
+        P2_dot = (sigma * Ac @ phi_a).reshape((nz*nz,))
+        P3_dot = (sigma * Ac @ phi_b_m + sigma * Bc * a).reshape((nz*m,))
+        P4_dot = (sigma * Ac @ phi_b_p + sigma * Bc * b).reshape((nz*m,))
         P5_dot = (sigma * Ac @ phi_s   + fc)
 
         return jnp.concatenate([P1_dot, P2_dot, P3_dot, P4_dot, P5_dot])
@@ -305,19 +309,19 @@ def jit_jax_discretize(problem):
     # initilize stacked propagation vector  
     def pack_lds0(zs_k):
         P1 = zs_k
-        P2 = jnp.eye(n).reshape(n*n)
-        P3 = jnp.zeros(n*m)
-        P4 = jnp.zeros(n*m)
-        P5 = jnp.zeros(n)
+        P2 = jnp.eye(nz).reshape(nz*nz)
+        P3 = jnp.zeros(nz*m)
+        P4 = jnp.zeros(nz*m)
+        P5 = jnp.zeros(nz)
 
         return jnp.concatenate([P1, P2, P3, P4, P5])
 
     # unpacks stacked propagation vector to correct shapes
     def unpack_ldsf(ldsf_k):
         zs_minus_k = ldsf_k[ : Ak_ind0]
-        A_jax_k    = ldsf_k[Ak_ind0  : Bk_ind0].reshape((n, n))
-        B_jax_k    = ldsf_k[Bk_ind0  : Bkp_ind0].reshape((n, m))
-        Bp_jax_k   = ldsf_k[Bkp_ind0 : Sk_ind0].reshape((n, m))
+        A_jax_k    = ldsf_k[Ak_ind0  : Bk_ind0].reshape((nz, nz))
+        B_jax_k    = ldsf_k[Bk_ind0  : Bkp_ind0].reshape((nz, m))
+        Bp_jax_k   = ldsf_k[Bkp_ind0 : Sk_ind0].reshape((nz, m))
         S_jax_k    = ldsf_k[Sk_ind0  : ]
 
         return (A_jax_k, B_jax_k, Bp_jax_k, S_jax_k, zs_minus_k)

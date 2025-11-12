@@ -56,7 +56,8 @@ uf_idx: []
 udot_max: [10]
 udot_max_idx: [0]
 
-path_limits: {}
+path_limits:
+  max_q: 8000
 
 aux_limits: {}
 

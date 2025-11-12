@@ -6,6 +6,7 @@ import trajopt.core.modules.method.initial_guess as guess
 import trajopt.core.modules.method.convergence as convergence
 import trajopt.core.modules.method.convexify as convexify
 import trajopt.utils.nondim as nondim
+import jax.numpy as jnp
 
 class Mission:
     def __init__(self, problem, config):
@@ -195,10 +196,19 @@ class Mission:
         M_udot_max = method.nondim["M"]["ctrl"]["d2nd"][np.ix_(self.udot_max_idx, self.udot_max_idx)]
         self.udot_max = M_udot_max @ self.udot_max * method.nondim["nt"]
 
-        # TODO (CARLOS): make nondim correct for both distances and angles
-        self.obs["xc"] = self.obs["xc"] / method.nondim["nd"]
-        self.obs["yc"] = self.obs["yc"] / method.nondim["nd"]
-        self.obs["rc"] = self.obs["rc"] / method.nondim["nd"]
+        if method.flags["jax_dyn"]:
+            obs_xc = jnp.asarray(self.obs["xc"])
+            obs_yc = jnp.asarray(self.obs["yc"])
+            obs_rc = jnp.asarray(self.obs["rc"])
+        else:
+            obs_xc = self.obs["xc"]
+            obs_yc = self.obs["yc"]
+            obs_rc = self.obs["rc"]
+
+        # TODO (CARLOS): temporaray to work for quadrotor and reentry 3dof, need to make more general soon
+        self.obs["xc"] = obs_xc * method.nondim["M"]["state"]["d2nd"][1, 1]
+        self.obs["yc"] = obs_yc * method.nondim["M"]["state"]["d2nd"][1, 1]
+        self.obs["rc"] = obs_rc * method.nondim["M"]["state"]["d2nd"][1, 1]
 
         self.set_custom_params()
 

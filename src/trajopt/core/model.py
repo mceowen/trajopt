@@ -95,10 +95,19 @@ class Model:
         # Linearized Dynamics
         # ------------------------------------------------------------
         if method.flags.get("jax_dyn", 0):
+
             f, dfcn_dz, dfcn_du = convexify.linearize_jax(self._dynamics, problem)
 
             def lin_dyn(ts, zs, us):
                 return f(zs, us), dfcn_dz(zs, us), dfcn_du(zs, us)
+
+            if method.flags["ctcs"] == 1:
+                f_ctcs, dfcn_dz_ctcs, dfcn_du_ctcs = convexify.linearize_jax_ctcs(self._dynamics, problem)
+
+                def lin_dyn_ctcs(ts, zs, us):
+                    return f_ctcs(zs, us), dfcn_dz_ctcs(zs, us), dfcn_du_ctcs(zs, us)
+                
+                self.lin_dyn_ctcs = lin_dyn_ctcs
 
         else:
             _lin_dyn = _resolve_function("analytical_linsys")

@@ -598,6 +598,7 @@ class Subproblem:
 
         # compute linearized terminal and running costs
         cost, dcostdz, dcostdu = discretize.compute_linearized_costs(inputs["ts_ref"], inputs["zs_ref"], inputs["us_ref"], self.problem)
+
         g, dgdz, dgdu = discretize.compute_nodal_inequality_constraints(inputs["ts_ref"], inputs["zs_ref"], inputs["us_ref"], self.problem)
 
         # Dynamics & references

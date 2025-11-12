@@ -14,14 +14,14 @@ def convexify_constraints(problem):
                     fcn_jit, dfcn_dz_jit, dfcn_du_jit = linearize_jax(constraint.fcn, problem)
 
                     def affine_approximation(ts, zs, us, f=fcn_jit, dfdz=dfcn_dz_jit, dfdu=dfcn_du_jit):
-                        return f(ts, zs, us), dfdz(ts, zs, us), dfdu(ts, zs, us)
+                        return f(zs, us), dfdz(zs, us), dfdu(zs, us)
                     
                     constraint.affine_approximation = affine_approximation
                 
                 elif constraint.sympy == 1:
                     fcn_sym, dfcn_dz_sym, dfcn_du_sym = linearize_sympy(constraint.fcn, problem)
                     def affine_approximation(ts, zs, us, f=fcn_sym, dfdz=dfcn_dz_sym, dfdu=dfcn_du_sym):
-                        return f(ts, zs, us), dfdz(ts, zs, us), dfdu(ts, zs, us)
+                        return f(zs, us), dfdz(zs, us), dfdu(zs, us)
                     constraint.affine_approximation = affine_approximation
 
             elif constraint.auto_diff == 0:
@@ -68,6 +68,23 @@ def linearize_jax(fcn, problem):
     f = jax.jit(wrapped_fcn)
 
     return f, dfcn_dz, dfcn_du
+
+def linearize_jax_ctcs(fcn, problem):
+    def wrapped_fcn(zs, us):
+        model = problem.model
+
+        constr = jnp.concatenate([model.nonconvex_inequality_constraints[i].fcn(0, zs, us, problem) for i in range(len(model.nonconvex_inequality_constraints))])
+
+        f_val = jnp.concatenate([fcn(0, zs[:model.n], us, problem), jnp.square(jnp.maximum(constr, 0.0))])
+        
+        return f_val
+
+    dfcn_dz = jax.jacrev(wrapped_fcn, argnums=0)
+    dfcn_du = jax.jacrev(wrapped_fcn, argnums=1)
+    f = jax.jit(wrapped_fcn)
+    
+    return f, dfcn_dz, dfcn_du
+    
 
 # PROTOTYPE 
 def linearize_sympy(fcn, problem):
