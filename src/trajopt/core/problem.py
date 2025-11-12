@@ -27,7 +27,7 @@ class Problem:
         self.mission.update_mission_params()
         self.model.update_model_params()
         self.method.update_method_params()
-
+ 
         # get initial guess
         self.method.get_initial_guess()
 
