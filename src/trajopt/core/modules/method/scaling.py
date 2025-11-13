@@ -31,10 +31,10 @@ def nondim_vars(t, x, u, params):
     ts              = params["nondim"]["nt"] * t
     
     # Return dimensionalized x and u
-    xs              = M_state_d2nd @ x
+    zs             = M_state_d2nd @ x
     nu            = M_ctrl_d2nd @ u
     
-    return ts, xs, us
+    return t, z, nu
 
 def dim_vars(t, xs, nu, params):
     """
@@ -42,7 +42,7 @@ def dim_vars(t, xs, nu, params):
     
     Parameters:
     ts (numpy.ndarray): Non-dimensionalized time array
-    xs (numpy.ndarray): Non-dimensionalized state variables array
+    zs(numpy.ndarray): Non-dimensionalized state variables array
     us (numpy.ndarray): Non-dimensionalized control variables array
     params (dict): Parameters dictionary with scaling constants
     
@@ -207,7 +207,7 @@ if __name__ == "__main__":
     x = np.random.rand(3, 4)
     u = np.random.rand(3, 4)
     
-    ts, xs, nu = nondim_vars(t, x, u, params)
+    t, xs, nu = nondim_vars(t, x, u, params)
     print(f"ts: {ts}")
     print(f"xs: {xs}")
     print(f"us: {us}")
@@ -225,7 +225,7 @@ if __name__ == "__main__":
     }
     
     t = np.array([0, 1, 2, 3])
-    xs = np.random.rand(3, 4)
+    zs= np.random.rand(3, 4)
     nu = np.random.rand(2, 4)
     
     t, x, u = dim_vars(t, xs, nu, params)

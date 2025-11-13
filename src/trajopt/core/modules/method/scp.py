@@ -78,7 +78,7 @@ def run_scp(problem):
 class ModuleFlags:
     path:  float = 1.0
     nfz:   float = 1.0
-    aux:   float = 1.0
+    custom:   float = 1.0
     term:  float = 1.0
     dyn:   float = 1.0
     tr:    float = 1.0
@@ -115,7 +115,7 @@ class Subproblem:
         # module sizes
         self.n_path  = int(mission.n_path)
         self.n_nfz   = int(mission.n_nfz)
-        self.n_aux   = int(getattr(mission, "n_aux", 0))
+        self.n_custom   = int(getattr(mission, "n_custom", 0))
         self.n_ineq  = int(mission.n_ineq)
         self.n_term  = int(mission.n_term + mission.n_term_ineq)
         self.n_dyn   = int(getattr(mission, "n_dyn", model.nz))
@@ -126,7 +126,7 @@ class Subproblem:
         # Optional module flags as Parameters (enable gating)
         self.flag_path = method.flags.get("flag_path", 1.0)
         self.flag_nfz  = method.flags.get("flag_nfz", 1.0)
-        self.flag_aux  = method.flags.get("flag_aux", 1.0)
+        self.flag_custom  = method.flags.get("flag_custom", 1.0)
         self.flag_term = method.flags.get("flag_term", 1.0)
         self.flag_dyn  = method.flags.get("flag_dyn", 1.0)
         self.flag_tr   = method.flags.get("flag_tr", 1.0)
@@ -422,7 +422,7 @@ class Subproblem:
                     <= cp.hstack([-self.u_min, self.u_max])
                 )
 
-            # Linearized inequality constraints (path + nfz + aux)
+            # Linearized inequality constraints (path + nfz + custom)
             if mission.n_ineq > 0 and not flags["ctcs"] and self.dgdz is not None:
         
                 C.append(self.dgdz[k] @ self.dz[k] + self.dgdnu[k] @ self.dnu[k] + self.g0[k] - self.vb_ineq[k] <= 0)

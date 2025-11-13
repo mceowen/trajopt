@@ -7,7 +7,7 @@ path_lim: []
 path_idx: []
 n_path: 0
 n_nfz: 0
-n_aux: 0
+n_custom: 0
 n_ineq: 0
 n_eq: 0
 

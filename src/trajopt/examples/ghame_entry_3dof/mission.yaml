@@ -58,7 +58,7 @@ udot_max_idx: [0]
 
 path_limits: {}
 
-aux_limits: {}
+custom_limits: {}
 
 custom_input_dict: {}
 

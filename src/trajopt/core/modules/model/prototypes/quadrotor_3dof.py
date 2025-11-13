@@ -132,34 +132,34 @@ def ocp(config):
 
     if params["method"]['flags']["auto_jac"]:
         problem["lin_cost"] = convexify.generate_jacobians(
-            lambda ts, z, us: problem["cost"](t, z, nu, problem),
+            lambda t, z, us: problem["cost"](t, z, nu, problem),
             problem
         )
     else:
-        problem["lin_cost"] = lambda ts, z, us: analytical_cost(t, z, nu, problem)
+        problem["lin_cost"] = lambda t, z, us: analytical_cost(t, z, nu, problem)
 
     # Dynamics
-    problem["xdot"] = lambda ts, z, nu, t_vec: system_dynamics(t, z, nu, problem, t_vec)
+    problem["xdot"] = lambda t, z, nu, t_vec: system_dynamics(t, z, nu, problem, t_vec)
 
     if params["method"]['flags']["auto_jac"]:
         problem["lin_dyn"] = convexify.generate_jacobians(
-            lambda ts, z, us: system_dynamics(t, z, nu, problem),
+            lambda t, z, us: system_dynamics(t, z, nu, problem),
             problem
         )
     else:
-        problem["lin_dyn"] = lambda ts, z, us: analytical_linsys(t, z, nu, problem)
+        problem["lin_dyn"] = lambda t, z, us: analytical_linsys(t, z, nu, problem)
 
     # Nonconvex inequality constraints
     problem["mission"]["path_lim"] = params["mission"]["path_lim"]
-    problem["P"] = lambda ts, z, nu, t_vec: nonlinear_inequality_constraints(t, z, nu, problem)
+    problem["P"] = lambda t, z, nu, t_vec: nonlinear_inequality_constraints(t, z, nu, problem)
 
     if params["method"]['flags']["auto_jac_cnst"]:
         problem["lin_constr"] = convexify.generate_jacobians(
-            lambda ts, z, us: nonlinear_inequality_constraints(t, z, nu, problem),
+            lambda t, z, us: nonlinear_inequality_constraints(t, z, nu, problem),
             problem
         )
     else:
-        problem["lin_constr"] = lambda ts, z, us: analytical_inequality_constraints(t, z, nu, problem)
+        problem["lin_constr"] = lambda t, z, us: analytical_inequality_constraints(t, z, nu, problem)
 
     # Algorithm - custom formulation
     problem["custom_inputs"]        = lambda problem,   local_vars:     custom_inputs(problem, local_vars)

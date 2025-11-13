@@ -13,7 +13,7 @@ def set_convergence_tolerance(problem):
 
     eps_path_config = method.conv["eps_path"]
     eps_nfz_config  = method.conv["eps_nfz"]
-    eps_aux_config  = method.conv["eps_aux"]
+    eps_custom_config  = method.conv["eps_custom"]
     
     # =======================
     # STATE CONVERGENCE
@@ -34,7 +34,7 @@ def set_convergence_tolerance(problem):
             ctcs_mult_state * eps_state,
             ctcs_mult_cnst  * eps_path_config,
             ctcs_mult_cnst  * eps_nfz_config,
-            ctcs_mult_cnst  * eps_aux_config
+            ctcs_mult_cnst  * eps_custom_config
         ])
         M_state_d2nd = np.diag(np.concatenate([
             np.diag(M_state_d2nd),
@@ -61,24 +61,24 @@ def set_convergence_tolerance(problem):
     # =======================
     n_path = mission.n_path
     n_nfz  = mission.n_nfz
-    n_aux  = mission.n_aux
-    n_ineq = n_path + n_nfz + n_aux
+    n_custom  = mission.n_custom
+    n_ineq = n_path + n_nfz + n_custom
 
     eps_path = np.array(method.conv["eps_path"], ndmin=1)
     eps_nfz  = np.array(method.conv["eps_nfz"],  ndmin=1)
-    eps_aux  = np.array(method.conv["eps_aux"],  ndmin=1)
+    eps_custom  = np.array(method.conv["eps_custom"],  ndmin=1)
 
     # Handle per-category nondim matrices (default to identity if missing)
     M_path_d2nd = method.nondim["M"].get("path", {}).get("d2nd", np.eye(max(n_path, 1)))
     M_nfz_d2nd  = method.nondim["M"].get("nfz", {}).get("d2nd", np.eye(max(n_nfz, 1)))
-    M_aux_d2nd  = method.nondim["M"].get("aux", {}).get("d2nd", np.eye(max(n_aux, 1)))
+    M_custom_d2nd  = method.nondim["M"].get("custom", {}).get("d2nd", np.eye(max(n_custom, 1)))
 
     # Compute dimensional tolerances
     eps_path_nd = M_path_d2nd @ eps_path if n_path > 0 else np.array([])
     eps_nfz_nd  = M_nfz_d2nd  @ eps_nfz  if n_nfz  > 0 else np.array([])
-    eps_aux_nd  = M_aux_d2nd  @ eps_aux  if n_aux  > 0 else np.array([])
+    eps_custom_nd  = M_custom_d2nd  @ eps_custom  if n_custom  > 0 else np.array([])
 
-    eps_ineq_nd = np.concatenate([eps_path_nd, eps_nfz_nd, eps_aux_nd]) if n_ineq > 0 else np.array([0.])
+    eps_ineq_nd = np.concatenate([eps_path_nd, eps_nfz_nd, eps_custom_nd]) if n_ineq > 0 else np.array([0.])
     eps_min_ineq = float(np.min(eps_ineq_nd)) if eps_ineq_nd.size > 0 else 0.
 
     Wconv_ineq = np.diag(eps_min_ineq / eps_ineq_nd) if eps_ineq_nd.size > 0 else np.zeros((1,1))
@@ -143,7 +143,7 @@ def set_convergence_tolerance(problem):
             ctcs_mult_state * eps_dyn,
             ctcs_mult_cnst  * eps_path_config,
             ctcs_mult_cnst  * eps_nfz_config,
-            ctcs_mult_cnst  * eps_aux_config
+            ctcs_mult_cnst  * eps_custom_config
         ])
         M_dyn_d2nd = np.diag(np.concatenate([
             np.diag(M_dyn_d2nd),

@@ -49,7 +49,7 @@ class Model:
     # member functions point to selected fcns from selected module
     # ===============================================================
 
-    def dynamics(self, ts, z, nu, t_vec=None):
+    def dynamics(self, t, z, nu, t_vec=None):
         return self._dynamics(t, z, nu, self.problem, t_vec)
     
     def update_model_params(self):

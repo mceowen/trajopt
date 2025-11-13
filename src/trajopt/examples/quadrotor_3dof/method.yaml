@@ -15,7 +15,7 @@ flags:
 
   flag_path: 1.0
   flag_nfz: 1.0
-  flag_aux: 1.0
+  flag_custom: 1.0
   flag_term: 1.0
   flag_dyn: 1.0
   flag_tr:  1.0
@@ -56,7 +56,7 @@ weights:
   wbuff: 100.0
   w_nfz_scale: 1.0
   w_path_scale: 0.0
-  w_aux_scale: 0.0
+  w_custom_scale: 0.0
   w_dyn_scale: 100000.0
   w_term_scale: 100.0
 

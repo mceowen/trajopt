@@ -136,6 +136,6 @@ class Method:
         # --- Initialize virtual buffers ---
         self.conv_data["vb_path"] = np.zeros((self.N,   mission.n_path))
         self.conv_data["vb_nfz"]  = np.zeros((self.N,   mission.n_nfz))
-        self.conv_data["vb_aux"]  = np.zeros((self.N,   mission.n_aux))
+        self.conv_data["vb_custom"]  = np.zeros((self.N,   mission.n_custom))
         self.conv_data["vb_dyn"]  = np.zeros((self.N-1, model.nz))
         self.conv_data["vb_term"] = np.zeros(model.nz)

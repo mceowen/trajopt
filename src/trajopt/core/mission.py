@@ -51,7 +51,7 @@ class Mission:
         
         # dictionaries
         self.path_limits       = mission_config["path_limits"]
-        self.aux_limits        = mission_config["aux_limits"]
+        self.custom_limits        = mission_config["custom_limits"]
         self.custom_input_dict = mission_config["custom_input_dict"]
 
         self.planet            = mission_config["planet"]
@@ -76,12 +76,12 @@ class Mission:
         self.n_udot       = len(self.udot_max_idx)
         self.n_path       = sum(1 if np.isscalar(v) else len(v) for v in self.path_limits.values())
         self.n_nfz        = len(self.obs["xc"])
-        self.n_aux        = sum(1 if np.isscalar(v) else len(v) for v in self.aux_limits.values())
-        self.n_ineq       = self.n_path + self.n_nfz + self.n_aux
+        self.n_custom        = sum(1 if np.isscalar(v) else len(v) for v in self.custom_limits.values())
+        self.n_ineq       = self.n_path + self.n_nfz + self.n_custom
 
         self.path_idx     = np.arange(self.n_path)
         self.nfz_idx      = np.arange(self.n_path, self.n_path + self.n_nfz)
-        self.aux_idx      = np.arange(self.n_path + self.n_nfz, self.n_ineq)
+        self.custom_idx      = np.arange(self.n_path + self.n_nfz, self.n_ineq)
 
         # ===============================================================
         # point to module and corresponding methods based on configs
@@ -95,7 +95,7 @@ class Mission:
     # member functions point to selected fcns from selected module
     # ===============================================================
     
-    def nonlinear_aero(self, ts, z, nu):
+    def nonlinear_aero(self, t, z, nu):
         return self._nonlinear_aero(t, z, nu, self.problem)
 
     def custom_constraints(self, subproblem):

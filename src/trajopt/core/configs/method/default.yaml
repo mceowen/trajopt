@@ -25,7 +25,7 @@ conv:
   eps_state:  []
   eps_path:   []
   eps_nfz:    []
-  eps_aux:    []
+  eps_custom:    []
   eps_term:   []
   eps_dyn:    []
   ctcs_mult_state: 1.0
@@ -44,7 +44,7 @@ weights:
   eps_nonzero2: 0.0000000001
   wbuff: 100.0
   w_path_scale: 1.0
-  w_aux_scale: 1.0
+  w_custom_scale: 1.0
   w_nfz_scale: 1.0
   w_dyn_scale: 100000.0
   w_term_scale: 100.0

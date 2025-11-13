@@ -59,8 +59,8 @@ u_max_idx: []
 # path limits
 path_limits: {}
 
-# auxiliary limits
-aux_limits: {}
+# customiliary limits
+custom_limits: {}
 
 # custom input dictionary
 custom_input_dict:

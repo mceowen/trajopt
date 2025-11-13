@@ -62,6 +62,6 @@ udot_max_idx: [0, 1]
 
 path_lim: [] #[15e5/45, 18e3, 2.5]
 path_idx: [] #[0, 1, 2]
-aux_idx: []
+custom_idx: []
 
 custom_input_dict: {}

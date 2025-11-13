@@ -16,7 +16,7 @@ flags:
 
   flag_path: 1.0
   flag_nfz: 1.0
-  flag_aux: 1.0
+  flag_custom: 1.0
   flag_term: 1.0
   flag_dyn: 1.0
   flag_tr:  1.0
@@ -40,7 +40,7 @@ conv:
   eps_cost: 1.0
   eps_path: [0.1]
   eps_nfz: [0.1]
-  eps_aux: [0.1]
+  eps_custom: [0.1]
   eps_term: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
   eps_term_min: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
   eps_term_max: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]

@@ -46,10 +46,10 @@ class Indices:
         # -------------------------------
         n_path = mission.n_path
         n_nfz  = mission.n_nfz
-        n_aux  = getattr(mission, "n_aux", 0)
+        n_custom  = getattr(mission, "n_custom", 0)
 
         # stacked nonlinear inequality vector
-        n_ineq = n_path + n_nfz + n_aux
+        n_ineq = n_path + n_nfz + n_custom
 
         # Define slices for subgroups
         i0 = 0
@@ -57,13 +57,13 @@ class Indices:
         i0 += n_path
         nfz_idx = np.arange(i0, i0 + n_nfz)
         i0 += n_nfz
-        aux_idx = np.arange(i0, i0 + n_aux)
+        custom_idx = np.arange(i0, i0 + n_custom)
 
         nonlinear_ineq = {
             "all": np.arange(0, n_ineq),
             "path": path_idx,
             "nfz": nfz_idx,
-            "aux": aux_idx
+            "custom": custom_idx
         }
 
         # LTV system / dynamic matrices indices 

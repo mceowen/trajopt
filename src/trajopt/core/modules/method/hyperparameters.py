@@ -11,7 +11,7 @@ def configure_penalty_weights(problem):
     mission = problem.mission
 
     # --- Default weights ---
-    n_ineq = mission.n_path + mission.n_nfz + mission.n_aux
+    n_ineq = mission.n_path + mission.n_nfz + mission.n_custom
     method.weights["W_ineq"] = np.zeros((method.N, n_ineq))
 
     method.weights["W_term"]     = np.zeros(mission.n_term + mission.n_term_ineq)
@@ -28,10 +28,10 @@ def configure_penalty_weights(problem):
     # local block arrays
     W_path      = np.zeros((method.N, mission.n_path))
     W_nfz       = np.zeros((method.N, mission.n_nfz))
-    W_aux       = np.zeros((method.N, mission.n_aux))
+    W_custom       = np.zeros((method.N, mission.n_custom))
     dual_path   = np.zeros((method.N, mission.n_path))
     dual_nfz    = np.zeros((method.N, mission.n_nfz))
-    dual_aux    = np.zeros((method.N, mission.n_aux))
+    dual_custom    = np.zeros((method.N, mission.n_custom))
 
     # PTR penalty weights
         # Wtr: weight for trust region cost                        
@@ -62,47 +62,47 @@ def configure_penalty_weights(problem):
 
                 w_path_dim = method.weights["w_path_scale"] * method.weights["wbuff"] / method.weights["w_fac_N"]
                 w_nfz_dim  = method.weights["w_nfz_scale"]  * method.weights["wbuff"] / method.weights["w_fac_N"]
-                w_aux_dim  = method.weights["w_aux_scale"]  * method.weights["wbuff"] / method.weights["w_fac_N"]
+                w_custom_dim  = method.weights["w_custom_scale"]  * method.weights["wbuff"] / method.weights["w_fac_N"]
                 w_dyn_dim  = method.weights["w_dyn_scale"]  * method.weights["wbuff"] / method.weights["w_fac_Nm1"]
                 w_term_dim = method.weights["w_term_scale"] * method.weights["wbuff"]
 
                 if method.flags["match_dim_nondim_weights"]:
                     M_path = method.nondim["M"].get("path", {}).get("nd2d", np.eye(mission.n_path))
                     M_nfz  = method.nondim["M"]["nfz"]["nd2d"]
-                    M_aux  = method.nondim["M"].get("aux", {}).get("nd2d", np.eye(mission.n_aux))
+                    M_custom  = method.nondim["M"].get("custom", {}).get("nd2d", np.eye(mission.n_custom))
                     M_dyn  = method.nondim["M"]["dyn"]["nd2d"]
                     M_term = method.nondim["M"]["term"]["nd2d"]
 
                     avg_path_nd_sq = np.mean(np.diag(M_path)**2) if mission.n_path > 0 else 1
                     avg_nfz_nd_sq  = np.mean(np.diag(M_nfz)**2)  if mission.n_nfz  > 0 else 1
-                    avg_aux_nd_sq  = np.mean(np.diag(M_aux)**2)  if mission.n_aux  > 0 else 1
+                    avg_custom_nd_sq  = np.mean(np.diag(M_custom)**2)  if mission.n_custom  > 0 else 1
                     avg_dyn_nd_sq  = np.mean(np.diag(M_dyn)**2)
                     avg_term_nd_sq = np.mean(np.diag(M_term)**2)
                 else:
                     avg_path_nd_sq = 1
                     avg_nfz_nd_sq  = 1
-                    avg_aux_nd_sq  = 1
+                    avg_custom_nd_sq  = 1
                     avg_dyn_nd_sq  = 1
                     avg_term_nd_sq = 1
 
                 w_path = avg_path_nd_sq * w_path_dim
                 w_nfz  = avg_nfz_nd_sq  * w_nfz_dim
-                w_aux  = avg_aux_nd_sq  * w_aux_dim
+                w_custom  = avg_custom_nd_sq  * w_custom_dim
                 w_dyn  = avg_dyn_nd_sq  * w_dyn_dim
                 w_term = avg_term_nd_sq * w_term_dim
             else:
                 w_path = method.weights["wbuff"] / method.weights["w_fac_N"]
                 w_nfz  = method.weights["wbuff"] / method.weights["w_fac_N"]
-                w_aux  = method.weights["wbuff"] / method.weights["w_fac_N"]
+                w_custom  = method.weights["wbuff"] / method.weights["w_fac_N"]
                 w_dyn  = method.weights["wbuff"] / method.weights["w_fac_Nm1"]
                 w_term = method.weights["wbuff"]
 
         W_path += w_path
         W_nfz  += w_nfz
-        W_aux  += w_aux
+        W_custom  += w_custom
 
         # Stack into the master W_ineq
-        method.weights["W_ineq"] = np.hstack([W_path, W_nfz, W_aux])
+        method.weights["W_ineq"] = np.hstack([W_path, W_nfz, W_custom])
 
         if method.flags["dynamics_nonconvex"] or method.flags["ctcs"]:
             buff_dyn = str(method.flags.get("buff_dyn", ""))
@@ -119,9 +119,9 @@ def configure_penalty_weights(problem):
 
         dual_path += method.weights["eps_nonzero1"]
         dual_nfz  += method.weights["eps_nonzero1"]
-        dual_aux  += method.weights["eps_nonzero1"]
+        dual_custom  += method.weights["eps_nonzero1"]
 
-        method.weights["dual_ineq"] = np.hstack([dual_path, dual_nfz, dual_aux])
+        method.weights["dual_ineq"] = np.hstack([dual_path, dual_nfz, dual_custom])
 
         if method.flags["dynamics_nonconvex"] or method.flags["ctcs"]:
             buff_dyn = str(method.flags.get("buff_dyn", ""))

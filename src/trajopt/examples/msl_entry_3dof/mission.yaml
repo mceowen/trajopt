@@ -62,7 +62,7 @@ path_limits:
 
 path_limits: {}
 
-aux_limits: {}
+custom_limits: {}
 
 # custom input dictionary
 custom_input_dict: {}
