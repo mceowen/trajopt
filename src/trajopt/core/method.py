@@ -53,16 +53,16 @@ class Method:
         self.line_guess_u_init = self.line_guess_u_init @ self.nondim["M"]["ctrl"]["d2nd"]
 
         if self.flags["free_final_time"] and (self.flags.get("buff_dyn")=="term"):
-            us_range = np.vstack([self.nl_guess_u_start, self.nl_guess_u_stop])
-            guess.nonlinear_initial_guess(us_range, problem)
+            nu_range = np.vstack([self.nl_guess_u_start, self.nl_guess_u_stop])
+            guess.nonlinear_initial_guess(nu_range, problem)
         else:
             guess.straight_line_initial_guess(problem)
-            self.us_init = self.line_guess_u_init
+            self.nu_init = self.line_guess_u_init
 
         if self.flags["ctcs"]:
             guess.ctcs_initial_guess(problem)
 
-        self.cost_init = discretize.compute_linearized_costs(self.ts_init, self.zs_init, self.us_init, problem)[0].sum().item()
+        self.cost_init = discretize.compute_linearized_costs(self.t_init, self.z_init, self.nu_init, problem)[0].sum().item()
 
     def update_method_params(self):
         problem = self.problem
@@ -102,9 +102,9 @@ class Method:
         ### Time of flight constraints ###
         Ts_min        = self.T_min / self.nondim["nt"]
         Ts_max        = self.T_max / self.nondim["nt"]
-        self.ddts_max = self.dT_max / ((self.N - 1) * self.nondim["nt"])
-        self.dts_min  = Ts_min / (self.N - 1)
-        self.dts_max  = Ts_max / (self.N - 1)
+        self.ddt_max = self.dT_max / ((self.N - 1) * self.nondim["nt"])
+        self.dt_min  = Ts_min / (self.N - 1)
+        self.dt_max  = Ts_max / (self.N - 1)
 
         # --- Terminal nondimensionalization matrix ---
         M_state_vec = np.diag(self.nondim["M"]["state"]["d2nd"])

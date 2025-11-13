@@ -19,35 +19,35 @@ jax.config.update("jax_enable_x64", True)
 # terminal cost
 # =============================================================================
 
-def terminal_cost(ts, zs, us, problem):
-    return zs[3]
+def terminal_cost(t, z, nu, problem):
+    return z[3]
 
-def analytical_affine_approximation_terminal_cost(ts, zs, us, problem):
+def analytical_affine_approximation_terminal_cost(t, z, nu, problem):
     model = problem.model
     
-    cost = terminal_cost(ts, zs, us, problem)
+    cost = terminal_cost(t, z, nu, problem)
 
     dcostdz = np.array([0, 0, 0, 1, 0, 0]).reshape(1, -1)
-    dcostdu = np.zeros((1, model.m))
+    dcostdnu = np.zeros((1, model.m))
 
-    return cost, dcostdz, dcostdu
+    return cost, dcostdz, dcostdnu
 
 # =============================================================================
 # running cost
 # =============================================================================
 
-def running_cost(ts, zs, us, problem):
+def running_cost(t, z, nu, problem):
     return 0.0
 
-def analytical_affine_approximation_running_cost(ts, zs, us, problem):
+def analytical_affine_approximation_running_cost(t, z, nu, problem):
     model = problem.model
     
-    cost = running_cost(ts, zs, us, problem)
+    cost = running_cost(t, z, nu, problem)
 
     dcostdz = np.zeros((1, model.n))
-    dcostdu = np.zeros((1, model.m))
+    dcostdnu = np.zeros((1, model.m))
 
-    return cost, dcostdz, dcostdu
+    return cost, dcostdz, dcostdnu
 
 def get_cost_cnstr_nondim(problem):
     '''
@@ -92,7 +92,7 @@ def atmosphere_model_jax(rs, problem):
     return rho
 
 
-def nonlinear_aero_jax(ts, zs, us, problem):
+def nonlinear_aero_jax(t, z, nu, problem):
     '''
     returns all aero data as a function of full state
     
@@ -146,7 +146,7 @@ def nonlinear_aero_jax(ts, zs, us, problem):
         Kl2h    = kl2 * d2r**2
         Kl3h    = kl3 * d2r**3
 
-    rs, _, _, vs, _, _ = zs
+    r, _, _, v, _, _ = z
 
     # compute v_sat with jnp
     v_sat = jnp.minimum(vs * nv, vlim)

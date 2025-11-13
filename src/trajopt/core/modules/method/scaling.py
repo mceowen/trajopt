@@ -32,11 +32,11 @@ def nondim_vars(t, x, u, params):
     
     # Return dimensionalized x and u
     xs              = M_state_d2nd @ x
-    us              = M_ctrl_d2nd @ u
+    nu            = M_ctrl_d2nd @ u
     
     return ts, xs, us
 
-def dim_vars(ts, xs, us, params):
+def dim_vars(t, xs, nu, params):
     """
     Dimensionalize state and control variables to physical quantities.
     
@@ -61,7 +61,7 @@ def dim_vars(ts, xs, us, params):
     
     # Return dimensionalized x and u
     x                   = M_state_nd2d @ xs[nx_ind, :]
-    u                   = M_ctrl_nd2d @ us[nu_ind, :]
+    u                   = M_ctrl_nd2d @ nu[nu_ind, :]
     u[nu_rad_ind, :]    = wrap_to_pi(u[nu_rad_ind, :])
     
     return t, x, u
@@ -82,8 +82,8 @@ def subprob_variable_scaling(problem, local_vars):
     bool_dev_var    = method.flags["dev_var"]
     var_scl_flag    = method.flags["var_scl_flag"]
 
-    zs_ref          = I["zs_ref"]
-    us_ref          = I["us_ref"]
+    z_ref          = I["z_ref"]
+    nu_ref          = I["us_ref"]
     z_max           = mission.z_max
     z_min           = mission.z_min
     u_max           = mission.u_max
@@ -101,11 +101,11 @@ def subprob_variable_scaling(problem, local_vars):
 
         if var_scl_flag == 1:  # affine scaling
             for k in range(N):
-                dz_max = z_max - zs_ref[k]
-                dz_min = zs_ref[k] - z_min
+                dz_max = z_max - z_ref[k]
+                dz_min = z_ref[k] - z_min
 
-                du_max = u_max - us_ref[k]
-                du_min = us_ref[k] - u_min
+                du_max = u_max - nu_ref[k]
+                du_min = nu_ref[k] - u_min
 
                 M_x[k] = np.diag(dz_max - dz_min)
                 b_x[k] = dz_min
@@ -115,11 +115,11 @@ def subprob_variable_scaling(problem, local_vars):
 
         elif var_scl_flag == 2:  # linear scaling
             for k in range(N):
-                dz_max = z_max - zs_ref[k]
-                dz_min = zs_ref[k] - z_min
+                dz_max = z_max - z_ref[k]
+                dz_min = z_ref[k] - z_min
 
-                du_max = u_max - us_ref[k]
-                du_min = us_ref[k] - u_min
+                du_max = u_max - nu_ref[k]
+                du_min = nu_ref[k] - u_min
 
                 M_x[k] = np.diag(dz_max - dz_min)
                 b_x[k] = np.zeros(n)
@@ -185,8 +185,8 @@ def subprob_variable_scaling(problem, local_vars):
             x[k] = M_x[k] @ xhat[k].value + b_x[k]
             u[k] = M_u[k] @ uhat[k].value + b_u[k]
 
-        dz = x - zs_ref
-        du = u - us_ref
+        dz = x - z_ref
+        du = u - nu_ref
 
     return dz, du
 
@@ -207,7 +207,7 @@ if __name__ == "__main__":
     x = np.random.rand(3, 4)
     u = np.random.rand(3, 4)
     
-    ts, xs, us = nondim_vars(t, x, u, params)
+    ts, xs, nu = nondim_vars(t, x, u, params)
     print(f"ts: {ts}")
     print(f"xs: {xs}")
     print(f"us: {us}")
@@ -224,18 +224,18 @@ if __name__ == "__main__":
         }
     }
     
-    ts = np.array([0, 1, 2, 3])
+    t = np.array([0, 1, 2, 3])
     xs = np.random.rand(3, 4)
-    us = np.random.rand(2, 4)
+    nu = np.random.rand(2, 4)
     
-    t, x, u = dim_vars(ts, xs, us, params)
+    t, x, u = dim_vars(t, xs, nu, params)
     print(f"t: {t}")
     print(f"x: {x}")
     print(f"u: {u}")
 
     # Define a dummy problem for testing
     problem = {
-        "I": [{"zs_ref": np.random.rand(3, 4), "us_ref": np.random.rand(2, 4)}],
+        "I": [{"z_ref": np.random.rand(3, 4), "us_ref": np.random.rand(2, 4)}],
         "params": {
             "nz": 3,
             "m": 2,

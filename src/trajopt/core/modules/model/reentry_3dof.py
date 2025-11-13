@@ -5,7 +5,7 @@ import trajopt.utils.tools as tools
 jax.config.update("jax_enable_x64", True)
 import trajopt.core.modules.model.obstacles     as obstacles
 
-def dynamics_jax(ts, zs, us, problem, t_vec=None):
+def dynamics_jax(t, z, nu, problem, t_vec=None):
 
     mission = problem.mission
     model = problem.model
@@ -18,15 +18,15 @@ def dynamics_jax(ts, zs, us, problem, t_vec=None):
     Kg = mission.planet["mu"]    / (method.nondim["na"] * method.nondim["nd"] ** 2)
 
     # Extract states
-    rs, theta, phi, vs, gamma, psi = zs
+    rs, theta, phi, vs, gamma, psi = z
 
     if ctrl_type == 'bank_aoa':
-        alpha   = us[1]
+        alpha   = nu[1]
     
-    sigma       = us[0]
+    sigma       = nu[0]
     
     # Determine lift and drag coefficients from velocity
-    aero = mission.nonlinear_aero(ts, zs, us)
+    aero = mission.nonlinear_aero(t, z, nu)
     L    = aero["L"]
     D    = aero["D"]
 
@@ -55,24 +55,24 @@ def dynamics_jax(ts, zs, us, problem, t_vec=None):
 
     return xDot
 
-def max_q(ts, zs, us, problem):
+def max_q(t, z, nu, problem):
     mission = problem.mission
     method = problem.method
     
-    rs = zs[0]
-    vs = zs[3]
+    rs = z[0]
+    vs = z[3]
 
     rho = mission.mission_module.atmosphere_model_jax(rs, problem)
     nv = method.nondim["nv"]
 
     return  0.5 * jnp.array([0.5 * rho * (vs * nv) ** 2 - mission.path_limits['max_q']])
 
-def max_Q(ts, zs, us, problem):
+def max_Q(t, z, nu, problem):
     mission = problem.mission
     method = problem.method
 
-    rs = zs[0]
-    vs = zs[3]
+    rs = z[0]
+    vs = z[3]
 
     rho = mission.mission_module.atmosphere_model_jax(rs, problem)
     nv = method.nondim["nv"]

@@ -11,35 +11,35 @@ jax.config.update("jax_enable_x64", True)
 # terminal cost
 # =============================================================================
 
-def terminal_cost(ts, zs, us, problem):
-    return -zs[2]
+def terminal_cost(t, z, nu, problem):
+    return -z[2]
 
-def analytical_affine_approximation_terminal_cost(ts, zs, us, problem):
+def analytical_affine_approximation_terminal_cost(t, z, nu, problem):
     model = problem.model
     
-    cost = terminal_cost(ts, zs, us, problem)
+    cost = terminal_cost(t, z, nu, problem)
 
     dcostdz = np.array([0, 0, -1, 0, 0, 0]).reshape(1, -1)
-    dcostdu = np.zeros((1, model.m))
+    dcostdnu = np.zeros((1, model.m))
 
-    return cost, dcostdz, dcostdu
+    return cost, dcostdz, dcostdnu
 
 # =============================================================================
 # running cost
 # =============================================================================
 
-def running_cost(ts, zs, us, problem):
+def running_cost(t, z, nu, problem):
     return 0.0
 
-def analytical_affine_approximation_running_cost(ts, zs, us, problem):
+def analytical_affine_approximation_running_cost(t, z, nu, problem):
     model = problem.model
     
-    cost = running_cost(ts, zs, us, problem)
+    cost = running_cost(t, z, nu, problem)
 
     dcostdz = np.zeros((1, model.n))
-    dcostdu = np.zeros((1, model.m))
+    dcostdnu = np.zeros((1, model.m))
 
-    return cost, dcostdz, dcostdu
+    return cost, dcostdz, dcostdnu
 
 def get_cost_cnstr_nondim(problem):
     '''
@@ -80,7 +80,7 @@ def atmosphere_model_jax(rs, problem):
     return rho
 
 
-def nonlinear_aero_jax(ts, zs, us, problem):
+def nonlinear_aero_jax(t, z, nu, problem):
     '''
     returns all aero data as a function of full state
     
@@ -100,8 +100,8 @@ def nonlinear_aero_jax(ts, zs, us, problem):
     nv = method.nondim['nv']
     mass_nd = mission.vehicle['mass'] / method.nondim['nm']
 
-    rs = zs[0]
-    vs = zs[3]
+    rs = z[0]
+    vs = z[3]
 
     # Extract control
     if ctrl_type == 'bank_only':
@@ -109,7 +109,7 @@ def nonlinear_aero_jax(ts, zs, us, problem):
         alpha = jnp.deg2rad(alpha_deg)
 
     elif ctrl_type == 'bank_aoa':
-        alpha = us[1]
+        alpha = nu[1]
         alpha_deg = jnp.rad2deg(alpha)
 
     # COEFFICIENTS

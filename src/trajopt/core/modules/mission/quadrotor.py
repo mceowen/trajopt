@@ -5,35 +5,35 @@ import cvxpy as cp
 # terminal cost
 # =============================================================================
 
-def terminal_cost(ts, zs, us, problem):
-    return np.dot(np.transpose(us), us)
+def terminal_cost(t, z, nu, problem):
+    return np.dot(np.transpose(nu), nu)
 
-def analytical_affine_approximation_terminal_cost(ts, zs, us, problem):
+def analytical_affine_approximation_terminal_cost(t, z, nu, problem):
     model = problem.model
     
-    cost = terminal_cost(ts, zs, us, problem)
+    cost = terminal_cost(t, z, nu, problem)
 
     dcostdz = np.zeros((1, model.n))
-    dcostdu = 2 * us.reshape(1, -1)
+    dcostdnu = 2 * nu.reshape(1, -1)
 
-    return cost, dcostdz, dcostdu
+    return cost, dcostdz, dcostdnu
 
 # =============================================================================
 # running cost
 # =============================================================================
 
-def running_cost(ts, zs, us, problem):
-    return np.dot(np.transpose(us), us)
+def running_cost(t, z, nu, problem):
+    return np.dot(np.transpose(nu), nu)
 
-def analytical_affine_approximation_running_cost(ts, zs, us, problem):
+def analytical_affine_approximation_running_cost(t, z, nu, problem):
     model = problem.model
     
-    cost = running_cost(ts, zs, us, problem)
+    cost = running_cost(t, z, nu, problem)
 
     dcostdz = np.zeros((1, model.n))
-    dcostdu = 2 * us.reshape(1, -1)
+    dcostdnu = 2 * nu.reshape(1, -1)
 
-    return cost, dcostdz, dcostdu
+    return cost, dcostdz, dcostdnu
 
 # =============================================================================
 # custom constraints and cost (has direct access to subproblem)
@@ -52,7 +52,7 @@ def custom_constraints(subproblem):
     ehat_u = np.eye(model.m)
 
     for k in range(method.N):
-        u_k     = subproblem.us_ref[k] + subproblem.du[k]
+        u_k     = subproblem.nu_ref[k] + subproblem.dnu[k]
         slack_k = subproblem.u_slack[k]
         
         constraints.append(cp.norm(u_k) <= slack_k)
@@ -73,7 +73,7 @@ def custom_cost(subproblem):
     for k in range(method.N - 1):
         TRUE_COST   += cp.square(subproblem.u_slack[k + 1])
 
-        jerk        = (subproblem.us_ref[k + 1] + subproblem.du[k + 1] - subproblem.us_ref[k] - subproblem.du[k])
+        jerk        = (subproblem.nu_ref[k + 1] + subproblem.dnu[k + 1] - subproblem.nu_ref[k] - subproblem.dnu[k])
         # JERK_COST += w_jerk * cp.sum_squares(jerk)
 
     subproblem.cost_expr += w_true * TRUE_COST + JERK_COST

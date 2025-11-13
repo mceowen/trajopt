@@ -3,7 +3,7 @@ import numpy as np
 import trajopt.utils.tools                      as tools
 import trajopt.core.modules.model.obstacles    as obstacles
 
-def dynamics(ts, zs, us, problem, t_vec=None):
+def dynamics(t, z, nu, problem, t_vec=None):
     """
     x1, x2: r (position)
     u1, u2: v (velocity)
@@ -20,10 +20,10 @@ def dynamics(ts, zs, us, problem, t_vec=None):
     g_vec   = np.array([0,0, -mission.planet["g"]]) / method.nondim["na"]
 
     # extract states
-    r = zs[0:3]
-    v = zs[3:6]
+    r = z[0:3]
+    v = z[3:6]
     
-    T = us
+    T = nu
 
     # compute velocity and acceleration
     xDot        = np.empty(6) # initialize
@@ -38,7 +38,7 @@ def dynamics(ts, zs, us, problem, t_vec=None):
         
     return xDot
 
-def analytical_linsys(ts, zs, us, problem):
+def analytical_linsys(t, z, nu, problem):
 
     mission = problem.mission
     model = problem.model
@@ -51,11 +51,11 @@ def analytical_linsys(ts, zs, us, problem):
     mass    = mission.vehicle["mass"] / method.nondim["nm"]
 
     # Sanity check for vector shapes
-    zs = np.asarray(zs).flatten()
-    us = np.asarray(us).flatten()
+    z =  np.asarray(z).flatten()
+    nu = np.asarray(nu).flatten()
 
-    assert len(zs) == n, f"Expected state vector of length {n}, got {len(zs)}"
-    assert len(us) == m, f"Expected control vector of length {m}, got {len(us)}"
+    assert len(z) == n, f"Expected state vector of length {n}, got {len(z)}"
+    assert len(nu) == m, f"Expected control vector of length {m}, got {len(nu)}"
 
     # Compute A matrix (Jacobian w.r.t. state)
     n2 = n // 2
@@ -71,6 +71,6 @@ def analytical_linsys(ts, zs, us, problem):
     ]) * (1.0 / mass)
 
     # Evaluate nonlinear dynamics
-    fc = dynamics(ts, zs, us, problem)
+    fc = dynamics(t, z, nu, problem)
 
     return fc, Ac, Bc

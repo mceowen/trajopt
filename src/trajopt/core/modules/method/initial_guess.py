@@ -5,14 +5,14 @@ import jax
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 
-def rk4_propagate_jax(dynamics, z0, us_ref, ts_ref, problem):
+def rk4_propagate_jax(dynamics, z0, nu_ref, t_ref, problem):
 
     # convert to JAX arrays
     z0_jax = jnp.array(z0)
-    us_ref_jax = jnp.array(us_ref)
-    ts_ref_jax = jnp.array(ts_ref)
+    nu_ref_jax = jnp.array(nu_ref)
+    t_ref_jax = jnp.array(t_ref)
     
-    N = len(ts_ref_jax)
+    N = len(t_ref_jax)
     n = len(z0_jax)
     
     def rk4_step(zi, ti, dt, ui, ui_next):
@@ -27,19 +27,19 @@ def rk4_propagate_jax(dynamics, z0, us_ref, ts_ref, problem):
     
     # Define loop body for scan
     def scan_fn(zi, i):
-        dt = ts_ref_jax[i+1] - ts_ref_jax[i]
-        ti = ts_ref_jax[i]
-        ui = us_ref_jax[i]
-        ui_next = us_ref_jax[i+1]
+        dt = t_ref_jax[i+1] - t_ref_jax[i]
+        ti = t_ref_jax[i]
+        ui = nu_ref_jax[i]
+        ui_next = nu_ref_jax[i+1]
         
         zi_next = rk4_step(zi, ti, dt, ui, ui_next)
         return zi_next, zi_next
     
-    _, zs_propagated = jax.lax.scan(scan_fn, z0_jax, jnp.arange(N-1))
-    zs_jax = jnp.vstack([z0_jax[None, :], zs_propagated])
-    zs_numpy = np.array(zs_jax)
+    _, z_propagated = jax.lax.scan(scan_fn, z0_jax, jnp.arange(N-1))
+    z_jax = jnp.vstack([z0_jax[None, :], z_propagated])
+    z_numpy = np.array(z_jax)
 
-    return zs_numpy
+    return z_numpy
 
 def straight_line_initial_guess(problem):
     """
@@ -59,19 +59,19 @@ def straight_line_initial_guess(problem):
     # Initialization trajectory
     method.dt_init   = (method.T_init / (method.N - 1)) * np.ones(method.N - 1)
     method.Ts_init   = method.T_init / method.nondim["nt"]
-    method.dts_init  = method.dt_init / method.nondim["nt"]
-    ts_init             = np.cumsum(np.concatenate(([0], method.dts_init)))
+    method.dt_init  = method.dt_init / method.nondim["nt"]
+    t_init             = np.cumsum(np.concatenate(([0], method.dt_init)))
 
     # Initial state
-    zs_init             = np.array([np.linspace(mission.zi[i], mission.zf[i], method.N) for i in range(model.n)]).T
+    z_init             = np.array([np.linspace(mission.zi[i], mission.zf[i], method.N) for i in range(model.n)]).T
 
     # Initial control
-    us_init             = np.zeros((method.N,model.m))
+    nu_init             = np.zeros((method.N,model.m))
 
     # Create initial state and control vector
-    method.ts_init   = ts_init
-    method.zs_init   = zs_init
-    method.us_init   = us_init
+    method.t_init   = t_init
+    method.z_init   = z_init
+    method.nu_init   = nu_init
 
 
 def waypoint_initial_guess(problem):
@@ -92,8 +92,8 @@ def waypoint_initial_guess(problem):
     # Initialization trajectory
     method.dt_init   = (method.T_init / (method.N - 1)) * np.ones(method.N - 1)
     method.Ts_init   = method.T_init / method.nondim["nt"]
-    method.dts_init  = method.dt_init / method.nondim["nt"]
-    ts_init             = np.cumsum(np.concatenate(([0], method.dts_init)))
+    method.dt_init  = method.dt_init / method.nondim["nt"]
+    t_init             = np.cumsum(np.concatenate(([0], method.dt_init)))
 
     # Waypoint
     if "z_waypt" not in params:
@@ -118,7 +118,7 @@ def waypoint_initial_guess(problem):
     idx2 = np.arange(N1, method.N)
 
     # Initialize
-    zs_init = np.zeros((method.N,model.n))
+    z_init = np.zeros((method.N,model.n))
 
     # Initial state
     for i_state in range(min(model.n, len(method.z_waypt))):
@@ -126,28 +126,28 @@ def waypoint_initial_guess(problem):
             i_init = np.where(mission.zi_idx == i_state)[0][0]
             i_term = np.where(mission.zf_idx == i_state)[0][0]
 
-            zs_init[idx1-1, i_state]    = np.linspace(mission.zi[i_init], method.z_waypt[i_state], N1)
-            zs_init[idx2, i_state]      = np.linspace(method.z_waypt[i_state], mission.zf[i_term], N2)
+            z_init[idx1-1, i_state]    = np.linspace(mission.zi[i_init], method.z_waypt[i_state], N1)
+            z_init[idx2, i_state]      = np.linspace(method.z_waypt[i_state], mission.zf[i_term], N2)
 
     # Initial control
-    us_init             = np.zeros((method.N, model.m))
+    nu_init             = np.zeros((method.N, model.m))
 
     # Create initial state and control vector
-    method.ts_init   = ts_init
-    method.zs_init   = zs_init
-    method.us_init   = us_init
+    method.t_init   = t_init
+    method.z_init   = z_init
+    method.nu_init   = nu_init
 
 
-def nonlinear_initial_guess(us_range, problem):
+def nonlinear_initial_guess(nu_range, problem):
     """
     Generate a nonlinear initial guess for trajectory and control.
 
     Parameters:
-        us_range (ndarray): 2×1 or 2×2 array giving control input range (min/max per axis)
+        nu_range (ndarray): 2×1 or 2×2 array giving control input range (min/max per axis)
         params (dict): Parameter dictionary with fields "N", "T_init", "nondim", "z0s", etc.
 
     Returns:
-        dict: Updated params with initial guesses (zs_init: N×n, us_init: N×m)
+        dict: Updated params with initial guesses (z_init: N×n, nu_init: N×m)
     """
 
     mission = problem.mission
@@ -157,54 +157,54 @@ def nonlinear_initial_guess(us_range, problem):
     # ---- Time grid initialization ----
     method.dt_init = (method.T_init / (method.N - 1)) * np.ones(method.N - 1)
     method.Ts_init  = method.T_init / method.nondim["nt"]
-    method.dts_init = method.dt_init / method.nondim["nt"]
-    ts_init = np.cumsum(np.concatenate(([0], method.dts_init)))
+    method.dt_init = method.dt_init / method.nondim["nt"]
+    t_init = np.cumsum(np.concatenate(([0], method.dt_init)))
 
     # ---- Control initialization ----
-    # us_range is expected to have shape (m, 2): [[u1_min, u1_max], [u2_min, u2_max], ...]
-    m = us_range.shape[1]
+    # nu_range is expected to have shape (m, 2): [[u1_min, u1_max], [u2_min, u2_max], ...]
+    m = nu_range.shape[1]
     N = method.N
 
     # Create N×m matrix: each column is a linspace for that control dimension
-    us_init = np.zeros((N, m))
+    nu_init = np.zeros((N, m))
     for i in range(m):
-        umin, umax = us_range[0,i], us_range[1,i]
-        us_init[:, i] = np.linspace(umin, umax, N)
+        umin, umax = nu_range[0,i], nu_range[1,i]
+        nu_init[:, i] = np.linspace(umin, umax, N)
 
     # ---- Propagate initial trajectory ----
     # Choose integrator based on jax_dyn flag
     use_jax = method.flags.get("jax_dyn", 0)
     
     if use_jax:
-        zs_init = rk4_propagate_jax(
+        z_init = rk4_propagate_jax(
             model._dynamics,
             mission.zi,
-            us_init,
-            ts_init,
+            nu_init,
+            t_init,
             problem
         )
     else:
         # Wrapper that does FOH interpolation before calling dynamics
         def dynamics_wrapper_scipy(t, z):
             # FOH interpolation to get control at time t
-            u = np.array([np.interp(t, ts_init, us_init[:, i]) for i in range(m)])
+            u = np.array([np.interp(t, t_init, nu_init[:, i]) for i in range(m)])
             return model.dynamics(t, z, u)
         
         odesettings = {"atol": 1e-12, "rtol": 1e-12}
         sol = solve_ivp(
             dynamics_wrapper_scipy,
-            [ts_init[0], ts_init[-1]],
+            [t_init[0], t_init[-1]],
             mission.zi,
-            t_eval=ts_init,
+            t_eval=t_init,
             **odesettings
         )
         # sol.y is (n, N) → transpose to (N, n)
-        zs_init = sol.y.T
+        z_init = sol.y.T
 
     # ---- Store results ----
-    method.ts_init = ts_init
-    method.zs_init = zs_init
-    method.us_init = us_init
+    method.t_init = t_init
+    method.z_init = z_init
+    method.nu_init = nu_init
 
 
 def ctcs_initial_guess(problem):
@@ -220,8 +220,8 @@ def ctcs_initial_guess(problem):
     
     mission = problem.mission
     method = problem.method
-    # Extend zs_init with zeros for the inequality constraints
-    method.zs_init = np.hstack([method.zs_init, np.zeros((method.zs_init.shape[0], mission.n_ineq))])
+    # Extend z_init with zeros for the inequality constraints
+    method.z_init = np.hstack([method.z_init, np.zeros((method.z_init.shape[0], mission.n_ineq))])
 
 # Example usage
 if __name__ == "__main__":
@@ -260,7 +260,7 @@ if __name__ == "__main__":
 
 
     # Define dummy data for testing
-    us_range = np.array([[0, 1], [1, 2]])
+    nu_range = np.array([[0, 1], [1, 2]])
     params = {
         "T_init": 10,
         "N": 50,
@@ -268,13 +268,13 @@ if __name__ == "__main__":
         "z0s": np.zeros(4)
     }
     
-    updated_params = nonlinear_initial_guess(us_range, params)
+    updated_params = nonlinear_initial_guess(nu_range, params)
     print(updated_params)
 
 
     # Define dummy data for testing
     params = {
-        "zs_init": np.array([[1, 2, 3], [4, 5, 6]]),
+        "z_init": np.array([[1, 2, 3], [4, 5, 6]]),
         "n_ineq": 2,
         "N": 3
     }

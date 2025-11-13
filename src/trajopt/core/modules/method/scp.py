@@ -141,7 +141,7 @@ class Subproblem:
         self._create_variables()
         self._create_parameters()
         self.constraints: List[cp.constraints.constraint.Constraint] = []
-        self._build_constraints_once()
+        self._build_constraint_once()
         self.cost_expr = self._build_cost_once()
 
         # apply custom constraints and cost
@@ -156,10 +156,10 @@ class Subproblem:
         # --------------------------
         self.iter_data: List[Dict[str, Any]] = [{
             "iter_num": 0,  # init only (no outputs yet)
-            "zs_ref": problem.method.zs_init,
-            "us_ref": problem.method.us_init,
-            "dts_ref": problem.method.dts_init,
-            "ts_ref": problem.method.ts_init,
+            "z_ref": problem.method.z_init,
+            "us_ref": problem.method.nu_init,
+            "dt_ref": problem.method.dt_init,
+            "t_ref": problem.method.t_init,
             "conv_data": {
                 "vb_ineq": np.zeros((self.N, mission.n_ineq)),
                 "vb_dyn":  np.zeros((self.N - 1, self.nz)),
@@ -212,7 +212,7 @@ class Subproblem:
 
         # Core optimization variables
         self.dz = cp.Variable((N, nz), name="dz")
-        self.du = cp.Variable((N, m), name="du")
+        self.dnu= cp.Variable((N, m), name="du")
 
         # Time variable(s)
         if self.free_T:
@@ -258,31 +258,31 @@ class Subproblem:
         self.Bk     = cp.Parameter((N - 1, nz, m), name="Bk")
         self.Bkp    = cp.Parameter((N - 1, nz, m), name="Bkp")
         self.Sk     = cp.Parameter((N - 1, nz),    name="Sk")
-        self.zs_m   = cp.Parameter((N, nz),        name="zs_minus")
+        self.z_m   = cp.Parameter((N, nz),        name="z_minus")
 
         self.w_cost_times_dcostdz = cp.Parameter((N, n), name="dcostdz")
-        self.w_cost_times_dcostdu = cp.Parameter((N, m), name="dcostdu")
+        self.w_cost_times_dcostdnu = cp.Parameter((N, m), name="dcostdnu")
         self.w_cost_times_cost0   = cp.Parameter(N,      name="cost0")
 
-        self.zs_ref  = cp.Parameter((N, nz),    name="zs_ref")
-        self.us_ref  = cp.Parameter((N, m),    name="us_ref")
-        self.dts_ref = cp.Parameter((N - 1, 1),name="dts_ref")
+        self.z_ref  = cp.Parameter((N, nz),    name="z_ref")
+        self.nu_ref  = cp.Parameter((N, m),    name="us_ref")
+        self.dt_ref = cp.Parameter((N - 1, 1),name="dt_ref")
 
         # Path/NFZ/AUX linearized constraints
         if mission.n_ineq > 0:
             self.dgdz = cp.Parameter((N, mission.n_ineq, n), name="dgdz")
-            self.dgdu = cp.Parameter((N, mission.n_ineq, m), name="dgdu")
+            self.dgdnu = cp.Parameter((N, mission.n_ineq, m), name="dgdnu")
             self.g0   = cp.Parameter((N, mission.n_ineq),    name="g0")
         else:
-            self.dgdz = self.dgdu = self.g0 = None
+            self.dgdz = self.dgdnu = self.g0 = None
 
         # time-step scalar bounds
         if self.free_T:
-            self.dts_min  = cp.Parameter(nonneg=True, name="dts_min")
-            self.dts_max  = cp.Parameter(nonneg=True, name="dts_max")
-            self.ddts_max = cp.Parameter(nonneg=True, name="ddts_max")
+            self.dt_min  = cp.Parameter(nonneg=True, name="dt_min")
+            self.dt_max  = cp.Parameter(nonneg=True, name="dt_max")
+            self.ddt_max = cp.Parameter(nonneg=True, name="ddt_max")
         else:
-            self.dts_min = self.dts_max = self.ddts_max = None
+            self.dt_min = self.dt_max = self.ddt_max = None
 
         # Weights & Trust Region weights
         self.w_cost = cp.Parameter(nonneg=True, name="w_cost")
@@ -334,7 +334,7 @@ class Subproblem:
     # ============================================================
     # CONSTRAINTS (build-once)
     # ============================================================
-    def _build_constraints_once(self) -> None:
+    def _build_constraint_once(self) -> None:
         mission, model, method = self.problem.mission, self.problem.model, self.problem.method
         N, n, m, nz = self.N, self.n, self.m, self.nz
         flags = method.flags
@@ -343,30 +343,30 @@ class Subproblem:
 
         # Initial control (optional)
         if mission.flags.get("init_ctrl", False) and mission.n_init_ctrl > 0:
-            C.append(self.du[0,mission.ui_idx] + self.us_ref[0, mission.ui_idx] == self.u1)
+            C.append(self.dnu[0,mission.ui_idx] + self.nu_ref[0, mission.ui_idx] == self.u1)
 
         # Terminal control (optional)
         if mission.flags.get("final_ctrl", False) and mission.n_term_ctrl > 0:
-            C.append(self.du[-1,mission.uf_idx] + self.us_ref[-1, mission.uf_idx] == self.uN)
+            C.append(self.dnu[-1,mission.uf_idx] + self.nu_ref[-1, mission.uf_idx] == self.uN)
 
         # Initial equalities / inequalities
         if mission.n_init > 0 and self.z1 is not None:
-            C.append(self.dz[0, mission.zi_idx] + self.zs_ref[0, mission.zi_idx] == self.z1)
+            C.append(self.dz[0, mission.zi_idx] + self.z_ref[0, mission.zi_idx] == self.z1)
 
         if mission.n_init_ineq > 0 and self.z1_min is not None and self.z1_max is not None:
             M_sel = tools.constraint_index_selector(mission.zi_min_idx, mission.zi_max_idx, n)
-            C.append(M_sel @ (self.dz[0, :n] + self.zs_ref[0, :n]) <= cp.hstack([-self.z1_min, self.z1_max]))
+            C.append(M_sel @ (self.dz[0, :n] + self.z_ref[0, :n]) <= cp.hstack([-self.z1_min, self.z1_max]))
 
         # Terminal equalities / inequalities
         if mission.n_term > 0 and self.zN is not None:
             vbN = self.vb_term[:mission.n_term] if self.vb_term is not None else 0.0
-            C.append(self.dz[-1, mission.zf_idx] + self.zs_ref[-1, mission.zf_idx] - vbN == self.zN)
+            C.append(self.dz[-1, mission.zf_idx] + self.z_ref[-1, mission.zf_idx] - vbN == self.zN)
 
         if mission.n_term_ineq > 0 and self.zN_min is not None and self.zN_max is not None:
             nterm = mission.n_term
             vbNiq = self.vb_term[nterm:nterm + mission.n_term_ineq] if self.vb_term is not None else 0.0
             M_sel = tools.constraint_index_selector(mission.zf_min_idx, mission.zf_max_idx, n)
-            C.append(M_sel @ (self.dz[-1, :n] + self.zs_ref[-1, :n]) - vbNiq <= cp.hstack([-self.zN_min, self.zN_max]))
+            C.append(M_sel @ (self.dz[-1, :n] + self.z_ref[-1, :n]) - vbNiq <= cp.hstack([-self.zN_min, self.zN_max]))
 
         # Per-stage constraints
         for k in range(N):
@@ -374,12 +374,12 @@ class Subproblem:
                 # Discrete dynamics with dyn buffers
                 rhs = (
                     self.Ak[k] @ self.dz[k]
-                    + self.Bk[k] @ self.du[k]
-                    + self.Bkp[k] @ self.du[k + 1]
+                    + self.Bk[k] @ self.dnu[k]
+                    + self.Bkp[k] @ self.dnu[k + 1]
                     + cp.multiply(self.Sk[k], self.dt[k])
                     + (self.vb_dyn_p[k] - self.vb_dyn_m[k])
                 )
-                C.append(self.dz[k + 1] + self.zs_ref[k + 1] - self.zs_m[k + 1] == rhs)
+                C.append(self.dz[k + 1] + self.z_ref[k + 1] - self.z_m[k + 1] == rhs)
 
                 if self.buff_dyn != "term":
                     C.append(self.vb_dyn_p[k] >= 0)
@@ -388,29 +388,29 @@ class Subproblem:
                 # CTCS coupling on extra components
                 if flags["ctcs"] and n < nz:
                     C.append(
-                        self.zs_ref[k + 1, n:nz] + self.dz[k + 1, n:nz]
-                        - (self.zs_ref[k, n:nz] + self.dz[k, n:nz]) <= self.eps_ctcs
+                        self.z_ref[k + 1, n:nz] + self.dz[k + 1, n:nz]
+                        - (self.z_ref[k, n:nz] + self.dz[k, n:nz]) <= self.eps_ctcs
                     )
 
                 # Free-final-time bounds
                 if self.free_T:
-                    C.append(self.dts_ref[k] + self.dt[k] <= self.dts_max)
-                    C.append(self.dts_ref[k] + self.dt[k] >= self.dts_min)
-                    C.append(cp.abs(self.dt[k]) <= self.ddts_max)
+                    C.append(self.dt_ref[k] + self.dt[k] <= self.dt_max)
+                    C.append(self.dt_ref[k] + self.dt[k] >= self.dt_min)
+                    C.append(cp.abs(self.dt[k]) <= self.ddt_max)
 
                 # Control slew (udot)
                 if mission.n_udot > 0 and self.udot_max is not None and k < N - 2:
                     M_sel = tools.constraint_index_selector(mission.udot_max_idx, mission.udot_max_idx, m)
                     C.append(
-                        M_sel @ (self.us_ref[k + 1] + self.du[k + 1] - (self.us_ref[k] + self.du[k]))
-                        <= (self.dts_ref[k] + self.dt[k]) * cp.hstack([self.udot_max, self.udot_max])
+                        M_sel @ (self.nu_ref[k + 1] + self.dnu[k + 1] - (self.nu_ref[k] + self.dnu[k]))
+                        <= (self.dt_ref[k] + self.dt[k]) * cp.hstack([self.udot_max, self.udot_max])
                     )
 
             # State box constraints
             if mission.n_state > 0 and self.z_min is not None and self.z_max is not None:
                 M_sel = tools.constraint_index_selector(mission.z_min_idx, mission.z_max_idx, n)
                 C.append(
-                    M_sel @ (self.zs_ref[k, :n] + self.dz[k, :n])
+                    M_sel @ (self.z_ref[k, :n] + self.dz[k, :n])
                     <= cp.hstack([-self.z_min, self.z_max])
                 )
 
@@ -418,14 +418,14 @@ class Subproblem:
             if mission.n_ctrl > 0 and self.u_min is not None and self.u_max is not None:
                 M_sel = tools.constraint_index_selector(mission.u_min_idx, mission.u_max_idx, m)
                 C.append(
-                    M_sel @ (self.us_ref[k] + self.du[k])
+                    M_sel @ (self.nu_ref[k] + self.dnu[k])
                     <= cp.hstack([-self.u_min, self.u_max])
                 )
 
             # Linearized inequality constraints (path + nfz + aux)
             if mission.n_ineq > 0 and not flags["ctcs"] and self.dgdz is not None:
         
-                C.append(self.dgdz[k] @ self.dz[k] + self.dgdu[k] @ self.du[k] + self.g0[k] - self.vb_ineq[k] <= 0)
+                C.append(self.dgdz[k] @ self.dz[k] + self.dgdnu[k] @ self.dnu[k] + self.g0[k] - self.vb_ineq[k] <= 0)
                 if str(self.flag_autotune) in {"1", "3", "al-scvx"} and self.vb_ineq[k]:
                     C.append(self.vb_ineq[k] >= 0)
 
@@ -450,12 +450,12 @@ class Subproblem:
         # === TRUE cost (linearized objective) ===
         TRUE = self.flag_true * (
             cp.sum(cp.multiply(self.w_cost_times_dcostdz, self.dz[:,:model.n]))
-          + cp.sum(cp.multiply(self.w_cost_times_dcostdu, self.du))
+          + cp.sum(cp.multiply(self.w_cost_times_dcostdnu, self.dnu))
           + cp.sum(self.w_cost_times_cost0)
         )
 
         # === Trust-region penalties ===
-        TR = self.flag_tr * (self.wtr_z * cp.sum_squares(self.dz[:, :model.n]) + self.wtr_u * cp.sum_squares(self.du))
+        TR = self.flag_tr * (self.wtr_z * cp.sum_squares(self.dz[:, :model.n]) + self.wtr_u * cp.sum_squares(self.dnu))
 
         # === Virtual buffer penalties ===
         VB = 0.0
@@ -478,7 +478,7 @@ class Subproblem:
         if param is None:
             return
         arr = np.asarray(val)
-        if param is self.zs_m and arr.shape != (self.N, self.nz):
+        if param is self.z_m and arr.shape != (self.N, self.nz):
             arr = arr.reshape(self.N, self.nz)
         param.value = arr
 
@@ -486,21 +486,21 @@ class Subproblem:
         last_rec = self.iter_data[-1]
         k_prev = int(last_rec.get("iter_num", 0))
 
-        if all(key in last_rec for key in ("zs", "us", "dts", "ts")):
+        if all(key in last_rec for key in ("zs", "us", "dt", "ts")):
             refs = {
-                "zs_ref": last_rec["zs"],
+                "z_ref": last_rec["zs"],
                 "us_ref": last_rec["us"],
-                "dts_ref": last_rec["dts"],
-                "ts_ref": last_rec["ts"],
+                "dt_ref": last_rec["dt"],
+                "t_ref": last_rec["ts"],
             }
             weights = last_rec.get("weights", self.problem.method.weights)
             conv_data = last_rec.get("conv_data", {})
         else:
             refs = {
-                "zs_ref": last_rec["zs_ref"],
+                "z_ref": last_rec["z_ref"],
                 "us_ref": last_rec["us_ref"],
-                "dts_ref": last_rec["dts_ref"],
-                "ts_ref": last_rec["ts_ref"],
+                "dt_ref": last_rec["dt_ref"],
+                "t_ref": last_rec["t_ref"],
             }
             weights = last_rec.get("weights", self.problem.method.weights)
             conv_data = last_rec.get("conv_data", {})
@@ -517,22 +517,22 @@ class Subproblem:
         mission, model, method = self.problem.mission, self.problem.model, self.problem.method
 
         start = time.time()
-        Ak, Bk, Bkp, Sk, zs_minus = discretize.compute_linsys_discrete(
-            inputs["zs_ref"], inputs["us_ref"], inputs["dts_ref"], self.problem
+        Ak, Bk, Bkp, Sk, z_minus = discretize.compute_linsys_discrete(
+            inputs["z_ref"], inputs["us_ref"], inputs["dt_ref"], self.problem
         )
         prop_time_ms = (time.time() - start) * 1000.0
 
         # compute linearized terminal and running costs
-        cost, dcostdz, dcostdu = discretize.compute_linearized_costs(inputs["ts_ref"], inputs["zs_ref"], inputs["us_ref"], self.problem)
+        cost, dcostdz, dcostdnu = discretize.compute_linearized_costs(inputs["t_ref"], inputs["z_ref"], inputs["us_ref"], self.problem)
 
-        g, dgdz, dgdu = discretize.compute_nodal_inequality_constraints(inputs["ts_ref"], inputs["zs_ref"], inputs["us_ref"], self.problem)
+        g, dgdz, dgdnu = discretize.compute_nodal_inequality_constraints(inputs["t_ref"], inputs["z_ref"], inputs["us_ref"], self.problem)
 
         # Dynamics & references
         self._set_param(self.Ak,   Ak)
         self._set_param(self.Bk,   Bk)
         self._set_param(self.Bkp,  Bkp)
         self._set_param(self.Sk,   Sk)
-        self._set_param(self.zs_m, zs_minus)
+        self._set_param(self.z_m, z_minus)
 
         # Weights/duals (ensure shapes, fill any scalars/empties)
         W = inputs["weights"]
@@ -541,21 +541,21 @@ class Subproblem:
         self.wtr_u.value  = W.get("wtr_u", 1e-2)
 
         self.w_cost_times_dcostdz.value = self.w_cost * dcostdz[:, 0, :]
-        self.w_cost_times_dcostdu.value = self.w_cost * dcostdu[:, 0, :]
+        self.w_cost_times_dcostdnu.value = self.w_cost * dcostdnu[:, 0, :]
         self.w_cost_times_cost0.value   = self.w_cost * cost[:, 0, 0]
-        self.zs_ref.value  = inputs["zs_ref"]
-        self.us_ref.value  = inputs["us_ref"]
-        self.dts_ref.value = inputs["dts_ref"].reshape(self.N - 1, 1)
+        self.z_ref.value  = inputs["z_ref"]
+        self.nu_ref.value  = inputs["us_ref"]
+        self.dt_ref.value = inputs["dt_ref"].reshape(self.N - 1, 1)
 
         if dgdz is not None:
             self.dgdz.value = dgdz
-            self.dgdu.value = dgdu
+            self.dgdnu.value = dgdnu
             self.g0.value   = g
         
         if self.free_T:
-            self.dts_min.value  = float(method.dts_min)
-            self.dts_max.value  = float(method.dts_max)
-            self.ddts_max.value = float(method.ddts_max)
+            self.dt_min.value  = float(method.dt_min)
+            self.dt_max.value  = float(method.dt_max)
+            self.ddt_max.value = float(method.ddt_max)
 
         # TODO(Skye): refactor weight loading to reduce code duplication with autotune        
         W_ineq_arr = tools.ensure_shape(W.get("W_ineq", 0.0), (self.N, max(self.n_ineq, 1)))
@@ -596,7 +596,7 @@ class Subproblem:
         self.eps_ctcs.value = float(self.problem.method.conv["eps_ctcs"])
 
         # cache for optional debug
-        inputs["_linsys_cache"] = (Ak, Bk, Bkp, Sk, zs_minus)
+        inputs["_linsys_cache"] = (Ak, Bk, Bkp, Sk, z_minus)
         return prop_time_ms
 
     def solve_iteration(self) -> None:
@@ -608,17 +608,17 @@ class Subproblem:
           - appends it to self.iter_data.
         """
         # Build inputs for this iteration (refs/weights/conv_data, iter_num)
-        inputs_for_iter = self._load_inputs()
+        input_for_iter = self._load_inputs()
 
         # Parameter propagation and linearization
-        prop_time_ms = self._load_parameters(inputs_for_iter)
+        prop_time_ms = self._load_parameters(input_for_iter)
 
         # Solve subproblem
         solver_name = self.problem.method.solver_opts.get("solver", "ECOS")
         self.subproblem.solve(solver=solver_name, warm_start=True)  # ignore_dpp=True if desired
 
         # Create unified record for this iteration and append
-        iter_record = self._load_outputs(inputs_for_iter, prop_time_ms)
+        iter_record = self._load_outputs(input_for_iter, prop_time_ms)
         iter_record = convergence.check_convergence_tolerance(self.problem, self, iter_record)
         iter_record = baseline_autotune(self.problem, {}, iter_record)
         self.iter_data.append(iter_record)
@@ -626,14 +626,14 @@ class Subproblem:
     # ============================================================
     # OUTPUT PACKING (UNIFIED RECORD)
     # ============================================================
-    def _load_outputs(self, inputs_for_iter: Dict[str, Any], prop_time_ms: float) -> Dict[str, Any]:
+    def _load_outputs(self, input_for_iter: Dict[str, Any], prop_time_ms: float) -> Dict[str, Any]:
         mission, model, method = self.problem.mission, self.problem.model, self.problem.method
         N, n, m = self.N, self.n, self.m
 
-        dz_val, du_val = self.dz.value, self.du.value
+        dz_val, dnu_val = self.dz.value, self.dnu.value
         dt_val = self.dt.value if isinstance(self.dt, cp.expressions.expression.Expression) else self.dt
 
-        rec: Dict[str, Any] = dict(inputs_for_iter)  # include exact inputs used this iteration
+        rec: Dict[str, Any] = dict(input_for_iter)  # include exact inputs used this iteration
         rec["subprob"] = self.subproblem
 
         if self.subproblem is not None:
@@ -651,19 +651,19 @@ class Subproblem:
 
         # raw solver variables (useful for diagnostics)
         rec["dz_s"] = dz_val
-        rec["du_s"] = du_val
+        rec["dnu_s"] = dnu_val
         rec["dt_s"] = dt_val
 
         # outputs (absolute trajectories)
-        rec["zs"]  = tools.safe_val(dz_val, rows=N, cols=n) + inputs_for_iter["zs_ref"]
-        rec["us"]  = tools.safe_val(du_val, rows=N, cols=m) + inputs_for_iter["us_ref"]
-        rec["dts"] = tools.safe_val(dt_val).squeeze() + inputs_for_iter["dts_ref"].squeeze()
-        rec["ts"]  = np.concatenate(([0], np.cumsum(rec["dts"])))
-        rec["Ts"]  = float(np.sum(rec["dts"]))
+        rec["zs"]  = tools.safe_val(dz_val, rows=N, cols=n) + input_for_iter["z_ref"]
+        rec["us"]  = tools.safe_val(dnu_val, rows=N, cols=m) + input_for_iter["us_ref"]
+        rec["dt"] = tools.safe_val(dt_val).squeeze() + input_for_iter["dt_ref"].squeeze()
+        rec["ts"]  = np.concatenate(([0], np.cumsum(rec["dt"])))
+        rec["Ts"]  = float(np.sum(rec["dt"]))
 
         # Discretization model (expose for debug/analysis)
-        Ak, Bk, Bkp, Sk, zs_minus = inputs_for_iter.get("_linsys_cache", (None, None, None, None, None))
-        rec["zs_minus"] = self.zs_m.value if zs_minus is None else zs_minus
+        Ak, Bk, Bkp, Sk, z_minus = input_for_iter.get("_linsys_cache", (None, None, None, None, None))
+        rec["z_minus"] = self.z_m.value if z_minus is None else z_minus
         rec["Ak"] = self.Ak.value if Ak is None else Ak
         rec["Bk"] = self.Bk.value if Bk is None else Bk
         rec["Bkp"] = self.Bkp.value if Bkp is None else Bkp
@@ -682,10 +682,10 @@ class Subproblem:
         conv["vb_term"] = tools.get_val(self.vb_term,  rows=self.n_term, cols=1)      if self.vb_term  is not None else np.zeros((self.n_term,  1))
         conv["vb_dyn"]  = tools.get_val(self.vb_dyn_p, rows=self.n_dyn,  cols=self.N-1) - tools.get_val(self.vb_dyn_m, rows=self.n_dyn, cols=self.N-1)
 
-        conv["defect"]  = tools.safe_val(self.dz, rows=N, cols=n) + inputs_for_iter["zs_ref"] - self.zs_m.value
+        conv["defect"]  = tools.safe_val(self.dz, rows=N, cols=n) + input_for_iter["z_ref"] - self.z_m.value
         conv["Jtr"]     = ( float(self.wtr_z.value) * np.sum(tools.safe_val(self.dz, rows=N, cols=n)**2)
-                          + float(self.wtr_u.value) * np.sum(tools.safe_val(self.du, rows=N, cols=m)**2) )
-        ref_cost = discretize.compute_linearized_costs(inputs_for_iter["ts_ref"], inputs_for_iter["zs_ref"], inputs_for_iter["us_ref"], self.problem)[0].sum().item()
+                          + float(self.wtr_u.value) * np.sum(tools.safe_val(self.dnu, rows=N, cols=m)**2) )
+        ref_cost = discretize.compute_linearized_costs(input_for_iter["t_ref"], input_for_iter["z_ref"], input_for_iter["us_ref"], self.problem)[0].sum().item()
         conv["cost_ref"] = ref_cost
 
         rec["conv_data"]  = conv

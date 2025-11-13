@@ -49,8 +49,8 @@ class Model:
     # member functions point to selected fcns from selected module
     # ===============================================================
 
-    def dynamics(self, ts, zs, us, t_vec=None):
-        return self._dynamics(ts, zs, us, self.problem, t_vec)
+    def dynamics(self, ts, z, nu, t_vec=None):
+        return self._dynamics(t, z, nu, self.problem, t_vec)
     
     def update_model_params(self):
         """
@@ -98,22 +98,22 @@ class Model:
 
             f, dfcn_dz, dfcn_du = convexify.linearize_jax(self._dynamics, problem)
 
-            def lin_dyn(ts, zs, us):
-                return f(zs, us), dfcn_dz(zs, us), dfcn_du(zs, us)
+            def lin_dyn(t, z, nu):
+                return f(z, nu), dfcn_dz(z, nu), dfcn_du(z, nu)
 
             if method.flags["ctcs"] == 1:
                 f_ctcs, dfcn_dz_ctcs, dfcn_du_ctcs = convexify.linearize_jax_ctcs(self._dynamics, problem)
 
-                def lin_dyn_ctcs(ts, zs, us):
-                    return f_ctcs(zs, us), dfcn_dz_ctcs(zs, us), dfcn_du_ctcs(zs, us)
+                def lin_dyn_ctcs(t, z, nu):
+                    return f_ctcs(z, nu), dfcn_dz_ctcs(z, nu), dfcn_du_ctcs(z, nu)
                 
                 self.lin_dyn_ctcs = lin_dyn_ctcs
 
         else:
             _lin_dyn = _resolve_function("analytical_linsys")
 
-            def lin_dyn(ts, zs, us):
-                return _lin_dyn(ts, zs, us, problem)
+            def lin_dyn(t, z, nu):
+                return _lin_dyn(t, z, nu, problem)
 
         self.lin_dyn = lin_dyn
 

@@ -3,7 +3,7 @@ import numpy as np
 import trajopt.utils.tools                      as tools
 import trajopt.core.modules.models.obstacles    as obstacles
 
-def system_dynamics(ts, zs, us, problem, t_vec=None):
+def system_dynamics(t, z, nu, problem, t_vec=None):
     """
     x1, x2: r (position)
     u1, u2: v (velocity)
@@ -20,17 +20,17 @@ def system_dynamics(ts, zs, us, problem, t_vec=None):
     g_vec      = np.array([0,0, -mission.planet["g"]]) / method.nondim["na"]
 
     # extract states
-    r = zs[0:3]
-    v = zs[3:6]
+    r = z[0:3]
+    v = z[3:6]
 
     # extract controls 
     if t_vec is None:
-        us2 = us
+        us2 = nu
     else:
-        us2 = np.array([np.interp(ts, t_vec, us[:, i]) for i in range(m)])
+        us2 = np.array([np.interp(t, t_vec, nu[:, i]) for i in range(m)])
             
     # extract control
-    T = us2
+    T = nu2
 
     # compute velocity and acceleration
     xDot        = np.empty(6) # initialize
@@ -45,7 +45,7 @@ def system_dynamics(ts, zs, us, problem, t_vec=None):
         
     return xDot
 
-def analytical_linsys(ts, zs, us, problem):
+def analytical_linsys(t, z, nu, problem):
 
     mission = problem.mission
     model = problem.model
@@ -58,11 +58,11 @@ def analytical_linsys(ts, zs, us, problem):
     mass    = mission.vehicle["mass"] / method.nondim["nm"]
 
     # Sanity check for vector shapes
-    zs = np.asarray(zs).flatten()
-    us = np.asarray(us).flatten()
+    z =  np.asarray(z).flatten()
+    nu = np.asarray(nu).flatten()
 
-    assert len(zs) == n, f"Expected state vector of length {n}, got {len(zs)}"
-    assert len(us) == m, f"Expected control vector of length {m}, got {len(us)}"
+    assert len(z) == n, f"Expected state vector of length {n}, got {len(z)}"
+    assert len(nu) == m, f"Expected control vector of length {m}, got {len(nu)}"
 
     # Compute A matrix (Jacobian w.r.t. state)
     n2 = n // 2
@@ -78,7 +78,7 @@ def analytical_linsys(ts, zs, us, problem):
     ]) * (1.0 / mass)
 
     # Evaluate nonlinear dynamics
-    fc = system_dynamics(ts, zs, us, problem)
+    fc = system_dynamics(t, z, nu, problem)
 
     # Return in dictionary format
     linsys = {
@@ -89,8 +89,8 @@ def analytical_linsys(ts, zs, us, problem):
 
     return linsys
 
-def nonlinear_inequality_constraints(ts, zs, us, problem):
-    N = tools.num_timesteps(zs)
+def nonlinear_inequality_constraints(t, z, nu, problem):
+    N = tools.num_timesteps(z)
     P_blocks = []
 
     # path constraints (placeholder)
@@ -98,25 +98,25 @@ def nonlinear_inequality_constraints(ts, zs, us, problem):
     P_blocks.append(P_path)
 
     # add NFZ block
-    P_blocks.append(obstacles.nfz_nonlinear(ts, zs, us, problem))
+    P_blocks.append(obstacles.nfz_nonlinear(t, z, nu, problem))
 
     # stack all constraint blocks horizontally
     P = np.hstack([P for P in P_blocks if P.size > 0])
 
     return P
 
-def analytical_inequality_constraints(ts, zs, us, problem):
-    N = tools.num_timesteps(zs)
+def analytical_inequality_constraints(t, z, nu, problem):
+    N = tools.num_timesteps(z)
     model = problem.model
     n = model.n
     m = model.m
 
     # NFZ block
-    nfz = obstacles.nfz_analytical(ts, zs, us, problem)
+    nfz = obstacles.nfz_analytical(t, z, nu, problem)
 
     # preallocate total constraint arrays
     fcn_all   = nfz["fcn"]
     dPdz_all  = nfz["dfcn_dz"]
-    dPdu_all  = nfz["dfcn_du"]
+    dPdnu_all  = nfz["dfcn_du"]
 
-    return {"fcn": fcn_all, "dfcn_dz": dPdz_all, "dfcn_du": dPdu_all}
+    return {"fcn": fcn_all, "dfcn_dz": dPdz_all, "dfcn_du": dPdnu_all}

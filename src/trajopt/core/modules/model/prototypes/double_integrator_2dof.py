@@ -114,47 +114,47 @@ def ocp(config):
     problem["config"]   = config
     params              = config_params(config)
     problem["params"]   = params
-    problem["ts_init"]  = params["ts_init"]
-    problem["zs_init"]  = params["zs_init"]
-    problem["us_init"]  = params["us_init"]
+    problem["t_init"]  = params["t_init"]
+    problem["z_init"]  = params["z_init"]
+    problem["nu_init"]  = params["nu_init"]
 
     # Default state/control bounds
     problem             = defaults.set_problem_default(problem)
 
     # Cost function
     problem["cost"]     = params["cost"]
-    problem["cost_init"] = problem["cost"](params["ts_init"], params["zs_init"], params["us_init"])
+    problem["cost_init"] = problem["cost"](params["t_init"], params["z_init"], params["nu_init"])
 
     if params["method"]['flags']["auto_jac"]:
         problem["lin_cost"] = convexify.generate_jacobians(
-            lambda ts, zs, us: problem["cost"](ts, zs, us, problem),
+            lambda ts, z, us: problem["cost"](t, z, nu, problem),
             problem
         )
     else:
-        problem["lin_cost"] = lambda ts, zs, us: analytical_cost(ts, zs, us, problem)
+        problem["lin_cost"] = lambda ts, z, us: analytical_cost(t, z, nu, problem)
 
     # Dynamics
-    problem["xdot"] = lambda ts, zs, us, t_vec: system_dynamics(ts, zs, us, problem, t_vec)
+    problem["xdot"] = lambda ts, z, nu, t_vec: system_dynamics(t, z, nu, problem, t_vec)
 
     if params["method"]['flags']["auto_jac"]:
         problem["lin_dyn"] = convexify.generate_jacobians(
-            lambda ts, zs, us: system_dynamics(ts, zs, us, problem),
+            lambda ts, z, us: system_dynamics(t, z, nu, problem),
             problem
         )
     else:
-        problem["lin_dyn"] = lambda ts, zs, us: analytical_linsys(ts, zs, us, problem)
+        problem["lin_dyn"] = lambda ts, z, us: analytical_linsys(t, z, nu, problem)
 
     # Nonconvex inequality constraints
     problem["mission"]["path_lim"] = params["mission"]["path_lim"]
-    problem["P"] = lambda ts, zs, us, t_vec: nonlinear_inequality_constraints(ts, zs, us, problem)
+    problem["P"] = lambda ts, z, nu, t_vec: nonlinear_inequality_constraints(t, z, nu, problem)
 
     if params["method"]['flags']["auto_jac_cnst"]:
         problem["lin_constr"] = convexify.generate_jacobians(
-            lambda ts, zs, us: nonlinear_inequality_constraints(ts, zs, us, problem),
+            lambda ts, z, us: nonlinear_inequality_constraints(t, z, nu, problem),
             problem
         )
     else:
-        problem["lin_constr"] = lambda ts, zs, us: analytical_inequality_constraints(ts, zs, us, problem)
+        problem["lin_constr"] = lambda ts, z, us: analytical_inequality_constraints(t, z, nu, problem)
 
     # Algorithm - custom formulation
     problem["custom_inputs"]        = lambda problem,   local_vars:     custom_inputs(problem, local_vars)
@@ -259,9 +259,9 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     ### Time of flight constraints ###
     Ts_min                  = 1 / params['nondim']['nt']  # 50
     Ts_max                  = 20 / params['nondim']['nt']
-    params['ddts_max']      = 5 / ((params['N'] - 1) * params['nondim']['nt'])  # 0.025
-    params['dts_min']       = Ts_min / (params['N'] - 1)
-    params['dts_max']       = Ts_max / (params['N'] - 1)
+    params['ddt_max']      = 5 / ((params['N'] - 1) * params['nondim']['nt'])  # 0.025
+    params['dt_min']       = Ts_min / (params['N'] - 1)
+    params['dt_max']       = Ts_max / (params['N'] - 1)
 
     ### Set default constraint data ###
     params                  = defaults.set_params_constraint_default(params)
@@ -271,12 +271,12 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     # Initialize trajectory (initial guess)
     #======================================
     if params['flags']['free_final_time'] and not params['flags']['buff_dyn']:
-        us_range = np.ones((params['m'], 2)) 
+        nu_range = np.ones((params['m'], 2)) 
         # need to manually set the left-hand side vector to a column vector for multiplication to work
-        params = guess.nonlinear_initial_guess(us_range, params)
+        params = guess.nonlinear_initial_guess(nu_range, params)
     else:
         params = guess.waypoint_initial_guess(params) 
-        params['us_init'] = np.ones((params['m'], params['N']))
+        params['nu_init'] = np.ones((params['m'], params['N']))
 
     if params['flags']['ctcs']:
         params = guess.ctcs_initial_guess(params)
@@ -431,11 +431,11 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
     # params['conv']['num_buffers'] = 4
 
     # Save variable names
-    params['save_var_names'] = ['ts_opt', 'zs_opt', 'us_opt', 'params', 'O']
+    params['save_var_names'] = ['t_opt', 'z_opt', 'nu_opt', 'params', 'O']
 
     return params
 
-def system_dynamics(ts,zs,us,params,t_vec=None):
+def system_dynamics(t,z,us,params,t_vec=None):
     """
     x1, x2: r (position)
     u1, u2: v (velocity)
@@ -451,20 +451,20 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
     ge      = params['ge']
 
     # extract states
-    r = zs[0:2]
-    v = zs[2:4]
+    r = z[0:2]
+    v = z[2:4]
 
     # extract controls 
     if t_vec is None:
-        us2 = us
+        us2 = nu
     else:
         us2 = np.empty(m)
         for i in range(m):
-            interp = interp1d(t_vec, us[i,:]) # does this work?
+            interp = interp1d(t_vec, nu[i,:]) # does this work?
             us2[i] = interp(ts)
             
     # extract control
-    T = us2
+    T = nu2
 
     # compute velocity and acceleration
     xDot = np.empty(6) # initialize
@@ -473,7 +473,7 @@ def system_dynamics(ts,zs,us,params,t_vec=None):
         
     return xDot
 
-def analytical_linsys(ts, zs, us, problem):
+def analytical_linsys(t, z, nu, problem):
     
     # Extract parameters
     params = problem.get("params", problem)
@@ -482,11 +482,11 @@ def analytical_linsys(ts, zs, us, problem):
     mass = params["mass"]
 
     # Sanity check for vector shapes
-    zs = np.asarray(zs).flatten()
-    us = np.asarray(us).flatten()
+    z =  np.asarray(z).flatten()
+    nu = np.asarray(nu).flatten()
 
-    assert len(zs) == n, f"Expected state vector of length {n}, got {len(zs)}"
-    assert len(us) == m, f"Expected control vector of length {m}, got {len(us)}"
+    assert len(z) == n, f"Expected state vector of length {n}, got {len(z)}"
+    assert len(nu) == m, f"Expected control vector of length {m}, got {len(nu)}"
 
     # Compute A matrix (Jacobian w.r.t. state)
     n2 = n // 2
@@ -502,7 +502,7 @@ def analytical_linsys(ts, zs, us, problem):
     ]) 
 
     # Evaluate nonlinear dynamics
-    fc = system_dynamics(ts, zs, us, params)
+    fc = system_dynamics(t, z, nu, params)
 
     # Return in dictionary format
     linsys = {
@@ -513,14 +513,14 @@ def analytical_linsys(ts, zs, us, problem):
 
     return linsys
 
-def nonlinear_inequality_constraints(ts, zs, us, params):
+def nonlinear_inequality_constraints(t, z, nu, params):
 
     # Extract nested params if needed
     if "params" in params:
         params = params["params"]
 
-    zs      = zs.reshape(-1, 1) if zs.ndim == 1 else zs
-    N       = tools.num_timesteps(zs)
+    z    = z.reshape(-1, 1) if zs.ndim == 1 else zs
+    N       = tools.num_timesteps(z)
     n_nfz   = params["mission"]["n_nfz"]
     n_path  = params.get("n_path", 0)  # currently unused
 
@@ -528,8 +528,8 @@ def nonlinear_inequality_constraints(ts, zs, us, params):
     P_nfz   = []
 
     for k in range(N):
-        rx_k = zs[0, k]
-        ry_k = zs[1, k]
+        rx_k = z[0, k]
+        ry_k = z[1, k]
 
         # --- No Fly Zone constraints ---
         P_nfz_k = []
@@ -552,7 +552,7 @@ def nonlinear_inequality_constraints(ts, zs, us, params):
     return P
 
 
-def analytical_cost(ts, zs, us, problem):
+def analytical_cost(t, z, nu, problem):
 
     # Extract params
     params = problem.get("params", problem)
@@ -560,48 +560,48 @@ def analytical_cost(ts, zs, us, problem):
     m = params["model"]["m"]
     N = params["N"]
 
-    ts = np.asarray(ts).flatten()
-    zs = np.asarray(zs)
-    us = np.asarray(us)
+    t = np.asarray(ts).flatten()
+    z =  np.asarray(z)
+    nu = np.asarray(nu)
     dt = np.diff(ts)
 
     # Preallocate outputs
     dcostdz = np.zeros((1, n, N))
-    dcostdu = np.zeros((1, m, N))
+    dcostdnu = np.zeros((1, m, N))
     cost    = np.zeros((1, 1, N))
 
     for k in range(N - 1):
-        tk   = ts[k]
-        zk   = zs[:, k]
-        uk   = us[:, k]
+        tk   = t[k]
+        zk   = z[:, k]
+        uk   = nu[:, k]
 
-        tkp  = ts[k + 1]
-        zkp  = zs[:, k + 1]
-        ukp  = us[:, k + 1]
+        tkp  = t[k + 1]
+        zkp  = z[:, k + 1]
+        ukp  = nu[:, k + 1]
 
-        dcostdu[:, :, k] = 2 * ((uk + ukp) / 2).reshape(1, m)
+        dcostdnu[:, :, k] = 2 * ((uk + ukp) / 2).reshape(1, m)
         avg_cost = 0.5 * (problem["cost"](tk, zk, uk) + problem["cost"](tkp, zkp, ukp))
         cost[:, :, k] = avg_cost * dt[k]
 
     # Last step (N)
     dcostdz[:, :, N - 1] = 0
-    dcostdu[:, :, N - 1] = 0
+    dcostdnu[:, :, N - 1] = 0
     cost[:, :, N - 1]    = 0
 
     # Package into output dict
     lincost = {
         "dfcn_dz": np.squeeze(dcostdz, axis=0),
-        "dfcn_du": np.squeeze(dcostdu, axis=0),
+        "dfcn_du": np.squeeze(dcostdnu, axis=0),
         "fcn":     np.squeeze(cost, axis=0)
     }
 
     return lincost
 
-def analytical_inequality_constraints(ts, zs, us, problem):
+def analytical_inequality_constraints(t, z, nu, problem):
 
     params = problem.get("params", problem)
 
-    N = tools.num_timesteps(zs)
+    N = tools.num_timesteps(z)
     n = params["model"]["n"]
     m = params["model"]["m"]
     n_path = params["n_path"]
@@ -612,13 +612,13 @@ def analytical_inequality_constraints(ts, zs, us, problem):
     path_lim_scaled = np.linalg.solve(path_lim_diag, params["mission"]["path_lim"])
 
     # Preallocate storage
-    path_cnst = {"P": [], "Praw": [], "dPdz": [], "dPdu": []}
-    nfz_cnst = {"P": [], "dPdz": [], "dPdu": []}
+    path_cnst = {"P": [], "Praw": [], "dPdz": [], "dPdnu": []}
+    nfz_cnst = {"P": [], "dPdz": [], "dPdnu": []}
 
     for k in range(N):
-        tk = ts[k]
-        zk = zs[:, k]
-        uk = us[:, k]
+        tk = t[k]
+        zk = z[:, k]
+        uk = nu[:, k]
         rx_k, ry_k = zk[0], zk[1]
 
         # Evaluate full constraint vector
@@ -632,15 +632,15 @@ def analytical_inequality_constraints(ts, zs, us, problem):
 
             # Use zero Jacobians as placeholders (same as original MATLAB)
             dPdz_path = np.zeros((n_path, n))
-            dPdu_path = np.zeros((n_path, m))
+            dPdnu_path = np.zeros((n_path, m))
             path_cnst["dPdz"].append(dPdz_path)
-            path_cnst["dPdu"].append(dPdu_path)
+            path_cnst["dPdnu"].append(dPdnu_path)
 
         # ---- No-fly zone constraints ----
         if n_nfz > 0:
             P_nfz = P_full[n_path:n_path + n_nfz]
             dPdz_nfz = []
-            dPdu_nfz = []
+            dPdnu_nfz = []
 
             for i in range(n_nfz):
                 xc = params["obs"]["posc"][0, i]
@@ -652,17 +652,17 @@ def analytical_inequality_constraints(ts, zs, us, problem):
                 row_dz[1] = 2 * (ry_k - yc)
                 dPdz_nfz.append(row_dz)
 
-                dPdu_nfz.append(np.zeros(m))
+                dPdnu_nfz.append(np.zeros(m))
 
             nfz_cnst["P"].append(P_nfz)
             nfz_cnst["dPdz"].append(np.vstack(dPdz_nfz))
-            nfz_cnst["dPdu"].append(np.vstack(dPdu_nfz))
+            nfz_cnst["dPdnu"].append(np.vstack(dPdnu_nfz))
 
     # Stack outputs across time
     path_out = {
         "dfcn_dz": np.stack(path_cnst["dPdz"] + nfz_cnst["dPdz"], axis=2)
                    if n_path + n_nfz > 0 else np.array([]),
-        "dfcn_du": np.stack(path_cnst["dPdu"] + nfz_cnst["dPdu"], axis=2)
+        "dfcn_du": np.stack(path_cnst["dPdnu"] + nfz_cnst["dPdnu"], axis=2)
                    if n_path + n_nfz > 0 else np.array([]),
         "fcn":     np.stack(path_cnst["P"] + nfz_cnst["P"], axis=1)
                    if n_path + n_nfz > 0 else np.array([]),

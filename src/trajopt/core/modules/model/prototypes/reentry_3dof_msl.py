@@ -96,27 +96,27 @@ def config_params():
 
     # === Initial time grid ===
     dt_init             = (params['T_init'] / (params['N'] - 1)) * np.ones(params['N'] - 1)
-    dts_init            = dt_init / params['nondim']['nt']  # nondimensionalized
+    dt_init            = dt_init / params['nondim']['nt']  # nondimensionalized
     Ts_init             = params['T_init'] / params['nondim']['nt']
-    ts_init             = np.cumsum(np.insert(dts_init, 0, 0.0))  # size N
+    t_init             = np.cumsum(np.insert(dt_init, 0, 0.0))  # size N
 
     params['dt_init']   = dt_init       # dimensional [s]
-    params['dts_init']  = dts_init      # nondimensional
+    params['dt_init']  = dt_init      # nondimensional
     params['Ts_init']   = Ts_init       # nondimensional
-    params['ts_init']   = ts_init       # nondimensional
+    params['t_init']   = t_init       # nondimensional
 
     # === Initial trajectory guess ===
-    # params['zs_init'] = np.tile(params['z0'], (params['N'], 1))       # (N, 6)
+    # params['z_init'] = np.tile(params['z0'], (params['N'], 1))       # (N, 6)
 
     return params
 
 
 
 def extract_N(ts):
-    N = 1 if isinstance(ts, float) else (ts.shape[0] if ts.ndim == 1 else ts.shape[1])
+    N = 1 if isinstance(t, float) else (ts.shape[0] if ts.ndim == 1 else ts.shape[1])
     return N
 
-def mass_thrust(ts, zs, us, params):
+def mass_thrust(t, z, nu, params):
     """
     Compute mass and thrust.
 
@@ -183,7 +183,7 @@ def reference_bank_angle(t, z, params):
     else:
         raise ValueError(f"Unexpected shape for z: {z.shape}")
 
-def nonlinear_aero(ts, zs, us, params, case_flag=None):
+def nonlinear_aero(t, z, nu, params, case_flag=None):
     """
     Compute aerodynamic parameters (Lift, Drag, Cl, Cd, alpha, density)
     for high-speed Mars entry dynamics, vectorized over time steps.
@@ -221,9 +221,9 @@ def nonlinear_aero(ts, zs, us, params, case_flag=None):
     rho   = np.zeros(N)
 
     for k in range(N):
-        tk = ts if N == 1 else ts[k]
-        zk = zs if N == 1 else zs[k]
-        uk = us if N == 1 else us[k]
+        tk = ts if N == 1 else t[k]
+        zk = z if N == 1 else z[k]
+        uk = nu if N == 1 else nu[k]
 
         r, theta, phi, v, gamma, psi = zk
         v2 = v**2
@@ -264,14 +264,14 @@ def nonlinear_aero(ts, zs, us, params, case_flag=None):
     }
 
 
-def system_dynamics(ts, zs, us, params, v_vec=None):
+def system_dynamics(t, z, nu, params, v_vec=None):
     """
     Mars 3DoF reentry dynamics in polar coordinates with rotating planet (if enabled).
     
     Parameters:
         ts      : float or array-like
-        zs      : np.ndarray, state vector [r, theta, phi, v, gamma, psi]
-        us      : np.ndarray, control input (e.g., bank angle σ)
+        z    : np.ndarray, state vector [r, theta, phi, v, gamma, psi]
+        nu    : np.ndarray, control input (e.g., bank angle σ)
         params  : dictionary of physical/scaling parameters
         v_vec   : time vector for interpolated control (optional)
 
@@ -288,27 +288,27 @@ def system_dynamics(ts, zs, us, params, v_vec=None):
     N         = extract_N(ts)
 
     # Extract current state
-    r, theta, phi, v, gamma, psi = zs
+    r, theta, phi, v, gamma, psi = z
 
     # Interpolate control if time vector is provided
     if v_vec is not None:
         us2 = np.zeros(m)
         for i in range(m):
-            us2[i] = np.interp(ts, v_vec, us[:, i])
+            us2[i] = np.interp(t, v_vec, nu[:, i])
     else:
-        us2 = reference_bank_angle(ts, zs, params) 
+        us2 = reference_bank_angle(t, z, params) 
 
     # Bank angle σ
-    sigma = us2[0] if hasattr(us2, '__len__') else us2
+    sigma = nu2[0] if hasattr(us2, '__len__') else us2
 
     # === Call aero model ===
-    aero = nonlinear_aero(ts, zs, us2, params)
+    aero = nonlinear_aero(t, z, us2, params)
     L     = aero['L'][0]  # scalar
     D     = aero['D'][0]
     alpha = aero['alpha'][0]
 
     # === Call mass/thrust model ===
-    force = mass_thrust(ts, zs, us2, params)
+    force = mass_thrust(t, z, us2, params)
     mass  = force['mass']
     Tf    = force['Tf']
 

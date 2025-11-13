@@ -145,7 +145,7 @@ def load_yaml(pkg, file_name):
     path = importlib.resources.files(pkg).joinpath(file_name)
     return load_dict(path)
 
-def num_timesteps(zs):
+def num_timesteps(z):
     if zs.ndim == 1:
         return 1
     elif zs.ndim == 2:

@@ -26,9 +26,9 @@ def perform_default_analysis(problem):
     mission_params_exclude_list = ['_nonlinear_aero', 'costs', 'custom_modules', 'mission_module', '_get_cost_cnstr_nondim', '_set_custom_params', '_custom_constraints', '_custom_cost', 'problem'] 
     model_params_list = ['constraint_config_list', 'flags', 'm', 'n', 'name', 'nz', 'obs', 'u_types', 'z_types']
     method_params_list = ['N', 'N_dens', 'Npm', 'T_init', 'T_max', 'T_min', 'Ts_init', 'conv', 'conv_data', 'cost_init', 
-                          'dT_max', 'ddts_max', 'dt_init', 'dts_init', 'dts_max', 'dts_min', 'flags', 'line_guess_u_init',
+                          'dT_max', 'ddt_max', 'dt_init', 'dt_init', 'dt_max', 'dt_min', 'flags', 'line_guess_u_init',
                           'name', 'n_minus', 'n_plus', 'nl_guess_u_start', 'nl_guess_u_stop', 'solver_opts',
-                          'nondim', 'ts_init', 'us_init', 'weights', 'z_ind', 'zs_init']
+                          'nondim', 't_init', 'nu_init', 'weights', 'z_ind', 'z_init']
 
     mission_params = tools.extract_attributes_exclude(problem.mission, exclude=mission_params_exclude_list)
     model_params   = tools.extract_attributes(problem.model, model_params_list)
@@ -52,32 +52,32 @@ def perform_default_analysis(problem):
     for data in iter_data:
         
         # get reference trajectory for this iteration (in nondimensional coordinates)
-        ts_ref = np.asarray(data['ts_ref'])
-        zs_ref = np.asarray(data['zs_ref'])
-        us_ref = np.asarray(data['us_ref'])
+        t_ref = np.asarray(data['t_ref'])
+        z_ref = np.asarray(data['z_ref'])
+        nu_ref = np.asarray(data['us_ref'])
         
         # create dense time grid for this iteration based on its reference trajectory time span
-        ts_dense = np.linspace(ts_ref[0], ts_ref[-1], N_dense)
-        t_dense = ts_dense * nondim['nt']
+        t_dense = np.linspace(t_ref[0], t_ref[-1], N_dense)
+        t_dense = t_dense * nondim['nt']
         
         # create dense control interpolation for this iteration
-        us_ref_dense = np.hstack([np.interp(ts_dense, ts_ref, us_ref[:, i]).reshape((-1, 1)) for i in range(m)])
-        u_ref_dense = us_ref_dense @ nondim['M']['ctrl']['nd2d']
+        nu_ref_dense = np.hstack([np.interp(t_dense, t_ref, nu_ref[:, i]).reshape((-1, 1)) for i in range(m)])
+        u_ref_dense = nu_ref_dense @ nondim['M']['ctrl']['nd2d']
 
         # Wrapper that does FOH interpolation before calling dynamics
         def FOH_dynamics(t, z):
             # FOH interpolation to get control at time t
-            u = np.array([np.interp(t, ts_ref, us_ref[:, i]) for i in range(m)])
+            u = np.array([np.interp(t, t_ref, nu_ref[:, i]) for i in range(m)])
             return problem.model.dynamics(t, z, u)
         
         # nonlinear propagation
-        zs_ref_np = np.asarray(zs_ref)
+        z_ref_np = np.asarray(z_ref)
         sol = solve_ivp(
             FOH_dynamics,
-            [ts_ref[0], ts_ref[-1]],
-            zs_ref_np[0, :n],
-            args=(us_ref, ts_ref),
-            t_eval=ts_dense,
+            [t_ref[0], t_ref[-1]],
+            z_ref_np[0, :n],
+            args=(nu_ref, t_ref),
+            t_eval=t_dense,
             method='RK45',
             **odesettings
         )
@@ -86,8 +86,8 @@ def perform_default_analysis(problem):
         data['z_nl'] = sol.y.T @ nondim['M']['state']['nd2d']
         data['u_nl'] = u_ref_dense
 
-        data['t_ref'] = data['ts_ref'] * nondim['nt']
-        data['z_ref'] = data['zs_ref'][:, :n] @ nondim['M']['state']['nd2d']
+        data['t_ref'] = data['t_ref'] * nondim['nt']
+        data['z_ref'] = data['z_ref'][:, :n] @ nondim['M']['state']['nd2d']
         data['u_ref'] = data['us_ref'] @ nondim['M']['ctrl']['nd2d']
 
         if 'ts' in data:

@@ -94,27 +94,27 @@ def config_params():
 
     # === Initial time grid ===
     dt_init             = (params['T_init'] / (params['N'] - 1)) * np.ones(params['N'] - 1)
-    dts_init            = dt_init / params['nondim']['nt']  # nondimensionalized
+    dt_init            = dt_init / params['nondim']['nt']  # nondimensionalized
     Ts_init             = params['T_init'] / params['nondim']['nt']
-    ts_init             = np.cumsum(np.insert(dts_init, 0, 0.0))  # size N
+    t_init             = np.cumsum(np.insert(dt_init, 0, 0.0))  # size N
 
     params['dt_init']   = dt_init       # dimensional [s]
-    params['dts_init']  = dts_init      # nondimensional
+    params['dt_init']  = dt_init      # nondimensional
     params['Ts_init']   = Ts_init       # nondimensional
-    params['ts_init']   = ts_init       # nondimensional
+    params['t_init']   = t_init       # nondimensional
 
     # === Initial trajectory guess ===
-    # params['zs_init'] = np.tile(params['z0'], (params['N'], 1))       # (N, 6)
+    # params['z_init'] = np.tile(params['z0'], (params['N'], 1))       # (N, 6)
 
     return params
 
 
 
 def extract_N(ts):
-    N = 1 if isinstance(ts, float) else (ts.shape[0] if ts.ndim == 1 else ts.shape[1])
+    N = 1 if isinstance(t, float) else (ts.shape[0] if ts.ndim == 1 else ts.shape[1])
     return N
 
-def mass_thrust(ts, zs, us, params):
+def mass_thrust(t, z, nu, params):
     """
     Compute mass and thrust.
 
@@ -132,8 +132,8 @@ def mass_thrust(ts, zs, us, params):
     N       = extract_N(ts)
 
     if params['case_flag'] == 3:
-        Tf      = us[2] if N == 1 else us[:, 2]
-        mass    = zs[6] if N == 1 else zs[:, 6]
+        Tf      = nu[2] if N == 1 else nu[:, 2]
+        mass    = z[6] if N == 1 else z[:, 6]
     else:
         Tf      = 0. / params['nondim']['nf']
         mass    = params['mass'] / params['nondim']['nm']
@@ -144,7 +144,7 @@ def mass_thrust(ts, zs, us, params):
         }
 
 
-def nonlinear_aero(ts, zs, us, params, case_flag=None):
+def nonlinear_aero(t, z, nu, params, case_flag=None):
     """
     Compute nonlinear aerodynamic coefficients and lift/drag forces.
 
@@ -215,10 +215,10 @@ def nonlinear_aero(ts, zs, us, params, case_flag=None):
 
     for k in range(N):
         # Extract states and controls
-        tk = ts if N == 1 else ts[k]
-        zk = zs if N == 1 else zs[k]
-        uk = us if N == 1 else us[k]
-        r, theta, phi, v, gamma, psi = zs if N == 1 else zs[k]
+        tk = ts if N == 1 else t[k]
+        zk = z if N == 1 else z[k]
+        uk = nu if N == 1 else nu[k]
+        r, theta, phi, v, gamma, psi = z if N == 1 else z[k]
 
         # Extract thrust and mass
         force   = mass_thrust(tk, zk, uk, params)
@@ -233,7 +233,7 @@ def nonlinear_aero(ts, zs, us, params, case_flag=None):
             Cd[k]       = Kd1 + Kd2 * Cl[k] + Kd3 * Cl[k]**2
             alpha[k]    = np.deg2rad(alphlim_deg - kalph * (min(v * nv, vlim) - vlim)**2)
         elif case_flag in [2, 3]:
-            alpha[k]    = us if N == 1 else us[k,1]
+            alpha[k]    = nu if N == 1 else nu[k,1]
             alpha_deg   = np.rad2deg(alpha[k])
             Cl[k]       = Kl1h + Kl2h * alpha_deg + Kl3h * alpha_deg**2
             Cd[k]       = Kd1h + Kd2h * alpha_deg + Kd3h * alpha_deg**2 + Kd4h * alpha_deg**3 + Kd5h * alpha_deg**4
@@ -253,7 +253,7 @@ def nonlinear_aero(ts, zs, us, params, case_flag=None):
     }
 
 
-def system_dynamics(ts, zs, us, params, t_vec=None):
+def system_dynamics(t, z, nu, params, t_vec=None):
     """
     Nonlinear polar 3DoF hypersonic entry rotating earth dynamics
 
@@ -277,21 +277,21 @@ def system_dynamics(ts, zs, us, params, t_vec=None):
     case_flag   = params['case_flag']
     N           = extract_N(ts)
     # Extract states
-    r, theta, phi, v, gamma, psi = zs
+    r, theta, phi, v, gamma, psi = z
     
     # Extract controls 
     if t_vec is None:
-        us2 = us
+        us2 = nu
     else:
         us2 = np.zeros(m)
         for i in range(m-1):
-            us2[i] = np.interp(ts, t_vec, us[:, i])
+            us2[i] = np.interp(t, t_vec, nu[:, i])
 
     # Extract bank angle
-    sigma   = us2 if isinstance(us2, float) else us2[0]
+    sigma   = nu2 if isinstance(us2, float) else us2[0]
 
     # Determine lift and drag coefficients from velocity
-    aero    = nonlinear_aero(ts, zs, us2, params)
+    aero    = nonlinear_aero(t, z, us2, params)
     L       = aero['L']
     D       = aero['D']
     Cl      = aero['Cl']
@@ -299,7 +299,7 @@ def system_dynamics(ts, zs, us, params, t_vec=None):
     alpha   = aero['alpha']
 
     # Extract mass and thrust
-    force   = mass_thrust(ts, zs, us2, params)
+    force   = mass_thrust(t, z, us2, params)
     mass    = force['mass']
     Tf      = force['Tf']
 

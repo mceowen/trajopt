@@ -5,14 +5,14 @@ import trajopt.utils.tools                      as tools
 # MISSION
 # ===============================================================
 
-def cost2(ts, zs, us, problem):
-    return np.dot(np.transpose(us), us)
+def cost2(t, z, nu, problem):
+    return np.dot(np.transpose(nu), nu)
 
 # ===============================================================
 # MODEL
 # ===============================================================
 
-def dynamics(ts, zs, us, problem, t_vec=None):
+def dynamics(t, z, nu, problem, t_vec=None):
     """
     x1, x2: r (position)
     u1, u2: v (velocity)
@@ -29,17 +29,17 @@ def dynamics(ts, zs, us, problem, t_vec=None):
     g_vec      = np.array([0,0, -mission.planet["g"]]) / method.nondim["na"]
 
     # extract states
-    r = zs[0:3]
-    v = zs[3:6]
+    r = z[0:3]
+    v = z[3:6]
 
     # extract controls 
     if t_vec is None:
-        us2 = us
+        us2 = nu
     else:
-        us2 = np.array([np.interp(ts, t_vec, us[:, i]) for i in range(m)])
+        us2 = np.array([np.interp(t, t_vec, nu[:, i]) for i in range(m)])
             
     # extract control
-    T = us2
+    T = nu2
 
     # compute velocity and acceleration
     xDot        = np.empty(6) # initialize

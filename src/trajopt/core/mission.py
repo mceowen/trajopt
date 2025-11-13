@@ -95,8 +95,8 @@ class Mission:
     # member functions point to selected fcns from selected module
     # ===============================================================
     
-    def nonlinear_aero(self, ts, zs, us):
-        return self._nonlinear_aero(ts, zs, us, self.problem)
+    def nonlinear_aero(self, ts, z, nu):
+        return self._nonlinear_aero(t, z, nu, self.problem)
 
     def custom_constraints(self, subproblem):
         return self._custom_constraints(subproblem)

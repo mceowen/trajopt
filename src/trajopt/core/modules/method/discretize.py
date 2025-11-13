@@ -54,20 +54,20 @@ def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, problem):
         # Convert to JAX arrays upfront if any constraint uses JAX (auto_diff=1)
         has_jax = any(c.auto_diff == 1 for c in model.nonconvex_inequality_constraints)
         if has_jax:
-            ts_jax = jnp.asarray(t_ref)
-            zs_jax = jnp.asarray(z_ref)
-            us_jax = jnp.asarray(u_ref)
+            t_jax = jnp.asarray(t_ref)
+            z_jax = jnp.asarray(z_ref)
+            nu_jax = jnp.asarray(u_ref)
         
         # Preallocate stacked arrays
         g    = np.zeros((method.N, mission.n_ineq))
         dgdz = np.zeros((method.N, mission.n_ineq, model.n))
-        dgdu = np.zeros((method.N, mission.n_ineq, model.m))
+        dgdnu = np.zeros((method.N, mission.n_ineq, model.m))
         
         # Evaluate constraints at each timestep
         for k in range(method.N):
-            tk = ts_jax[k] if has_jax else t_ref[k]
-            zk = zs_jax[k] if has_jax else z_ref[k]
-            uk = us_jax[k] if has_jax else u_ref[k]
+            tk = t_jax[k] if has_jax else t_ref[k]
+            zk = z_jax[k] if has_jax else z_ref[k]
+            uk = nu_jax[k] if has_jax else u_ref[k]
             
             col_start = 0
             for constraint in model.nonconvex_inequality_constraints:
@@ -76,13 +76,13 @@ def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, problem):
                 f, dfcn_dz, dfcn_du = constraint.affine_approximation(tk, zk, uk)
                 g[k, col_start:col_end]       = np.asarray(f)
                 dgdz[k, col_start:col_end, :] = np.asarray(dfcn_dz)[:, :model.n]
-                dgdu[k, col_start:col_end, :] = np.asarray(dfcn_du)
+                dgdnu[k, col_start:col_end, :] = np.asarray(dfcn_du)
                 
                 col_start = col_end
     else:
-        dgdz = dgdu = g = None
+        dgdz = dgdnu = g = None
     
-    return g, dgdz, dgdu
+    return g, dgdz, dgdnu
 
 def compute_linearized_costs(t_ref, z_ref, u_ref, problem):
 
@@ -93,50 +93,50 @@ def compute_linearized_costs(t_ref, z_ref, u_ref, problem):
     if len(mission.costs) > 0:
         has_jax = any(c.auto_diff == 1 for c in mission.costs)
         if has_jax:
-            ts_jax = jnp.asarray(t_ref)
-            zs_jax = jnp.asarray(z_ref)
-            us_jax = jnp.asarray(u_ref)
+            t_jax = jnp.asarray(t_ref)
+            z_jax = jnp.asarray(z_ref)
+            nu_jax = jnp.asarray(u_ref)
         
         # preallocate stacked arrays (cost per timestep)
         cost = np.zeros((method.N, 1, 1))
         dcostdz = np.zeros((method.N, 1, model.n))
-        dcostdu = np.zeros((method.N, 1, model.m))
+        dcostdnu = np.zeros((method.N, 1, model.m))
 
         # evaluate costs at each timestep
         for cost_fn in mission.costs:
             if cost_fn.category == "running":
                 for k in range(method.N-1):
-                    tk = ts_jax[k] if has_jax else t_ref[k]
-                    zk = zs_jax[k] if has_jax else z_ref[k]
-                    uk = us_jax[k] if has_jax else u_ref[k]
+                    tk = t_jax[k] if has_jax else t_ref[k]
+                    zk = z_jax[k] if has_jax else z_ref[k]
+                    uk = nu_jax[k] if has_jax else u_ref[k]
                     
                     f, dfcn_dz, dfcn_du = cost_fn.affine_approximation(tk, zk, uk)
                     cost[k, 0, 0] += np.asarray(f)
                     dcostdz[k, 0, :] += np.asarray(dfcn_dz).flatten()
-                    dcostdu[k, 0, :] += np.asarray(dfcn_du).flatten()
+                    dcostdnu[k, 0, :] += np.asarray(dfcn_du).flatten()
                 
             elif cost_fn.category == "terminal":
-                tk = ts_jax[-1] if has_jax else t_ref[-1]
-                zk = zs_jax[-1] if has_jax else z_ref[-1]
-                uk = us_jax[-1] if has_jax else u_ref[-1]
+                tk = t_jax[-1] if has_jax else t_ref[-1]
+                zk = z_jax[-1] if has_jax else z_ref[-1]
+                uk = nu_jax[-1] if has_jax else u_ref[-1]
                 
                 f, dfcn_dz, dfcn_du = cost_fn.affine_approximation(tk, zk, uk)
                 cost[-1, 0, 0] += np.asarray(f)
                 dcostdz[-1, 0, :] += np.asarray(dfcn_dz).flatten()
-                dcostdu[-1, 0, :] += np.asarray(dfcn_du).flatten()
+                dcostdnu[-1, 0, :] += np.asarray(dfcn_du).flatten()
     else:
-        cost = dcostdz = dcostdu = None
+        cost = dcostdz = dcostdnu = None
     
-    return cost, dcostdz, dcostdu
+    return cost, dcostdz, dcostdnu
 
 # Compute exact discretize for linear dynamic system
-def discretize_inv_foh(zs_ref, us_ref, dts_ref, problem):
+def discretize_inv_foh(z_ref, nu_ref, dt_ref, problem):
     model = problem.model
     method = problem.method
 
     N = method.N
 
-    traj_minus_data = {"zs_minus": [zs_ref[0]]}
+    traj_minus_data = {"z_minus": [z_ref[0]]}
 
     # Precompute
     eye_flat = np.eye(model.n).ravel()
@@ -144,14 +144,14 @@ def discretize_inv_foh(zs_ref, us_ref, dts_ref, problem):
     # Stack dynamics
     lds0_stack = []
     for k in range(N - 1):
-        method.lds0[method.z_ind] = zs_ref[k]
+        method.lds0[method.z_ind] = z_ref[k]
         method.lds0[method.Ak_ind] = eye_flat
         lds0_stack.append(method.lds0.copy())
 
     lds0_stack = np.concatenate(lds0_stack)
 
     def derivs_step(tau, lds):
-        return RHS_ltv(tau, lds, us_ref, dts_ref, problem)
+        return RHS_ltv(tau, lds, nu_ref, dt_ref, problem)
 
     sol = solve_ivp(derivs_step, [0, 1], lds0_stack, method="RK45", atol=1e-6, rtol=1e-6)
 
@@ -166,7 +166,7 @@ def discretize_inv_foh(zs_ref, us_ref, dts_ref, problem):
 
     for k in range(N - 1):
         base    = k * method.lds0_size
-        traj_minus_data["zs_minus"].append(lds_end[base + method.z_ind])
+        traj_minus_data["z_minus"].append(lds_end[base + method.z_ind])
 
         Ak_bar  = lds_end[base + method.Ak_ind].reshape(model.n, model.n)
         Bk_bar  = lds_end[base + method.Bk_ind].reshape(model.n, model.m)
@@ -178,13 +178,13 @@ def discretize_inv_foh(zs_ref, us_ref, dts_ref, problem):
         Bkp[k]  = Ak_bar @ Bkp_bar
         Sk[k]   = Ak_bar @ Sk_bar
 
-    zs_minus    = np.array(traj_minus_data["zs_minus"])
+    z_minus    = np.array(traj_minus_data["z_minus"])
 
-    return Ak, Bk, Bkp, Sk, zs_minus
+    return Ak, Bk, Bkp, Sk, z_minus
 
 
 # Integrate linear system
-def RHS_ltv(tau, lds, us_ref, dts_ref, problem):
+def RHS_ltv(tau, lds, nu_ref, dt_ref, problem):
 
     model = problem.model
     method = problem.method
@@ -197,17 +197,17 @@ def RHS_ltv(tau, lds, us_ref, dts_ref, problem):
     Om_k            = 1 - tau
     Om_kp           = tau
 
-    nrows, ncols    = us_ref.shape
+    nrows, ncols    = nu_ref.shape
     rows            = nrows if nrows > ncols else ncols
 
     v_1             = Om_k * np.ones((rows, 1))
     v_2             = Om_kp * np.ones((rows - 1, 1))
     Om              = np.diagflat(v_1) + np.diagflat(v_2, 1)
 
-    u               = Om @ us_ref
+    u               = Om @ nu_ref
 
     for k in range(N - 1):
-        dts_k       = dts_ref[k]
+        dt_k       = dt_ref[k]
 
         # Extract state info
         x           = lds[ k * method.lds0_size + method.z_ind ]
@@ -219,10 +219,10 @@ def RHS_ltv(tau, lds, us_ref, dts_ref, problem):
         Phi_tau     = lds[ k * method.lds0_size + method.Ak_ind ].reshape(model.n, model.n)
 
         # Construct Jacobians w.r.t. tau
-        f_tau       = dts_k * fc
-        A_tau       = dts_k * Ac
-        B_tau       = dts_k * Om_k * Bc
-        Bp_tau      = dts_k * Om_kp * Bc
+        f_tau       = dt_k * fc
+        A_tau       = dt_k * Ac
+        B_tau       = dt_k * Om_k * Bc
+        Bp_tau      = dt_k * Om_kp * Bc
         S_tau       = fc
 
         Phi_tau_inv = np.linalg.pinv(Phi_tau)
@@ -271,7 +271,7 @@ def jit_jax_discretize(problem):
     t = jnp.linspace(0.0, 1.0, nsub_nodes + 2)
 
     # packs the derivative of stacked RHS vector for node k
-    def pack_lds_dot(tau, lds_k, us_k, us_kp, dts_k):
+    def pack_lds_dot(tau, lds_k, nu_k, nu_kp, dt_k):
         a = 1 - tau
         b = tau
 
@@ -281,8 +281,8 @@ def jit_jax_discretize(problem):
         phi_b_p = lds_k[Bkp_ind0 : Sk_ind0].reshape((nz, m))
         phi_s   = lds_k[Sk_ind0  : ]
 
-        u = a * us_k + b * us_kp
-        sigma = dts_k
+        u = a * nu_k + b * nu_kp
+        sigma = dt_k
 
         fc, Ac, Bc    = lin_dyn(tau, x, u)
 
@@ -295,11 +295,11 @@ def jit_jax_discretize(problem):
         return jnp.concatenate([P1_dot, P2_dot, P3_dot, P4_dot, P5_dot])
 
     # rk4 single step function for jax integration
-    def rk4_step_jax(tau, lds, us_k, us_kp, dts_k):
-        k1 = pack_lds_dot(tau, lds, us_k, us_kp, dts_k)
-        k2 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k1, us_k, us_kp, dts_k)
-        k3 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k2, us_k, us_kp, dts_k)
-        k4 = pack_lds_dot(tau + dt_sub, lds + dt_sub * k3, us_k, us_kp, dts_k)
+    def rk4_step_jax(tau, lds, nu_k, nu_kp, dt_k):
+        k1 = pack_lds_dot(tau, lds, nu_k, nu_kp, dt_k)
+        k2 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k1, nu_k, nu_kp, dt_k)
+        k3 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k2, nu_k, nu_kp, dt_k)
+        k4 = pack_lds_dot(tau + dt_sub, lds + dt_sub * k3, nu_k, nu_kp, dt_k)
         
         lds_next = lds + (dt_sub / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
         return lds_next, None
@@ -307,8 +307,8 @@ def jit_jax_discretize(problem):
     rk4_step_jax_jit = jax.jit(rk4_step_jax)
 
     # initilize stacked propagation vector  
-    def pack_lds0(zs_k):
-        P1 = zs_k
+    def pack_lds0(z_k):
+        P1 = z_k
         P2 = jnp.eye(nz).reshape(nz*nz)
         P3 = jnp.zeros(nz*m)
         P4 = jnp.zeros(nz*m)
@@ -318,27 +318,27 @@ def jit_jax_discretize(problem):
 
     # unpacks stacked propagation vector to correct shapes
     def unpack_ldsf(ldsf_k):
-        zs_minus_k = ldsf_k[ : Ak_ind0]
+        z_minus_k = ldsf_k[ : Ak_ind0]
         A_jax_k    = ldsf_k[Ak_ind0  : Bk_ind0].reshape((nz, nz))
         B_jax_k    = ldsf_k[Bk_ind0  : Bkp_ind0].reshape((nz, m))
         Bp_jax_k   = ldsf_k[Bkp_ind0 : Sk_ind0].reshape((nz, m))
         S_jax_k    = ldsf_k[Sk_ind0  : ]
 
-        return (A_jax_k, B_jax_k, Bp_jax_k, S_jax_k, zs_minus_k)
+        return (A_jax_k, B_jax_k, Bp_jax_k, S_jax_k, z_minus_k)
 
     # propagation function for node k
-    def propagate_k(k, zs_ref, us_ref, dts_ref):
-        zs_k  = zs_ref[k]
-        us_k  = us_ref[k]
-        us_kp = us_ref[k+1]
-        dts_k = dts_ref[k]
+    def propagate_k(k, z_ref, nu_ref, dt_ref):
+        z_k  = z_ref[k]
+        nu_k  = nu_ref[k]
+        nu_kp = nu_ref[k+1]
+        dt_k = dt_ref[k]
 
         # stack z, A, B, Bp, S for multiple shooting propagation
-        lds0_k = pack_lds0(zs_k)
+        lds0_k = pack_lds0(z_k)
 
         # propagate stacked vector
         def rk4_step_jax_partial(lds, tau):
-            return rk4_step_jax_jit(tau, lds, us_k, us_kp, dts_k)
+            return rk4_step_jax_jit(tau, lds, nu_k, nu_kp, dt_k)
 
         ldsf_k, _ = jax.lax.scan(rk4_step_jax_partial, lds0_k, t[:-1])
 
@@ -350,7 +350,7 @@ def jit_jax_discretize(problem):
     method.propagate_jax = propagate
 
 # inverse free discretize with jax
-def discretize_inv_free_jax(zs_ref_np, us_ref_np, dts_ref_np, problem):
+def discretize_inv_free_jax(z_ref_np, nu_ref_np, dt_ref_np, problem):
 
     method = problem.method
 
@@ -358,76 +358,76 @@ def discretize_inv_free_jax(zs_ref_np, us_ref_np, dts_ref_np, problem):
     method.propagate_jax
 
     # convert numpy arrays to jax
-    zs_ref = jnp.asarray(zs_ref_np)
-    us_ref = jnp.asarray(us_ref_np)
-    dts_ref = jnp.asarray(dts_ref_np)
+    z_ref = jnp.asarray(z_ref_np)
+    nu_ref = jnp.asarray(nu_ref_np)
+    dt_ref = jnp.asarray(dt_ref_np)
 
     # call jitted propagator for each node
     ks = jnp.arange(method.N - 1)
-    A_jax, B_jax, Bp_jax, S_jax, zs_minus = method.propagate_jax(ks, zs_ref, us_ref, dts_ref)
+    A_jax, B_jax, Bp_jax, S_jax, z_minus = method.propagate_jax(ks, z_ref, nu_ref, dt_ref)
 
-    zs_ref_0 = zs_ref[[0], :]
+    z_ref_0 = z_ref[[0], :]
     
-    return np.asarray(A_jax), np.asarray(B_jax), np.asarray(Bp_jax), np.asarray(S_jax), np.asarray(jnp.vstack([zs_ref_0, zs_minus]))
+    return np.asarray(A_jax), np.asarray(B_jax), np.asarray(Bp_jax), np.asarray(S_jax), np.asarray(jnp.vstack([z_ref_0, z_minus]))
 
-def compute_linsys_discrete(zs_ref, us_ref, dts_ref, problem):
+def compute_linsys_discrete(z_ref, nu_ref, dt_ref, problem):
     """
     Compute the linear system in discrete form.
 
     Parameters:
-    zs_ref (numpy.ndarray): Reference state trajectory.
-    us_ref (numpy.ndarray): Reference control trajectory.
-    dts_ref (numpy.ndarray): Time steps.
+    z_ref (numpy.ndarray): Reference state trajectory.
+    nu_ref (numpy.ndarray): Reference control trajectory.
+    dt_ref (numpy.ndarray): Time steps.
     problem (dict): Dictionary containing problem parameters.
 
     Returns:
-    tuple: Ak, Bk, Bkp, Sk, zs_minus
+    tuple: Ak, Bk, Bkp, Sk, z_minus
     """
     method = problem.method
 
 
     if method.flags.get("jax_dyn", 0):
-        Ak, Bk, Bkp, Sk, zs_minus = discretize_inv_free_jax(zs_ref, us_ref, dts_ref, problem)
+        Ak, Bk, Bkp, Sk, z_minus = discretize_inv_free_jax(z_ref, nu_ref, dt_ref, problem)
     else:
         if method.flags["ctcs"]:
-            Ak, Bk, Bkp, Sk, zs_minus = discretize_ctcs(zs_ref, us_ref, dts_ref, problem)
+            Ak, Bk, Bkp, Sk, z_minus = discretize_ctcs(z_ref, nu_ref, dt_ref, problem)
         else:
-            Ak, Bk, Bkp, Sk, zs_minus = discretize_inv_foh(zs_ref, us_ref, dts_ref, problem)
+            Ak, Bk, Bkp, Sk, z_minus = discretize_inv_foh(z_ref, nu_ref, dt_ref, problem)
     
-    return Ak, Bk, Bkp, Sk, zs_minus
+    return Ak, Bk, Bkp, Sk, z_minus
 
 
-def discretize_ctcs(zs_ref, us_ref, dts_ref, problem):
+def discretize_ctcs(z_ref, nu_ref, dt_ref, problem):
     """
     Compute exact discretize for linear dynamic system.
 
     Parameters:
-    zs_ref (numpy.ndarray): Reference state trajectory.
-    us_ref (numpy.ndarray): Reference control trajectory.
-    dts_ref (numpy.ndarray): Time steps.
+    z_ref (numpy.ndarray): Reference state trajectory.
+    nu_ref (numpy.ndarray): Reference control trajectory.
+    dt_ref (numpy.ndarray): Time steps.
     problem (dict): Dictionary containing problem parameters.
 
     Returns:
-    tuple: Ak, Bk, Bkp, Sk, zs_minus
+    tuple: Ak, Bk, Bkp, Sk, z_minus
     """
     model  = problem.model
     method = problem.method
 
     N = method.N
 
-    traj_minus_data = {"zs_minus": [zs_ref[0]]}
+    traj_minus_data = {"z_minus": [z_ref[0]]}
 
     # Setup LTV system dynamics
     lds0_stack = []
     for k in range(N - 1):
-        method.lds0[method.z_ind] = zs_ref[k]
+        method.lds0[method.z_ind] = z_ref[k]
         method.lds0[method.Ak_ind] = np.reshape(np.eye(model.nz), -1)
         lds0_stack.append(method.lds0.copy())
 
     lds0_stack = np.hstack(lds0_stack)
 
     def derivs_step(tau, lds):
-        return RHS_ltv_ctcs(tau, lds, us_ref, dts_ref, problem)
+        return RHS_ltv_ctcs(tau, lds, nu_ref, dt_ref, problem)
 
     sol = solve_ivp(derivs_step, [0, 1], lds0_stack, atol=1E-12, rtol=1E-12)
     lds_out_stack = sol.y
@@ -440,7 +440,7 @@ def discretize_ctcs(zs_ref, us_ref, dts_ref, problem):
     # Extract dense values
     for k in range(N - 1):
         lds_end = lds_out_stack[:, -1]
-        traj_minus_data["zs_minus"].append(
+        traj_minus_data["z_minus"].append(
             lds_end[k * method.lds0_size + method.z_ind])
 
         # Reshape matrices
@@ -459,20 +459,20 @@ def discretize_ctcs(zs_ref, us_ref, dts_ref, problem):
         Sk[k]   = Ak_bar @ Sk_bar
 
     # Extract x_ref_minus traj (from integration)
-    zs_minus    = np.array(traj_minus_data["zs_minus"])
+    z_minus    = np.array(traj_minus_data["z_minus"])
 
-    return Ak, Bk, Bkp, Sk, zs_minus
+    return Ak, Bk, Bkp, Sk, z_minus
 
 
-def RHS_ltv_ctcs(tau, lds, us_ref, dts_ref, problem):
+def RHS_ltv_ctcs(tau, lds, nu_ref, dt_ref, problem):
     """
     Integrate linear system.
 
     Parameters:
     tau (float): Current time step.
     lds (numpy.ndarray): Linear dynamic system state.
-    us_ref (numpy.ndarray): Reference control trajectory.
-    dts_ref (numpy.ndarray): Time steps.
+    nu_ref (numpy.ndarray): Reference control trajectory.
+    dt_ref (numpy.ndarray): Time steps.
     problem (dict): Dictionary containing problem parameters.
 
     Returns:
@@ -488,12 +488,12 @@ def RHS_ltv_ctcs(tau, lds, us_ref, dts_ref, problem):
     Om_k = 1 - tau
     Om_kp = tau
 
-    Om = np.diag(Om_k * np.ones(us_ref.shape[0])) + np.diag(Om_kp * np.ones(us_ref.shape[0] - 1), 1)
+    Om = np.diag(Om_k * np.ones(nu_ref.shape[0])) + np.diag(Om_kp * np.ones(nu_ref.shape[0] - 1), 1)
 
-    u = Om @ us_ref
+    u = Om @ nu_ref
 
     for k in range(N - 1):
-        dts_k = dts_ref[k]
+        dt_k = dt_ref[k]
         x = lds[k * method.lds0_size + method.z_ind]
 
         Ac, Bc, fc = convexify.compute_ctcs_jacobians(tau, x, u[k, :], problem)
@@ -501,10 +501,10 @@ def RHS_ltv_ctcs(tau, lds, us_ref, dts_ref, problem):
         Phi_tau = np.reshape(lds[k * method.lds0_size + method.Ak_ind],
                              (model.nz, model.nz))
 
-        f_tau = dts_k * fc
-        A_tau = dts_k * Ac
-        B_tau = dts_k * Om_k * Bc
-        Bp_tau = dts_k * Om_kp * Bc
+        f_tau = dt_k * fc
+        A_tau = dt_k * Ac
+        B_tau = dt_k * Om_k * Bc
+        Bp_tau = dt_k * Om_kp * Bc
         S_tau = fc
 
         Phi_tau_inv = np.linalg.inv(Phi_tau)

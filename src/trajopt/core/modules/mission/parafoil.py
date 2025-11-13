@@ -1,11 +1,11 @@
 import numpy as np
 import cvxpy as cp
 
-def cost(ts, zs, us, problem):
+def cost(t, z, nu, problem):
     
-    return np.dot(np.transpose(us), us)
+    return np.dot(np.transpose(nu), nu)
 
-def analytical_cost(ts, zs, us, problem):
+def analytical_cost(t, z, nu, problem):
 
     mission = problem.mission
     model = problem.model
@@ -16,37 +16,37 @@ def analytical_cost(ts, zs, us, problem):
     N               = method.N
 
     ts              = np.asarray(ts).flatten()
-    zs              = np.asarray(zs)
-    us              = np.asarray(us)
+    z            = np.asarray(z)
+    nu            = np.asarray(nu)
     dt              = np.diff(ts)
 
     # Preallocate outputs
     dcostdz         = np.zeros((N, 1, n))
-    dcostdu         = np.zeros((N, 1, m))
+    dcostdnu         = np.zeros((N, 1, m))
     cost            = np.zeros((N, 1, 1))
 
     for k in range(N - 1):
-        tk          = ts[k]
-        zk          = zs[k]
-        uk          = us[k]
+        tk          = t[k]
+        zk          = z[k]
+        uk          = nu[k]
 
-        tkp         = ts[k + 1]
-        zkp         = zs[k + 1]
-        ukp         = us[k + 1]
+        tkp         = t[k + 1]
+        zkp         = z[k + 1]
+        ukp         = nu[k + 1]
 
-        dcostdu[k]  = 2 * dt[k] * ((uk + ukp) / 2).reshape(1, m)
+        dcostdnu[k]  = 2 * dt[k] * ((uk + ukp) / 2).reshape(1, m)
         avg_cost    = 0.5 * (mission.cost(tk, zk, uk) + mission.cost(tkp, zkp, ukp))
         cost[k]     = avg_cost * dt[k]
 
     # Last step (N)
     dcostdz[N - 1]  = 0
-    dcostdu[N - 1]  = 0
+    dcostdnu[N - 1]  = 0
     cost[N - 1]     = 0
 
     # Package into output dict
     lincost = {
         "dfcn_dz": dcostdz,
-        "dfcn_du": dcostdu,
+        "dfcn_du": dcostdnu,
         "fcn":     cost     
     }
 
@@ -87,7 +87,7 @@ def custom_variables(problem,local_vars):
 
 def custom_constraints(CNST,local_vars):
 
-    us_ref     = local_vars["us_ref"]
+    nu_ref     = local_vars["us_ref"]
     du         = local_vars["sol_vars"]["du"]
     u_slack    = local_vars["u_slack"]
     u_norm_min = local_vars["u_norm_min"]
@@ -98,7 +98,7 @@ def custom_constraints(CNST,local_vars):
     N          = local_vars["N"]
 
     for k in range(N):
-        u_k     = us_ref[k] + du[k]
+        u_k     = nu_ref[k] + du[k]
         slack_k = u_slack[k]
         
         CNST.append(cp.norm(u_k) <= slack_k)
@@ -111,16 +111,16 @@ def custom_constraints(CNST,local_vars):
 def custom_cost(PTR_COST,local_vars):
 
     # Extract variables from local_vars
-    ts_ref    = local_vars["ts_ref"]
+    t_ref    = local_vars["t_ref"]
     N         = local_vars["N"]
     u_slack   = local_vars["u_slack"]
-    us_ref    = local_vars["us_ref"]
+    nu_ref    = local_vars["us_ref"]
     du        = local_vars["sol_vars"]["du"]
     ncost     = local_vars["ncost"]
     # w_jerk  = local_vars["w_jerk"]  # Uncomment if you include JERK_COST term
 
-    # Compute dts_ref (time step differences)
-    dts_ref = np.diff(ts_ref)  # shape: (N-1,)
+    # Compute dt_ref (time step differences)
+    dt_ref = np.diff(t_ref)  # shape: (N-1,)
 
     w_true = ncost
 
@@ -128,9 +128,9 @@ def custom_cost(PTR_COST,local_vars):
     JERK_COST = 0
 
     for k in range(N - 1):
-        TRUE_COST   += cp.square(u_slack[k + 1]) * dts_ref[k]
+        TRUE_COST   += cp.square(u_slack[k + 1]) * dt_ref[k]
 
-        jerk        = (us_ref[k + 1] + du[k + 1] - us_ref[k] - du[k]) / dts_ref[k]
+        jerk        = (nu_ref[k + 1] + du[k + 1] - nu_ref[k] - du[k]) / dt_ref[k]
         # JERK_COST += w_jerk * cp.sum_squares(jerk)
 
     PTR_COST        = PTR_COST + w_true * TRUE_COST + JERK_COST

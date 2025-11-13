@@ -14,7 +14,7 @@ print(">>> LOADED reentry_3dof_ghame.py <<<")
  203.538 s    1774915 calls   C:\Users\chris\hypersonic_entry_opt\entry_problems\missions\rlv_betts\aero\nonlinear_aero.m>nonlinear_aero
  382.006 s     593023 calls   C:\Users\chris\hypersonic_entry_opt\entry_problems\missions\rlv_betts\aero\analytical_aero.m>analytical_aero
  139.509 s         25 calls   C:\Users\chris\hypersonic_entry_opt\entry_problems\missions\rlv_betts\custom\analytical_cost.m>analytical_cost
-   1.134 s       7429 calls   C:\Users\chris\hypersonic_entry_opt\entry_problems\missions\rlv_betts\custom\generate_initial_guess.m>@(t,x)system_dynamics(t,x,us_init,params,ts_init)
+   1.134 s       7429 calls   C:\Users\chris\hypersonic_entry_opt\entry_problems\missions\rlv_betts\custom\generate_initial_guess.m>@(t,x)system_dynamics(t,x,nu_init,params,t_init)
    0.003 s         76 calls   C:\Users\chris\hypersonic_entry_opt\entry_problems\missions\rlv_betts\config_params_vehicle.m>@(t,z,u)-z(3,end)
    0.000 s         25 calls   C:\Users\chris\hypersonic_entry_opt\entry_problems\missions\rlv_betts\custom\custom_inputs.m>custom_inputs
    0.000 s         25 calls   C:\Users\chris\hypersonic_entry_opt\entry_problems\missions\rlv_betts\custom\custom_constraints.m>custom_constraints
@@ -33,7 +33,7 @@ RLV Betts calls in matlab version
     analytical_aero.m           - 
     analytical_cost.m           -  
 
-    generate_initial_guess.m>@(t,x)system_dynamics(t,x,us_init,params,ts_init)
+    generate_initial_guess.m>@(t,x)system_dynamics(t,x,nu_init,params,t_init)
     config_params_vehicle.m>@(t,z,u)-z(3,end)
     custom_inputs.m>custom_inputs
     custom_constraints.m>custom_constraints
@@ -214,30 +214,30 @@ def config_params():
 
     # === Initial time grid ===
     dt_init             = (params['T_init'] / (params['N'] - 1)) * np.ones(params['N'] - 1)
-    dts_init            = dt_init / params['nondim']['nt']  # nondimensionalized
+    dt_init            = dt_init / params['nondim']['nt']  # nondimensionalized
     Ts_init             = params['T_init'] / params['nondim']['nt']
-    ts_init             = np.cumsum(np.insert(dts_init, 0, 0.0))  # size N
+    t_init             = np.cumsum(np.insert(dt_init, 0, 0.0))  # size N
 
     # === Initial control === 
     sigmas_init = np.linspace(np.deg2rad(-30), np.deg2rad(-30), params['N'])
     alphas_init = np.linspace(np.deg2rad(10), np.deg2rad(10), params['N'])
 
     if params['case_flag'] == 1:
-        us_init = sigmas_init       
+        nu_init = sigmas_init       
         params['alpha_nom'] = alphas_init
     
     elif params['case_flag'] in [2, 3]:
-        us_init = np.vstack(sigmas_init, alphas_init)
+        nu_init = np.vstack(sigmas_init, alphas_init)
     else:
         raise ValueError('Undefined case_flag!')
 
     params['dt_init']   = dt_init       # dimensional [s]
-    params['dts_init']  = dts_init      # nondimensional
+    params['dt_init']  = dt_init      # nondimensional
     params['Ts_init']   = Ts_init       # nondimensional
-    params['ts_init']   = ts_init       # nondimensional
+    params['t_init']   = t_init       # nondimensional
 
     # === Initial trajectory guess ===
-    # params['zs_init'] = np.tile(params['z0'], (params['N'], 1))       # (N, 6)
+    # params['z_init'] = np.tile(params['z0'], (params['N'], 1))       # (N, 6)
 
     # init_params_struct from matlab
     params['zi'] = params['z0s']
@@ -249,10 +249,10 @@ def config_params():
 
 
 def extract_N(ts):
-    N = 1 if isinstance(ts, float) else (ts.shape[0] if ts.ndim == 1 else ts.shape[1])
+    N = 1 if isinstance(t, float) else (ts.shape[0] if ts.ndim == 1 else ts.shape[1])
     return N
 
-def mass_thrust(ts, zs, us, params):
+def mass_thrust(t, z, nu, params):
     """
     Compute mass and thrust.
 
@@ -270,8 +270,8 @@ def mass_thrust(ts, zs, us, params):
     N       = extract_N(ts)
 
     if params['case_flag'] == 3:    
-        Tf      = us[2] if N == 1 else us[:, 2]
-        mass    = zs[6] if N == 1 else zs[:, 6]
+        Tf      = nu[2] if N == 1 else nu[:, 2]
+        mass    = z[6] if N == 1 else z[:, 6]
     else:
         Tf      = 0. / params['nondim']['nf']
         mass    = params['mass'] / params['nondim']['nm']
@@ -282,7 +282,7 @@ def mass_thrust(ts, zs, us, params):
         }
 
 
-def nonlinear_aero(ts, zs, us, params, case_flag=None):
+def nonlinear_aero(t, z, nu, params, case_flag=None):
     
     # Extract params if "problem" parent struct is passed in
     if case_flag is None:
@@ -311,10 +311,10 @@ def nonlinear_aero(ts, zs, us, params, case_flag=None):
     for k in range(N):
         
         # Extract states and controls
-        tk = ts if N == 1 else ts[k]
-        zk = zs if N == 1 else zs[k]
-        uk = us if N == 1 else us[k]
-        r, theta, phi, v, gamma, psi = zs if N == 1 else zs[k]
+        tk = ts if N == 1 else t[k]
+        zk = z if N == 1 else z[k]
+        uk = nu if N == 1 else nu[k]
+        r, theta, phi, v, gamma, psi = z if N == 1 else z[k]
 
         # Extract thrust and mass
         force   = mass_thrust(tk, zk, uk, params)
@@ -327,7 +327,7 @@ def nonlinear_aero(ts, zs, us, params, case_flag=None):
             # Determine lift and drag coefficients from velocity, and their derivatives
 
             if N > params['N']:
-                alpha[k] = np.interp(params['ts_init'], params['alpha_nom'])
+                alpha[k] = np.interp(params['t_init'], params['alpha_nom'])
             else:
                 alpha[k] = params['alpha_nom'][k]
             
@@ -337,7 +337,7 @@ def nonlinear_aero(ts, zs, us, params, case_flag=None):
 
         elif case_flag in [2, 3]:
 
-            alpha[k] = us[1,k]
+            alpha[k] = nu[1,k]
             Cl[k] = k_cl[0] + k_cl[1]*alpha[k]
             Cd[k] = k_cd[0] + k_cd[1]*alpha[k] + k_cd[2]*alpha[k]**2
 
@@ -355,7 +355,7 @@ def nonlinear_aero(ts, zs, us, params, case_flag=None):
     }
 
 
-def system_dynamics(ts, zs, us, params, t_vec=None):
+def system_dynamics(t, z, nu, params, t_vec=None):
     """
     Nonlinear polar 3DoF hypersonic entry rotating earth dynamics
 
@@ -383,19 +383,19 @@ def system_dynamics(ts, zs, us, params, t_vec=None):
     case_flag   = params['case_flag']
     N           = extract_N(ts)
     # Extract states
-    r, theta, phi, v, gamma, psi = zs
+    r, theta, phi, v, gamma, psi = z
 
     print(f"case_flag = {case_flag}, params keys = {params.keys()}")
     
     # Extract controls 
-    us2 = us
+    us2 = nu
 
     # Now safely extract individual controls
     sigma = float(us2[0])   # bank angle
     alpha = float(us2[1])   # angle of attack
 
     # Determine lift and drag coefficients from velocity
-    aero    = nonlinear_aero(ts, zs, us2, params)
+    aero    = nonlinear_aero(t, z, us2, params)
     L       = aero['L']
     D       = aero['D']
     Cl      = aero['Cl']
@@ -403,7 +403,7 @@ def system_dynamics(ts, zs, us, params, t_vec=None):
     alpha   = aero['alpha']
 
     # Extract mass and thrust
-    force   = mass_thrust(ts, zs, us2, params)
+    force   = mass_thrust(t, z, us2, params)
     mass    = force['mass']
     Tf      = force['Tf']
 
@@ -463,33 +463,33 @@ if __name__ == "__main__":
 def straight_line_initial_guess(params):
     params['dt_init'] = (params['T_init'] / (params['N'] - 1)) * np.ones(1, params['N'] - 1)
     params['Ts_init'] = params['T_init'] / params['nondim']['nt']
-    params['dts_init'] = params['dt_init'] / params['nondim']['nt']
-    ts_init = np.cumsum([0, params['dts_init']])
+    params['dt_init'] = params['dt_init'] / params['nondim']['nt']
+    t_init = np.cumsum([0, params['dt_init']])
 
     # initial state
     if 'zf_init' in params:
-        zs_init = np.zeros((params['n'], params['N']))
+        z_init = np.zeros((params['n'], params['N']))
         for i_state in params['n']:
-            zs_init[i_state, :] = np.linspace(params['z0'][i_state], 
+            z_init[i_state, :] = np.linspace(params['z0'][i_state], 
                                               params['zf_init'][i_state],
                                               params['N']
             )
     else:
-        zs_init = np.zeros((params['n'], params['N']))
+        z_init = np.zeros((params['n'], params['N']))
         for i_state in params['n']:
             if i_state in params['zi_idx'] & i_state in params['zf_idx']:
-                zs_init[i_state,:] = np.linspace(params['z0'](i_state), 
+                z_init[i_state,:] = np.linspace(params['z0'](i_state), 
                                                  params['zf'](i_state),
                                                  params['N']
                 )
 
     for i_state in params['n']:
-        us_init = np.zeros((params['n'], params['N']))
-        us_init[i_state, :] = np.zeros(params['N'])
+        nu_init = np.zeros((params['n'], params['N']))
+        nu_init[i_state, :] = np.zeros(params['N'])
 
-    params['ts_init'] = ts_init
-    params['zs_init'] = zs_init
-    params['us_init'] = us_init
+    params['t_init'] = t_init
+    params['z_init'] = z_init
+    params['nu_init'] = nu_init
 
     
         
@@ -507,28 +507,28 @@ def generate_initial_guess(params):
     # initialization trajectory
     params['dt_init'] = (params['T_init']/(params['N'] - 1)) * np.ones(1, params['N'] - 1)
     params['Ts_init'] = params['T_init']/params['nondim']['nt']
-    params['dts_init'] = params['dt_init']/params['nondim']['nt']
-    ts_init = np.cumsum(np.concatenate(([0], params['dts_init'])))
+    params['dt_init'] = params['dt_init']/params['nondim']['nt']
+    t_init = np.cumsum(np.concatenate(([0], params['dt_init'])))
 
     # initial control
     sigmas_init = np.linspace(np.deg2rad(-30), np.deg2rad(-30), params['N'])
     alphas_init = np.linspace(np.deg2rad(10), np.deg2rad(10), params['N'])
 
     if params['case_flag'] == 1:
-        us_init = alphas_init
+        nu_init = alphas_init
         params['alpha_nom'] = alphas_init
 
     elif params['case_flag'] in [2, 3]:
-        us_init = np.vstack(sigmas_init, alphas_init)
+        nu_init = np.vstack(sigmas_init, alphas_init)
 
     else:
         raise ValueError('Undefined case_flag!')
     
     if params['flags']['buff_dyn'] in ['term']:
-        sol = solve_ivp(lambda t, x: system_dynamics(t, x, us_init, params, ts_init), 
-                        (ts_init[0], ts_init[-1]),
+        sol = solve_ivp(lambda t, x: system_dynamics(t, x, nu_init, params, t_init), 
+                        (t_init[0], t_init[-1]),
                         params['z0s'],
-                        t_eval=ts_init, 
+                        t_eval=t_init, 
                         method='RK45',
                         rtol=1e-12,
                         atol=1e-12
@@ -540,16 +540,16 @@ def generate_initial_guess(params):
         params['zf_init'][1:3, None]        = np.deg2rad([10, 10])[:, None]
         params                              = straight_line_initial_guess(params)
 
-        zs_init = params['zs_init']
+        z_init = params['z_init']
 
-    if ts_init.shape[1] == 2:
-        zs_init = [zs_init[:, 0], zs_init[:, -1]]
+    if t_init.shape[1] == 2:
+        z_init = [z_init[:, 0], z_init[:, -1]]
 
-    aero_init = analytical_aero(ts_init, zs_init, us_init, params)
+    aero_init = analytical_aero(t_init, z_init, nu_init, params)
 
-    params['ts_init'] = ts_init
-    params['zs_init'] = zs_init
-    params['us_init'] = us_init
+    params['t_init'] = t_init
+    params['z_init'] = z_init
+    params['nu_init'] = nu_init
 
     # create initial aero
     params['aero_init'] = aero_init
