@@ -210,7 +210,7 @@ def build_dual_buffer_cost(subprob) -> cp.Expression:
 
 # -------------- AUTOTUNING SCHEMES ----------------------------------------------------------------------------------------
 
-def autotune1(problem, local_vars, O):
+def autotune1(problem, local_vars, iter_record):
     """
     Unified version of autotune1 using stacked inequality form (_ineq only).
     """
@@ -223,7 +223,7 @@ def autotune1(problem, local_vars, O):
     sol_vars = local_vars["sol_vars"]
     vb_ineq = np.array(sol_vars["vb_ineq"])
     vb_term = np.array(sol_vars["vb_term"])
-    vb_dyn  = np.array(O["conv_data"]["vb_dyn"])  # from O since not in sol_vars
+    vb_dyn  = np.array(iter_record["conv_data"]["vb_dyn"])  # from O since not in sol_vars
 
     dual_ineq = local_vars["dual_ineq"]
     dual_dyn  = local_vars["dual_dyn"]
@@ -255,7 +255,7 @@ def autotune1(problem, local_vars, O):
     dual_term_plus[np.abs(vb_term) <= eps_term] = dual_term[np.abs(vb_term) <= eps_term]
 
     # Update output dictionary
-    weights = O["method"]["weights"]
+    weights = iter_record["method"]["weights"]
     weights.update({
         "dual_ineq": dual_ineq_plus,
         "dual_dyn": dual_dyn_plus,
@@ -269,7 +269,7 @@ def autotune1(problem, local_vars, O):
     return O
 
 
-def autotune2(problem, local_vars, O):
+def autotune2(problem, local_vars, iter_record):
     """
     Unified stacked-inequality version of autotune2.
     """
@@ -292,7 +292,7 @@ def autotune2(problem, local_vars, O):
     eps_feas_dyn  = method.conv["eps_dyn"]
 
     eps_nonzero2 = method.weights["eps_nonzero2"]
-    
+
     buff_dyn = method.flags["buff_dyn"]
 
     dual_ineq_buff = []
@@ -334,42 +334,42 @@ def autotune2(problem, local_vars, O):
         Wconv_field = f"Wconv_{i_field}"
 
         if np.sum(method.weights[W_field]) == 0:
-            O["method"]["weights"][W_field] = eval(W_field)
+            iter_record["method"]["weights"][W_field] = eval(W_field)
         else:
             exec(f"{Wh_field}[{Wh_field} <= eps_nonzero2] = eps_nonzero2")
 
             # Create updated weight
-            O["method"]["weights"][W_field] = eval(Wh_field)
+            iter_record["method"]["weights"][W_field] = eval(Wh_field)
 
     # --- Store diagnostics ---
-    O["method"]["weights"]["data"]["eps_feas"] = eps_feas_ineq
-    O["method"]["weights"]["data"] = {}
+    iter_record["method"]["weights"]["data"]["eps_feas"] = eps_feas_ineq
+    iter_record["method"]["weights"]["data"] = {}
 
-    O["method"]["weights"]["data"]["term"] = {
+    iter_record["method"]["weights"]["data"]["term"] = {
         "Wxq": np.diag(W_term.flatten()) @ vb_term,
         "dual": dual_term_buff
     }
 
     for k in range(N):
-        O["method"]["weights"]["data"]["ineq"] = {
+        iter_record["method"]["weights"]["data"]["ineq"] = {
             "Wxq": np.diag(W_ineq[:, k].flatten()) @ vb_ineq[:, k],
             "dual": dual_ineq_buff[k]
         }
 
-    O["method"]["weights"]["data"]["term"]["delta"] = (
-        O["method"]["weights"]["data"]["term"]["Wxq"]
-        - O["method"]["weights"]["data"]["term"]["dual"]
+    iter_record["method"]["weights"]["data"]["term"]["delta"] = (
+        iter_record["method"]["weights"]["data"]["term"]["Wxq"]
+        - iter_record["method"]["weights"]["data"]["term"]["dual"]
     )
-    O["method"]["weights"]["data"]["ineq"]["delta"] = (
-        O["method"]["weights"]["data"]["ineq"]["Wxq"]
-        - O["method"]["weights"]["data"]["ineq"]["dual"]
+    iter_record["method"]["weights"]["data"]["ineq"]["delta"] = (
+        iter_record["method"]["weights"]["data"]["ineq"]["Wxq"]
+        - iter_record["method"]["weights"]["data"]["ineq"]["dual"]
     )
 
     return O
 
 
-def autotune3(problem, local_vars, O):
-    O = autotune1(problem, local_vars, O)
-    O = autotune2(problem, local_vars, O)
+def autotune3(problem, local_vars, iter_record):
+    O = autotune1(problem, local_vars, iter_record)
+    O = autotune2(problem, local_vars, iter_record)
 
     return O
