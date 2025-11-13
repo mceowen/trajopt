@@ -32,8 +32,6 @@ class Problem:
         # get initial guess
         self.method.get_initial_guess()
 
-        
-
         # use precompiled cvxpy subproblem if provided
         if subprob is not None:
             self.method.subprob = subprob
