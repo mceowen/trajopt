@@ -1,7 +1,9 @@
 import numpy as np
-import trajopt.core.modules.method.initial_guess      as guess
-import trajopt.core.modules.method.convergence        as convergence
-import trajopt.core.modules.method.discretize     as discretize
+from trajopt.core.modules.method    import initial_guess as guess
+from trajopt.core.modules.method    import convergence
+from trajopt.core.modules.method    import hyperparameters
+from trajopt.core.modules.method    import discretize
+
 
 class Method:
 
@@ -115,7 +117,9 @@ class Method:
         # --- LTV indexing ---
         discretize.set_ltv_indices(problem)
 
-        self.set_weights()
+        # for reference
+        #self.set_weights()
+        hyperparameters.configure_penalty_weights(problem)
 
         ### NFZ convergence values ###
         rc_dim = mission.obs["rc"] * self.nondim["nd"]
@@ -135,125 +139,3 @@ class Method:
         self.conv_data["vb_aux"]  = np.zeros((self.N,   mission.n_aux))
         self.conv_data["vb_dyn"]  = np.zeros((self.N-1, model.nz))
         self.conv_data["vb_term"] = np.zeros(model.nz)
-
-    def set_weights(self):
-        problem = self.problem
-        mission = problem.mission
-
-        # --- Default weights ---
-        self.weights["dual_path"]    = np.zeros((self.N, mission.n_path))
-        self.weights["dual_nfz"]     = np.zeros((self.N, mission.n_nfz))
-        self.weights["dual_aux"]     = np.zeros((self.N, mission.n_aux))
-        self.weights["dual_term"]    = np.zeros(mission.n_term + mission.n_term_ineq)
-        self.weights["dual_dyn"]     = np.zeros((self.N - 1, mission.n_dyn))
-        self.weights["dual_plus"]    = np.zeros((self.N - 1, mission.n_dyn))
-        self.weights["dual_minus"]   = np.zeros((self.N - 1, mission.n_dyn))
-
-        self.weights["W_path"]       = np.zeros((self.N, mission.n_path))
-        self.weights["W_nfz"]        = np.zeros((self.N, mission.n_nfz))
-        self.weights["W_aux"]        = np.zeros((self.N, mission.n_aux))
-        self.weights["W_term"]       = np.zeros(mission.n_term + mission.n_term_ineq)
-        self.weights["W_dyn"]        = np.zeros((self.N - 1, mission.n_dyn))
-        self.weights["W_plus"]       = np.zeros((self.Npm, self.n_plus))
-        self.weights["W_minus"]      = np.zeros((self.Npm, self.n_minus))
-
-        # PTR penalty weights
-            # Wtr: weight for trust region cost                        
-            # w_term: weight for terminal constraint buffer cost
-            # w_path: weight for path constraint buffer cost
-            # w_nfz: weight for nfz constraint buffer cost
-
-
-        # TODO (carlos): this is a temporary fix to keep quadrotor converging the same, will remove soon!
-        if self.flags["match_dim_nondim_weights"]:
-            M_state  = self.nondim["M"]["state"]["nd2d"]
-            avg_state_nd_sq = np.mean(np.diag(M_state)**2)
-        else:
-            avg_state_nd_sq = 1
-
-        self.weights["wtr_z"] = avg_state_nd_sq  * 1 / (2 * self.weights["alpha_z"])
-        self.weights["wtr_u"] = 0 if np.isinf(self.weights["alpha_u"]) else 1 / (2 * self.weights["alpha_u"])
-
-        self.weights["w_fac_N"]      = self.N
-        self.weights["w_fac_Nm1"]    = self.N - 1
-
-        # === Autotune modes (flag_autotune ∈ {0,2,3,al-scvx}) ===
-        if str(self.flags["flag_autotune"]) in {"0", "2", "3", "al-scvx"}:
-
-            self.weights.setdefault("beta", 1)
-            self.weights.setdefault("gamma", 1e-1)
-
-            # --- Buffer weights ---
-            if str(self.flags["flag_autotune"]) in {"0", "al-scvx"}:
-                if "wbuff" not in self.weights:
-                    wbuff = 1e2
-                    if str(self.flags["flag_autotune"]) == "0":
-
-                        w_nfz_dim  = wbuff / self.weights["w_fac_N"]
-                        w_dyn_dim  = 1e5 * wbuff / self.weights["w_fac_Nm1"]
-                        w_term_dim = 1e2 * wbuff
-
-                        # TODO (carlos): this is a temporary fix to keep quadrotor converging the same
-                        # will remove soon!
-                        if self.flags["match_dim_nondim_weights"]:
-                            # scaled nondim weights to approximately preserve relative scaling between cost terms
-                            M_nfz  = self.nondim["M"]["nfz"]["nd2d"]
-                            M_dyn  = self.nondim["M"]["dyn"]["nd2d"]
-                            M_term = self.nondim["M"]["term"]["nd2d"]
-
-                            avg_nfz_nd_sq  = np.mean(np.diag(M_nfz)**2)
-                            avg_dyn_nd_sq  = np.mean(np.diag(M_dyn)**2)
-                            avg_term_nd_sq = np.mean(np.diag(M_term)**2)
-                        else:
-                            avg_nfz_nd_sq  = 1
-                            avg_dyn_nd_sq  = 1
-                            avg_term_nd_sq = 1
-
-                        w_nfz   = avg_nfz_nd_sq  * w_nfz_dim
-                        w_dyn   = avg_dyn_nd_sq  * w_dyn_dim
-                        w_term  = avg_term_nd_sq * w_term_dim
-                else:
-                    wbuff = self.weights["wbuff"]
-                    w_nfz = wbuff / self.weights["w_fac_N"]
-                    w_dyn = wbuff / self.weights["w_fac_Nm1"]
-                    w_term = wbuff
-            else:
-                wbuff = 1
-                w_nfz = wbuff / self.weights["w_fac_N"]
-                w_dyn = wbuff / self.weights["w_fac_Nm1"]
-                w_term = wbuff
-
-            self.weights["W_nfz"] += w_nfz
-
-            if self.flags["free_final_time"] or self.flags["ctcs"]:
-                buff_dyn = str(self.flags.get("buff_dyn", ""))
-                if buff_dyn in {"l1", "l2"}:
-                    self.weights["W_dyn"] += w_dyn
-                elif buff_dyn in {"quad-1", "quad-2", "quad-3"}:
-                    self.weights["W_plus"] += w_dyn
-                    self.weights["W_minus"] += w_dyn
-                else:
-                    self.weights["W_term"] += w_term
-
-        # === Autotune mode: {1,3,al-scvx} ===
-        if str(self.flags["flag_autotune"]) in {"1", "3", "al-scvx"}:
-
-            self.weights.setdefault("beta", 1)
-            self.weights.setdefault("gamma", 1e-1)
-
-            self.weights["dual_nfz"] += self.weights["eps_nonzero1"]
-
-            if self.flags["free_final_time"]:
-                buff_dyn = str(self.flags.get("buff_dyn", ""))
-                if buff_dyn == "term":
-                    self.weights["dual_term"] += self.weights["eps_nonzero1"]
-                else:
-                    self.weights["dual_dyn"] += self.weights["eps_nonzero1"]
-
-                    if str(self.flags.get("buff_dyn_dual", "")) == "l1":
-                        self.weights["dual_plus"] += self.weights["eps_nonzero1"]
-                        self.weights["dual_minus"] += self.weights["eps_nonzero1"]
-
-        ### ctcs convergence adjustments ###
-        # TODO: will probably need to change this weight later (shouldn't be tied to nondim["nd"])
-        self.weights["w_ctcs"] = self.nondim["nd"]**2

@@ -473,75 +473,17 @@ class Subproblem:
         # === Trust-region penalties ===
         TR = self.flag_tr * (self.wtr_z * cp.sum_squares(self.dz[:, :model.n]) + self.wtr_u * cp.sum_squares(self.du))
 
-        # === Virtual-buffer quadratic penalties ===
+        # === Virtual buffer penalties ===
         VB = 0.0
-        if self.flag_autotune in {"0", "2", "3", "al-scvx"}:
-
-            # Terminal term: weighted quadratic
-            if self.vb_term is not None and self.n_term > 0:
-                VB += cp.sum_squares(cp.diag(self.W_term_sqrt) @ self.vb_term)
-
-            # Path / NFZ / AUX (loop over time steps)
-            if self.vb_ineq is not None and self.n_path > 0:
-                for k in range(self.N):
-                    # OLD FOR REFERENCE(FEEL FREE TO DELETE)
-                    # VB += cp.sum_squares(cp.diag(self.W_path_sqrt[k, :]) @ self.vb_path[k])
-                    
-                    VB += cp.sum_squares(cp.diag(self.W_path_sqrt[k, :]) @ self.vb_ineq[k, mission.path_idx])
-            
-            if self.vb_ineq is not None and self.n_nfz > 0:
-                for k in range(self.N):
-                    # OLD FOR REFERENCE(FEEL FREE TO DELETE)
-                    # VB += cp.sum_squares(cp.diag(self.W_nfz_sqrt[k, :]) @ self.vb_nfz[k])
-                    
-                    VB += cp.sum_squares(cp.diag(self.W_nfz_sqrt[k, :]) @ self.vb_ineq[k, mission.nfz_idx])
-            
-            if self.vb_ineq is not None and self.n_aux > 0:
-                for k in range(self.N):
-                    # OLD FOR REFERENCE(FEEL FREE TO DELETE)
-                    # VB += cp.sum_squares(cp.diag(self.W_aux_sqrt[k, :]) @ self.vb_aux[k])
-                    
-                    VB += cp.sum_squares(cp.diag(self.W_nfz_sqrt[k, :]) @ self.vb_ineq[k, mission.aux_idx])
-
-            # Dynamics (L1 / L2 / quadratic penalties)
-            diff = self.vb_dyn_p - self.vb_dyn_m 
-            if self.buff_dyn == "l1":
-                for k in range(self.N - 1):
-                    VB += self.w_dyn_row[k] * cp.norm1(diff[k])
-
-            elif self.buff_dyn == "l2":
-                for k in range(self.N - 1):
-                    VB += cp.sum_squares(cp.diag(self.W_dyn_sqrt[k, :]) @ diff[k])
-
-            elif self.buff_dyn in {"quad-1", "quad-2"}:
-                if self.vb_plus is not None and self.n_plus > 0:
-                    for k in range(max(self.Npm, 1)):
-                        VB += cp.sum_squares(cp.diag(self.W_plus_sqrt[k, :]) @ self.vb_plus[k])
-                if self.vb_minus is not None and self.n_minus > 0:
-                    for k in range(max(self.Npm, 1)):
-                        VB += cp.sum_squares(cp.diag(self.W_minus_sqrt[k, :]) @ self.vb_minus[k])
-
-
-        VB = 0.5 * self.flag_vb * VB
-
-        # === Dual costs ===
         DUAL = 0.0
+
+        # Quadratic penalties 
+        if self.flag_autotune in {"0", "2", "3", "al-scvx"}:
+            VB = hp.build_virtual_buffer_cost(self)
+
+        # Dual penalties
         if self.flag_autotune in {"1", "3", "al-scvx"}:
-
-            # OLD FOR REFERENCE(FEEL FREE TO DELETE)
-            # if self.vb_path  is not None and self.n_path  > 0: DUAL += cp.sum(cp.multiply(self.vb_path,  self.dual_path))
-            # if self.vb_nfz   is not None and self.n_nfz   > 0: DUAL += cp.sum(cp.multiply(self.vb_nfz,   self.dual_nfz))
-            # if self.vb_aux   is not None and self.n_aux   > 0: DUAL += cp.sum(cp.multiply(self.vb_aux,   self.dual_aux))
-
-            if self.vb_ineq  is not None and self.n_path  > 0: DUAL += cp.sum(cp.multiply(self.vb_ineq[:, mission.path_idx],  self.dual_path))
-            if self.vb_ineq  is not None and self.n_nfz   > 0: DUAL += cp.sum(cp.multiply(self.vb_ineq[:, mission.nfz_idx],   self.dual_nfz))
-            if self.vb_ineq  is not None and self.n_aux   > 0: DUAL += cp.sum(cp.multiply(self.vb_ineq[:, mission.aux_idx],   self.dual_aux))
-
-            diff = self.vb_dyn_p - self.vb_dyn_m
-            DUAL += cp.sum(cp.multiply(diff, self.dual_dyn))
-            if self.vb_plus  is not None and self.n_plus  > 0: DUAL += cp.sum(cp.multiply(self.vb_plus,  self.dual_plus))
-            if self.vb_minus is not None and self.n_minus > 0: DUAL += cp.sum(cp.multiply(self.vb_minus, self.dual_minus))
-            if self.vb_term  is not None and self.n_term  > 0: DUAL += self.dual_term @ self.vb_term
+            DUAL = hp.build_dual_buffer_cost(self)
 
         return TRUE + TR + VB + DUAL
 

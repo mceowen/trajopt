@@ -1,5 +1,208 @@
 import numpy as np
 
+def configure_penalty_weights(problem):
+    """
+    Configure all scalar and matrix weights for the optimization method,
+    using YAML-defined parameters under method.weights.
+    """
+
+    method  = problem.method
+    mission = problem.mission
+
+    # --- Default weights ---
+    method.weights["dual_path"]    = np.zeros((method.N, mission.n_path))
+    method.weights["dual_nfz"]     = np.zeros((method.N, mission.n_nfz))
+    method.weights["dual_aux"]     = np.zeros((method.N, mission.n_aux))
+    method.weights["dual_term"]    = np.zeros(mission.n_term + mission.n_term_ineq)
+    method.weights["dual_dyn"]     = np.zeros((method.N - 1, mission.n_dyn))
+    method.weights["dual_plus"]    = np.zeros((method.N - 1, mission.n_dyn))
+    method.weights["dual_minus"]   = np.zeros((method.N - 1, mission.n_dyn))
+
+    method.weights["W_path"]       = np.zeros((method.N, mission.n_path))
+    method.weights["W_nfz"]        = np.zeros((method.N, mission.n_nfz))
+    method.weights["W_aux"]        = np.zeros((method.N, mission.n_aux))
+    method.weights["W_term"]       = np.zeros(mission.n_term + mission.n_term_ineq)
+    method.weights["W_dyn"]        = np.zeros((method.N - 1, mission.n_dyn))
+    method.weights["W_plus"]       = np.zeros((method.Npm, method.n_plus))
+    method.weights["W_minus"]      = np.zeros((method.Npm, method.n_minus))
+
+    # PTR penalty weights
+        # Wtr: weight for trust region cost                        
+        # w_term: weight for terminal constraint buffer cost
+        # w_path: weight for path constraint buffer cost
+        # w_nfz: weight for nfz constraint buffer cost
+
+
+    # TODO (carlos): this is a temporary fix to keep quadrotor converging the same, will remove soon!
+    if method.flags["match_dim_nondim_weights"]:
+        M_state  = method.nondim["M"]["state"]["nd2d"]
+        avg_state_nd_sq = np.mean(np.diag(M_state)**2)
+    else:
+        avg_state_nd_sq = 1
+
+    method.weights["wtr_z"] = avg_state_nd_sq  * 1 / (2 * method.weights["alpha_z"])
+    method.weights["wtr_u"] = 0 if np.isinf(method.weights["alpha_u"]) else 1 / (2 * method.weights["alpha_u"])
+
+    method.weights["w_fac_N"]      = method.N
+    method.weights["w_fac_Nm1"]    = method.N - 1
+
+    # === Autotune modes (flag_autotune ∈ {0,2,3,al-scvx}) ===
+    if str(method.flags["flag_autotune"]) in {"0", "2", "3", "al-scvx"}:
+
+        # --- Buffer weights ---
+        if str(method.flags["flag_autotune"]) in {"0", "al-scvx"}:
+            if str(method.flags["flag_autotune"]) == "0":
+
+                w_nfz_dim  = method.weights["w_nfz_scale"] * method.weights["wbuff"] / method.weights["w_fac_N"]
+                w_dyn_dim  = method.weights["w_dyn_scale"] * method.weights["wbuff"] / method.weights["w_fac_Nm1"]
+                w_term_dim = method.weights["w_term_scale"] * method.weights["wbuff"]
+
+                # TODO (carlos): this is a temporary fix to keep quadrotor converging the same
+                # will remove soon!
+                if method.flags["match_dim_nondim_weights"]:
+                    # scaled nondim weights to approximately preserve relative scaling between cost terms
+                    M_nfz  = method.nondim["M"]["nfz"]["nd2d"]
+                    M_dyn  = method.nondim["M"]["dyn"]["nd2d"]
+                    M_term = method.nondim["M"]["term"]["nd2d"]
+
+                    avg_nfz_nd_sq  = np.mean(np.diag(M_nfz)**2)
+                    avg_dyn_nd_sq  = np.mean(np.diag(M_dyn)**2)
+                    avg_term_nd_sq = np.mean(np.diag(M_term)**2)
+                else:
+                    avg_nfz_nd_sq  = 1
+                    avg_dyn_nd_sq  = 1
+                    avg_term_nd_sq = 1
+
+                w_nfz   = avg_nfz_nd_sq  * w_nfz_dim
+                w_dyn   = avg_dyn_nd_sq  * w_dyn_dim
+                w_term  = avg_term_nd_sq * w_term_dim
+            else:
+                w_nfz = method.weights["wbuff"] / method.weights["w_fac_N"]
+                w_dyn = method.weights["wbuff"] / method.weights["w_fac_Nm1"]
+                w_term = method.weights["wbuff"]
+
+        method.weights["W_nfz"] += w_nfz
+
+        if method.flags["dynamics_nonconvex"] or method.flags["ctcs"]:
+            buff_dyn = str(method.flags.get("buff_dyn", ""))
+            if buff_dyn in {"l1", "l2"}:
+                method.weights["W_dyn"] += w_dyn
+            elif buff_dyn in {"quad-1", "quad-2", "quad-3"}:
+                method.weights["W_plus"] += w_dyn
+                method.weights["W_minus"] += w_dyn
+            else:
+                method.weights["W_term"] += w_term
+
+    # === Autotune mode: {1,3,al-scvx} ===
+    if str(method.flags["flag_autotune"]) in {"1", "3", "al-scvx"}:
+
+        method.weights["dual_nfz"] += method.weights["eps_nonzero1"]
+
+        if method.flags["dynamics_nonconvex"] or method.flags["ctcs"]:
+            buff_dyn = str(method.flags.get("buff_dyn", ""))
+            if buff_dyn == "term":
+                method.weights["dual_term"] += method.weights["eps_nonzero1"]
+            else:
+                method.weights["dual_dyn"] += method.weights["eps_nonzero1"]
+
+                if str(method.flags.get("buff_dyn_dual", "")) == "l1":
+                    method.weights["dual_plus"] += method.weights["eps_nonzero1"]
+                    method.weights["dual_minus"] += method.weights["eps_nonzero1"]
+
+    ### ctcs convergence adjustments ###
+    # TODO: will probably need to change this weight later (shouldn't be tied to nondim["nd"])
+    method.weights["w_ctcs"] = method.nondim["nd"]**2
+
+
+# -------------- PENALTIES ----------------------------------------------------------------------------------------
+
+def build_virtual_buffer_cost(subprob) -> cp.Expression:
+    """
+    Build the virtual buffer penalty term VB for a given Subproblem instance.
+    Encapsulates all flag/buff_dyn logic outside of scp.py for clarity.
+    """
+    problem = subprob.problem
+    mission, model, method = problem.mission, problem.model, problem.method
+
+    VB = 0.0
+    N = subprob.N
+
+    # ----- Terminal term -----
+    if subprob.vb_term is not None and subprob.n_term > 0:
+        VB += cp.sum_squares(cp.diag(subprob.W_term_sqrt) @ subprob.vb_term)
+
+    # ----- Path / NFZ / AUX buffers -----
+    if subprob.vb_ineq is not None:
+        if subprob.n_path > 0:
+            for k in range(N):
+                VB += cp.sum_squares(cp.diag(subprob.W_path_sqrt[k, :])
+                                     @ subprob.vb_ineq[k, mission.path_idx])
+        if subprob.n_nfz > 0:
+            for k in range(N):
+                VB += cp.sum_squares(cp.diag(subprob.W_nfz_sqrt[k, :])
+                                     @ subprob.vb_ineq[k, mission.nfz_idx])
+        if subprob.n_aux > 0:
+            for k in range(N):
+                VB += cp.sum_squares(cp.diag(subprob.W_aux_sqrt[k, :])
+                                     @ subprob.vb_ineq[k, mission.aux_idx])
+
+    # ----- Dynamics buffers -----
+    diff = subprob.vb_dyn_p - subprob.vb_dyn_m
+    if subprob.buff_dyn == "l1":
+        for k in range(N - 1):
+            VB += subprob.w_dyn_row[k] * cp.norm1(diff[k])
+    elif subprob.buff_dyn == "l2":
+        for k in range(N - 1):
+            VB += cp.sum_squares(cp.diag(subprob.W_dyn_sqrt[k, :]) @ diff[k])
+    elif subprob.buff_dyn in {"quad-1", "quad-2"}:
+        if subprob.vb_plus is not None and subprob.n_plus > 0:
+            for k in range(max(subprob.Npm, 1)):
+                VB += cp.sum_squares(cp.diag(subprob.W_plus_sqrt[k, :])
+                                     @ subprob.vb_plus[k])
+        if subprob.vb_minus is not None and subprob.n_minus > 0:
+            for k in range(max(subprob.Npm, 1)):
+                VB += cp.sum_squares(cp.diag(subprob.W_minus_sqrt[k, :])
+                                     @ subprob.vb_minus[k])
+
+    return 0.5 * subprob.flag_vb * VB
+
+
+
+
+def build_dual_buffer_cost(subprob) -> cp.Expression:
+    """
+    Build dual penalty term DUAL for a given Subproblem instance.
+    """
+    problem = subprob.problem
+    mission = problem.mission
+
+    DUAL = 0.0
+
+    if subprob.vb_ineq is not None and subprob.n_path > 0:
+        DUAL += cp.sum(cp.multiply(subprob.vb_ineq[:, mission.path_idx],
+                                   subprob.dual_path))
+    if subprob.vb_ineq is not None and subprob.n_nfz > 0:
+        DUAL += cp.sum(cp.multiply(subprob.vb_ineq[:, mission.nfz_idx],
+                                   subprob.dual_nfz))
+    if subprob.vb_ineq is not None and subprob.n_aux > 0:
+        DUAL += cp.sum(cp.multiply(subprob.vb_ineq[:, mission.aux_idx],
+                                   subprob.dual_aux))
+
+    diff = subprob.vb_dyn_p - subprob.vb_dyn_m
+    DUAL += cp.sum(cp.multiply(diff, subprob.dual_dyn))
+
+    if subprob.vb_plus is not None and subprob.n_plus > 0:
+        DUAL += cp.sum(cp.multiply(subprob.vb_plus, subprob.dual_plus))
+    if subprob.vb_minus is not None and subprob.n_minus > 0:
+        DUAL += cp.sum(cp.multiply(subprob.vb_minus, subprob.dual_minus))
+    if subprob.vb_term is not None and subprob.n_term > 0:
+        DUAL += subprob.dual_term @ subprob.vb_term
+
+    return DUAL
+
+
+# -------------- AUTOTUNING SCHEMES ----------------------------------------------------------------------------------------
+
 def autotune1(problem, local_vars, O):
     
     mission = problem.mission
