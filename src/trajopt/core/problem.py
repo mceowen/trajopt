@@ -26,13 +26,13 @@ class Problem:
         # finish mission, model, method (this order currently matters)
         self.mission.update_mission_params()
         self.model.update_model_params()
+        self.indices = Indices(self)
         self.method.update_method_params()
  
         # get initial guess
         self.method.get_initial_guess()
 
-        # set problem indices
-        self.indices = Indices(self)
+        
 
         # use precompiled cvxpy subproblem if provided
         if subprob is not None:

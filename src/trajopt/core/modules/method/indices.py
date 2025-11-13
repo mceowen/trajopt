@@ -14,7 +14,6 @@ class Indices:
     def _build_indices(self):
         model   = self.problem.model
         mission = self.problem.mission
-        method  = self.problem.method
 
         # -------------------------------
         # STATE / CONTROL / DYNAMICS INDICES

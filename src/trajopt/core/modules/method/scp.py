@@ -290,59 +290,43 @@ class Subproblem:
         self.wtr_u  = cp.Parameter(nonneg=True, name="wtr_u")
 
         # TODO(Skye): refactor these weight parameters to be less redundant later
-        self.W_path  = cp.Parameter((N,  max(self.n_path, 1)),  nonneg=True, name="W_path")
-        self.W_nfz   = cp.Parameter((N,  max(self.n_nfz, 1)),   nonneg=True, name="W_nfz")
-        self.W_aux   = cp.Parameter((N,  max(self.n_aux, 1)),   nonneg=True, name="W_aux")
+        self.W_ineq  = cp.Parameter((N,  max(self.n_ineq, 1)),  nonneg=True, name="W_ineq")
         self.W_term  = cp.Parameter((max(self.n_term, 1),),     nonneg=True, name="W_term")
         self.W_dyn   = cp.Parameter((N - 1, max(nz, 1)),        nonneg=True, name="W_dyn")
         self.W_plus  = cp.Parameter((max(self.Npm, 1), max(self.n_plus, 1)),  nonneg=True, name="W_plus")
         self.W_minus = cp.Parameter((max(self.Npm, 1), max(self.n_minus, 1)), nonneg=True, name="W_minus")
         # ----------------------------------------------------------------------------------------------------------
-        self.W_path_sqrt  = cp.Parameter((N,  max(self.n_path, 1)),  nonneg=True, name="W_path_sqrt")
-        self.W_nfz_sqrt   = cp.Parameter((N,  max(self.n_nfz, 1)),   nonneg=True, name="W_nfz_sqrt")
-        self.W_aux_sqrt   = cp.Parameter((N,  max(self.n_aux, 1)),   nonneg=True, name="W_aux_sqrt")
+        self.W_ineq_sqrt  = cp.Parameter((N,  max(self.n_ineq, 1)),  nonneg=True, name="W_ineq_sqrt")
         self.W_term_sqrt  = cp.Parameter((max(self.n_term, 1),),     nonneg=True, name="W_term_sqrt")
         self.W_dyn_sqrt   = cp.Parameter((N - 1, max(nz, 1)),        nonneg=True, name="W_dyn_sqrt")
         self.W_plus_sqrt  = cp.Parameter((max(self.Npm, 1), max(self.n_plus, 1)),  nonneg=True, name="W_plus_sqrt")
         self.W_minus_sqrt = cp.Parameter((max(self.Npm, 1), max(self.n_minus, 1)), nonneg=True, name="W_minus_sqrt")
         # ----------------------------------------------------------------------------------------------------------
-        self.w_path_row = cp.Parameter(N,  nonneg=True, name="w_path_row")  if self.n_path > 0 else None
-        self.w_nfz_row  = cp.Parameter(N,  nonneg=True, name="w_nfz_row")   if self.n_nfz  > 0 else None
-        self.w_aux_row  = cp.Parameter(N,  nonneg=True, name="w_aux_row")   if self.n_aux  > 0 else None
+        self.w_ineq_row = cp.Parameter(N,  nonneg=True, name="w_ineq_row")  if self.n_ineq > 0 else None
         self.w_dyn_row  = cp.Parameter(N - 1, nonneg=True, name="w_dyn_row")
         # ----------------------------------------------------------------------------------------------------------
-        self.W_path.value  = np.ones((N,  max(self.n_path, 1)))
-        self.W_nfz.value   = np.ones((N,  max(self.n_nfz, 1)))
-        self.W_aux.value   = np.ones((N,  max(self.n_aux, 1)))
+        self.W_ineq.value  = np.ones((N,  max(self.n_ineq, 1)))
         self.W_term.value  = np.ones((max(self.n_term, 1),))
         self.W_dyn.value   = np.ones((N - 1, max(nz, 1)))
         self.W_plus.value  = np.ones((max(self.Npm, 1), max(self.n_plus, 1)))
         self.W_minus.value = np.ones((max(self.Npm, 1), max(self.n_minus, 1)))
         # ----------------------------------------------------------------------------------------------------------
-        self.W_path_sqrt.value  = np.sqrt(self.W_path.value)
-        self.W_nfz_sqrt.value   = np.sqrt(self.W_nfz.value)
-        self.W_aux_sqrt.value   = np.sqrt(self.W_aux.value)
+        self.W_ineq_sqrt.value  = np.sqrt(self.W_ineq.value)
         self.W_term_sqrt.value  = np.sqrt(self.W_term.value)
         self.W_dyn_sqrt.value   = np.sqrt(self.W_dyn.value)
         self.W_plus_sqrt.value  = np.sqrt(self.W_plus.value)
         self.W_minus_sqrt.value = np.sqrt(self.W_minus.value)
         # ----------------------------------------------------------------------------------------------------------
-        if self.w_path_row is not None:
-            self.w_path_row.value = np.max(self.W_path.value, axis=1)
-        if self.w_nfz_row is not None:
-            self.w_nfz_row.value  = np.max(self.W_nfz.value, axis=1)
-        if self.w_aux_row is not None:
-            self.w_aux_row.value  = np.max(self.W_aux.value, axis=1)
+        if self.w_ineq_row is not None:
+            self.w_ineq_row.value = np.max(self.W_ineq.value, axis=1)
         self.w_dyn_row.value = np.max(self.W_dyn.value, axis=1)
 
-        # duals (same ≥1-column pattern)
-        self.dual_path  = cp.Parameter((N,  max(self.n_path,1)),  name="dual_path")
-        self.dual_nfz   = cp.Parameter((N,  max(self.n_nfz,1)),   name="dual_nfz")
-        self.dual_aux   = cp.Parameter((N,  max(self.n_aux,1)),   name="dual_aux")
-        self.dual_dyn   = cp.Parameter((N - 1, nz),               name="dual_dyn")
-        self.dual_plus  = cp.Parameter((max(self.Npm,1), max(self.n_plus,1)),  name="dual_plus")
-        self.dual_minus = cp.Parameter((max(self.Npm,1), max(self.n_minus,1)), name="dual_minus")
-        self.dual_term  = cp.Parameter((max(self.n_term,1),),                 name="dual_term")
+        # duals (same ≥1-column pattern, unified inequality structure)
+        self.dual_ineq  = cp.Parameter((N,  max(self.n_ineq, 1)), name="dual_ineq")
+        self.dual_dyn   = cp.Parameter((N - 1, nz),              name="dual_dyn")
+        self.dual_plus  = cp.Parameter((max(self.Npm, 1), max(self.n_plus, 1)),  name="dual_plus")
+        self.dual_minus = cp.Parameter((max(self.Npm, 1), max(self.n_minus, 1)), name="dual_minus")
+        self.dual_term  = cp.Parameter((max(self.n_term, 1),),                  name="dual_term")
 
         # CTCS epsilon (scalar)
         self.eps_ctcs = cp.Parameter(nonneg=True, name="eps_ctcs")
@@ -573,48 +557,40 @@ class Subproblem:
             self.dts_max.value  = float(method.dts_max)
             self.ddts_max.value = float(method.ddts_max)
 
-        # TODO(Skye): refactor weight loading to reduce code duplication with autotune
-        W_path_arr  = tools.ensure_shape(W.get("W_path",  0.0), (self.N,  max(self.n_path, 1)))
-        W_nfz_arr   = tools.ensure_shape(W.get("W_nfz",   0.0), (self.N,  max(self.n_nfz,  1)))
-        W_aux_arr   = tools.ensure_shape(W.get("W_aux",   0.0), (self.N,  max(self.n_aux,  1)))
-        W_term_arr  = tools.ensure_shape(W.get("W_term",  0.0), (max(self.n_term, 1),))
-        W_dyn_arr   = tools.ensure_shape(W.get("W_dyn",   0.0), (self.N - 1, max(self.nz, 1)))
-        W_plus_arr  = tools.ensure_shape(W.get("W_plus",  0.0), (max(self.Npm, 1), max(self.n_plus,  1)))
-        W_minus_arr = tools.ensure_shape(W.get("W_minus", 0.0), (max(self.Npm, 1), max(self.n_minus, 1)))
+        # TODO(Skye): refactor weight loading to reduce code duplication with autotune        
+        W_ineq_arr = tools.ensure_shape(W.get("W_ineq", 0.0), (self.N, max(self.n_ineq, 1)))
+        W_term_arr = tools.ensure_shape(W.get("W_term", 0.0), (max(self.n_term, 1),))
+        W_dyn_arr  = tools.ensure_shape(W.get("W_dyn",  0.0), (self.N - 1, max(self.nz, 1)))
+        W_plus_arr = tools.ensure_shape(W.get("W_plus", 0.0), (max(self.Npm, 1), max(self.n_plus,  1)))
+        W_minus_arr= tools.ensure_shape(W.get("W_minus",0.0), (max(self.Npm, 1), max(self.n_minus, 1)))
         # ------------------------------------------------------------------
-        self.W_path.value  = W_path_arr
-        self.W_nfz.value   = W_nfz_arr
-        self.W_aux.value   = W_aux_arr
+        # Assign to CVXPY parameters
+        self.W_ineq.value  = W_ineq_arr
         self.W_term.value  = W_term_arr
         self.W_dyn.value   = W_dyn_arr
         self.W_plus.value  = W_plus_arr
         self.W_minus.value = W_minus_arr
         # ------------------------------------------------------------------
-        self.W_path_sqrt.value  = np.sqrt(W_path_arr)
-        self.W_nfz_sqrt.value   = np.sqrt(W_nfz_arr)
-        self.W_aux_sqrt.value   = np.sqrt(W_aux_arr)
+        # Square-rooted parameters (for quadratic penalties)
+        self.W_ineq_sqrt.value  = np.sqrt(W_ineq_arr)
         self.W_term_sqrt.value  = np.sqrt(W_term_arr)
         self.W_dyn_sqrt.value   = np.sqrt(W_dyn_arr)
         self.W_plus_sqrt.value  = np.sqrt(W_plus_arr)
         self.W_minus_sqrt.value = np.sqrt(W_minus_arr)
         # ------------------------------------------------------------------
-        if self.w_path_row is not None:
-            self.w_path_row.value = np.max(W_path_arr, axis=1)
-        if self.w_nfz_row is not None:
-            self.w_nfz_row.value = np.max(W_nfz_arr, axis=1)
-        if self.w_aux_row is not None:
-            self.w_aux_row.value = np.max(W_aux_arr, axis=1)
+        # Rowwise scalar reductions (for DCP-safe convex weighting)
+        if self.w_ineq_row is not None:
+            self.w_ineq_row.value = np.max(W_ineq_arr, axis=1)
         if self.w_dyn_row is not None:
-            self.w_dyn_row.value = np.max(W_dyn_arr, axis=1)
-
-        # duals
-        self.dual_path.value  = tools.ensure_shape(W.get("dual_path", 0.0), (self.N,  max(self.n_path, 1)))
-        self.dual_nfz.value   = tools.ensure_shape(W.get("dual_nfz",  0.0), (self.N,  max(self.n_nfz,  1)))
-        self.dual_aux.value   = tools.ensure_shape(W.get("dual_aux",  0.0), (self.N,  max(self.n_aux,  1)))
+            self.w_dyn_row.value  = np.max(W_dyn_arr, axis=1)
+        # ------------------------------------------------------------------
+        # Dual variables (unified inequality structure)
+        self.dual_ineq.value  = tools.ensure_shape(W.get("dual_ineq", 0.0), (self.N, max(self.n_ineq, 1)))
         self.dual_dyn.value   = tools.ensure_shape(W.get("dual_dyn",  0.0), (self.N - 1, self.nz))
         self.dual_plus.value  = tools.ensure_shape(W.get("dual_plus", 0.0), (max(self.Npm, 1), max(self.n_plus,  1)))
         self.dual_minus.value = tools.ensure_shape(W.get("dual_minus",0.0), (max(self.Npm, 1), max(self.n_minus, 1)))
         self.dual_term.value  = tools.ensure_shape(W.get("dual_term", 0.0), (max(self.n_term,1),))
+
 
         # ctcs eps
         self.eps_ctcs.value = float(self.problem.method.conv["eps_ctcs"])
