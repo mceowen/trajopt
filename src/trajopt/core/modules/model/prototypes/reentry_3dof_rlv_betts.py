@@ -61,7 +61,7 @@ def config_params():
         'init_ctrl': 0,
         'aoa_vb': 0,
         'buff_dyn': 'term',
-        'ctcs': 0
+        'ctcs': "none"          # 'none', 'term', 'l1', 'l2', 'quad-1', 'quad-2'
     }
 
     # === Physical constants ===

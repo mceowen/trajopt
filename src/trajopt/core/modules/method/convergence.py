@@ -29,7 +29,7 @@ def set_convergence_tolerance(problem):
         eps_state    = method.conv["eps_state"]
         M_state_d2nd = method.nondim["M"]["state"]["d2nd"]
 
-    if method.flags["ctcs"] and mission.n_ineq > 0:
+    if method.flags["ctcs"] != "none" and mission.n_ineq > 0:
         eps_state = np.concatenate([
             ctcs_mult_state * eps_state,
             ctcs_mult_cnst  * eps_path_config,
@@ -138,7 +138,7 @@ def set_convergence_tolerance(problem):
         eps_dyn    = np.zeros((model.nz,))
         M_dyn_d2nd = np.zeros((1, model.nz))
 
-    if method.flags["ctcs"] and mission.n_ineq > 0:
+    if method.flags["ctcs"] != "none" and mission.n_ineq > 0:
         eps_dyn = np.concatenate([
             ctcs_mult_state * eps_dyn,
             ctcs_mult_cnst  * eps_path_config,
@@ -232,11 +232,7 @@ def check_convergence_tolerance(problem, subprob, iter_record):
         if conv_ineq_nl.size else 0.0
     )
 
-    # === Convergence mode selection
-    ctcs      = method.flags["ctcs"]
-    flag_conv = method.flags["flag_conv"]
-
-    if ctcs:
+    if method.flags["ctcs"] != "none":
         chk_feas_1 = np.array([chk_vb_term, chk_vb_dyn])
         chk_feas_2 = np.array([chk_vb_term, chk_defect])
         eps_feas_1 = np.array([eps_term, eps_dyn])
@@ -247,13 +243,13 @@ def check_convergence_tolerance(problem, subprob, iter_record):
         eps_feas_1 = np.array([eps_ineq, eps_term, eps_dyn])
         eps_feas_2 = np.array([eps_ineq, eps_term])
 
-    if flag_conv == 0:
+    if method.flags["flag_conv"] == 0:
         chk_opt = np.array([chk_dz, chk_cost])
         eps_opt = np.array([eps_state, eps_cost])
-    elif flag_conv == 1:
+    elif method.flags["flag_conv"] == 1:
         chk_opt = np.array([chk_dz, np.nan])
         eps_opt = np.array([eps_state, np.nan])
-    elif flag_conv == 2:
+    elif method.flags["flag_conv"] == 2:
         chk_opt = np.array([np.nan, chk_cost])
         eps_opt = np.array([np.nan, eps_cost])
 

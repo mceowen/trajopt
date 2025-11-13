@@ -59,7 +59,7 @@ def config_main():
         'equal_dt': 0,          # 0, 1
         'buff_dyn': 'term',     # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
         'buff_dyn_dual': 'none',  # 'l1', 'none'
-        'ctcs': 0,              # 0, 1
+        'ctcs': "none",          # 'none', 'term', 'l1', 'l2', 'quad-1', 'quad-2'
         'ode_fixed_dt': 0,      # 0, 1 ,
         'nondim': 0,            # 0, 1
     }
@@ -278,7 +278,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
         params = guess.waypoint_initial_guess(params) 
         params['nu_init'] = np.ones((params['m'], params['N']))
 
-    if params['flags']['ctcs']:
+    if method.flags["ctcs"] != "none":
         params = guess.ctcs_initial_guess(params)
 
     #============================================

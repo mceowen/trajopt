@@ -61,7 +61,7 @@ def config_main():
         'flag_autotune': '0',   # '0', '1', '2', '3', 'al-scvx'
         'buff_dyn': 'term',       # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
         'buff_dyn_dual': 'none',# 'l1', 'none'
-        'ctcs': 0,              # 0, 1
+        'ctcs': "none",          # 'none', 'term', 'l1', 'l2', 'quad-1', 'quad-2'
         'ode_fixed_dt': 0,      # 0, 1 ,
         'nondim': 1,            # 0, 1
     }
@@ -309,7 +309,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
         params              = guess.straight_line_initial_guess(params) 
         params['nu_init']   =  np.tile(-params['ge'] * params['mass'], (params['N'], 1)) / params['nondim']['nf']
 
-    if params['flags']['ctcs']:
+    if method.flags["ctcs"] != "none":
         params              = guess.ctcs_initial_guess(params)
 
     #============================================
@@ -377,7 +377,7 @@ def config_params(config=None): # replacing init_params_struct TODO: Test
 
         params['weights']['W_nfz'] += w_nfz
 
-        if params['flags']['free_final_time'] or params['flags']['ctcs']:
+        if params['flags']['free_final_time'] or method.flags["ctcs"] != "none":
             buff_dyn = str(params['flags'].get('buff_dyn', ''))
             if buff_dyn in {'l1', 'l2'}:
                 params['weights']['W_dyn'] += w_dyn

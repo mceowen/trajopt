@@ -260,7 +260,7 @@ def jit_jax_discretize(problem):
     Sk_ind0   = Bkp_ind0 + nz*m
 
     # pull ltv dynamics
-    if method.flags["ctcs"]:
+    if method.flags["ctcs"] != "none":
         lin_dyn = model.lin_dyn_ctcs
     else:
         lin_dyn = model.lin_dyn
@@ -389,7 +389,7 @@ def compute_linsys_discrete(z_ref, nu_ref, dt_ref, problem):
     if method.flags.get("jax_dyn", 0):
         Ak, Bk, Bkp, Sk, z_minus = discretize_inv_free_jax(z_ref, nu_ref, dt_ref, problem)
     else:
-        if method.flags["ctcs"]:
+        if method.flags["ctcs"] != "none":
             Ak, Bk, Bkp, Sk, z_minus = discretize_ctcs(z_ref, nu_ref, dt_ref, problem)
         else:
             Ak, Bk, Bkp, Sk, z_minus = discretize_inv_foh(z_ref, nu_ref, dt_ref, problem)

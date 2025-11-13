@@ -104,7 +104,7 @@ def configure_penalty_weights(problem):
         # Stack into the master W_ineq
         method.weights["W_ineq"] = np.hstack([W_path, W_nfz, W_custom])
 
-        if method.flags["dynamics_nonconvex"] or method.flags["ctcs"]:
+        if method.flags["dynamics_nonconvex"] or method.flags["ctcs"] != "none":
             buff_dyn = str(method.flags.get("buff_dyn", ""))
             if buff_dyn in {"l1", "l2"}:
                 method.weights["W_dyn"] += w_dyn
@@ -123,7 +123,7 @@ def configure_penalty_weights(problem):
 
         method.weights["dual_ineq"] = np.hstack([dual_path, dual_nfz, dual_custom])
 
-        if method.flags["dynamics_nonconvex"] or method.flags["ctcs"]:
+        if method.flags["dynamics_nonconvex"] or method.flags["ctcs"] != "none":
             buff_dyn = str(method.flags.get("buff_dyn", ""))
             if buff_dyn == "term":
                 method.weights["dual_term"] += method.weights["eps_nonzero1"]

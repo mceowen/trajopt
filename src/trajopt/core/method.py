@@ -59,7 +59,7 @@ class Method:
             guess.straight_line_initial_guess(problem)
             self.nu_init = self.line_guess_u_init
 
-        if self.flags["ctcs"]:
+        if self.flags["ctcs"] != "none":
             guess.ctcs_initial_guess(problem)
 
         self.cost_init = discretize.compute_linearized_costs(self.t_init, self.z_init, self.nu_init, problem)[0].sum().item()
@@ -76,7 +76,7 @@ class Method:
         buff_dyn = str(self.flags.get("buff_dyn", "term"))
 
         # --- CTCS-specific adjustment ---
-        if self.flags.get("ctcs") and buff_dyn == "term":
+        if self.flags["ctcs"]!="none" and buff_dyn == "term":
             buff_dyn = "l1"
 
         # --- Dynamics buffering ---

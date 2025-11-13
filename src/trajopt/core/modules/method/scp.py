@@ -237,13 +237,44 @@ class Subproblem:
                         )
 
 
-        # Dynamics buffers (zeros if 'term')
-        if method.flags.get("buff_dyn") == "term":
-            self.vb_dyn_p = np.zeros((N - 1, nz))
-            self.vb_dyn_m = np.zeros((N - 1, nz))
-        else:
-            self.vb_dyn_p = cp.Variable((N - 1, nz), name="vb_dyn_p")
-            self.vb_dyn_m = cp.Variable((N - 1, nz), name="vb_dyn_m")
+        # --- Physical dynamics (first n states) ---
+        self.vb_dyn_real_p = (
+            cp.Variable((N - 1, n), name="vb_dyn_real_plus")
+            if method.flags["buff_dyn"] != "term" and n > 0
+            else cp.Constant(np.zeros((N - 1, n))) if n > 0
+            else None
+        )
+        self.vb_dyn_real_m = (
+            cp.Variable((N - 1, n), name="vb_dyn_real_minus")
+            if method.flags["buff_dyn"] != "term" and n > 0
+            else cp.Constant(np.zeros((N - 1, n))) if n > 0
+            else None
+        )
+
+        
+        # --- CTCS dynamics (augmented states n : nz) ---
+        self.vb_dyn_ctcs_p = (
+            cp.Variable((N - 1, max(nz - n, 0)), name="vb_dyn_ctcs_plus")
+            if method.flags["ctcs"] != "none" not in {"none", "term"} and nz > n
+            else cp.Constant(np.zeros((N - 1, max(nz - n, 0)))) if nz > n
+            else None
+        )
+        self.vb_dyn_ctcs_m = (
+            cp.Variable((N - 1, max(nz - n, 0)), name="vb_dyn_ctcs_minus")
+            if method.flags["ctcs"] != "none" not in {"none", "term"} and nz > n
+            else cp.Constant(np.zeros((N - 1, max(nz - n, 0)))) if nz > n
+            else None
+        )
+
+        # --- Unified composite buffers (always same shape for DPP) ---
+        self.vb_dyn_p = (
+            cp.hstack([self.vb_dyn_real_p, self.vb_dyn_ctcs_p])
+            if nz > n else self.vb_dyn_real_p
+        )
+        self.vb_dyn_m = (
+            cp.hstack([self.vb_dyn_real_m, self.vb_dyn_ctcs_m])
+            if nz > n else self.vb_dyn_real_m
+        )
 
         # Aggregate buffers (optional)
         self.vb_plus  = cp.Variable((self.Npm, self.n_plus),  name="vb_plus")  if self.n_plus  > 0 else None
@@ -386,7 +417,7 @@ class Subproblem:
                     C.append(self.vb_dyn_m[k] >= 0)
 
                 # CTCS coupling on extra components
-                if flags["ctcs"] and n < nz:
+                if method.flags["ctcs"] != "none" and n < nz:
                     C.append(
                         self.z_ref[k + 1, n:nz] + self.dz[k + 1, n:nz]
                         - (self.z_ref[k, n:nz] + self.dz[k, n:nz]) <= self.eps_ctcs
@@ -423,7 +454,7 @@ class Subproblem:
                 )
 
             # Linearized inequality constraints (path + nfz + custom)
-            if mission.n_ineq > 0 and not flags["ctcs"] and self.dgdz is not None:
+            if mission.n_ineq > 0 and method.flags["ctcs"] == "none" and self.dgdz is not None:
         
                 C.append(self.dgdz[k] @ self.dz[k] + self.dgdnu[k] @ self.dnu[k] + self.g0[k] - self.vb_ineq[k] <= 0)
                 if str(self.flag_autotune) in {"1", "3", "al-scvx"} and self.vb_ineq[k]:

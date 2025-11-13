@@ -101,7 +101,7 @@ class Model:
             def lin_dyn(t, z, nu):
                 return f(z, nu), dfcn_dz(z, nu), dfcn_du(z, nu)
 
-            if method.flags["ctcs"] == 1:
+            if method.flags["ctcs"] != "none":
                 f_ctcs, dfcn_dz_ctcs, dfcn_du_ctcs = convexify.linearize_jax_ctcs(self._dynamics, problem)
 
                 def lin_dyn_ctcs(t, z, nu):
@@ -131,7 +131,7 @@ class Model:
         # ------------------------------------------------------------
         # CTCS / state bookkeeping
         # ------------------------------------------------------------
-        if method.flags.get("ctcs", False):
+        if method.flags["ctcs"] != "none":
             self.nz = self.n + mission.n_ineq
         else:
             self.nz = self.n
