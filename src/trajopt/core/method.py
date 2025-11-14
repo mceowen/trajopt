@@ -121,8 +121,9 @@ class Method:
         #self.set_weights()
         hyperparameters.configure_penalty_weights(problem)
 
+        # TODO (CARLOS): revisit
         ### NFZ convergence values ###
-        rc_dim = mission.obs["rc"] * self.nondim["nd"]
+        rc_dim = mission.obs["rc"] * self.nondim["M"]["state"]["d2nd"][1, 1]
 
         eps_nfz_cnst = 2 * rc_dim * self.conv["eps_nfz"] - self.conv["eps_nfz"]**2
         self.conv["eps_nfz"] = eps_nfz_cnst * np.ones(mission.n_nfz)
@@ -130,12 +131,12 @@ class Method:
         # Extract only those terminal constraints used
         self.conv["eps_term"] = np.concatenate((self.conv["eps_term"][mission.zf_idx], self.conv["eps_term_min"][mission.zf_min_idx], self.conv["eps_term_max"][mission.zf_max_idx]))
 
-        ### Configure generic convergence criterion and max iterations ###
-        convergence.set_convergence_tolerance(problem)
-
         # --- Initialize virtual buffers ---
         self.conv_data["vb_path"] = np.zeros((self.N,   mission.n_path))
         self.conv_data["vb_nfz"]  = np.zeros((self.N,   mission.n_nfz))
         self.conv_data["vb_custom"]  = np.zeros((self.N,   mission.n_custom))
         self.conv_data["vb_dyn"]  = np.zeros((self.N-1, model.nz))
         self.conv_data["vb_term"] = np.zeros(model.nz)
+
+        ### Configure generic convergence criterion and max iterations ###
+        convergence.set_convergence_tolerance(problem)

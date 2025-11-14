@@ -70,12 +70,14 @@ def linearize_jax(fcn, problem):
     return f, dfcn_dz, dfcn_du
 
 def linearize_jax_ctcs(fcn, problem):
+    method = problem.method
+    
     def wrapped_fcn(z, nu):
         model = problem.model
 
         constr = jnp.concatenate([model.nonconvex_inequality_constraints[i].fcn(0, z, nu, problem) for i in range(len(model.nonconvex_inequality_constraints))])
 
-        f_val = jnp.concatenate([fcn(0, z[:model.n], nu, problem), jnp.square(jnp.maximum(constr, 0.0))])
+        f_val = jnp.concatenate([fcn(0, z[:model.n], nu, problem), jnp.square(jnp.maximum(method.weights["w_ctcs"] * constr, 0.0))])
         
         return f_val
 

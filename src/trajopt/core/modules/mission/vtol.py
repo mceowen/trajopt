@@ -61,7 +61,7 @@ def get_cost_cnstr_nondim(problem):
     nm = method.nondim["nm"]
 
     ncost = method.nondim["nv"]
-    np_ineq = np.array([1, 1, nm / (nd * nt**2)])
+    np_ineq = np.array([1, 1, nm / (nd * nt**2), 1, 1])
 
     return ncost, np_ineq
 
@@ -146,31 +146,25 @@ def nonlinear_aero_jax(t, z, nu, problem):
         Kl2h    = kl2 * d2r**2
         Kl3h    = kl3 * d2r**3
 
-    r, _, _, v, _, _ = z
+    r = z[0]
+    v = z[3]
 
     # compute v_sat with jnp
-    v_sat = jnp.minimum(vs * nv, vlim)
+    v_sat = jnp.minimum(v * nv, vlim)
 
     # compute Cl/Cd locally then set into arrays
     Cl = Kl1 + Kl2 * (v_sat - vlim)**2 + Kl3 * (v_sat - vlim)**4
     Cd = Kd1 + Kd2 * Cl + Kd3 * Cl**2
-    alpha = jnp.deg2rad(alphlim_deg - kalph * (jnp.minimum(vs * nv, vlim) - vlim)**2)
+    alpha = jnp.deg2rad(alphlim_deg - kalph * (jnp.minimum(v * nv, vlim) - vlim)**2)
 
-    rho = atmosphere_model_jax(rs, problem)
+    rho = atmosphere_model_jax(r, problem)
     rho_s = rho / (method.nondim["nm"] / method.nondim["nd"] ** 3)
     sref_s = mission.vehicle["sref"] / method.nondim["nd"] ** 2
 
-    L = (1 / mass_nd) * rho_s * sref_s * Cl * vs**2
-    D = (1 / mass_nd) * rho_s * sref_s * Cd * vs**2
+    L = (0.5 / mass_nd) * rho_s * sref_s * Cl * v**2
+    D = (0.5 / mass_nd) * rho_s * sref_s * Cd * v**2
 
-    return {
-        'L': L,
-        'D': D,
-        'Cl': Cl,
-        'Cd': Cd,
-        'alpha': alpha,
-        'rho': rho
-    }
+    return {'L': L, 'D': D, 'Cl': Cl, 'Cd': Cd, 'alpha': alpha, 'rho': rho}
 
 def custom_constraints(subproblem):
     pass

@@ -65,7 +65,9 @@ def max_q(t, z, nu, problem):
     rho = mission.mission_module.atmosphere_model_jax(rs, problem)
     nv = method.nondim["nv"]
 
-    return  0.5 * jnp.array([0.5 * rho * (vs * nv) ** 2 - mission.path_limits['max_q']])
+    q_dim = 0.5 * rho * (vs * nv) ** 2 
+
+    return jnp.array([q_dim / mission.path_limits['max_q'] - 1.0])
 
 def max_Q(t, z, nu, problem):
     mission = problem.mission
@@ -77,4 +79,22 @@ def max_Q(t, z, nu, problem):
     rho = mission.mission_module.atmosphere_model_jax(rs, problem)
     nv = method.nondim["nv"]
 
-    return jnp.array([mission.vehicle["kQ"] * rho ** 0.5 * (vs * nv) ** 3 - mission.path_limits["max_Q"]])
+    Q_dim = mission.vehicle["kQ"] * rho ** 0.5 * (vs * nv) ** 3
+
+    return jnp.array([Q_dim / mission.path_limits["max_Q"] - 1.0])
+
+def max_load(t, z, nu, problem):
+    mission = problem.mission
+    method = problem.method
+
+    rs = z[0]
+    vs = z[3]
+
+    aero = mission.nonlinear_aero(t, z, nu)
+
+    L = aero["L"]
+    D = aero["D"]
+
+    load_dim = jnp.sqrt(L ** 2 + D ** 2) * method.nondim["na"]
+
+    return jnp.array([load_dim / mission.path_limits["max_load"] - 1.0])

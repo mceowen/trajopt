@@ -56,9 +56,9 @@ def custom_constraints(subproblem):
         slack_k = subproblem.u_slack[k]
         
         constraints.append(cp.norm(u_k) <= slack_k)
-        constraints.append(slack_k >= mission.custom_input_dict["u_norm_min"])
-        constraints.append(slack_k <= mission.custom_input_dict["u_norm_max"])
-        constraints.append(np.cos(mission.custom_input_dict["theta_max"]) * slack_k - (1 / (mission.vehicle["mass"] / method.nondim["nm"])) * ehat_u[:, 2].T @ u_k <= 0)
+        constraints.append(slack_k >= mission.u_norm_min)
+        constraints.append(slack_k <= mission.u_norm_max)
+        constraints.append(np.cos(mission.theta_max) * slack_k - (1 / (mission.vehicle["mass"] / method.nondim["nm"])) * ehat_u[:, 2].T @ u_k <= 0)
 
 def custom_cost(subproblem):
 
@@ -93,3 +93,4 @@ def set_custom_params(problem):
 
     mission.u_norm_min = mission.custom_input_dict["u_norm_min"] / method.nondim["nf"]
     mission.u_norm_max = mission.custom_input_dict["u_norm_max"] / method.nondim["nf"]
+    mission.theta_max = mission.custom_input_dict["theta_max"] / method.nondim["nang"]

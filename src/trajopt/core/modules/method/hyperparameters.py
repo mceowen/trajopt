@@ -39,15 +39,7 @@ def configure_penalty_weights(problem):
         # w_path: weight for path constraint buffer cost
         # w_nfz:  weight for nfz constraint buffer cost
 
-
-    # TODO (carlos): this is a temporary fix to keep quadrotor converging the same, will remove soon!
-    if method.flags["match_dim_nondim_weights"]:
-        M_state  = method.nondim["M"]["state"]["nd2d"]
-        avg_state_nd_sq = np.mean(np.diag(M_state)**2)
-    else:
-        avg_state_nd_sq = 1
-
-    method.weights["wtr_z"] = avg_state_nd_sq  * 1 / (2 * method.weights["alpha_z"])
+    method.weights["wtr_z"] = 1 / (2 * method.weights["alpha_z"])
     method.weights["wtr_u"] = 0 if np.isinf(method.weights["alpha_u"]) else 1 / (2 * method.weights["alpha_u"])
 
     method.weights["w_fac_N"]      = method.N
@@ -60,42 +52,25 @@ def configure_penalty_weights(problem):
         if str(method.flags["flag_autotune"]) in {"0", "al-scvx"}:
             if str(method.flags["flag_autotune"]) == "0":
 
-                w_path_dim = method.weights["w_path_scale"] * method.weights["wbuff"] / method.weights["w_fac_N"]
-                w_nfz_dim  = method.weights["w_nfz_scale"]  * method.weights["wbuff"] / method.weights["w_fac_N"]
-                w_custom_dim  = method.weights["w_custom_scale"]  * method.weights["wbuff"] / method.weights["w_fac_N"]
-                w_dyn_dim  = method.weights["w_dyn_scale"]  * method.weights["wbuff"] / method.weights["w_fac_Nm1"]
-                w_term_dim = method.weights["w_term_scale"] * method.weights["wbuff"]
+                w_path = method.weights["w_path_scale"] * method.weights["wbuff"] / method.weights["w_fac_N"]
+                w_nfz  = method.weights["w_nfz_scale"]  * method.weights["wbuff"] / method.weights["w_fac_N"]
+                w_custom  = method.weights["w_custom_scale"]  * method.weights["wbuff"] / method.weights["w_fac_N"]
+                w_dyn  = method.weights["w_dyn_scale"]  * method.weights["wbuff"] / method.weights["w_fac_Nm1"]
+                w_term = method.weights["w_term_scale"] * method.weights["wbuff"]
 
-                if method.flags["match_dim_nondim_weights"]:
-                    M_path = method.nondim["M"].get("path", {}).get("nd2d", np.eye(mission.n_path))
-                    M_nfz  = method.nondim["M"]["nfz"]["nd2d"]
-                    M_custom  = method.nondim["M"].get("custom", {}).get("nd2d", np.eye(mission.n_custom))
-                    M_dyn  = method.nondim["M"]["dyn"]["nd2d"]
-                    M_term = method.nondim["M"]["term"]["nd2d"]
-
-                    avg_path_nd_sq = np.mean(np.diag(M_path)**2) if mission.n_path > 0 else 1
-                    avg_nfz_nd_sq  = np.mean(np.diag(M_nfz)**2)  if mission.n_nfz  > 0 else 1
-                    avg_custom_nd_sq  = np.mean(np.diag(M_custom)**2)  if mission.n_custom  > 0 else 1
-                    avg_dyn_nd_sq  = np.mean(np.diag(M_dyn)**2)
-                    avg_term_nd_sq = np.mean(np.diag(M_term)**2)
-                else:
-                    avg_path_nd_sq = 1
-                    avg_nfz_nd_sq  = 1
-                    avg_custom_nd_sq  = 1
-                    avg_dyn_nd_sq  = 1
-                    avg_term_nd_sq = 1
-
-                w_path = avg_path_nd_sq * w_path_dim
-                w_nfz  = avg_nfz_nd_sq  * w_nfz_dim
-                w_custom  = avg_custom_nd_sq  * w_custom_dim
-                w_dyn  = avg_dyn_nd_sq  * w_dyn_dim
-                w_term = avg_term_nd_sq * w_term_dim
             else:
                 w_path = method.weights["wbuff"] / method.weights["w_fac_N"]
                 w_nfz  = method.weights["wbuff"] / method.weights["w_fac_N"]
                 w_custom  = method.weights["wbuff"] / method.weights["w_fac_N"]
                 w_dyn  = method.weights["wbuff"] / method.weights["w_fac_Nm1"]
                 w_term = method.weights["wbuff"]
+        else:
+            method.weights["wbuff"] = 1
+            w_path = method.weights["wbuff"] / method.weights["w_fac_N"]
+            w_nfz  = method.weights["wbuff"] / method.weights["w_fac_N"]
+            w_custom  = method.weights["wbuff"] / method.weights["w_fac_N"]
+            w_dyn  = method.weights["wbuff"] / method.weights["w_fac_Nm1"]
+            w_term = method.weights["wbuff"]
 
         W_path += w_path
         W_nfz  += w_nfz
@@ -135,7 +110,7 @@ def configure_penalty_weights(problem):
                     method.weights["dual_minus"] += method.weights["eps_nonzero1"]
 
     ### ctcs convergence adjustments ###
-    method.weights["w_ctcs"] = method.nondim["nd"]**2
+    method.weights["w_ctcs"] = 10.0
 
 
 
@@ -210,24 +185,23 @@ def build_dual_buffer_cost(subprob) -> cp.Expression:
 
 # -------------- AUTOTUNING SCHEMES ----------------------------------------------------------------------------------------
 
-def autotune1(problem, local_vars, iter_record):
+def autotune1(problem, iter_record):
     """
     Unified version of autotune1 using stacked inequality form (_ineq only).
     """
     method = problem.method
 
     # Access iteration number
-    iter_num = local_vars["iter_num"]
+    iter_num = iter_record["iter_num"]
 
     # Extract variables from local_vars
-    sol_vars = local_vars["sol_vars"]
-    vb_ineq = np.array(sol_vars["vb_ineq"])
-    vb_term = np.array(sol_vars["vb_term"])
+    vb_ineq = np.array(iter_record["conv_data"]["vb_ineq"])
+    vb_term = np.array(iter_record["conv_data"]["vb_term"])
     vb_dyn  = np.array(iter_record["conv_data"]["vb_dyn"])  # from O since not in sol_vars
 
-    dual_ineq = local_vars["dual_ineq"]
-    dual_dyn  = local_vars["dual_dyn"]
-    dual_term = local_vars["dual_term"]
+    dual_ineq = iter_record["weights"]["dual_ineq"]
+    dual_dyn  = iter_record["weights"]["dual_dyn"]
+    dual_term = iter_record["weights"]["dual_term"]
 
     # Hyperparameters
     if method.flags["stepsize_auto_dual"]:
@@ -255,7 +229,7 @@ def autotune1(problem, local_vars, iter_record):
     dual_term_plus[np.abs(vb_term) <= eps_term] = dual_term[np.abs(vb_term) <= eps_term]
 
     # Update output dictionary
-    weights = iter_record["method"]["weights"]
+    weights = iter_record["weights"]
     weights.update({
         "dual_ineq": dual_ineq_plus,
         "dual_dyn": dual_dyn_plus,
@@ -266,25 +240,24 @@ def autotune1(problem, local_vars, iter_record):
         }
     })
 
-    return O
+    return iter_record
 
 
-def autotune2(problem, local_vars, iter_record):
+def autotune2(problem, iter_record):
     """
     Unified stacked-inequality version of autotune2.
     """
     method = problem.method
-
+    
     # Extract variables from local_vars
-    N = local_vars["N"]
-    sol_vars = local_vars["sol_vars"]
-    vb_ineq = np.array(sol_vars["vb_ineq"])
-    vb_dyn  = np.array(sol_vars["vb_dyn_plus"])  # Assuming vb_dyn_plus is in sol_vars
-    vb_term = np.array(sol_vars["vb_term"])
+    N = method.N
+    vb_ineq = np.array(iter_record["conv_data"]["vb_ineq"])
+    vb_dyn  = np.array(iter_record["conv_data"]["vb_dyn"])  # Assuming vb_dyn_plus is in sol_vars
+    vb_term = np.array(iter_record["conv_data"]["vb_term"])
 
-    W_ineq = local_vars["W_ineq"]
-    W_dyn  = local_vars["W_dyn"]
-    W_term = local_vars["W_term"]
+    W_ineq = np.array(iter_record["weights"]["W_ineq"])
+    W_dyn  = np.array(iter_record["weights"]["W_dyn"])
+    W_term = np.array(iter_record["weights"]["W_term"])
 
     # Extract parameters for autotuning
     eps_feas_ineq = method.conv.get("eps_ineq", 1e-6)
@@ -298,78 +271,82 @@ def autotune2(problem, local_vars, iter_record):
     dual_ineq_buff = []
     dual_dyn_buff  = []
 
-    Wh_ineq = []
-    Wh_dyn  = []
-    Wh_term = []
+    Wh_ineq = np.zeros((N, method.problem.mission.n_ineq))
+    Wh_dyn  = np.zeros((N, method.problem.mission.n_dyn))
+    Wh_term = np.zeros(method.problem.mission.n_term + method.problem.mission.n_term_ineq)
+
+    Wh_plus  = np.zeros((N, method.n_plus))
+    Wh_minus = np.zeros((N, method.n_minus))
 
     # Autotune matrices via dual variables and feasibility tolerance
     for k in range(N):
-        dual_ineq_buff.append(np.diag(W_ineq[:, k]) @ vb_ineq[:, k].flatten())
+        dual_ineq_buff.append(np.diag(W_ineq[k, :]) @ vb_ineq[k, :].flatten())
 
         if method.problem.mission.n_ineq > 0:
-            Wh_ineq.append(np.abs(dual_ineq_buff[-1] / eps_feas_ineq))
+            Wh_ineq[k, :] = np.abs(dual_ineq_buff[-1] / eps_feas_ineq)
         else:
-            Wh_ineq.append(np.abs(dual_ineq_buff[-1]))
+            Wh_ineq[k, :] = np.abs(dual_ineq_buff[-1])
 
         if k < N - 1:
-            dual_dyn_buff.append(np.diag(W_dyn[:, k].flatten()) @ vb_dyn[:, k])
+            dual_dyn_buff.append(np.diag(W_dyn[k, :]) @ vb_dyn[k, :])
             if buff_dyn:
-                Wh_dyn.append(np.sum(np.abs(dual_dyn_buff[-1]) / eps_feas_dyn))
+                Wh_dyn[k, :] = np.sum(np.abs(dual_dyn_buff[-1]) / eps_feas_dyn)
             else:
-                Wh_dyn.append(np.sum(np.abs(dual_dyn_buff[-1])))
+                Wh_dyn[k, :] = np.sum(np.abs(dual_dyn_buff[-1]))
 
     if (method.problem.mission.n_term + method.problem.mission.n_term_ineq) > 0:
-        dual_term_buff = np.diag(W_term.flatten()) @ vb_term
-        Wh_term = np.abs(dual_term_buff / eps_feas_term)
+        dual_term_buff = np.diag(W_term) @ vb_term
+        Wh_term = np.abs(dual_term_buff / eps_feas_term).flatten()
 
     # Extract field names and create buffer nametags
-    W_fn = [key for key in method.weights.keys() if key.startswith("W")]
+    W_fn = [key for key in iter_record["weights"].keys() if key.startswith("W")]
     nametags = [key.split("_")[1] for key in W_fn if key.startswith("W")]
 
     for i_field in nametags:
-        W_field = f"W_{i_field}"
-        Wh_field = f"Wh_{i_field}"
-        vb_field = f"vb_{i_field}"
-        eps_feas = f"eps_feas_{i_field}"
-        Wconv_field = f"Wconv_{i_field}"
+        if i_field not in {"plus", "minus"}:
+            W_field = f"W_{i_field}"
+            Wh_field = f"Wh_{i_field}"
+            vb_field = f"vb_{i_field}"
+            eps_feas = f"eps_feas_{i_field}"
+            Wconv_field = f"Wconv_{i_field}"
 
-        if np.sum(method.weights[W_field]) == 0:
-            iter_record["method"]["weights"][W_field] = eval(W_field)
-        else:
-            exec(f"{Wh_field}[{Wh_field} <= eps_nonzero2] = eps_nonzero2")
+            if np.sum(method.weights[W_field]) == 0:
+                iter_record["weights"][W_field] = eval(W_field)
+            else:
+                exec(f"{Wh_field}[{Wh_field} <= eps_nonzero2] = eps_nonzero2")
 
-            # Create updated weight
-            iter_record["method"]["weights"][W_field] = eval(Wh_field)
+                # Create updated weight
+                iter_record["weights"][W_field] = eval(Wh_field)
 
     # --- Store diagnostics ---
-    iter_record["method"]["weights"]["data"]["eps_feas"] = eps_feas_ineq
-    iter_record["method"]["weights"]["data"] = {}
+    iter_record["weights"]["data"] = {}
+    iter_record["weights"]["data"]["eps_feas"] = eps_feas_ineq
 
-    iter_record["method"]["weights"]["data"]["term"] = {
-        "Wxq": np.diag(W_term.flatten()) @ vb_term,
+    iter_record["weights"]["data"]["term"] = {
+        "Wxq": np.diag(W_term) @ vb_term,
         "dual": dual_term_buff
     }
 
     for k in range(N):
-        iter_record["method"]["weights"]["data"]["ineq"] = {
-            "Wxq": np.diag(W_ineq[:, k].flatten()) @ vb_ineq[:, k],
+        iter_record["weights"]["data"]["ineq"] = {
+            "Wxq": np.diag(W_ineq[k, :]) @ vb_ineq[k, :],
             "dual": dual_ineq_buff[k]
         }
 
-    iter_record["method"]["weights"]["data"]["term"]["delta"] = (
-        iter_record["method"]["weights"]["data"]["term"]["Wxq"]
-        - iter_record["method"]["weights"]["data"]["term"]["dual"]
+    iter_record["weights"]["data"]["term"]["delta"] = (
+        iter_record["weights"]["data"]["term"]["Wxq"]
+        - iter_record["weights"]["data"]["term"]["dual"]
     )
-    iter_record["method"]["weights"]["data"]["ineq"]["delta"] = (
-        iter_record["method"]["weights"]["data"]["ineq"]["Wxq"]
-        - iter_record["method"]["weights"]["data"]["ineq"]["dual"]
+    iter_record["weights"]["data"]["ineq"]["delta"] = (
+        iter_record["weights"]["data"]["ineq"]["Wxq"]
+        - iter_record["weights"]["data"]["ineq"]["dual"]
     )
 
-    return O
+    return iter_record
 
 
-def autotune3(problem, local_vars, iter_record):
-    O = autotune1(problem, local_vars, iter_record)
-    O = autotune2(problem, local_vars, iter_record)
+def autotune3(problem, iter_record):
+    iter_record = autotune1(problem, iter_record)
+    iter_record = autotune2(problem, iter_record)
 
-    return O
+    return iter_record

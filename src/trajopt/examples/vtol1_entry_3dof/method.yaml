@@ -4,14 +4,13 @@ flags:
   free_final_time: 1      # 0, 1
   dynamics_nonconvex: 1  # 0, 1
   equal_dt: 1             # 0, 1
-  flag_autotune: "0"      # '0', '1', '2
+  flag_autotune: "3"      # '0', '1', '2
   buff_dyn: "term"        # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
   buff_dyn_dual: "none"   # 'l1', 'none'
   ctcs: 1                 # 0, 1
   ode_fixed_dt: 0         # 0, 1
   nondim: 1               # 0, 1
   jax_dyn: 1              # 0, 1
-  match_dim_nondim_weights: 0  # 0, 1 # this is temporary, to be removed later
 
 solver_opts:
   solver: "QOCO"
@@ -23,15 +22,15 @@ dT_max: 450.0
 
 conv:
   ctcs_mult_state: 0.5
-  ctcs_mult_cnst: 0.001
+  ctcs_mult_cnst: 2.0
   eps_ctcs: 1e-4
-  eps_state: [5000, 1, 1, 30, 5, 5]
-  eps_cost: 10
+  eps_state: [500, 1, 1, 50, 1, 1]
+  eps_cost: 1
   eps_nfz: 1
-  eps_path: [10.0]
-  eps_term: [2000.0, 2.0, 2.0, 30, 6.0, 6.0]
-  eps_term_min: [10.0, 1.0, 1.0, 10, 1.0, 1.0]
-  eps_term_max: [10.0, 1.0, 1.0, 10, 1.0, 1.0]
+  eps_path: [100.0, 100.0, 0.1]
+  eps_term: [8000.0, 1.0, 1.0, 100, 1.0, 1.0]
+  eps_term_min: [10.0, 1.0, 1.0, 10.0, 1.0, 1.0]
+  eps_term_max: [10.0, 1.0, 1.0, 10.0, 1.0, 1.0]
   eps_defect: [0.01]
   eps_dyn: [10.0, 0.1, 0.1, 30.0, 0.1, 0.1]
   iter_max: 80

@@ -19,7 +19,7 @@ def nfz_nonlinear(t, z, nu, problem):
     x_idx = problem.model.obs["x_idx"]
     y_idx = problem.model.obs["y_idx"]
     
-    return (rc**2 - (z[x_idx] - xc)**2 - (z[y_idx] - yc)**2)
+    return (1.0 - (z[x_idx] - xc)**2 / rc**2 - (z[y_idx] - yc)**2 / rc**2)
 
 # =============================================================================
 # NFZ Analytical Linearization Block

@@ -651,7 +651,7 @@ class Subproblem:
         # Create unified record for this iteration and append
         iter_record = self._load_outputs(input_for_iter, prop_time_ms)
         iter_record = convergence.check_convergence_tolerance(self.problem, self, iter_record)
-        iter_record = baseline_autotune(self.problem, {}, iter_record)
+        iter_record = baseline_autotune(self.problem, iter_record)
         self.iter_data.append(iter_record)
 
     # ============================================================
@@ -728,14 +728,14 @@ class Subproblem:
 # ===========================
 # Baseline autotune wrapper
 # ===========================
-def baseline_autotune(problem, _unused, rec: Dict[str, Any]) -> Dict[str, Any]:
+def baseline_autotune(problem, rec: Dict[str, Any]) -> Dict[str, Any]:
     flag = problem.method.flags["flag_autotune"]
-    if flag == 1:
-        rec = hp.autotune1(problem, {}, rec)
-    elif flag == 2:
-        rec = hp.autotune2(problem, {}, rec)
-    elif flag == 3:
-        rec = hp.autotune3(problem, {}, rec)
+    if flag == "1":
+        rec = hp.autotune1(problem, rec)
+    elif flag == "2":
+        rec = hp.autotune2(problem, rec)
+    elif flag == "3":
+        rec = hp.autotune3(problem, rec)
     return rec
 
 

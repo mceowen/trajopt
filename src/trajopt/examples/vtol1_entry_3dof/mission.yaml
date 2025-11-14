@@ -57,7 +57,9 @@ udot_max: [10]
 udot_max_idx: [0]
 
 path_limits:
-  max_q: 8000
+  max_q: 18000
+  max_Q: 33300
+  max_load: 24.525
 
 custom_limits: {}
 
