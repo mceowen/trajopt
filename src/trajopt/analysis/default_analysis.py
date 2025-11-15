@@ -63,12 +63,13 @@ def perform_default_analysis(problem):
         # create dense control interpolation for this iteration
         nu_ref_dense = np.hstack([np.interp(t_dense, t_ref, nu_ref[:, i]).reshape((-1, 1)) for i in range(m)])
         u_ref_dense = nu_ref_dense @ nondim['M']['ctrl']['nd2d']
-
-        # Wrapper that does FOH interpolation before calling dynamics
-        def FOH_dynamics(t, z):
-            # FOH interpolation to get control at time t
-            u = np.array([np.interp(t, t_ref, nu_ref[:, i]) for i in range(m)])
-            return problem.model.dynamics(t, z, u)
+        
+        def FOH_dynamics(t, z, nu_ref, t_ref):
+            """First-order hold dynamics for RK45 integration."""
+            # Interpolate control at time t (each control dimension separately)
+            u_t = np.array([np.interp(t, t_ref, nu_ref[:, i]) for i in range(m)])
+            # Call model dynamics
+            return problem.model.dynamics(t, z, u_t)
         
         # nonlinear propagation
         z_ref_np = np.asarray(z_ref)
