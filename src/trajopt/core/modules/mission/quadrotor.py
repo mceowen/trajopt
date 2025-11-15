@@ -83,7 +83,7 @@ def get_cost_cnstr_nondim(problem):
     method = problem.method
 
     ncost = method.nondim["nf"] ** 2
-    np_ineq = np.ones(mission.n_nfz) * method.nondim["nd"] ** 2
+    np_ineq = np.ones(mission.n_nfz) * 1.0 ** 2
 
     return ncost, np_ineq
 

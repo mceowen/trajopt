@@ -23,7 +23,7 @@ z_max: [12.0, 12.0, 10.0]
 z_max_idx: [0, 1, 2]
 
 # initial state constraints
-zi: [0.0, 0.0, 5.0, 0.5, 0.5, 0.0]
+zi: [0.0, 0.0, 5.0, 0.5, 0.25, 0.0]
 zi_idx: [0, 1, 2, 3, 4, 5]
 zi_min: []
 zi_min_idx: []

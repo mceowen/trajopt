@@ -1,9 +1,10 @@
 import numpy as np
-
+import jax 
+import jax.numpy as jnp
 import trajopt.utils.tools                      as tools
 import trajopt.core.modules.model.obstacles    as obstacles
 
-def dynamics(t, z, nu, problem, t_vec=None):
+def dynamics(t, z, nu, problem):
     """
     x1, x2: r (position)
     u1, u2: v (velocity)
@@ -74,3 +75,20 @@ def analytical_linsys(t, z, nu, problem):
     fc = dynamics(t, z, nu, problem)
 
     return fc, Ac, Bc
+
+def dynamics_jax(t, z, nu, problem):
+    mission = problem.mission
+    model = problem.model
+    method = problem.method
+
+    mass    = mission.vehicle["mass"] / method.nondim["nm"]
+    g_vec   = np.array([0,0, -mission.planet["g"]]) / method.nondim["na"]
+
+    r = z[0:3]
+    v = z[3:6]
+    
+    T = nu
+
+    xDot = jnp.concatenate([v, T/mass + g_vec])
+
+    return xDot

@@ -1,17 +1,16 @@
 'N': 40
 
 flags:
-  free_final_time: 0    # 0, 1
+  free_final_time: 1    # 0, 1
   dynamics_nonconvex: 1 # 0, 1
   equal_dt: 1           # 0, 1
-  flag_autotune: "0"    # '0', '1', '2', '3'
-  buff_dyn: "l2"        # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
+  flag_autotune: "3"    # '0', '1', '2', '3'
+  buff_dyn: "term"        # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
   buff_dyn_dual: "none" # 'l1', 'none'
   ctcs: "none"          # 'none', 'term', 'l1', 'l2', 'quad-1', 'quad-2'
   ode_fixed_dt: 0       # 0, 1
   nondim: 1             # 0, 1
-  jax_dyn: 0            # 0, 1
-  match_dim_nondim_weights: 1  # 0, 1 # this is temporary, to be removed later
+  jax_dyn: 1            # 0, 1
 
   flag_path: 1.0
   flag_nfz: 1.0
@@ -37,7 +36,7 @@ conv:
   eps_ctcs: 1e-4
   eps_state: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
   eps_cost: 1.0
-  eps_nfz: [0.1]
+  eps_nfz: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
   eps_term: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
   eps_term_min: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
   eps_term_max: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
@@ -54,7 +53,7 @@ weights:
   eps_nonzero1: 0.2
   eps_nonzero2: 0.0000000001
   wbuff: 100.0
-  w_nfz_scale: 1.0
+  w_nfz_scale: 100.0
   w_path_scale: 0.0
   w_custom_scale: 0.0
   w_dyn_scale: 100000.0

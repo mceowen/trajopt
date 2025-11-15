@@ -5,7 +5,7 @@ import trajopt.utils.tools as tools
 jax.config.update("jax_enable_x64", True)
 import trajopt.core.modules.model.obstacles     as obstacles
 
-def dynamics_jax(t, z, nu, problem, t_vec=None):
+def dynamics_jax(t, z, nu, problem):
 
     mission = problem.mission
     model = problem.model

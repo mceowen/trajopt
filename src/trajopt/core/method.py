@@ -121,12 +121,8 @@ class Method:
         #self.set_weights()
         hyperparameters.configure_penalty_weights(problem)
 
-        # TODO (CARLOS): revisit
-        ### NFZ convergence values ###
-        rc_dim = mission.obs["rc"] * self.nondim["M"]["state"]["d2nd"][1, 1]
-
-        eps_nfz_cnst = 2 * rc_dim * self.conv["eps_nfz"] - self.conv["eps_nfz"]**2
-        self.conv["eps_nfz"] = eps_nfz_cnst * np.ones(mission.n_nfz)
+        # ### NFZ convergence values ###
+        self.conv["eps_nfz"] = 2 * self.conv["eps_nfz"] / mission.obs["rc"] - self.conv["eps_nfz"]**2 / mission.obs["rc"]**2
 
         # Extract only those terminal constraints used
         self.conv["eps_term"] = np.concatenate((self.conv["eps_term"][mission.zf_idx], self.conv["eps_term_min"][mission.zf_min_idx], self.conv["eps_term_max"][mission.zf_max_idx]))
