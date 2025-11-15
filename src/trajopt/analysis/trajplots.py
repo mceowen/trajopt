@@ -1,7 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
-matplotlib.rcParams['text.usetex'] = True
+# matplotlib.rcParams['text.usetex'] = True
+plt.rcParams['text.usetex'] = True
 import numpy.linalg as mat
 import scipy.linalg as smat
 
@@ -38,7 +39,7 @@ class SCVXPLOTS:
         if 'label' in ins: label = ins['label']
 
         for r in runs:
-            RUNS = self.data[scenario][method]['runs'];
+            RUNS = self.data[scenario][method]['mc_data'];
             if r < len(RUNS):
                 RUN = RUNS[r];
                 for i in iters:
@@ -65,6 +66,10 @@ class SCVXPLOTS:
 
 
     ######## LABELS AND LEGENDS ############
+    def setTicks(self,ax,x=False,y=False,ins={}):
+        if x==True:  ax.tick_params(**ins)
+        if y==True:  ax.tick_params(**ins)
+
     def setLabels(self,ax,xlabel='',ylabel='',ins={}):
         ax.set_xlabel(xlabel,**ins)
         ax.set_ylabel(ylabel,**ins);
