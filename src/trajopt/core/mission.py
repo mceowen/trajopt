@@ -26,6 +26,7 @@ class Mission:
         self.zi_idx            = mission_config["zi_idx"]
         self.zf                = mission_config["zf"]
         self.zf_idx            = mission_config["zf_idx"]
+        self.zf_guess          = mission_config["zf_guess"]
         self.ui                = mission_config["ui"]
         self.uf                = mission_config["uf"]
         self.ui_idx            = mission_config["ui_idx"]
@@ -178,6 +179,9 @@ class Mission:
         self.M_zf = method.nondim["M"]["state"]["d2nd"][np.ix_(self.zf_idx, self.zf_idx)]
         self.zi = self.M_zi @ self.zi
         self.zf = self.M_zf @ self.zf
+
+        if self.zf_guess.size > 0:
+            self.zf_guess = method.nondim["M"]["state"]["d2nd"] @ self.zf_guess
 
         M_z_min = method.nondim["M"]["state"]["d2nd"][np.ix_(self.z_min_idx, self.z_min_idx)]
         M_z_max = method.nondim["M"]["state"]["d2nd"][np.ix_(self.z_max_idx, self.z_max_idx)]

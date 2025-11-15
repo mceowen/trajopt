@@ -103,13 +103,13 @@ def nonlinear_aero_jax(t, z, nu, problem):
     # Extract states and controls
     r, _, _, v, _, _ = z
 
-    rho = atmosphere_model_jax(rs, problem)
+    rho = atmosphere_model_jax(r, problem)
 
     rho_s = rho / (method.nondim["nm"] / method.nondim["nd"] ** 3)
     sref_s = mission.vehicle["sref"] / method.nondim["nd"] ** 2
     bc_s = mission.vehicle["bc"] / (method.nondim["nm"] / (method.nondim["nd"] ** 2))
 
-    D    = 0.5 * (1 / bc_s) * rho_s * vs**2
+    D    = 0.5 * (1 / bc_s) * rho_s * v**2
     L    = D * mission.vehicle["LD"]
 
     alpha = 0

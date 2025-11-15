@@ -65,18 +65,19 @@ def custom_cost(subproblem):
     problem = subproblem.problem
     method = problem.method
 
-    w_true = method.nondim["ncost"]
+    w_true = 1.0
 
     TRUE_COST = 0
     JERK_COST = 0
 
     for k in range(method.N - 1):
-        TRUE_COST   += cp.square(subproblem.u_slack[k + 1])
+
+        TRUE_COST   += cp.square(subproblem.u_slack[k]) + 100 * subproblem.dt[k]
 
         jerk        = (subproblem.nu_ref[k + 1] + subproblem.dnu[k + 1] - subproblem.nu_ref[k] - subproblem.dnu[k])
         # JERK_COST += w_jerk * cp.sum_squares(jerk)
 
-    subproblem.cost_expr += w_true * TRUE_COST + JERK_COST
+    subproblem.cost_expr += w_true * (TRUE_COST + JERK_COST) / method.N
 
 def get_cost_cnstr_nondim(problem):
     mission = problem.mission

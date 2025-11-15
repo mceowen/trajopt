@@ -1,7 +1,7 @@
 'N': 40
 
 flags:
-  free_final_time: 1    # 0, 1
+  free_final_time: 0    # 0, 1
   dynamics_nonconvex: 1 # 0, 1
   equal_dt: 1           # 0, 1
   flag_autotune: "3"    # '0', '1', '2', '3'
@@ -42,7 +42,7 @@ conv:
   eps_term_max: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
   eps_defect: [0.01]
   eps_dyn: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
-  iter_max: 20
+  iter_max: 50
 
 weights:
   w_cost: 0.0

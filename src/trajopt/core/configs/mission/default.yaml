@@ -34,6 +34,8 @@ zf_max_idx: []
 n_term: 0
 n_term_ineq: 0
 
+zf_guess: []
+
 # State constraints
 z_min: []
 z_min_idx: []

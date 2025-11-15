@@ -266,7 +266,7 @@ def jit_jax_discretize(problem):
         lin_dyn = model.lin_dyn
 
     # nsub defines the number of sub *nodes* between knot points
-    nsub_nodes = 30
+    nsub_nodes = 15
     dt_sub = 1.0 / (nsub_nodes + 1)
     t = jnp.linspace(0.0, 1.0, nsub_nodes + 2)
 
@@ -347,15 +347,12 @@ def jit_jax_discretize(problem):
     
     propagate = jax.jit(jax.vmap(propagate_k, in_axes=(0, None, None, None)))
 
-    method.propagate_jax = propagate
+    method.propagate_discretization_jax = propagate
 
 # inverse free discretize with jax
 def discretize_inv_free_jax(z_ref_np, nu_ref_np, dt_ref_np, problem):
 
     method = problem.method
-
-    # get jitted jax propagation
-    method.propagate_jax
 
     # convert numpy arrays to jax
     z_ref = jnp.asarray(z_ref_np)
@@ -364,7 +361,7 @@ def discretize_inv_free_jax(z_ref_np, nu_ref_np, dt_ref_np, problem):
 
     # call jitted propagator for each node
     ks = jnp.arange(method.N - 1)
-    A_jax, B_jax, Bp_jax, S_jax, z_minus = method.propagate_jax(ks, z_ref, nu_ref, dt_ref)
+    A_jax, B_jax, Bp_jax, S_jax, z_minus = method.propagate_discretization_jax(ks, z_ref, nu_ref, dt_ref)
 
     z_ref_0 = z_ref[[0], :]
     

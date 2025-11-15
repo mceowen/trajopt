@@ -23,7 +23,7 @@ z_max: [12.0, 12.0, 10.0]
 z_max_idx: [0, 1, 2]
 
 # initial state constraints
-zi: [0.0, 0.0, 5.0, 0.5, 0.25, 0.0]
+zi: [0.0, 0.0, 5.0, 0, 0.5, 0.0]
 zi_idx: [0, 1, 2, 3, 4, 5]
 zi_min: []
 zi_min_idx: []
@@ -37,6 +37,9 @@ zf_min: []
 zf_min_idx: []
 zf_max: []
 zf_max_idx: []
+
+# final state guess for straight line initialization (not used with nonlinear initial guess)
+zf_guess: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
 
 # control boundary conditions
 ui: "eval: np.array([0, 0, mission['planet']['g']]) * mission['vehicle']['mass']"

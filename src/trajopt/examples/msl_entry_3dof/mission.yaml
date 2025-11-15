@@ -38,6 +38,9 @@ zf_min_idx: []
 zf_max: []
 zf_max_idx: []
 
+# final state guess for straight line initialization (not used with nonlinear initial guess)
+zf_guess: "eval: np.array([(mission['planet']['r'] + 10e3), 0.0, 10.5768, 406.0, -10.0, 0.0])" 
+
 # control min/max constraints
 u_min: [-170.0, -5.0]
 u_max: [170.0, 5.0]

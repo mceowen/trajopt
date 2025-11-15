@@ -4,8 +4,11 @@ import importlib
 import jax
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
+import time
 
 def rk4_propagate_jax(dynamics, z0, nu_ref, t_ref, problem):
+
+    time0 = time.perf_counter()
 
     # convert to JAX arrays
     z0_jax = jnp.array(z0)
@@ -35,9 +38,19 @@ def rk4_propagate_jax(dynamics, z0, nu_ref, t_ref, problem):
         zi_next = rk4_step(zi, ti, dt, ui, ui_next)
         return zi_next, zi_next
     
-    _, z_propagated = jax.lax.scan(scan_fn, z0_jax, jnp.arange(N-1))
+    # Wrap scan in a function, then JIT-compile it
+    def scan_wrapper(z0, xs):
+        _, z_propagated = jax.lax.scan(scan_fn, z0, xs)
+        return z_propagated
+    
+    scan_jit = jax.jit(scan_wrapper)
+    z_propagated = scan_jit(z0_jax, jnp.arange(N-1))
+    
     z_jax = jnp.vstack([z0_jax[None, :], z_propagated])
     z_numpy = np.array(z_jax)
+
+    init_guess_time = time.perf_counter() - time0
+    print(f"Initial guess time: {init_guess_time} seconds")
 
     return z_numpy
 
@@ -63,7 +76,7 @@ def straight_line_initial_guess(problem):
     t_init             = np.cumsum(np.concatenate(([0], method.dt_init)))
 
     # Initial state
-    z_init             = np.array([np.linspace(mission.zi[i], mission.zf[i], method.N) for i in range(model.n)]).T
+    z_init             = np.array([np.linspace(mission.zi[i], mission.zf_guess[i], method.N) for i in range(model.n)]).T
 
     # Initial control
     nu_init             = np.zeros((method.N,model.m))
@@ -72,7 +85,6 @@ def straight_line_initial_guess(problem):
     method.t_init   = t_init
     method.z_init   = z_init
     method.nu_init   = nu_init
-
 
 def waypoint_initial_guess(problem):
     """

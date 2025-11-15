@@ -297,7 +297,7 @@ class Subproblem:
 
         self.z_ref  = cp.Parameter((N, nz),    name="z_ref")
         self.nu_ref  = cp.Parameter((N, m),    name="us_ref")
-        self.dt_ref = cp.Parameter((N - 1, 1),name="dt_ref")
+        self.dt_ref = cp.Parameter((N - 1, 1),name="dt_ref", nonneg=True)
 
         # Path/NFZ/AUX linearized constraints
         if mission.n_ineq > 0:
