@@ -87,6 +87,32 @@ def atmosphere_model_jax(rs, problem):
 
     return rho
 
+def atmosphere_model_nonjax(rs, problem):
+    '''
+    Returns density as a function of orbital radius
+
+    TODO: (carlos)
+    expand 'lookup' option to be higher dimensional
+    remember LUT grow exponenetiall in size!
+    '''
+
+    mission = problem.mission
+    model = problem.model
+    method = problem.method
+
+    # Compute altitude
+    rdim = rs * method.nondim["nd"]
+    hdim = rdim - mission.planet["r"]
+    
+    # TODO (carlos): add the remaining options for atmosphere model
+    if mission.flags["aero_type"] == "lookup":
+        rho = np.interp(hdim/1e3, dens.h_grid, dens.rho_vals)
+
+    elif mission.flags["aero_type"] == "exponential":
+        rho = mission.planet["rho"] * np.exp(-hdim / mission.planet["H"])
+
+    return rho    
+
 def nonlinear_aero_jax(t, z, nu, problem):
     '''
     returns all aero data as a function of full state
@@ -115,6 +141,35 @@ def nonlinear_aero_jax(t, z, nu, problem):
     alpha = 0
 
     return {"L": L, "D": D, "alpha": alpha, "rho": rho}
+
+def nonlinear_aero_nonjax(t, z, nu, problem):
+    '''
+    returns all aero data as a function of full state
+    
+    TODO: (carlos)
+    this function currently only accepts a single time step!
+    handle the general case? or make seperate function?
+    '''
+
+    mission = problem.mission
+    model = problem.model
+    method = problem.method
+
+    # Extract states and controls
+    r, _, _, v, _, _ = z
+
+    rho = atmosphere_model_nonjax(r, problem)
+
+    rho_s = rho / (method.nondim["nm"] / method.nondim["nd"] ** 3)
+    sref_s = mission.vehicle["sref"] / method.nondim["nd"] ** 2
+    bc_s = mission.vehicle["bc"] / (method.nondim["nm"] / (method.nondim["nd"] ** 2))
+
+    D    = 0.5 * (1 / bc_s) * rho_s * v**2
+    L    = D * mission.vehicle["LD"]
+
+    alpha = 0
+
+    return {"L": L, "D": D, "alpha": alpha, "rho": rho}    
 
 def custom_constraints(subproblem):
     pass

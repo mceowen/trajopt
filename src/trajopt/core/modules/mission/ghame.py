@@ -79,6 +79,32 @@ def atmosphere_model_jax(rs, problem):
 
     return rho
 
+def atmosphere_model_nonjax(rs, problem):
+    '''
+    Returns density as a function of orbital radius
+
+    TODO: (carlos)
+    expand 'lookup' option to be higher dimensional
+    remember LUT grow exponenetiall in size!
+    '''
+
+    mission = problem.mission
+    model = problem.model
+    method = problem.method
+
+    # Compute altitude
+    rdim = rs * method.nondim["nd"]
+    hdim = rdim - mission.planet["r"]
+    
+    # TODO (carlos): add the remaining options for atmosphere model
+    if mission.flags["aero_type"] == "lookup":
+        rho = np.interp(hdim/1e3, dens.h_grid, dens.rho_vals)
+
+    elif mission.flags["aero_type"] == "exponential":
+        rho = mission.planet["rho"] * np.exp(-hdim / mission.planet["H"])
+
+    return rho    
+
 
 def nonlinear_aero_jax(t, z, nu, problem):
     '''
@@ -133,6 +159,61 @@ def nonlinear_aero_jax(t, z, nu, problem):
     D = 0.5 * (1 / mass_nd) * rho_s * sref_s * Cd * vs**2
 
     return {'L': L, 'D': D, 'Cl': Cl, 'Cd': Cd, 'alpha': alpha, 'rho': rho}
+    
+
+def nonlinear_aero_nonjax(t, z, nu, problem):
+    '''
+    returns all aero data as a function of full state
+    
+    TODO: (carlos)
+    this function currently only accepts a single time step!
+    handle the general case? or make seperate function?ƒ
+    '''
+
+    mission = problem.mission
+    model = problem.model
+    method = problem.method
+
+
+    ctrl_type = model.flags['ctrl_type']
+
+    # Extract key params
+    nv = method.nondim['nv']
+    mass_nd = mission.vehicle['mass'] / method.nondim['nm']
+
+    rs = z[0]
+    vs = z[3]
+
+    # Extract control
+    if ctrl_type == 'bank_only':
+        alpha_deg = 15
+        alpha = np.deg2rad(alpha_deg)
+
+    elif ctrl_type == 'bank_aoa':
+        alpha = nu[1]
+        alpha_deg = np.rad2deg(alpha)
+
+    # COEFFICIENTS
+
+    M   = vs * nv / ((1.4 * 287 * 239)**0.5)
+    cl0 = 0.0052  * np.log(M) - 0.0334
+    cl1 = 0.03    * (M**(-0.49))
+    cd0 = 0.0577  * np.exp(-0.042*M)
+    cd1 = 0.00879 * np.log(M) - 0.0192
+    cd2 = 0.4521  * (M**(0.4856))
+
+    # AoA-DEPENDENT AERO COEFFICIENTS
+    Cl = cl0 + cl1 * alpha_deg
+    Cd = cd0 + (cd1 * Cl) + (cd2 * (Cl**2))
+
+    rho = atmosphere_model_nonjax(rs, problem)
+    rho_s = rho / (method.nondim["nm"] / method.nondim["nd"] ** 3)
+    sref_s = mission.vehicle["sref"] / method.nondim["nd"] ** 2
+    
+    L = 0.5 * (1 / mass_nd) * rho_s * sref_s * Cl * vs**2
+    D = 0.5 * (1 / mass_nd) * rho_s * sref_s * Cd * vs**2
+
+    return {'L': L, 'D': D, 'Cl': Cl, 'Cd': Cd, 'alpha': alpha, 'rho': rho}    
 
 def custom_constraints(subproblem):
     pass

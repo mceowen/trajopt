@@ -55,27 +55,44 @@ class SCVXPLOTS:
                                 if i < len(RUN['iters']):
                                     data = RUN['iters'][i];
                                     #############################
-                                    lens = [];
-                                    for arg in func_ins:
-                                        given = False;
-                                        if 'given' in arg: newarg = arg['val']; given = arg['given'];
-                                        if not(given): newarg = data[arg['val']]
+                                    lens = []; args = []
+                                    for arg in func_args:
+                                        newarg = arg; 
+                                        if isinstance(arg,str): newarg = data[arg].copy();
                                         if isinstance(newarg,(list,np.ndarray)): lens.append(len(newarg))
+                                        args.append(newarg);                                        
                                     totlen = 1; 
                                     if len(lens)>0: totlen = np.min(lens);
                                     fxvals = [];
                                     for t in range(totlen):
-                                        args = [];
-                                        for arg in func_ins:
-                                            given = False;
-                                            if 'given' in arg: newarg = arg['val']; given = arg['given'];
-                                            if not(given): newarg = data[arg['val']]
-                                            if 'inds' in arg: newarg = newarg[:,arg['inds']];
-                                            if isinstance(newarg,(list,np.ndarray)): newarg[t]
-                                            args.append(newarg);
-                                        fxvals.append(func(*args))
+                                        currargs = []
+                                        for arg in args:
+                                            if isinstance(arg,(list,np.ndarray)): currargs.append(arg[t]);
+                                            else: currargs.append(arg);
+                                        fxvals.append(func(*currargs))
                                     fxvals = np.array(fxvals);
                                     self.data[scenario][method]['mc_data'][r]['iters'][i][tag] = fxvals;
+                                    # lens = [];
+                                    # for arg in func_args:
+                                    #     given = False;
+                                    #     if 'given' in arg: newarg = arg['val']; given = arg['given'];
+                                    #     if not(given): newarg = data[arg['val']]
+                                    #     if isinstance(newarg,(list,np.ndarray)): lens.append(len(newarg))
+                                    # totlen = 1; 
+                                    # if len(lens)>0: totlen = np.min(lens);
+                                    # fxvals = [];                                    
+                                    # for t in range(totlen):
+                                    #     args = [];
+                                    #     for arg in func_args:
+                                    #         given = False;
+                                    #         if 'given' in arg: newarg = arg['val']; given = arg['given'];
+                                    #         if not(given): newarg = data[arg['val']]
+                                    #         if 'inds' in arg: newarg = newarg[:,arg['inds']];
+                                    #         if isinstance(newarg,(list,np.ndarray)): newarg[t]
+                                    #         args.append(newarg);
+                                    #     fxvals.append(func(*args))
+                                    # fxvals = np.array(fxvals);
+                                    # self.data[scenario][method]['mc_data'][r]['iters'][i][tag] = fxvals;
 
 
     ########### BASIC 2D-PLOTTING ###############
