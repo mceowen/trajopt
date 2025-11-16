@@ -19,7 +19,7 @@ class SCVXPLOTS:
         self.use_current = False;
         self.current_scenarios = [];
         self.current_methods = [];
-        self.current_runs = [];
+        self.current_runs = []; 
         self.current_iters = [];
 
     def setCurrent(self,ins={}):
@@ -28,6 +28,54 @@ class SCVXPLOTS:
         if 'scenarios' in ins: self.current_scenarios = ins['scenarios'];
         if 'runs' in ins: self.current_runs = ins['runs'];
         if 'iters' in ins: self.current_iters = ins['iters'];
+
+
+    def calcField(self,tag,func,func_args=[],ins={}):
+        # scenarios = [self.scenarios[0]];
+        # methods = [self.methods[scenarios[0]][0]];
+        # runs = [0];
+        # iters = [0];
+        if self.use_current:
+            scenarios = self.current_scenarios;
+            methods = self.current_methods;
+            runs = self.current_runs;
+            iters = self.current_iters;
+        if 'scenarios' in ins: scenarios = ins['scenarios'];
+        if 'methods' in ins: methods = ins['methods'];
+        if 'runs' in ins: runs = ins['runs'];
+        if 'iters' in ins: iters = ins['iters'];
+        for scenario in scenarios:
+            for method in methods:
+                if method in self.data[scenario]:
+                    RUNS = self.data[scenario][method]['mc_data'];
+                    for r in runs:
+                        if r < len(RUNS):
+                            RUN = RUNS[r];
+                            for i in iters:
+                                if i < len(RUN['iters']):
+                                    data = RUN['iters'][i];
+                                    #############################
+                                    lens = [];
+                                    for arg in func_ins:
+                                        given = False;
+                                        if 'given' in arg: newarg = arg['val']; given = arg['given'];
+                                        if not(given): newarg = data[arg['val']]
+                                        if isinstance(newarg,(list,np.ndarray)): lens.append(len(newarg))
+                                    totlen = 1; 
+                                    if len(lens)>0: totlen = np.min(lens);
+                                    fxvals = [];
+                                    for t in range(totlen):
+                                        args = [];
+                                        for arg in func_ins:
+                                            given = False;
+                                            if 'given' in arg: newarg = arg['val']; given = arg['given'];
+                                            if not(given): newarg = data[arg['val']]
+                                            if 'inds' in arg: newarg = newarg[:,arg['inds']];
+                                            if isinstance(newarg,(list,np.ndarray)): newarg[t]
+                                            args.append(newarg);
+                                        fxvals.append(func(*args))
+                                    fxvals = np.array(fxvals);
+                                    self.data[scenario][method]['mc_data'][r]['iters'][i][tag] = fxvals;
 
 
     ########### BASIC 2D-PLOTTING ###############

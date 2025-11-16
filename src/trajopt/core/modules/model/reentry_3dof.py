@@ -120,7 +120,7 @@ def max_Q_nonjax(t, z, nu, problem): # heat rate
 def max_load_nonjax(t, z, nu, problem): # normal load
     mission = problem.mission; method = problem.method
     rs = z[0]; vs = z[3]
-    aero = mission.nonlinear_aero(t, z, nu)
+    aero = mission.nonlinear_aero_nonjax(t, z, nu)
     L = aero["L"]; D = aero["D"]
     load_dim = np.sqrt(L ** 2 + D ** 2) * method.nondim["na"]
     return load_dim #np.array([load_dim / mission.path_limits["max_load"] - 1.0])
