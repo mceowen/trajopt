@@ -55,7 +55,7 @@ def dynamics_jax(t, z, nu, problem, t_vec=None):
 
     return xDot
 
-def max_q(t, z, nu, problem):
+def max_q(t, z, nu, problem):  #dynamic pressure
     mission = problem.mission
     method = problem.method
     
@@ -69,7 +69,7 @@ def max_q(t, z, nu, problem):
 
     return jnp.array([q_dim / mission.path_limits['max_q'] - 1.0])
 
-def max_Q(t, z, nu, problem):
+def max_Q(t, z, nu, problem): # heat rate
     mission = problem.mission
     method = problem.method
 
@@ -83,7 +83,7 @@ def max_Q(t, z, nu, problem):
 
     return jnp.array([Q_dim / mission.path_limits["max_Q"] - 1.0])
 
-def max_load(t, z, nu, problem):
+def max_load(t, z, nu, problem): # normal load
     mission = problem.mission
     method = problem.method
 
