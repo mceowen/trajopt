@@ -98,3 +98,29 @@ def max_load(t, z, nu, problem): # normal load
     load_dim = jnp.sqrt(L ** 2 + D ** 2) * method.nondim["na"]
 
     return jnp.array([load_dim / mission.path_limits["max_load"] - 1.0])
+
+
+
+def max_q_nonjax(t, z, nu, problem):  #dynamic pressure
+    mission = problem.mission; method = problem.method
+    rs = z[0]; vs = z[3]
+    rho = mission.mission_module.atmosphere_model_nonjax(rs, problem)
+    nv = method.nondim["nv"]
+    q_dim = 0.5 * rho * (vs * nv) ** 2 
+    return q_dim #np.array([q_dim / mission.path_limits['max_q'] - 1.0])
+
+def max_Q_nonjax(t, z, nu, problem): # heat rate
+    mission = problem.mission; method = problem.method
+    rs = z[0]; vs = z[3]
+    rho = mission.mission_module.atmosphere_model_nonjax(rs, problem)
+    nv = method.nondim["nv"]
+    Q_dim = mission.vehicle["kQ"] * rho ** 0.5 * (vs * nv) ** 3
+    return Q_dim #np.array([Q_dim / mission.path_limits["max_Q"] - 1.0])
+
+def max_load_nonjax(t, z, nu, problem): # normal load
+    mission = problem.mission; method = problem.method
+    rs = z[0]; vs = z[3]
+    aero = mission.nonlinear_aero(t, z, nu)
+    L = aero["L"]; D = aero["D"]
+    load_dim = np.sqrt(L ** 2 + D ** 2) * method.nondim["na"]
+    return load_dim #np.array([load_dim / mission.path_limits["max_load"] - 1.0])
