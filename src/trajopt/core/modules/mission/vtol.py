@@ -91,6 +91,23 @@ def atmosphere_model_jax(rs, problem):
 
     return rho
 
+def atmosphere_model_nonjax(rs, problem):
+    '''
+    Returns density as a function of orbital radius
+    ...rewritten from above for plain numpy
+    '''
+    mission = problem.mission; model = problem.model; method = problem.method
+    # Compute altitude
+    rdim = rs * method.nondim["nd"]
+    hdim = rdim - mission.planet["r"]
+    # TODO (carlos): add the remaining options for atmosphere model
+    if mission.flags["aero_type"] == "lookup":
+        rho = np.interp(hdim/1e3, dens.h_grid, dens.rho_vals)
+    elif mission.flags["aero_type"] == "exponential":
+        rho = mission.planet["rho"] * np.exp(-hdim / mission.planet["H"])
+    return rho
+
+
 
 def nonlinear_aero_jax(t, z, nu, problem):
     '''
@@ -165,6 +182,68 @@ def nonlinear_aero_jax(t, z, nu, problem):
     D = (0.5 / mass_nd) * rho_s * sref_s * Cd * v**2
 
     return {'L': L, 'D': D, 'Cl': Cl, 'Cd': Cd, 'alpha': alpha, 'rho': rho}
+
+def nonlinear_aero_nonjax(t, z, nu, problem):
+    '''
+    returns all aero data as a function of full state
+    ... rewritten from above without jax
+    '''
+
+    mission = problem.mission; model = problem.model; method = problem.method
+    ctrl_type = model.flags['ctrl_type']
+    # Extract key params
+    nv = method.nondim['nv']
+    mass_nd = mission.vehicle['mass'] / method.nondim['nm']
+
+    B = (method.nondim['nd'] / method.nondim['nm']) * (mission.vehicle['sref'] / 2)
+
+    # Setup coefficient values
+    kl1         = -0.041065
+    kl2         = 0.016292
+    kl3         = 0.0002602
+    kd1         = 0.080505
+    kd2         = -0.03026
+    kd3         = 0.86495
+    kalph       = 0.20705 / (340**2)
+    vlim        = 4570
+    alphlim_deg = 40
+
+    if ctrl_type == 'bank_only':
+        # Velocity-dependent polynomial coefficients
+        Kd1     = kd1
+        Kd2     = kd2
+        Kd3     = kd3
+        Kl1     = kl1 + kl2 * alphlim_deg + kl3 * alphlim_deg**2
+        Kl2     = -kl2 * kalph - 2 * kl3 * alphlim_deg * kalph
+        Kl3     = kl3 * kalph**2
+    
+    elif ctrl_type == 'bank_aoa':
+        # AOA-dependent polynomial coefficients
+        d2r     = 1  # /(pi/180)
+        Kd1h    = kd1 + kd2 * kl1 + kd3 * kl1**2
+        Kd2h    = (kd2 * kl2 + 2 * kd3 * kl1 * kl2) * d2r
+        Kd3h    = (kd2 * kl3 + 2 * kd3 * kl1 * kl3 + kd3 * kl2**2) * d2r**2
+        Kd4h    = (2 * kd3 * kl2 * kl3) * d2r**3
+        Kd5h    = (kd3 * kl3**2) * d2r**4
+        Kl1h    = kl1
+        Kl2h    = kl2 * d2r**2
+        Kl3h    = kl3 * d2r**3
+
+    r = z[0]
+    v = z[3]
+
+    # compute v_sat with jnp
+    v_sat = np.minimum(v * nv, vlim)
+    # compute Cl/Cd locally then set into arrays
+    Cl = Kl1 + Kl2 * (v_sat - vlim)**2 + Kl3 * (v_sat - vlim)**4
+    Cd = Kd1 + Kd2 * Cl + Kd3 * Cl**2
+    alpha = np.deg2rad(alphlim_deg - kalph * (np.minimum(v * nv, vlim) - vlim)**2)
+    rho = atmosphere_model_nonjax(r, problem)
+    rho_s = rho / (method.nondim["nm"] / method.nondim["nd"] ** 3)
+    sref_s = mission.vehicle["sref"] / method.nondim["nd"] ** 2
+    L = (0.5 / mass_nd) * rho_s * sref_s * Cl * v**2
+    D = (0.5 / mass_nd) * rho_s * sref_s * Cd * v**2
+    return {'L': L, 'D': D, 'Cl': Cl, 'Cd': Cd, 'alpha': alpha, 'rho': rho}    
 
 def custom_constraints(subproblem):
     pass
