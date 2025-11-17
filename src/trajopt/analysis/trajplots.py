@@ -114,6 +114,11 @@ class SCVXPLOTS:
         if 'runs' in ins: runs = ins['runs'];
         if 'iters' in ins: iters = ins['iters'];
 
+        dataloc = 'iters';
+        if 'dataloc' in ins: dataloc = ins['dataloc'];
+        if dataloc == 'weights': iters = [0];
+
+
 
         xtag = None; ytag = None;
         if 'x' in ins: xtag = ins['x'];
@@ -131,27 +136,146 @@ class SCVXPLOTS:
                     for r in runs:
                         if r < len(RUNS):
                             RUN = RUNS[r];
+                            DAT = RUN['iters'];
+                            ################################
+                            if dataloc == 'weights': DATW = [RUN['params']['method']['weights']];
+                            ################################
                             for i in iters:
-                                if i < len(RUN['iters']):
-                                    data = RUN['iters'][i];
+                                if i < len(DAT):
+                                    data = DAT[i];
                                     if not(ytag == None):
-                                        if isinstance(ytag,tuple): ydata = data[ytag[0]][:,ytag[1]];
-                                        else: ydata = data[ytag];
+                                        data_with_y = DAT[i]; 
+                                        if dataloc == 'weights': data_with_y = DATW[i]
+                                        if isinstance(ytag,tuple):
+                                            ydata = data_with_y[ytag[0]][:,ytag[1]];
+                                        else: ydata = data_with_y[ytag];
                                         if xtag == None: xdata = list(range(len(ydata)));
                                         else:
-                                            if isinstance(xtag,tuple): xdata = data[xtag[0]][:,xtag[1]];
-                                            else: xdata = data[xtag];
-
+                                            if isinstance(xtag,tuple): xdata = DAT[i][xtag[0]][:,xtag[1]];
+                                            else: xdata = DAT[i][xtag];
                                         frgba = penn['frgba']; lrgba = penn['lrgba'];
                                         lw = penn['lw']; ls = penn['ls']
                                         msty = penn['msty']; msz = penn['msz']
                                         if typ == 'line':
                                             if leg == None: 
-                                                ax.plot(xdata,ydata.T,color=lrgba[:3],alpha=lrgba[3],linewidth=lw,linestyle = ls,marker=msty,markersize=msz)
+                                                ax.plot(xdata,ydata,color=lrgba[:3],alpha=lrgba[3],linewidth=lw,linestyle = ls,marker=msty,markersize=msz)
                                             else: 
-                                                self.legends[leg][label] = ax.plot(xdata,ydata.T,
+                                                self.legends[leg][label] = ax.plot(xdata,ydata,
                                                     label=label,color=lrgba[:3],alpha=lrgba[3],
                                                     linewidth=lw,linestyle = ls,marker=msty,markersize=msz)[0]
+
+
+    ########### BASIC 2D-PLOTTING ###############
+    def addPlot3D(self,ax,pen={},typ='line',ins={}):
+        if len(pen)==0: penn = self.base_pen.copy();
+        else: penn = {**self.base_pen,**pen}
+
+        scenarios = [self.scenarios[0]];
+        methods = [self.methods[scenarios[0]][0]];
+        runs = [0];
+        iters = [0];
+        if self.use_current:
+            scenarios = self.current_scenarios;
+            methods = self.current_methods;
+            runs = self.current_runs;
+            iters = self.current_iters;
+        if 'scenarios' in ins: scenarios = ins['scenarios'];
+        if 'methods' in ins: methods = ins['methods'];
+        if 'runs' in ins: runs = ins['runs'];
+        if 'iters' in ins: iters = ins['iters'];
+
+        xtag = None; ytag = None; ztag = None;
+        if 'x' in ins: xtag = ins['x'];
+        if 'y' in ins: ytag = ins['y'];
+        if 'z' in ins: ztag = ins['z'];
+        leg = None;
+        if 'legend' in ins: leg = ins['legend'];
+        if not(leg in self.legends):  self.legends[leg] = {};
+        label = 'basic_label';
+        if 'label' in ins: label = ins['label']
+
+        for scenario in scenarios:
+            for method in methods:
+                if method in self.data[scenario]:
+                    RUNS = self.data[scenario][method]['mc_data'];
+                    for r in runs:
+                        if r < len(RUNS):
+                            RUN = RUNS[r];
+                            for i in iters:
+                                if i < len(RUN['iters']):
+                                    data = RUN['iters'][i];
+                                    # if not(ytag == None):
+                                    if isinstance(xtag,tuple): xdata = data[xtag[0]][:,xtag[1]];
+                                    else: xdata = data[xtag];                                    
+                                    if isinstance(ytag,tuple): ydata = data[ytag[0]][:,ytag[1]];
+                                    else: ydata = data[ytag];
+                                    if isinstance(ztag,tuple): zdata = data[ztag[0]][:,ztag[1]];
+                                    else: zdata = data[ztag];
+
+                                    frgba = penn['frgba']; lrgba = penn['lrgba'];
+                                    lw = penn['lw']; ls = penn['ls']; msty = penn['msty']; msz = penn['msz']
+                                    if typ == 'line':
+                                        if leg == None: 
+                                            ax.plot(xdata,ydata,zdata,color=lrgba[:3],alpha=lrgba[3],linewidth=lw,linestyle = ls,marker=msty,markersize=msz)
+                                        else: 
+                                            self.legends[leg][label] = ax.plot(xdata,ydata,zdata,label=label,color=lrgba[:3],alpha=lrgba[3],
+                                                                                linewidth=lw,linestyle = ls,marker=msty,markersize=msz)[0]                                                
+
+
+
+
+
+    ########### BASIC 2D-PLOTTING ###############
+    def addPlot2DbyIter(self,ax,pen={},typ='line',ins={}):
+        if len(pen)==0: penn = self.base_pen.copy();
+        else: penn = {**self.base_pen,**pen}
+
+        scenarios = [self.scenarios[0]];
+        methods = [self.methods[scenarios[0]][0]];
+        runs = [0];
+        iters = [0];
+        if self.use_current:
+            scenarios = self.current_scenarios;
+            methods = self.current_methods;
+            runs = self.current_runs;
+            iters = self.current_iters;
+        if 'scenarios' in ins: scenarios = ins['scenarios'];
+        if 'methods' in ins: methods = ins['methods'];
+        if 'runs' in ins: runs = ins['runs'];
+        if 'iters' in ins: iters = ins['iters'];
+        if 'tinds' in ins: tinds = ins['tinds'];
+        if 'y' in ins: ytag = ins['y'];
+
+        leg = None;
+        if 'legend' in ins: leg = ins['legend'];
+        if not(leg in self.legends):  self.legends[leg] = {};
+        label = 'blarg';
+        if 'label' in ins: label = ins['label']
+        for scenario in scenarios:
+            for method in methods:
+                if method in self.data[scenario]:
+                    RUNS = self.data[scenario][method]['mc_data'];
+                    for r in runs:
+                        if r < len(RUNS):
+                            RUN = RUNS[r];
+                            for tind in tinds:
+                                xdata = []; ydata = [];
+                                for i in iters:
+                                    if i < len(RUN['iters']):
+                                        xdata.append(i);
+                                        data = RUN['iters'][i];
+                                        print(list(data))
+                                        if isinstance(ytag,tuple): ydata.append(data[ytag[0]][tind,ytag[1]]);
+                                        else: ydata.append(data[ytag][tind]);
+                                xdata = np.array(xdata);
+                                ydata = np.array(ydata);
+                                frgba = penn['frgba']; lrgba = penn['lrgba'];
+                                lw = penn['lw']; ls = penn['ls']; msty = penn['msty']; msz = penn['msz']
+                                if typ == 'line':
+                                    if leg == None: ax.plot(xdata,ydata.T,color=lrgba[:3],alpha=lrgba[3],linewidth=lw,linestyle = ls,marker=msty,markersize=msz)
+                                    else: self.legends[leg][label] = ax.plot(xdata,ydata.T,
+                                                        label=label,color=lrgba[:3],alpha=lrgba[3],
+                                                        linewidth=lw,linestyle = ls,marker=msty,markersize=msz)[0]
 
 
     def setParams(self,ax,ins={}):
@@ -189,10 +313,15 @@ class SCVXPLOTS:
             grid[(1,0)] = [0.55,0.05,0.45,0.4];
             grid[(1,1)] = [0.55,0.6,0.45,0.4];
         return grid; 
-    def createGrid(self,fig,typ='manual',grid={}):
+
+    def createGrid(self,fig,typ='manual',grid={},ins={}):
+        plt_typ = '2D';
+        if 'plt_typ' in ins: plttyp = ins['plt_typ'];
         if typ=='manual':
             axs = {};
-            for tag in grid: axs[tag] = fig.add_axes(grid[tag])
+            for tag in grid:
+                if plt_typ == '3d': axs[tag] = fig.add_axes(grid[tag],projection='3d')
+                else: axs[tag] = fig.add_axes(grid[tag])
         return axs;
 
             
