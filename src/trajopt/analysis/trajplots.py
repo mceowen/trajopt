@@ -116,7 +116,7 @@ class SCVXPLOTS:
 
         dataloc = 'iters';
         if 'dataloc' in ins: dataloc = ins['dataloc'];
-        if dataloc == 'weights': iters = [0];
+        # if dataloc == 'weights': iters = [0];
 
 
 
@@ -138,14 +138,14 @@ class SCVXPLOTS:
                             RUN = RUNS[r];
                             DAT = RUN['iters'];
                             ################################
-                            if dataloc == 'weights': DATW = [RUN['params']['method']['weights']];
+                            # if dataloc == 'weights': DATW = [RUN['params']['method']['weights']];
                             ################################
                             for i in iters:
                                 if i < len(DAT):
                                     data = DAT[i];
                                     if not(ytag == None):
                                         data_with_y = DAT[i]; 
-                                        if dataloc == 'weights': data_with_y = DATW[i]
+                                        if dataloc == 'weights': data_with_y = DAT[i]['weights']
                                         if isinstance(ytag,tuple):
                                             ydata = data_with_y[ytag[0]][:,ytag[1]];
                                         else: ydata = data_with_y[ytag];
@@ -222,11 +222,8 @@ class SCVXPLOTS:
                                                                                 linewidth=lw,linestyle = ls,marker=msty,markersize=msz)[0]                                                
 
 
-
-
-
     ########### BASIC 2D-PLOTTING ###############
-    def addPlot2DbyIter(self,ax,pen={},typ='line',ins={}):
+    def addPlot2DIter(self,ax,pen={},typ='line',ins={}):
         if len(pen)==0: penn = self.base_pen.copy();
         else: penn = {**self.base_pen,**pen}
 
@@ -264,7 +261,6 @@ class SCVXPLOTS:
                                     if i < len(RUN['iters']):
                                         xdata.append(i);
                                         data = RUN['iters'][i];
-                                        print(list(data))
                                         if isinstance(ytag,tuple): ydata.append(data[ytag[0]][tind,ytag[1]]);
                                         else: ydata.append(data[ytag][tind]);
                                 xdata = np.array(xdata);
