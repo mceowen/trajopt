@@ -68,6 +68,11 @@ custom_limits: {}
 
 custom_input_dict: {}
 
+
+# custom modules
+custom_modules:
+  cost: trajopt.examples.quadrotor_3dof.custom.cost2
+
 costs:
 - fcn: "trajopt.core.modules.mission.vtol.terminal_cost"
   analytical_affine_approximation: "trajopt.core.modules.mission.vtol.analytical_affine_approximation_terminal_cost"
