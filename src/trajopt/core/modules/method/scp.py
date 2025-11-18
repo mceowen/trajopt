@@ -141,7 +141,7 @@ class Subproblem:
         self._create_variables()
         self._create_parameters()
         self.constraints: List[cp.constraints.constraint.Constraint] = []
-        self._build_constraint_once()
+        self._build_constraints_once()
         self.cost_expr = self._build_cost_once()
 
         # apply custom constraints and cost
@@ -240,13 +240,13 @@ class Subproblem:
         # --- Physical dynamics (first n states) ---
         self.vb_dyn_real_p = (
             cp.Variable((N - 1, n), name="vb_dyn_real_plus")
-            if method.flags["buff_dyn"] != "term" and n > 0
+            if method.flags["buff_dyn"] != "term" and method.flags["dynamics_nonconvex"] != 0 and n > 0
             else cp.Constant(np.zeros((N - 1, n))) if n > 0
             else None
         )
         self.vb_dyn_real_m = (
             cp.Variable((N - 1, n), name="vb_dyn_real_minus")
-            if method.flags["buff_dyn"] != "term" and n > 0
+            if method.flags["buff_dyn"] != "term" and method.flags["dynamics_nonconvex"] != 0 and n > 0
             else cp.Constant(np.zeros((N - 1, n))) if n > 0
             else None
         )
@@ -365,7 +365,7 @@ class Subproblem:
     # ============================================================
     # CONSTRAINTS (build-once)
     # ============================================================
-    def _build_constraint_once(self) -> None:
+    def _build_constraints_once(self) -> None:
         mission, model, method = self.problem.mission, self.problem.model, self.problem.method
         N, n, m, nz = self.N, self.n, self.m, self.nz
         flags = method.flags
