@@ -5,7 +5,7 @@ flags:
   dynamics_nonconvex: 0 # 0, 1
   equal_dt: 1           # 0, 1
   flag_autotune: "0"    # '0', '1', '2', '3'
-  buff_dyn: "term"        # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
+  buff_dyn: "term"      # "none", 'term', 'l1', 'l2', 'quad-1', 'quad-2'
   buff_dyn_dual: "none" # 'l1', 'none'
   ctcs: "none"          # 'none', 'term', 'l1', 'l2', 'quad-1', 'quad-2'
   ode_fixed_dt: 0       # 0, 1
@@ -25,7 +25,7 @@ flags:
 solver_opts:
   solver: "QOCO"
 
-T_init: 8.0
+T_init: 7.0
 T_min: 1.0
 T_max: 20.0
 dT_max: 5.0
@@ -42,7 +42,7 @@ conv:
   eps_term_max: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
   eps_defect: [0.01]
   eps_dyn: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
-  iter_max: 200
+  iter_max: 50
 
 weights:
   w_cost: 0.0

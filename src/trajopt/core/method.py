@@ -52,7 +52,7 @@ class Method:
 
         self.line_guess_u_init = self.line_guess_u_init @ self.nondim["M"]["ctrl"]["d2nd"]
 
-        if self.flags["free_final_time"] and (self.flags.get("buff_dyn")=="term"):
+        if self.flags["dynamics_nonconvex"] and (self.flags.get("buff_dyn")=="term"):
             nu_range = np.vstack([self.nl_guess_u_start, self.nl_guess_u_stop])
             guess.nonlinear_initial_guess(nu_range, problem)
         else:
