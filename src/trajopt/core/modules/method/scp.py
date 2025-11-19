@@ -231,7 +231,7 @@ class Subproblem:
         self.vb_ineq    = cp.Variable((N, mission.n_ineq), name="vb_ineq")   if mission.n_ineq  > 0 else None 
         self.vb_term    = (
                             cp.Variable(self.n_term, name="vb_term")
-                            if method.flags.get("buff_dyn") == "term" and self.n_term > 0
+                            if method.flags.get("buff_dyn") == "term" and method.flags["dynamics_nonconvex"] != 0 and self.n_term > 0
                             else cp.Constant(np.zeros(self.n_term)) if self.n_term > 0
                             else None
                         )
