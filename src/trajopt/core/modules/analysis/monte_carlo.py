@@ -61,8 +61,8 @@ def run_mc_analysis(example_name, nominal_config, gen_mc_variations=1, save_mc_v
             # perform default analysis on this mc run and store related params
             scenario_data[name]["mc_data"][run_idx] = default_analysis.perform_default_analysis(problem)
 
-            # # store total time for scp (used to calculate time to converge)
-            # scenario_data[name]['mc_data'][run_idx] = problem.solution['t_all']
+            # store total time for scp (used to calculate time to converge)
+            scenario_data[name]['mc_data'][run_idx]['t_full'] = problem.solution['t_full']
             
             # cache subproblem graph to speed up solves
             cached_subprob = None # problem.method.subprob
