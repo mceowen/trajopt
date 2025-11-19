@@ -39,11 +39,14 @@ def load_configs(example_name, local=False):
     
     return config
 
-def gen_mc_variations(example_name):
+def gen_mc_variations(example_name, local=False):
 
     mc_variations = {}
 
-    mc_variations = tools.load_yaml(f"trajopt.examples.{example_name}.variations", "mission.yaml")
+    if local:
+        mc_variations = tools.load_yaml(f"trajopt.local.examples.{example_name}.variations", "mission.yaml")
+    else:
+        mc_variations = tools.load_yaml(f"trajopt.examples.{example_name}.variations", "mission.yaml")
 
     # generate the realizations for the mission variations
     mc_variations["realizations"] = [{}]
@@ -68,6 +71,11 @@ def gen_mc_variations(example_name):
         mc_variations["realizations"].append(realization_dict)
     return mc_variations
 
-def load_mv_variations(example_name):
+def load_mv_variations(example_name, local=False):
 
-    return tools.load_yaml(f"trajopt.examples.{example_name}.variations", "method.yaml")
+    if local:
+        mv_variations = tools.load_yaml(f"trajopt.local.examples.{example_name}.variations", "method.yaml")
+    else:
+        mv_variations = tools.load_yaml(f"trajopt.examples.{example_name}.variations", "method.yaml")
+
+    return mv_variations

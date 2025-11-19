@@ -10,13 +10,13 @@ def add_monte_carlo_dispersions(mission_dict, realization):
         for mc_var, mc_disp in realization.items():
             mission_dict[mc_var] = mission_dict[mc_var] + mc_disp
 
-def run_mc_analysis(example_name, nominal_config, gen_mc_variations=1, save_mc_variations=0, save_scenario_data=0, mc_name="mc1"):
+def run_mc_analysis(example_name, nominal_config, gen_mc_variations=1, save_mc_variations=0, save_scenario_data=0, mc_name="mc1", local=False):
 
 
-    mv_variations = cfg.load_mv_variations(example_name)
+    mv_variations = cfg.load_mv_variations(example_name, local=local)
 
     if gen_mc_variations:
-        mc_variations = cfg.gen_mc_variations(example_name)
+        mc_variations = cfg.gen_mc_variations(example_name, local=local)
 
         if save_mc_variations:
             np.save(f"data/mc_variations/{mc_name}", mc_variations)

@@ -10,7 +10,7 @@ jax.config.update("jax_enable_x64", True)
 outline of plt_data structure
 scenario_data = {
     "method1": {
-        "run_data": [{"iters": {}, "params": {}}, {"iters": {}, "params": {}}, ...]
+        "mc_data": [{"iters": {}, "params": {}}, {"iters": {}, "params": {}}, ...]
     },
 
     "method2": {
@@ -109,7 +109,7 @@ def perform_default_analysis(problem):
     }
 
     odesettings = {"atol": 1e-12, "rtol": 1e-12}
-    N_dense = 20 * N
+    N_dense = 5 * N
 
     for data in iter_data:
         
@@ -120,11 +120,9 @@ def perform_default_analysis(problem):
         
         # create dense time grid for this iteration based on its reference trajectory time span
         t_dense = np.linspace(t_ref[0], t_ref[-1], N_dense)
-        t_dense = t_dense * nondim['nt']
-        t_ref_scaled = t_ref * nondim['nt']
         
         # create dense control interpolation for this iteration
-        nu_ref_dense = np.hstack([np.interp(t_dense, t_ref_scaled, nu_ref[:, i]).reshape((-1, 1)) for i in range(m)])
+        nu_ref_dense = np.hstack([np.interp(t_dense, t_ref, nu_ref[:, i]).reshape((-1, 1)) for i in range(m)])
         u_ref_dense = nu_ref_dense @ nondim['M']['ctrl']['nd2d']
         
         # TODO: need to move this to an integrator module
@@ -139,11 +137,11 @@ def perform_default_analysis(problem):
                 problem.model._dynamics,
                 z_ref_np[0, :n],
                 nu_ref,
-                t_ref_scaled,
+                t_ref,
                 t_dense,
                 problem
             )
-            data['t_nl'] = t_dense
+            data['t_nl'] = t_dense * nondim['nt']
             data['z_nl'] = z_nl @ nondim['M']['state']['nd2d']
             data['u_nl'] = u_ref_dense
         else:
@@ -157,15 +155,15 @@ def perform_default_analysis(problem):
             
             sol = solve_ivp(
                 FOH_dynamics,
-                [t_ref_scaled[0], t_ref_scaled[-1]],
+                [t_ref[0], t_ref[-1]],
                 z_ref_np[0, :n],
-                args=(nu_ref, t_ref_scaled),
+                args=(nu_ref, t_ref),
                 t_eval=t_dense,
                 method='RK45',
                 **odesettings
             )
             
-            data['t_nl'] = t_dense
+            data['t_nl'] = t_dense * nondim['nt']
             data['z_nl'] = sol.y.T @ nondim['M']['state']['nd2d']
             data['u_nl'] = u_ref_dense
 
