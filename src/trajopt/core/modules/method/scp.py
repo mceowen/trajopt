@@ -431,6 +431,16 @@ class Subproblem:
             C.append(
                 self.dz[-1, ctcs_state_idx] + self.z_ref[-1, ctcs_state_idx] - vbN_ctcs == 0.0
             )
+        
+        if self.buff_dyn == "quad-1":
+            C.append(cp.sum(self.vb_dyn_p) == self.vb_plus)
+            C.append(cp.sum(self.vb_dyn_m) == self.vb_minus)
+
+        if self.buff_dyn == "quad-3":
+            for j in range(self.nz):
+                C.append(cp.sum(self.vb_dyn_p[:, j]) == self.vb_plus[j])
+                C.append(cp.sum(self.vb_dyn_m[:, j]) == self.vb_minus[j])
+
 
         # Per-stage constraints
         for k in range(N):
@@ -448,6 +458,11 @@ class Subproblem:
                 if self.buff_dyn != "term":
                     C.append(self.vb_dyn_p[k] >= 0)
                     C.append(self.vb_dyn_m[k] >= 0)
+                
+                if self.buff_dyn == "quad-2":
+                    C.append(cp.sum(self.vb_dyn_p[k, :]) == self.vb_plus[k])
+                    C.append(cp.sum(self.vb_dyn_m[k, :]) == self.vb_minus[k])
+
 
                 # CTCS coupling on extra components
                 if method.flags["ctcs"] != "none" and n_ctcs>0:
