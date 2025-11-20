@@ -109,7 +109,7 @@ def configure_penalty_weights(problem):
                     method.weights["dual_minus"] += method.weights["eps_nonzero1"]
 
     ### ctcs convergence adjustments ###
-    method.weights["w_ctcs"] = 10.0
+    method.weights["w_ctcs"] = 10.0     # TODO(Skye): make this a yaml param
 
 
 
