@@ -15,81 +15,104 @@ class Indices:
         model   = self.problem.model
         mission = self.problem.mission
 
-        # -------------------------------
-        # STATE / CONTROL / DYNAMICS INDICES
-        # -------------------------------
+        # -------------------------------------------------
+        # STATE / CONTROL / CTCS INDICES
+        # -------------------------------------------------
+        n      = model.n
+        nz     = model.nz
+        n_ctcs = model.n_ctcs
 
-        z_idx_all      = np.arange(0, model.nz)
-        z_idx_state    = np.arange(0, model.n)
-        z_idx_ctcs     = np.arange(model.n, model.nz) if model.nz > model.n else np.array([], dtype=int)
-        z_idx_time     = np.array([], dtype=int)  # optional time variable slot
+        z_idx_all   = np.arange(0, nz)
+        z_idx_state = np.arange(0, n)
+        z_idx_ctcs  = np.arange(n, n + n_ctcs) if n_ctcs > 0 else np.array([], dtype=int)
 
         self.z = {
-            "all":      z_idx_all,
-            "state":    z_idx_state,
-            "ctcs":     z_idx_ctcs,
-            "time":     z_idx_time
+            "all":    z_idx_all,
+            "state":  z_idx_state,
+            "ctcs":   z_idx_ctcs,
+            "time":   np.array([], dtype=int),
         }
 
-        # Controls and other inputs
-        u_idx_all = np.arange(0, model.m) # later: add other augmented inputs 
-        u_idx_dyn = np.arange(0, model.m)
-        u_idx_dilation = np.array([], dtype=int)
+        # -------------------------------------------------
+        # CONTROL INDICES
+        # -------------------------------------------------
+        u_idx_all = np.arange(0, model.m)
         self.nu = {
             "all": u_idx_all,
-            "control": u_idx_dyn,
-            "dilation_factor": u_idx_dilation
+            "control": u_idx_all,
+            "dilation_factor": np.array([], dtype=int),
         }
 
-        # -------------------------------
-        # CONSTRAINT INDICES
-        # -------------------------------
-        n_path = mission.n_path
-        n_nfz  = mission.n_nfz
-        n_custom  = getattr(mission, "n_custom", 0)
+        # -------------------------------------------------
+        # NONLINEAR INEQUALITY INDICES
+        # -------------------------------------------------
+        n_path   = mission.n_path
+        n_nfz    = mission.n_nfz
+        n_custom = mission.n_custom
+        n_ineq   = mission.n_ineq
 
-        # stacked nonlinear inequality vector
-        n_ineq = n_path + n_nfz + n_custom
-
-        # Define slices for subgroups
         i0 = 0
-        path_idx = np.arange(i0, i0 + n_path)
-        i0 += n_path
-        nfz_idx = np.arange(i0, i0 + n_nfz)
-        i0 += n_nfz
+        path_idx   = np.arange(i0, i0 + n_path);   i0 += n_path
+        nfz_idx    = np.arange(i0, i0 + n_nfz);    i0 += n_nfz
         custom_idx = np.arange(i0, i0 + n_custom)
 
         nonlinear_ineq = {
-            "all": np.arange(0, n_ineq),
-            "path": path_idx,
-            "nfz": nfz_idx,
-            "custom": custom_idx
+            "all":    np.arange(0, n_ineq),
+            "path":   path_idx,
+            "nfz":    nfz_idx,
+            "custom": custom_idx,
         }
 
-        # LTV system / dynamic matrices indices 
-        Ak_ind  = np.arange(0, model.nz**2)
-        Bk_ind  = np.arange(Ak_ind[-1] + 1, Ak_ind[-1] + 1 + model.nz * model.m)
-        Bkp_ind = np.arange(Bk_ind[-1] + 1, Bk_ind[-1] + 1 + model.nz * model.m)
-        Sk_ind  = np.arange(Bkp_ind[-1] + 1, Bkp_ind[-1] + 1 + model.nz)
+        # -------------------------------------------------
+        # TERMINAL CONDITION INDICES (EQ + INEQ + CTCS)
+        # -------------------------------------------------
+        n_term_eq   = mission.n_term            # terminal eq constraints
+        n_term_ineq = mission.n_term_ineq       # terminal inequalities
+        n_term_ctcs = mission.n_term_ctcs       # CTCS terminal constraints
+
+        eq_idx   = np.arange(0, n_term_eq)
+        ineq_idx = np.arange(n_term_eq,
+                            n_term_eq + n_term_ineq)
+        ctcs_idx = np.arange(n_term_eq + n_term_ineq,
+                            n_term_eq + n_term_ineq + n_term_ctcs)
+
+        terminal = {
+            "eq":   eq_idx,
+            "ineq": ineq_idx,
+            "ctcs": ctcs_idx,
+            "all":  np.arange(0, n_term_eq + n_term_ineq + n_term_ctcs),
+        }
+
+        # -------------------------------------------------
+        # LTV SYSTEM INDICES
+        # -------------------------------------------------
+        Ak_ind  = np.arange(0, nz * nz)
+        Bk_ind  = np.arange(Ak_ind[-1] + 1, Ak_ind[-1] + 1 + nz * model.m)
+        Bkp_ind = np.arange(Bk_ind[-1] + 1, Bk_ind[-1] + 1 + nz * model.m)
+        Sk_ind  = np.arange(Bkp_ind[-1] + 1, Bkp_ind[-1] + 1 + nz)
 
         linear_system = {
-            "Ak": Ak_ind,
-            "Bk": Bk_ind,
+            "Ak":  Ak_ind,
+            "Bk":  Bk_ind,
             "Bkp": Bkp_ind,
-            "Sk": Sk_ind
+            "Sk":  Sk_ind,
         }
 
+        # -------------------------------------------------
+        # Populate namespace
+        # -------------------------------------------------
+        from types import SimpleNamespace
         self.constraints = SimpleNamespace(
-            nonlinear_inequality=nonlinear_ineq,
-            linear_system=linear_system
+            nonlinear_inequality = nonlinear_ineq,
+            terminal             = terminal,
+            linear_system        = linear_system,
         )
 
-        # -------------------------------
-        # Additional CTCS or dynamics couplings
-        # -------------------------------
+        # CTCS indexing
         self.ctcs = {
-            "ineq": np.array([], dtype=int),
-            "state": z_idx_ctcs
+            "state": z_idx_ctcs,
+            "term":  ctcs_idx,
+            "ineq":  np.array([], dtype=int),
         }
 
     def summary(self):

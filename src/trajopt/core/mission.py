@@ -77,7 +77,7 @@ class Mission:
         self.n_udot       = len(self.udot_max_idx)
         self.n_path       = sum(1 if np.isscalar(v) else len(v) for v in self.path_limits.values())
         self.n_nfz        = len(self.obs["xc"])
-        self.n_custom        = sum(1 if np.isscalar(v) else len(v) for v in self.custom_limits.values())
+        self.n_custom     = sum(1 if np.isscalar(v) else len(v) for v in self.custom_limits.values())
         self.n_ineq       = self.n_path + self.n_nfz + self.n_custom
 
         self.path_idx     = np.arange(self.n_path)
@@ -119,6 +119,7 @@ class Mission:
         Attach mission functions for costs and constraints.
         Uses custom_modules from YAML config if specified, otherwise uses base mission.
         """
+        model = self.problem.model
         method = self.problem.method
         problem = self.problem
 
@@ -173,7 +174,9 @@ class Mission:
         # ------------------------------------------------------------
         # Continue with the rest of nondim and constraint setup
         # ------------------------------------------------------------
-        method = self.problem.method
+        # Load CTCS terminal constraints if applicable
+        self.n_term_ctcs  = (model.n_ctcs if method.flags['ctcs']=="term" else 0)
+
         # nondimensionalization
         self.M_zi = method.nondim["M"]["state"]["d2nd"][np.ix_(self.zi_idx, self.zi_idx)]
         self.M_zf = method.nondim["M"]["state"]["d2nd"][np.ix_(self.zf_idx, self.zf_idx)]

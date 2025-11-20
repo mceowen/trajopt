@@ -7,9 +7,7 @@ def set_convergence_tolerance(problem):
     Compute convergence tolerances for all problem components.
     This refactored version stacks path/NFZ/AUX tolerances into unified eps_ineq/Wconv_ineq.
     """
-    mission = problem.mission
-    model   = problem.model
-    method  = problem.method
+    mission, model, method  = problem.mission, problem.model, problem.method
 
     eps_path_config = method.conv["eps_path"]
     eps_nfz_config  = method.conv["eps_nfz"]
@@ -130,7 +128,7 @@ def set_convergence_tolerance(problem):
     # =======================
     # DYNAMICS CONVERGENCE
     # =======================
-    n_dyn = mission.n_dyn
+    n_dyn = model.n_dyn
     if n_dyn > 0:
         eps_dyn    = method.conv["eps_dyn"]
         M_dyn_d2nd = method.nondim["M"]["dyn"]["d2nd"]
@@ -168,9 +166,7 @@ def set_convergence_tolerance(problem):
 
 def check_convergence_tolerance(problem, subprob, iter_record):
     """Check convergence using unified stacked inequality (_ineq) structure."""
-    mission = problem.mission
-    model   = problem.model
-    method  = problem.method
+    mission, model, method  = problem.mission, problem.model, problem.method
 
     # --- Load convergence data
     conv_data = iter_record["conv_data"]

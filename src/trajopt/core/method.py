@@ -67,17 +67,13 @@ class Method:
     def update_method_params(self):
         problem = self.problem
         mission = problem.mission
-        model = problem.model
+        model   = problem.model
 
         # precompile discretize functions for jax
         if self.flags['jax_dyn'] == 1:
             discretize.jit_jax_discretize(problem)
 
         buff_dyn = str(self.flags.get("buff_dyn", "term"))
-
-        # --- CTCS-specific adjustment ---
-        if self.flags["ctcs"]!="none" and buff_dyn == "term":
-            buff_dyn = "l1"
 
         # --- Dynamics buffering ---
         if buff_dyn in {"term", "l1", "l2"}:

@@ -1,63 +1,63 @@
 'N': 40
 
 flags:
-  free_final_time: 0    # 0, 1
-  dynamics_nonconvex: 0 # 0, 1
-  equal_dt: 1           # 0, 1
-  flag_autotune: "0"    # '0', '1', '2', '3'
-  buff_dyn: "term"      # "none", 'term', 'l1', 'l2', 'quad-1', 'quad-2'
-  buff_dyn_dual: "none" # 'l1', 'none'
-  ctcs: "none"          # 'none', 'term', 'l1', 'l2', 'quad-1', 'quad-2'
-  ode_fixed_dt: 0       # 0, 1
-  nondim: 0             # 0, 1
-  jax_dyn: 1            # 0, 1
+  free_final_time:    1       # 0, 1
+  dynamics_nonconvex: 1       # 0, 1
+  equal_dt:           1       # 0, 1
+  flag_autotune:      "0"     # '0', '1', '2', '3'
+  buff_dyn:           "l1"  # "none", 'term', 'l1', 'l2', 'quad-1', 'quad-2', 'quad-3', 'l1_dual'
+  #buff_dyn_dual:      "none"  # 'l1', 'none'
+  ctcs:               "l1"  # 'none', 'term', 'l1', 'l2', 'quad-1', 'quad-2', 'quad-3'
+  ode_fixed_dt:       0       # 0, 1
+  nondim:             0       # 0, 1
+  jax_dyn:            1       # 0, 1
 
-  flag_path: 1.0
-  flag_nfz: 1.0
-  flag_custom: 1.0
-  flag_term: 1.0
-  flag_dyn: 1.0
-  flag_tr:  1.0
-  flag_true: 1.0
-  flag_dual: 1.0
-  flag_vb:  1.0
+  flag_path:    1.0
+  flag_nfz:     1.0
+  flag_custom:  1.0
+  flag_term:    1.0
+  flag_dyn:     1.0
+  flag_tr:      1.0
+  flag_true:    1.0
+  flag_dual:    1.0
+  flag_vb:      1.0
 
 solver_opts:
   solver: "QOCO"
 
-T_init: 7.0
-T_min: 1.0
-T_max: 20.0
-dT_max: 5.0
+T_init:   7.0
+T_min:    1.0
+T_max:    20.0
+dT_max:   5.0
 
 conv:
-  ctcs_mult_state: 1.0
-  ctcs_mult_cnst: 1.0
-  eps_ctcs: 1e-4
-  eps_state: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
-  eps_cost: 1.0
-  eps_nfz: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
-  eps_term: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
-  eps_term_min: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
-  eps_term_max: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
-  eps_defect: [0.01]
-  eps_dyn: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
-  iter_max: 50
+  ctcs_mult_state:  1.0
+  ctcs_mult_cnst:   1.0
+  eps_ctcs:         1e-4
+  eps_state:        [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+  eps_cost:         1.0
+  eps_nfz:          [0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
+  eps_term:         [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+  eps_term_min:     [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+  eps_term_max:     [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+  eps_defect:       [0.01]
+  eps_dyn:          [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+  iter_max:         50
 
 weights:
-  w_cost: 0.0
-  alpha_z: 0.5
-  alpha_u: "inf"
-  beta: 1.0
-  gamma: 0.1
-  eps_nonzero1: 0.2
-  eps_nonzero2: 0.0000000001
-  wbuff: 100.0
-  w_nfz_scale: 100.0
-  w_path_scale: 0.0
+  w_cost:         0.0
+  alpha_z:        0.5
+  alpha_u:        "inf"
+  beta:           1.0
+  gamma:          0.1
+  eps_nonzero1:   0.2
+  eps_nonzero2:   0.0000000001
+  wbuff:          100.0
+  w_nfz_scale:    100.0
+  w_path_scale:   0.0
   w_custom_scale: 0.0
-  w_dyn_scale: 100000.0
-  w_term_scale: 100.0
+  w_dyn_scale:    100000.0
+  w_term_scale:   100.0
 
 
 nl_guess_u_start: "eval: (np.array([0, 0, mission['planet']['g']]) * mission['vehicle']['mass']) + np.array([0.08, 0.08, 0.0])"

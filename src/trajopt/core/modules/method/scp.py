@@ -28,7 +28,7 @@ def run_scp(problem):
 
     Subproblem maintains iteration history internally:
       - subprob.iter_data[0]: initialization inputs only
-      - subprob.iter_data[k>=1]: inputs used at iter k + outputs from that iter
+      - subprob.iter_data[it>=1]: inputs used at iter it + outputs from that iter
     """
 
     # Start full problem convergence timer
@@ -101,38 +101,39 @@ class Subproblem:
         method  = self.problem.method
 
         # derive canonical sizes for quick reuse
-        self.N  = int(method.N)
-        self.n  = int(model.n)
-        self.m  = int(model.m)
-        self.nz = int(model.nz)
-
-        self.flags         = method.flags
-        self.free_T        = bool(self.flags["free_final_time"])
-        self.equal_dt      = bool(self.flags["equal_dt"])
-        self.buff_dyn      = self.flags["buff_dyn"]                  # e.g., "l1", "l2", "term", "quad-1", "quad-2"
-        self.flag_autotune = self.flags["flag_autotune"]
-
-        # module sizes
-        self.n_path  = int(mission.n_path)
-        self.n_nfz   = int(mission.n_nfz)
+        self.N          = int(method.N)
+        self.n          = int(model.n)
+        self.m          = int(model.m)
+        self.nz         = int(model.nz)
+        self.n_ctcs     = int(model.n_ctcs)
+        self.n_path     = int(mission.n_path)
+        self.n_nfz      = int(mission.n_nfz)
         self.n_custom   = int(getattr(mission, "n_custom", 0))
-        self.n_ineq  = int(mission.n_ineq)
-        self.n_term  = int(mission.n_term + mission.n_term_ineq)
-        self.n_dyn   = int(getattr(mission, "n_dyn", model.nz))
-        self.Npm     = int(getattr(method, "Npm", 0))
-        self.n_plus  = int(getattr(method, "n_plus", 0))
-        self.n_minus = int(getattr(method, "n_minus", 0))
+        self.n_ineq     = int(mission.n_ineq)
+        self.n_term     = int(mission.n_term + mission.n_term_ineq)
+        self.n_term_ineq = int(mission.n_term_ineq)
+        self.n_term_ctcs = int(mission.n_term_ctcs)
+        self.n_term_total = self.n_term + mission.n_term_ineq + self.n_term_ctcs
+        self.n_dyn      = int(getattr(mission, "n_dyn", model.nz))
+        self.Npm        = int(getattr(method, "Npm", 0))
+        self.n_plus     = int(getattr(method, "n_plus", 0))
+        self.n_minus    = int(getattr(method, "n_minus", 0))
 
         # Optional module flags as Parameters (enable gating)
-        self.flag_path = method.flags.get("flag_path", 1.0)
-        self.flag_nfz  = method.flags.get("flag_nfz", 1.0)
-        self.flag_custom  = method.flags.get("flag_custom", 1.0)
-        self.flag_term = method.flags.get("flag_term", 1.0)
-        self.flag_dyn  = method.flags.get("flag_dyn", 1.0)
-        self.flag_tr   = method.flags.get("flag_tr", 1.0)
-        self.flag_true = method.flags.get("flag_true", 1.0)
-        self.flag_dual = method.flags.get("flag_dual", 1.0)
-        self.flag_vb   = method.flags.get("flag_vb", 1.0)
+        self.flags          = method.flags
+        self.free_T         = bool(self.flags["free_final_time"])
+        self.equal_dt       = bool(self.flags["equal_dt"])
+        self.buff_dyn       = self.flags["buff_dyn"]                  # e.g., "l1", "l2", "term", "quad-1", "quad-2"
+        self.flag_autotune  = self.flags["flag_autotune"]
+        self.flag_path      = method.flags.get("flag_path", 1.0)
+        self.flag_nfz       = method.flags.get("flag_nfz", 1.0)
+        self.flag_custom    = method.flags.get("flag_custom", 1.0)
+        self.flag_term      = method.flags.get("flag_term", 1.0)
+        self.flag_dyn       = method.flags.get("flag_dyn", 1.0)
+        self.flag_tr        = method.flags.get("flag_tr", 1.0)
+        self.flag_true      = method.flags.get("flag_true", 1.0)
+        self.flag_dual      = method.flags.get("flag_dual", 1.0)
+        self.flag_vb        = method.flags.get("flag_vb", 1.0)
 
         # Bounds (only create when nonzero-length)
         self._init_bounds(mission)
@@ -163,7 +164,7 @@ class Subproblem:
             "conv_data": {
                 "vb_ineq": np.zeros((self.N, mission.n_ineq)),
                 "vb_dyn":  np.zeros((self.N - 1, self.nz)),
-                "vb_term": np.zeros((self.n_term, 1)),
+                "vb_term": np.zeros((mission.n_term+mission.n_term_ineq+mission.n_term_ctcs, 1)),
             },
             "weights": problem.method.weights,
         }]
@@ -208,7 +209,7 @@ class Subproblem:
     # ============================================================
     def _create_variables(self) -> None:
         mission, model, method = self.problem.mission, self.problem.model, self.problem.method
-        N, n, m, nz = self.N, self.n, self.m, self.nz
+        N, n, m, nz, n_ctcs = self.N, self.n, self.m, self.nz, self.n_ctcs
 
         # Core optimization variables
         self.dz = cp.Variable((N, nz), name="dz")
@@ -229,14 +230,41 @@ class Subproblem:
 
         # Virtual buffers (None if zero-sized)
         self.vb_ineq    = cp.Variable((N, mission.n_ineq), name="vb_ineq")   if mission.n_ineq  > 0 else None 
-        self.vb_term    = (
-                            cp.Variable(self.n_term, name="vb_term")
-                            if method.flags.get("buff_dyn") == "term" and method.flags["dynamics_nonconvex"] != 0 and self.n_term > 0
-                            else cp.Constant(np.zeros(self.n_term)) if self.n_term > 0
-                            else None
-                        )
+        
+        # ---------------------------------------------
+        # TERMINAL CONDITION BUFFERS (REAL + CTCS)
+        # --- ------------------------------------------
+        n_term_real = self.n_term + self.n_term_ineq
+        n_term_ctcs  = self.n_term_ctcs
+        # ------------ Real terminal constraints (size = n_term_real) ------------
+        self.vb_term_real = (
+            cp.Variable(n_term_real, name="vb_term_real")
+            if (method.flags["buff_dyn"] == "term"
+                and method.flags["dynamics_nonconvex"] != 0
+                and n_term_real > 0)
+            else (cp.Constant(np.zeros(n_term_real)) if n_term_real > 0 else None)
+        )
+        # ------------ CTCS terminal constraints (size = n_term_ctcs) ------------
+        self.vb_term_ctcs = (
+            cp.Variable(n_term_ctcs, name="vb_term_ctcs")
+            if (n_term_ctcs > 0)  
+            else None
+        )
+        # ------------ Unified stacked terminal buffer ------------
+        self.vb_term = (
+            cp.hstack([self.vb_term_real, self.vb_term_ctcs])
+            if (self.vb_term_real is not None and self.vb_term_ctcs is not None)
+            else self.vb_term_real
+            if self.vb_term_ctcs is None
+            else self.vb_term_ctcs
+            if self.vb_term_real is None
+            else None # when both are None
+        )
 
 
+        # ---------------------------------------------
+        # DYNAMICS VIRTUAL BUFFERS (REAL + CTCS)
+        # ---------------------------------------------
         # --- Physical dynamics (first n states) ---
         self.vb_dyn_real_p = (
             cp.Variable((N - 1, n), name="vb_dyn_real_plus")
@@ -250,30 +278,27 @@ class Subproblem:
             else cp.Constant(np.zeros((N - 1, n))) if n > 0
             else None
         )
-
-        
         # --- CTCS dynamics (augmented states n : nz) ---
         self.vb_dyn_ctcs_p = (
-            cp.Variable((N - 1, max(nz - n, 0)), name="vb_dyn_ctcs_plus")
-            if method.flags["ctcs"] != "none" not in {"none", "term"} and nz > n
-            else cp.Constant(np.zeros((N - 1, max(nz - n, 0)))) if nz > n
+            cp.Variable((N - 1, n_ctcs), name="vb_dyn_ctcs_plus")
+            if method.flags["ctcs"] not in {"none", "term"} and n_ctcs > 0
+            else cp.Constant(np.zeros((N - 1, n_ctcs))) if n_ctcs > 0
             else None
         )
         self.vb_dyn_ctcs_m = (
-            cp.Variable((N - 1, max(nz - n, 0)), name="vb_dyn_ctcs_minus")
-            if method.flags["ctcs"] != "none" not in {"none", "term"} and nz > n
-            else cp.Constant(np.zeros((N - 1, max(nz - n, 0)))) if nz > n
+            cp.Variable((N - 1, n_ctcs), name="vb_dyn_ctcs_minus")
+            if method.flags["ctcs"] not in {"none", "term"} and n_ctcs > 0
+            else cp.Constant(np.zeros((N - 1, n_ctcs))) if n_ctcs > 0
             else None
         )
-
         # --- Unified composite buffers (always same shape for DPP) ---
         self.vb_dyn_p = (
             cp.hstack([self.vb_dyn_real_p, self.vb_dyn_ctcs_p])
-            if nz > n else self.vb_dyn_real_p
+            if n_ctcs>0 else self.vb_dyn_real_p
         )
         self.vb_dyn_m = (
             cp.hstack([self.vb_dyn_real_m, self.vb_dyn_ctcs_m])
-            if nz > n else self.vb_dyn_real_m
+            if n_ctcs>0 else self.vb_dyn_real_m
         )
 
         # Aggregate buffers (optional)
@@ -322,13 +347,13 @@ class Subproblem:
 
         # TODO(Skye): refactor these weight parameters to be less redundant later
         self.W_ineq  = cp.Parameter((N,  max(self.n_ineq, 1)),  nonneg=True, name="W_ineq")
-        self.W_term  = cp.Parameter((max(self.n_term, 1),),     nonneg=True, name="W_term")
+        self.W_term  = cp.Parameter((max(self.n_term_total, 1),),     nonneg=True, name="W_term")
         self.W_dyn   = cp.Parameter((N - 1, max(nz, 1)),        nonneg=True, name="W_dyn")
         self.W_plus  = cp.Parameter((max(self.Npm, 1), max(self.n_plus, 1)),  nonneg=True, name="W_plus")
         self.W_minus = cp.Parameter((max(self.Npm, 1), max(self.n_minus, 1)), nonneg=True, name="W_minus")
         # ----------------------------------------------------------------------------------------------------------
         self.W_ineq_sqrt  = cp.Parameter((N,  max(self.n_ineq, 1)),  nonneg=True, name="W_ineq_sqrt")
-        self.W_term_sqrt  = cp.Parameter((max(self.n_term, 1),),     nonneg=True, name="W_term_sqrt")
+        self.W_term_sqrt  = cp.Parameter((max(self.n_term_total, 1),),     nonneg=True, name="W_term_sqrt")
         self.W_dyn_sqrt   = cp.Parameter((N - 1, max(nz, 1)),        nonneg=True, name="W_dyn_sqrt")
         self.W_plus_sqrt  = cp.Parameter((max(self.Npm, 1), max(self.n_plus, 1)),  nonneg=True, name="W_plus_sqrt")
         self.W_minus_sqrt = cp.Parameter((max(self.Npm, 1), max(self.n_minus, 1)), nonneg=True, name="W_minus_sqrt")
@@ -337,7 +362,7 @@ class Subproblem:
         self.w_dyn_row  = cp.Parameter(N - 1, nonneg=True, name="w_dyn_row")
         # ----------------------------------------------------------------------------------------------------------
         self.W_ineq.value  = np.ones((N,  max(self.n_ineq, 1)))
-        self.W_term.value  = np.ones((max(self.n_term, 1),))
+        self.W_term.value  = np.ones((max(self.n_term_total, 1),))
         self.W_dyn.value   = np.ones((N - 1, max(nz, 1)))
         self.W_plus.value  = np.ones((max(self.Npm, 1), max(self.n_plus, 1)))
         self.W_minus.value = np.ones((max(self.Npm, 1), max(self.n_minus, 1)))
@@ -357,7 +382,7 @@ class Subproblem:
         self.dual_dyn   = cp.Parameter((N - 1, nz),              name="dual_dyn")
         self.dual_plus  = cp.Parameter((max(self.Npm, 1), max(self.n_plus, 1)),  name="dual_plus")
         self.dual_minus = cp.Parameter((max(self.Npm, 1), max(self.n_minus, 1)), name="dual_minus")
-        self.dual_term  = cp.Parameter((max(self.n_term, 1),),                  name="dual_term")
+        self.dual_term  = cp.Parameter((max(self.n_term_total, 1),),                  name="dual_term")
 
         # CTCS epsilon (scalar)
         self.eps_ctcs = cp.Parameter(nonneg=True, name="eps_ctcs")
@@ -366,9 +391,9 @@ class Subproblem:
     # CONSTRAINTS (build-once)
     # ============================================================
     def _build_constraints_once(self) -> None:
-        mission, model, method = self.problem.mission, self.problem.model, self.problem.method
-        N, n, m, nz = self.N, self.n, self.m, self.nz
-        flags = method.flags
+        mission, model, method  = self.problem.mission, self.problem.model, self.problem.method
+        indices = self.problem.indices
+        N, n, m, nz, n_ctcs     = self.N, self.n, self.m, self.nz, self.n_ctcs
 
         C: List[cp.Constraint] = []
 
@@ -389,15 +414,23 @@ class Subproblem:
             C.append(M_sel @ (self.dz[0, :n] + self.z_ref[0, :n]) <= cp.hstack([-self.z1_min, self.z1_max]))
 
         # Terminal equalities / inequalities
-        if mission.n_term > 0 and self.zN is not None:
-            vbN = self.vb_term[:mission.n_term] if self.vb_term is not None else 0.0
-            C.append(self.dz[-1, mission.zf_idx] + self.z_ref[-1, mission.zf_idx] - vbN == self.zN)
-
-        if mission.n_term_ineq > 0 and self.zN_min is not None and self.zN_max is not None:
-            nterm = mission.n_term
-            vbNiq = self.vb_term[nterm:nterm + mission.n_term_ineq] if self.vb_term is not None else 0.0
-            M_sel = tools.constraint_index_selector(mission.zf_min_idx, mission.zf_max_idx, n)
+        term_idx  = indices.constraints.terminal 
+        if mission.n_term>0 and self.zN is not None:
+            vbN = self.vb_term[term_idx["eq"]] if self.vb_term is not None else 0.0
+            C.append(
+                self.dz[-1, term_idx["eq"]] + self.z_ref[-1, term_idx["eq"]] - vbN == self.zN
+            )
+        if mission.n_term_ineq>0 and self.zN_min is not None and self.zN_max is not None:
+            vbNiq = self.vb_term[term_idx["ineq"]] if self.vb_term is not None else 0.0
+            M_sel = tools.constraint_index_selector(mission.zf_min_idx, mission.zf_max_idx, n) # TODO(Skye): move this to indices class
             C.append(M_sel @ (self.dz[-1, :n] + self.z_ref[-1, :n]) - vbNiq <= cp.hstack([-self.zN_min, self.zN_max]))
+        # CTCS terminal equalities
+        if mission.n_term_ctcs>0:
+            ctcs_state_idx = indices.z["ctcs"]  
+            vbN_ctcs = self.vb_term[term_idx["ctcs"]] if self.vb_term is not None else 0.0
+            C.append(
+                self.dz[-1, ctcs_state_idx] + self.z_ref[-1, ctcs_state_idx] - vbN_ctcs == 0.0
+            )
 
         # Per-stage constraints
         for k in range(N):
@@ -417,7 +450,7 @@ class Subproblem:
                     C.append(self.vb_dyn_m[k] >= 0)
 
                 # CTCS coupling on extra components
-                if method.flags["ctcs"] != "none" and n < nz:
+                if method.flags["ctcs"] != "none" and n_ctcs>0:
                     C.append(
                         self.z_ref[k + 1, n:nz] + self.dz[k + 1, n:nz]
                         - (self.z_ref[k, n:nz] + self.dz[k, n:nz]) <= self.eps_ctcs
@@ -590,7 +623,7 @@ class Subproblem:
 
         # TODO(Skye): refactor weight loading to reduce code duplication with autotune        
         W_ineq_arr = tools.ensure_shape(W.get("W_ineq", 0.0), (self.N, max(self.n_ineq, 1)))
-        W_term_arr = tools.ensure_shape(W.get("W_term", 0.0), (max(self.n_term, 1),))
+        W_term_arr = tools.ensure_shape(W.get("W_term", 0.0), (max(self.n_term_total, 1),))
         W_dyn_arr  = tools.ensure_shape(W.get("W_dyn",  0.0), (self.N - 1, max(self.nz, 1)))
         W_plus_arr = tools.ensure_shape(W.get("W_plus", 0.0), (max(self.Npm, 1), max(self.n_plus,  1)))
         W_minus_arr= tools.ensure_shape(W.get("W_minus",0.0), (max(self.Npm, 1), max(self.n_minus, 1)))
@@ -620,7 +653,7 @@ class Subproblem:
         self.dual_dyn.value   = tools.ensure_shape(W.get("dual_dyn",  0.0), (self.N - 1, self.nz))
         self.dual_plus.value  = tools.ensure_shape(W.get("dual_plus", 0.0), (max(self.Npm, 1), max(self.n_plus,  1)))
         self.dual_minus.value = tools.ensure_shape(W.get("dual_minus",0.0), (max(self.Npm, 1), max(self.n_minus, 1)))
-        self.dual_term.value  = tools.ensure_shape(W.get("dual_term", 0.0), (max(self.n_term,1),))
+        self.dual_term.value  = tools.ensure_shape(W.get("dual_term", 0.0), (max(self.n_term_total,1),))
 
 
         # ctcs eps
@@ -710,7 +743,7 @@ class Subproblem:
         conv = {}
         conv["soln"]    = self.subproblem
         conv["vb_ineq"] = tools.get_val(self.vb_ineq,  rows=self.n_ineq, cols=self.N) if self.vb_ineq  is not None else np.zeros((self.n_ineq,  self.N))
-        conv["vb_term"] = tools.get_val(self.vb_term,  rows=self.n_term, cols=1)      if self.vb_term  is not None else np.zeros((self.n_term,  1))
+        conv["vb_term"] = tools.get_val(self.vb_term,  rows=self.n_term_total, cols=1)      if self.vb_term  is not None else np.zeros((self.n_term_total_total,  1))
         conv["vb_dyn"]  = tools.get_val(self.vb_dyn_p, rows=self.n_dyn,  cols=self.N-1) - tools.get_val(self.vb_dyn_m, rows=self.n_dyn, cols=self.N-1)
 
         conv["defect"]  = tools.safe_val(self.dz, rows=N, cols=n) + input_for_iter["z_ref"] - self.z_m.value

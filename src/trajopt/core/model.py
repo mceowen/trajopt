@@ -131,11 +131,15 @@ class Model:
         # ------------------------------------------------------------
         # CTCS / state bookkeeping
         # ------------------------------------------------------------
+        # TODO(Skye): possibly move this to the method class?
         if method.flags["ctcs"] != "none":
-            self.nz = self.n + mission.n_ineq
+            # TODO(Carlos): change n_ctcs after 'always' flag is added
+            self.n_ctcs = mission.n_ineq 
+            self.nz = self.n + self.n_ctcs
         else:
-            self.nz = self.n
-        mission.n_dyn = self.nz
+            self.n_ctcs = 0.
+            self.nz     = self.n
+        self.n_dyn = self.nz
 
 class Constraint:
     def __init__(self, fcn=None, yaml_config=None, **kwargs):

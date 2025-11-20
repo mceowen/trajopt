@@ -7,31 +7,30 @@ def configure_penalty_weights(problem):
     using YAML-defined parameters under method.weights.
     """
 
-    method  = problem.method
-    mission = problem.mission
+    mission, model, method  = problem.mission, problem.model, problem.method
 
     # --- Default weights ---
     n_ineq = mission.n_path + mission.n_nfz + mission.n_custom
     method.weights["W_ineq"] = np.zeros((method.N, n_ineq))
 
-    method.weights["W_term"]     = np.zeros(mission.n_term + mission.n_term_ineq)
-    method.weights["W_dyn"]      = np.zeros((method.N - 1, mission.n_dyn))
+    method.weights["W_term"]     = np.zeros(mission.n_term + mission.n_term_ineq + mission.n_term_ctcs)
+    method.weights["W_dyn"]      = np.zeros((method.N - 1, model.n_dyn))
     method.weights["W_plus"]     = np.zeros((method.Npm, method.n_plus))
     method.weights["W_minus"]    = np.zeros((method.Npm, method.n_minus))
 
     method.weights["dual_ineq"]  = np.zeros((method.N, n_ineq))
-    method.weights["dual_term"]  = np.zeros(mission.n_term + mission.n_term_ineq)
-    method.weights["dual_dyn"]   = np.zeros((method.N - 1, mission.n_dyn))
-    method.weights["dual_plus"]  = np.zeros((method.N - 1, mission.n_dyn))
-    method.weights["dual_minus"] = np.zeros((method.N - 1, mission.n_dyn))
+    method.weights["dual_term"]  = np.zeros(mission.n_term + mission.n_term_ineq + mission.n_term_ctcs)
+    method.weights["dual_dyn"]   = np.zeros((method.N - 1, model.n_dyn))
+    method.weights["dual_plus"]  = np.zeros((method.N - 1, model.n_dyn))
+    method.weights["dual_minus"] = np.zeros((method.N - 1, model.n_dyn))
 
     # local block arrays
-    W_path      = np.zeros((method.N, mission.n_path))
-    W_nfz       = np.zeros((method.N, mission.n_nfz))
-    W_custom       = np.zeros((method.N, mission.n_custom))
-    dual_path   = np.zeros((method.N, mission.n_path))
-    dual_nfz    = np.zeros((method.N, mission.n_nfz))
-    dual_custom    = np.zeros((method.N, mission.n_custom))
+    W_path          = np.zeros((method.N, mission.n_path))
+    W_nfz           = np.zeros((method.N, mission.n_nfz))
+    W_custom        = np.zeros((method.N, mission.n_custom))
+    dual_path       = np.zeros((method.N, mission.n_path))
+    dual_nfz        = np.zeros((method.N, mission.n_nfz))
+    dual_custom     = np.zeros((method.N, mission.n_custom))
 
     # PTR penalty weights
         # Wtr: weight for trust region cost                        
@@ -52,25 +51,25 @@ def configure_penalty_weights(problem):
         if str(method.flags["flag_autotune"]) in {"0", "al-scvx"}:
             if str(method.flags["flag_autotune"]) == "0":
 
-                w_path = method.weights["w_path_scale"] * method.weights["wbuff"] / method.weights["w_fac_N"]
-                w_nfz  = method.weights["w_nfz_scale"]  * method.weights["wbuff"] / method.weights["w_fac_N"]
-                w_custom  = method.weights["w_custom_scale"]  * method.weights["wbuff"] / method.weights["w_fac_N"]
-                w_dyn  = method.weights["w_dyn_scale"]  * method.weights["wbuff"] / method.weights["w_fac_Nm1"]
-                w_term = method.weights["w_term_scale"] * method.weights["wbuff"]
+                w_path      = method.weights["w_path_scale"] * method.weights["wbuff"] / method.weights["w_fac_N"]
+                w_nfz       = method.weights["w_nfz_scale"]  * method.weights["wbuff"] / method.weights["w_fac_N"]
+                w_custom    = method.weights["w_custom_scale"]  * method.weights["wbuff"] / method.weights["w_fac_N"]
+                w_dyn       = method.weights["w_dyn_scale"]  * method.weights["wbuff"] / method.weights["w_fac_Nm1"]
+                w_term      = method.weights["w_term_scale"] * method.weights["wbuff"]
 
             else:
-                w_path = method.weights["wbuff"] / method.weights["w_fac_N"]
-                w_nfz  = method.weights["wbuff"] / method.weights["w_fac_N"]
-                w_custom  = method.weights["wbuff"] / method.weights["w_fac_N"]
-                w_dyn  = method.weights["wbuff"] / method.weights["w_fac_Nm1"]
-                w_term = method.weights["wbuff"]
+                w_path      = method.weights["wbuff"] / method.weights["w_fac_N"]
+                w_nfz       = method.weights["wbuff"] / method.weights["w_fac_N"]
+                w_custom    = method.weights["wbuff"] / method.weights["w_fac_N"]
+                w_dyn       = method.weights["wbuff"] / method.weights["w_fac_Nm1"]
+                w_term      = method.weights["wbuff"]
         else:
             method.weights["wbuff"] = 1
-            w_path = method.weights["wbuff"] / method.weights["w_fac_N"]
-            w_nfz  = method.weights["wbuff"] / method.weights["w_fac_N"]
-            w_custom  = method.weights["wbuff"] / method.weights["w_fac_N"]
-            w_dyn  = method.weights["wbuff"] / method.weights["w_fac_Nm1"]
-            w_term = method.weights["wbuff"]
+            w_path          = method.weights["wbuff"] / method.weights["w_fac_N"]
+            w_nfz           = method.weights["wbuff"] / method.weights["w_fac_N"]
+            w_custom        = method.weights["wbuff"] / method.weights["w_fac_N"]
+            w_dyn           = method.weights["wbuff"] / method.weights["w_fac_Nm1"]
+            w_term          = method.weights["wbuff"]
 
         W_path += w_path
         W_nfz  += w_nfz
@@ -119,39 +118,95 @@ def configure_penalty_weights(problem):
 
 def build_virtual_buffer_cost(subprob) -> cp.Expression:
     """
-    Build the virtual buffer penalty term VB (stacked inequality form).
+    Virtual-buffer cost VB with SEPARATE buffering logic for:
+        • real dynamics  (buff_dyn flag)
+        • CTCS dynamics  (ctcs flag)
     """
     problem = subprob.problem
-    idx = problem.indices
-    N   = subprob.N
+    method  = problem.method
+    model   = problem.model
+
+    N      = subprob.N
+    n      = model.n
+    n_ctcs = model.n_ctcs
 
     VB = 0.0
 
-    # --- Terminal term ---
-    if subprob.vb_term is not None and subprob.n_term > 0:
+    # ------------------------------------------------------------
+    # TERMINAL TERM (REAL + CTCS)
+    # ------------------------------------------------------------
+    if subprob.vb_term is not None and subprob.vb_term.size > 0: # TODO(Skye/Carlos): allow different penalty norms
         VB += cp.sum_squares(cp.diag(subprob.W_term_sqrt) @ subprob.vb_term)
 
-    # --- Stacked inequality constraints ---
+    # ------------------------------------------------------------
+    # STACKED NONLINEAR INEQUALITY BUFFERS
+    # ------------------------------------------------------------
     if subprob.vb_ineq is not None and subprob.n_ineq > 0:
         for k in range(N):
-            VB += cp.sum_squares(cp.diag(subprob.W_ineq_sqrt[k, :]) @ subprob.vb_ineq[k, :])
+            VB += cp.sum_squares(
+                cp.diag(subprob.W_ineq_sqrt[k, :]) @ subprob.vb_ineq[k, :]
+            )
 
-    # --- Dynamics buffers ---
-    diff = subprob.vb_dyn_p - subprob.vb_dyn_m
-    if subprob.buff_dyn == "l1":
-        for k in range(N - 1):
-            VB += subprob.w_dyn_row[k] * cp.norm1(diff[k])
-    elif subprob.buff_dyn == "l2":
-        for k in range(N - 1):
-            VB += cp.sum_squares(cp.diag(subprob.W_dyn_sqrt[k, :]) @ diff[k])
-    elif subprob.buff_dyn in {"quad-1", "quad-2"}:
-        for k in range(max(subprob.Npm, 1)):
-            if subprob.vb_plus is not None and subprob.n_plus > 0:
-                VB += cp.sum_squares(cp.diag(subprob.W_plus_sqrt[k, :]) @ subprob.vb_plus[k])
-            if subprob.vb_minus is not None and subprob.n_minus > 0:
-                VB += cp.sum_squares(cp.diag(subprob.W_minus_sqrt[k, :]) @ subprob.vb_minus[k])
+    # ============================================================
+    # REAL DYNAMICS BUFFERING   (first n states)
+    # ============================================================
+    mode_real = method.flags["buff_dyn"]   # {"none","term","l1","l2","quad-1","quad-2"}
+
+    if subprob.vb_dyn_real_p is not None and n > 0: 
+        diff_real = subprob.vb_dyn_real_p - subprob.vb_dyn_real_m
+
+        if mode_real == "l1":
+            for k in range(N - 1):
+                VB += subprob.w_dyn_row[k] * cp.norm1(diff_real[k, :])
+
+        elif mode_real == "l2":
+            for k in range(N - 1):
+                VB += cp.sum_squares(
+                    cp.diag(subprob.W_dyn_sqrt[k, :n]) @ diff_real[k, :]
+                )
+
+        elif mode_real in {"quad-1", "quad-2"}:
+            if subprob.vb_plus is not None:
+                for k in range(max(subprob.Npm, 1)):
+                    VB += cp.sum_squares(cp.diag(subprob.W_plus_sqrt[k, :]) @ subprob.vb_plus[k])
+            if subprob.vb_minus is not None:
+                for k in range(max(subprob.Npm, 1)):
+                    VB += cp.sum_squares(cp.diag(subprob.W_minus_sqrt[k, :]) @ subprob.vb_minus[k])
+
+        # mode_real == "term" or "none" gives no dynamic penalty (terminal buffer handles this)
+
+
+    # ============================================================
+    # CTCS DYNAMICS BUFFERING   (last n_ctcs states)
+    # ============================================================
+    mode_ctcs = method.flags["ctcs"]       # {"none","term","l1","l2","quad-1","quad-2"}
+
+    if subprob.vb_dyn_ctcs_p is not None and n_ctcs > 0:
+        diff_ctcs = subprob.vb_dyn_ctcs_p - subprob.vb_dyn_ctcs_m
+
+        # --- L1 ---
+        if mode_ctcs == "l1":
+            for k in range(N - 1):
+                VB += subprob.w_dyn_row[k] * cp.norm1(diff_ctcs[k, :])
+
+        # --- L2 ---
+        elif mode_ctcs == "l2":
+            for k in range(N - 1):
+                VB += cp.sum_squares(
+                    cp.diag(subprob.W_dyn_sqrt[k, n:n+n_ctcs]) @ diff_ctcs[k, :]
+                )
+
+        # --- Quadratic aggregate buffers ---
+        elif mode_ctcs in {"quad-1", "quad-2"}:
+            if subprob.vb_plus is not None:
+                for k in range(max(subprob.Npm, 1)):
+                    VB += cp.sum_squares(cp.diag(subprob.W_plus_sqrt[k, :]) @ subprob.vb_plus[k])
+            if subprob.vb_minus is not None:
+                for k in range(max(subprob.Npm, 1)):
+                    VB += cp.sum_squares(cp.diag(subprob.W_minus_sqrt[k, :]) @ subprob.vb_minus[k])
 
     return 0.5 * subprob.flag_vb * VB
+
 
 
 
@@ -189,7 +244,7 @@ def autotune1(problem, iter_record):
     """
     Unified version of autotune1 using stacked inequality form (_ineq only).
     """
-    method = problem.method
+    mission, model, method  = problem.mission, problem.model, problem.method
 
     # Access iteration number
     iter_num = iter_record["iter_num"]
@@ -247,7 +302,7 @@ def autotune2(problem, iter_record):
     """
     Unified stacked-inequality version of autotune2.
     """
-    method = problem.method
+    mission, model, method  = problem.mission, problem.model, problem.method
     
     # Extract variables from local_vars
     N = method.N
@@ -271,9 +326,9 @@ def autotune2(problem, iter_record):
     dual_ineq_buff = []
     dual_dyn_buff  = []
 
-    Wh_ineq = np.zeros((N, method.problem.mission.n_ineq))
-    Wh_dyn  = np.zeros((N, method.problem.mission.n_dyn))
-    Wh_term = np.zeros(method.problem.mission.n_term + method.problem.mission.n_term_ineq)
+    Wh_ineq = np.zeros((N, mission.n_ineq))
+    Wh_dyn  = np.zeros((N, model.n_dyn))
+    Wh_term = np.zeros(mission.n_term + mission.n_term_ineq)
 
     Wh_plus  = np.zeros((N, method.n_plus))
     Wh_minus = np.zeros((N, method.n_minus))
@@ -282,7 +337,7 @@ def autotune2(problem, iter_record):
     for k in range(N):
         dual_ineq_buff.append(np.diag(W_ineq[k, :]) @ vb_ineq[k, :].flatten())
 
-        if method.problem.mission.n_ineq > 0:
+        if mission.n_ineq > 0:
             Wh_ineq[k, :] = np.abs(dual_ineq_buff[-1] / eps_feas_ineq)
         else:
             Wh_ineq[k, :] = np.abs(dual_ineq_buff[-1])
@@ -294,7 +349,7 @@ def autotune2(problem, iter_record):
             else:
                 Wh_dyn[k, :] = np.sum(np.abs(dual_dyn_buff[-1]))
 
-    if (method.problem.mission.n_term + method.problem.mission.n_term_ineq) > 0:
+    if (mission.n_term + mission.n_term_ineq) > 0:
         dual_term_buff = np.diag(W_term) @ vb_term
         Wh_term = np.abs(dual_term_buff / eps_feas_term).flatten()
 
