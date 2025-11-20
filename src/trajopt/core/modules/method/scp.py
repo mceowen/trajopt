@@ -123,7 +123,8 @@ class Subproblem:
         self.flags          = method.flags
         self.free_T         = bool(self.flags["free_final_time"])
         self.equal_dt       = bool(self.flags["equal_dt"])
-        self.buff_dyn       = self.flags["buff_dyn"]                  # e.g., "l1", "l2", "term", "quad-1", "quad-2"
+        self.buff_dyn       = self.flags["buff_dyn"]  
+        self.ctcs           = self.flags["ctcs"]         # e.g., "l1", "l2", "term", "quad-1", "quad-2"
         self.flag_autotune  = self.flags["flag_autotune"]
         self.flag_path      = method.flags.get("flag_path", 1.0)
         self.flag_nfz       = method.flags.get("flag_nfz", 1.0)
@@ -163,7 +164,7 @@ class Subproblem:
             "t_ref": problem.method.t_init,
             "conv_data": {
                 "vb_ineq": np.zeros((self.N, mission.n_ineq)),
-                "vb_dyn":  np.zeros((self.N - 1, self.nz)),
+                "vb_dyn":  np.zeros((self.N - 1, self.n_dyn)),
                 "vb_term": np.zeros((mission.n_term+mission.n_term_ineq+mission.n_term_ctcs, 1)),
             },
             "weights": problem.method.weights,
@@ -456,13 +457,12 @@ class Subproblem:
                 C.append(self.dz[k + 1] + self.z_ref[k + 1] - self.z_m[k + 1] == rhs)
 
                 if self.buff_dyn != "term":
-                    C.append(self.vb_dyn_p[k] >= 0)
-                    C.append(self.vb_dyn_m[k] >= 0)
-                
-                if self.buff_dyn == "quad-2":
-                    C.append(cp.sum(self.vb_dyn_p[k, :]) == self.vb_plus[k])
-                    C.append(cp.sum(self.vb_dyn_m[k, :]) == self.vb_minus[k])
+                    C.append(self.vb_dyn_p[k, indices.z["state"]] >= 0)
+                    C.append(self.vb_dyn_m[k, indices.z["state"]] >= 0)
 
+                if self.ctcs != "term" and n_ctcs > 0:
+                    C.append(self.vb_dyn_p[k, indices.z["ctcs"]] >= 0)
+                    C.append(self.vb_dyn_m[k, indices.z["ctcs"]] >= 0)
 
                 # CTCS coupling on extra components
                 if method.flags["ctcs"] != "none" and n_ctcs>0:
@@ -757,9 +757,9 @@ class Subproblem:
         # Convergence data (buffers, defects, TR cost, ref cost)
         conv = {}
         conv["soln"]    = self.subproblem
-        conv["vb_ineq"] = tools.get_val(self.vb_ineq,  rows=self.n_ineq, cols=self.N) if self.vb_ineq  is not None else np.zeros((self.n_ineq,  self.N))
-        conv["vb_term"] = tools.get_val(self.vb_term,  rows=self.n_term_total, cols=1)      if self.vb_term  is not None else np.zeros((self.n_term_total_total,  1))
-        conv["vb_dyn"]  = tools.get_val(self.vb_dyn_p, rows=self.n_dyn,  cols=self.N-1) - tools.get_val(self.vb_dyn_m, rows=self.n_dyn, cols=self.N-1)
+        conv["vb_ineq"] = tools.get_val(self.vb_ineq,  rows=self.N, cols=self.n_ineq) if self.vb_ineq  is not None else np.zeros((self.N,self.n_ineq))
+        conv["vb_term"] = tools.get_val(self.vb_term,  rows=1, cols=self.n_term_total) if self.vb_term  is not None else np.zeros((1, self.n_term_total_total))
+        conv["vb_dyn"]  = tools.get_val(self.vb_dyn_p, rows=self.N-1,  cols=self.n_dyn) - tools.get_val(self.vb_dyn_m, rows=self.N-1, cols=self.n_dyn)
 
         conv["defect"]  = tools.safe_val(self.dz, rows=N, cols=n) + input_for_iter["z_ref"] - self.z_m.value
         conv["Jtr"]     = ( float(self.wtr_z.value) * np.sum(tools.safe_val(self.dz, rows=N, cols=n)**2)

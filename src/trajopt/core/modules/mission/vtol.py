@@ -61,7 +61,7 @@ def get_cost_cnstr_nondim(problem):
     nm = method.nondim["nm"]
 
     ncost = method.nondim["nv"]
-    np_ineq = np.array([1, 1, nm / (nd * nt**2), 1, 1])
+    np_ineq = np.array([1.0, 1.0, 1.0, 1.0, 1.0])
 
     return ncost, np_ineq
 

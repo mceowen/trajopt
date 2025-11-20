@@ -72,7 +72,7 @@ def custom_cost(subproblem):
 
     for k in range(method.N - 1):
 
-        TRUE_COST   += cp.square(subproblem.u_slack[k]) + 100 * subproblem.dt[k]
+        TRUE_COST   += cp.square(subproblem.u_slack[k]) + subproblem.dt[k]
 
         jerk        = (subproblem.nu_ref[k + 1] + subproblem.dnu[k + 1] - subproblem.nu_ref[k] - subproblem.dnu[k])
         # JERK_COST += w_jerk * cp.sum_squares(jerk)

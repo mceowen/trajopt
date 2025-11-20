@@ -53,10 +53,10 @@ weights:
   eps_nonzero1:   0.2
   eps_nonzero2:   0.0000000001
   wbuff:          100.0
-  w_nfz_scale:    100.0
+  w_nfz_scale:    1.0
   w_path_scale:   0.0
   w_custom_scale: 0.0
-  w_dyn_scale:    100000.0
+  w_dyn_scale:    1000.0
   w_term_scale:   100.0
 
 

@@ -8,6 +8,7 @@ def configure_penalty_weights(problem):
     """
 
     mission, model, method  = problem.mission, problem.model, problem.method
+    indices = problem.indices
 
     # --- Default weights ---
     n_ineq = mission.n_path + mission.n_nfz + mission.n_custom
@@ -38,11 +39,11 @@ def configure_penalty_weights(problem):
         # w_path: weight for path constraint buffer cost
         # w_nfz:  weight for nfz constraint buffer cost
 
-    method.weights["wtr_z"] = 1 / (2 * method.weights["alpha_z"])
-    method.weights["wtr_u"] = 0 if np.isinf(method.weights["alpha_u"]) else 1 / (2 * method.weights["alpha_u"])
-
     method.weights["w_fac_N"]      = method.N
     method.weights["w_fac_Nm1"]    = method.N - 1
+
+    method.weights["wtr_z"] = 1 / (2 * method.weights["alpha_z"])
+    method.weights["wtr_u"] = 0 if np.isinf(method.weights["alpha_u"]) else 1 / (2 * method.weights["alpha_u"])
 
     # === Autotune modes (flag_autotune ∈ {0,2,3,al-scvx}) ===
     if str(method.flags["flag_autotune"]) in {"0", "2", "3", "al-scvx"}:
@@ -79,14 +80,37 @@ def configure_penalty_weights(problem):
         method.weights["W_ineq"] = np.hstack([W_path, W_nfz, W_custom])
 
         if method.flags["dynamics_nonconvex"] or method.flags["ctcs"] != "none":
-            buff_dyn = str(method.flags.get("buff_dyn", ""))
-            if buff_dyn in {"l1", "l2"}:
-                method.weights["W_dyn"] += w_dyn
-            elif buff_dyn in {"quad-1", "quad-2", "quad-3"}:
-                method.weights["W_plus"] += w_dyn
-                method.weights["W_minus"] += w_dyn
+
+            z_state_idx = indices.z["state"]
+            z_ctcs_idx = indices.z["ctcs"]
+            term_idx  = indices.constraints.terminal 
+            
+            # real dynamics portion weights
+            if method.flags["buff_dyn"] in {"l1", "l2"}:
+                method.weights["W_dyn"][:, z_state_idx] += w_dyn
+
+            elif method.flags["buff_dyn"] in {"quad-1", "quad-2", "quad-3"}:
+                method.weights["W_plus"][:, z_state_idx] += w_dyn
+                method.weights["W_minus"][:, z_state_idx] += w_dyn
+
             else:
-                method.weights["W_term"] += w_term
+                if len(term_idx["eq"]) > 0:
+                    method.weights["W_term"][term_idx["eq"]] += w_term
+
+                if len(term_idx["ineq"]) > 0:
+                    method.weights["W_term"][term_idx["ineq"]] += w_term
+
+            # ctcs portion weights
+            if method.flags["ctcs"] in {"l1", "l2"}:
+                method.weights["W_dyn"][:, z_ctcs_idx] += w_dyn
+    
+            elif method.flags["ctcs"] in {"quad-1", "quad-2", "quad-3"}:
+                method.weights["W_plus"][:, z_ctcs_idx] += w_dyn
+                method.weights["W_minus"][:, z_ctcs_idx] += w_dyn
+            
+            else:
+                method.weights["W_term"][term_idx["ctcs"]] += w_term
+
 
     # === Autotune mode: {1,3,al-scvx} ===
     if str(method.flags["flag_autotune"]) in {"1", "3", "al-scvx"}:
@@ -109,9 +133,7 @@ def configure_penalty_weights(problem):
                     method.weights["dual_minus"] += method.weights["eps_nonzero1"]
 
     ### ctcs convergence adjustments ###
-    method.weights["w_ctcs"] = 10.0     # TODO(Skye): make this a yaml param
-
-
+    method.weights["w_ctcs"] = 1.0
 
 
 # -------------- PENALTIES ----------------------------------------------------------------------------------------
@@ -412,7 +434,7 @@ def autotune2(problem, iter_record):
 
     Wh_ineq = np.zeros((N, mission.n_ineq))
     Wh_dyn  = np.zeros((N, model.n_dyn))
-    Wh_term = np.zeros(mission.n_term + mission.n_term_ineq)
+    Wh_term = np.zeros(mission.n_term + mission.n_term_ineq + mission.n_term_ctcs)
 
     Wh_plus  = np.zeros((N, method.n_plus))
     Wh_minus = np.zeros((N, method.n_minus))
@@ -433,7 +455,7 @@ def autotune2(problem, iter_record):
             else:
                 Wh_dyn[k, :] = np.sum(np.abs(dual_dyn_buff[-1]))
 
-    if (mission.n_term + mission.n_term_ineq) > 0:
+    if (mission.n_term + mission.n_term_ineq + mission.n_term_ctcs) > 0:
         dual_term_buff = np.diag(W_term) @ vb_term
         Wh_term = np.abs(dual_term_buff / eps_feas_term).flatten()
 

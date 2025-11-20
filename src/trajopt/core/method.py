@@ -65,6 +65,8 @@ class Method:
 
         self.cost_init = discretize.compute_linearized_costs(self.t_init, self.z_init, self.nu_init, problem)[0].sum().item()
 
+        print(f"Cost initial: {self.cost_init}")
+
     def update_method_params(self):
         problem = self.problem
         mission = problem.mission
