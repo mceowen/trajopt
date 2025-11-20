@@ -3,6 +3,7 @@ from trajopt.core.modules.method    import initial_guess as guess
 from trajopt.core.modules.method    import convergence
 from trajopt.core.modules.method    import hyperparameters
 from trajopt.core.modules.method    import discretize
+from trajopt.core.modules.method    import integrators
 
 
 class Method:
@@ -72,6 +73,7 @@ class Method:
         # precompile discretize functions for jax
         if self.flags['jax_dyn'] == 1:
             discretize.jit_jax_discretize(problem)
+            integrators.jit_rk4_jax_dense(problem)
 
         buff_dyn = str(self.flags.get("buff_dyn", "term"))
 

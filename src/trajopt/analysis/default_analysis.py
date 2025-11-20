@@ -4,7 +4,7 @@ import trajopt.utils.tools as tools
 import jax
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
-
+import trajopt.core.modules.method.integrators as integrators
 
 '''
 outline of plt_data structure
@@ -19,63 +19,6 @@ scenario_data = {
 }
 '''
 
-def rk4_propagate_jax_dense(dynamics, z0, nu_ref, t_ref, t_dense, problem):
-
-    z0_jax = jnp.array(z0)
-    nu_ref_jax = jnp.array(nu_ref)
-    t_ref_jax = jnp.array(t_ref)
-    t_dense_jax = jnp.array(t_dense)
-    
-    N_ref = len(t_ref_jax)
-    N_dense = len(t_dense_jax)
-    n = len(z0_jax)
-    
-    def rk4_step(zi, ti, dt, ui, ui_next):
-        k1 = dynamics(ti, zi, ui, problem)
-        u2 = 0.5 * ui + 0.5 * ui_next
-        k2 = dynamics(ti + 0.5*dt, zi + 0.5*dt*k1, u2, problem)
-        k3 = dynamics(ti + 0.5*dt, zi + 0.5*dt*k2, u2, problem)
-        k4 = dynamics(ti + dt, zi + dt*k3, ui_next, problem)
-        zi_next = zi + (dt/6.0) * (k1 + 2*k2 + 2*k3 + k4)
-        return zi_next
-    
-    def interp_control_single(t, t_ref, nu_ref):
-        """First-order hold interpolation of controls at a single time point."""
-        idx = jnp.searchsorted(t_ref, t, side='right') - 1
-        idx = jnp.clip(idx, 0, N_ref - 2)
-        
-        t0 = t_ref[idx]
-        t1 = t_ref[idx + 1]
-        u0 = nu_ref[idx]
-        u1 = nu_ref[idx + 1]
-        
-        alpha = (t - t0) / (t1 - t0 + 1e-10)
-        u = u0 + alpha * (u1 - u0)
-        return u
-    
-    interp_control_vec = jax.vmap(interp_control_single, in_axes=(0, None, None))
-    u_dense = interp_control_vec(t_dense_jax, t_ref_jax, nu_ref_jax)
-    
-    def scan_fn(zi, i):
-        t = t_dense_jax[i]
-        u = u_dense[i]
-        dt = t_dense_jax[i+1] - t_dense_jax[i]
-        u_next = u_dense[i+1]
-        
-        zi_next = rk4_step(zi, t, dt, u, u_next)
-        return zi_next, zi_next
-    
-    def scan_wrapper(z0, xs):
-        _, z_propagated = jax.lax.scan(scan_fn, z0, xs)
-        return z_propagated
-    
-    scan_jit = jax.jit(scan_wrapper)
-    z_propagated = scan_jit(z0_jax, jnp.arange(N_dense - 1))
-    
-    z_jax = jnp.vstack([z0_jax[None, :], z_propagated])
-    z_numpy = np.array(z_jax)
-    
-    return z_numpy
 
 def perform_default_analysis(problem):
 
@@ -109,7 +52,7 @@ def perform_default_analysis(problem):
     }
 
     odesettings = {"atol": 1e-12, "rtol": 1e-12}
-    N_dense = 5 * N
+    N_dense = 20 * N
 
     for data in iter_data:
         
@@ -123,7 +66,7 @@ def perform_default_analysis(problem):
         
         # create dense control interpolation for this iteration
         nu_ref_dense = np.hstack([np.interp(t_dense, t_ref, nu_ref[:, i]).reshape((-1, 1)) for i in range(m)])
-        u_ref_dense = nu_ref_dense @ nondim['M']['ctrl']['nd2d']
+        u_ref_dense = nu_ref_dense
         
         # TODO: need to move this to an integrator module
         # choose integrator based on jax_dyn flag
@@ -133,17 +76,11 @@ def perform_default_analysis(problem):
         
         if use_jax:
             # use JAX-based RK4 propagation
-            z_nl = rk4_propagate_jax_dense(
-                problem.model._dynamics,
-                z_ref_np[0, :n],
-                nu_ref,
-                t_ref,
-                t_dense,
-                problem
-            )
+            z_nl = integrators.propagate_rk4_dense(z_ref_np[0, :n], nu_ref, t_ref, t_dense, problem)
+            
             data['t_nl'] = t_dense * nondim['nt']
             data['z_nl'] = z_nl @ nondim['M']['state']['nd2d']
-            data['u_nl'] = u_ref_dense
+            data['u_nl'] = u_ref_dense @ nondim['M']['ctrl']['nd2d']
         else:
             # use scipy solve_ivp
             def FOH_dynamics(t, z, nu_ref, t_ref):
