@@ -243,6 +243,11 @@ class SCVXPLOTS:
         if 'tinds' in ins: tinds = ins['tinds'];
         if 'y' in ins: ytag = ins['y'];
 
+        dataloc = 'iters';
+        if 'dataloc' in ins: dataloc = ins['dataloc'];
+        # if dataloc == 'weights': iters = [0];
+
+
         leg = None;
         if 'legend' in ins: leg = ins['legend'];
         if not(leg in self.legends):  self.legends[leg] = {};
@@ -257,19 +262,26 @@ class SCVXPLOTS:
                             RUN = RUNS[r];
                             for tind in tinds:
                                 xdata = []; ydata = [];
+                                DAT = RUN['iters'];
                                 for i in iters:
                                     if i < len(RUN['iters']):
                                         xdata.append(i);
-                                        data = RUN['iters'][i];
-                                        if isinstance(ytag,tuple): ydata.append(data[ytag[0]][tind,ytag[1]]);
-                                        else: ydata.append(data[ytag][tind]);
+                                        data = DAT[i];
+                                        if dataloc == 'weights': data = DAT[i]['weights']
+                                        if tind == None: 
+                                            if isinstance(ytag,tuple): ydata.append(data[ytag[0]][ytag[1]]);
+                                            else: ydata.append(data[ytag]);                                            
+                                        else: 
+                                            if isinstance(ytag,tuple): ydata.append(data[ytag[0]][tind,ytag[1]]);
+                                            else: ydata.append(data[ytag][tind]);
+
                                 xdata = np.array(xdata);
                                 ydata = np.array(ydata);
                                 frgba = penn['frgba']; lrgba = penn['lrgba'];
                                 lw = penn['lw']; ls = penn['ls']; msty = penn['msty']; msz = penn['msz']
                                 if typ == 'line':
-                                    if leg == None: ax.plot(xdata,ydata.T,color=lrgba[:3],alpha=lrgba[3],linewidth=lw,linestyle = ls,marker=msty,markersize=msz)
-                                    else: self.legends[leg][label] = ax.plot(xdata,ydata.T,
+                                    if leg == None: ax.plot(xdata,ydata,color=lrgba[:3],alpha=lrgba[3],linewidth=lw,linestyle = ls,marker=msty,markersize=msz)
+                                    else: self.legends[leg][label] = ax.plot(xdata,ydata,
                                                         label=label,color=lrgba[:3],alpha=lrgba[3],
                                                         linewidth=lw,linestyle = ls,marker=msty,markersize=msz)[0]
 
@@ -297,6 +309,9 @@ class SCVXPLOTS:
         if len(labels) == 0: labels = list(self.legends[leg]);
         handles = [self.legends[leg][label] for label in labels];
         ax.legend(handles,labels,**ins)
+
+    def dumpLegend(self,leg):
+        self.legends[leg] = {};
 
     ########## CONSTRUCT SUBPLOTS ##########
     def genGridTags(self,fig,typ=None,params={}):
