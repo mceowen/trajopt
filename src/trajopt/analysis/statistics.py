@@ -133,7 +133,7 @@ def extract_data(config, data):
             all_vars["Total Solve Time (ms)"].append(time_solve)
             all_vars["Total Parse Time (ms)"].append(time_parse)
             all_vars["Total Propagation Time (ms)"].append(time_prop)
-            all_vars["Total Convergence Time (ms)"].append((run_data['t_all'] * 1000) - time_parse)
+            all_vars["Total Convergence Time (ms)"].append((run_data['t_full'] * 1000) - time_parse)
             all_vars["No. of Iteration"].append(num_iters)
             all_vars['Cost'].append(run_data['iters'][-1]['cost'])
             all_vars["Dynamics Defect"].append(avg_state_vec)
