@@ -193,7 +193,7 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
         elif mode_real == "l2":
             for k in range(N - 1):
                 VB += cp.sum_squares(
-                    cp.diag(subprob.W_dyn_sqrt[k, :n]) @ diff_real[k, :]
+                    cp.diag(subprob.W_dyn_sqrt[k, :n]) @ diff_real[k, :] # TODO(Skye/Carlos): use indices here
                 )
 
         # --------------------------------------------------------
@@ -248,7 +248,7 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
         elif mode_ctcs == "l2":
             for k in range(N - 1):
                 VB += cp.sum_squares(
-                    cp.diag(subprob.W_dyn_sqrt[k, n:n+n_ctcs]) @ diff_ctcs[k, :]
+                    cp.diag(subprob.W_dyn_sqrt[k, n:n+n_ctcs]) @ diff_ctcs[k, :] # TODO(Skye/Carlos): use indices here
                 )
 
         # --------------------------------------------------------
