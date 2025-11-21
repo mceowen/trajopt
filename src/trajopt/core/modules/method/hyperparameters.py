@@ -351,56 +351,96 @@ def build_dual_buffer_cost(subprob) -> cp.Expression:
 
 def autotune1(problem, iter_record):
     """
-    Unified version of autotune1 using stacked inequality form (_ineq only).
+    Unified version of autotune1 including dual_plus and dual_minus.
+    Works with stacked inequality and dynamic buffer system.
     """
     mission, model, method  = problem.mission, problem.model, problem.method
 
-    # Access iteration number
+    # Iteration number
     iter_num = iter_record["iter_num"]
 
-    # Extract variables from local_vars
-    vb_ineq = np.array(iter_record["conv_data"]["vb_ineq"])
-    vb_term = np.array(iter_record["conv_data"]["vb_term"])
-    vb_dyn  = np.array(iter_record["conv_data"]["vb_dyn"])  # from O since not in sol_vars
+    # Extract primal buffers
+    vb_ineq  = np.array(iter_record["conv_data"]["vb_ineq"])
+    vb_term  = np.array(iter_record["conv_data"]["vb_term"])
+    vb_dyn   = np.array(iter_record["conv_data"]["vb_dyn"])
+    vb_plus  = np.array(iter_record["conv_data"].get("vb_plus", 0))
+    vb_minus = np.array(iter_record["conv_data"].get("vb_minus", 0))
 
-    dual_ineq = iter_record["weights"]["dual_ineq"]
-    dual_dyn  = iter_record["weights"]["dual_dyn"]
-    dual_term = iter_record["weights"]["dual_term"]
+    # Extract duals
+    dual_ineq  = iter_record["weights"]["dual_ineq"]
+    dual_dyn   = iter_record["weights"]["dual_dyn"]
+    dual_term  = iter_record["weights"]["dual_term"]
+    dual_plus  = iter_record["weights"].get("dual_plus", 0)
+    dual_minus = iter_record["weights"].get("dual_minus", 0)
 
     # Hyperparameters
     if method.flags["stepsize_auto_dual"]:
         beta = gamma = 1 / iter_num
     else:
-        beta = method.weights["beta"]
+        beta  = method.weights["beta"]
         gamma = method.weights["gamma"]
 
-    # === Updates ===
+    # ==========================================
+    # Dual updates
+    # ==========================================
+
+    # inequality
     dual_ineq_plus = np.maximum(0, gamma * vb_ineq + dual_ineq)
-    dual_dyn_plus  = beta * vb_dyn + dual_dyn
+
+    # dynamics
+    dual_dyn_plus = beta * vb_dyn + dual_dyn
+
+    # terminal
     dual_term_plus = beta * vb_term + dual_term
 
-    # Constraint feasibility thresholds
+    # plus/minus (quadratic 1-norm decomposition)
+    dual_plus_plus  = beta * vb_plus  + dual_plus
+    dual_minus_plus = beta * vb_minus + dual_minus
+
+    # ==========================================
+    # Saturation thresholds
+    # ==========================================
     conv = method.conv
     eps_ineq = conv.get("eps_ineq", 1e-6)
     eps_term = conv["eps_term"]
     eps_dyn  = conv["eps_dyn"]
+    eps_quad = conv.get("eps_quad", eps_dyn)   # for vb_plus/vb_minus
 
-    # Apply saturation logic
+    # inequality saturation
     mask_ineq = vb_ineq <= eps_ineq
     dual_ineq_plus[mask_ineq] = dual_ineq[mask_ineq]
 
-    dual_dyn_plus[np.abs(vb_dyn) <= eps_dyn] = dual_dyn[np.abs(vb_dyn) <= eps_dyn]
-    dual_term_plus[np.abs(vb_term) <= eps_term] = dual_term[np.abs(vb_term) <= eps_term]
+    # dynamics
+    mask_dyn = np.abs(vb_dyn) <= eps_dyn
+    dual_dyn_plus[mask_dyn] = dual_dyn[mask_dyn]
 
-    # Update output dictionary
+    # terminal
+    mask_term = np.abs(vb_term) <= eps_term
+    dual_term_plus[mask_term] = dual_term[mask_term]
+
+    # plus
+    mask_plus = np.abs(vb_plus) <= eps_quad
+    dual_plus_plus[mask_plus] = dual_plus if np.isscalar(dual_plus) else dual_plus[mask_plus]
+
+    # minus
+    mask_minus = np.abs(vb_minus) <= eps_quad
+    dual_minus_plus[mask_minus] = dual_minus if np.isscalar(dual_minus) else dual_minus[mask_minus]
+
+    # ==========================================
+    # Update weights
+    # ==========================================
     weights = iter_record["weights"]
     weights.update({
         "dual_ineq": dual_ineq_plus,
-        "dual_dyn": dual_dyn_plus,
+        "dual_dyn":  dual_dyn_plus,
         "dual_term": dual_term_plus,
+        "dual_plus": dual_plus_plus,
+        "dual_minus": dual_minus_plus,
         "data": {
             "dmu_ineq": dual_ineq_plus - dual_ineq,
-            "dmu_eq": dual_term_plus - dual_term
+            "dmu_eq":   dual_term_plus - dual_term,
+            "dmu_plus": dual_plus_plus  - dual_plus,
+            "dmu_minus": dual_minus_plus - dual_minus
         }
     })
 

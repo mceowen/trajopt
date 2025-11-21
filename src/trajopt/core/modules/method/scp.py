@@ -10,6 +10,7 @@ import time
 import numpy as np
 import cvxpy as cp
 import jax.numpy as jnp
+import copy
 
 # trajopt imports
 from trajopt.core.modules.method import discretize as discretize
@@ -167,7 +168,7 @@ class Subproblem:
                 "vb_dyn":  np.zeros((self.N - 1, self.n_dyn)),
                 "vb_term": np.zeros((mission.n_term+mission.n_term_ineq+mission.n_term_ctcs, 1)),
             },
-            "weights": problem.method.weights,
+            "weights": copy.deepcopy(problem.method.weights),
         }]
 
     # -------------------------
@@ -573,7 +574,7 @@ class Subproblem:
                 "dt_ref": last_rec["dt"],
                 "t_ref": last_rec["ts"],
             }
-            weights = last_rec.get("weights", self.problem.method.weights)
+            weights = copy.deepcopy(last_rec.get("weights", self.problem.method.weights))
             conv_data = last_rec.get("conv_data", {})
         else:
             refs = {
@@ -713,7 +714,7 @@ class Subproblem:
         dz_val, dnu_val = self.dz.value, self.dnu.value
         dt_val = self.dt.value if isinstance(self.dt, cp.expressions.expression.Expression) else self.dt
 
-        rec: Dict[str, Any] = dict(input_for_iter)  # include exact inputs used this iteration
+        rec = copy.deepcopy(input_for_iter)
         rec["subprob"] = self.subproblem
 
         if self.subproblem is not None:
