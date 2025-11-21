@@ -102,7 +102,7 @@ class Method:
         ctcs = str(self.flags.get("ctcs", "none"))
 
         # --- ctcs buffering ---
-        if ctcs in {"term", "l1", "l2"}:
+        if ctcs in {"term", "l1", "l2", "none"}:
             self.n_plus_ctcs = 0
             self.n_minus_ctcs = 0
             self.Npm_ctcs = 0
@@ -139,8 +139,6 @@ class Method:
         # --- LTV indexing ---
         discretize.set_ltv_indices(problem)
 
-        # for reference
-        #self.set_weights()
         hyperparameters.configure_penalty_weights(problem)
 
         # ### NFZ convergence values ###
