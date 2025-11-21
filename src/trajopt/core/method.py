@@ -81,23 +81,45 @@ class Method:
 
         # --- Dynamics buffering ---
         if buff_dyn in {"term", "l1", "l2"}:
-            self.n_plus = 0
-            self.n_minus = 0
-            self.Npm = 0
+            self.n_plus_real = 0
+            self.n_minus_real = 0
+            self.Npm_real = 0
         elif buff_dyn == "quad-1":
-            self.n_plus = 1
-            self.n_minus = 1
-            self.Npm = 1
+            self.n_plus_real = 1
+            self.n_minus_real = 1
+            self.Npm_real = 1
         elif buff_dyn == "quad-2":
-            self.n_plus = 1
-            self.n_minus = 1
-            self.Npm = self.N - 1
+            self.n_plus_real = 1
+            self.n_minus_real = 1
+            self.Npm_real = self.N - 1
         elif buff_dyn == "quad-3":
-            self.n_plus = model.nz
-            self.n_minus = model.nz
-            self.Npm = 1
+            self.n_plus_real = model.n
+            self.n_minus_real = model.n
+            self.Npm_real = 1
         else:
             raise ValueError("Invalid buff_dyn flag.")
+
+        ctcs = str(self.flags.get("ctcs", "none"))
+
+        # --- ctcs buffering ---
+        if ctcs in {"term", "l1", "l2"}:
+            self.n_plus_ctcs = 0
+            self.n_minus_ctcs = 0
+            self.Npm_ctcs = 0
+        elif ctcs == "quad-1":
+            self.n_plus_ctcs = 1
+            self.n_minus_ctcs = 1
+            self.Npm_ctcs = 1
+        elif ctcs == "quad-2":
+            self.n_plus_ctcs = 1
+            self.n_minus_ctcs = 1
+            self.Npm_ctcs = self.N - 1
+        elif ctcs == "quad-3":
+            self.n_plus_ctcs = model.n_ctcs
+            self.n_minus_ctcs = model.n_ctcs
+            self.Npm_ctcs = 1
+        else:
+            raise ValueError("Invalid ctcs flag.")
 
         ### Time of flight constraints ###
         Ts_min        = self.T_min / self.nondim["nt"]

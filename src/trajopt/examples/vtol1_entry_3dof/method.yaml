@@ -4,10 +4,11 @@ flags:
   free_final_time: 1      # 0, 1
   dynamics_nonconvex: 1  # 0, 1
   equal_dt: 1             # 0, 1
-  flag_autotune: "0"      # '0', '1', '2
+  flag_autotune: "3"      # '0', '1', '2
   buff_dyn: "term"        # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
   buff_dyn_dual: "none"   # 'l1', 'none'
-  ctcs: 'l1'                 # 0, 1
+  ctcs: 'quad-3'                 # 0, 1
+  ctcs_dual: "none"   # 'l1', 'none'
   ode_fixed_dt: 0         # 0, 1
   nondim: 1               # 0, 1
   jax_dyn: 1              # 0, 1
@@ -21,13 +22,13 @@ T_max: 3000.0
 dT_max: 450.0
 
 conv:
-  ctcs_mult_state: 0.5
-  ctcs_mult_cnst: 2.0
+  ctcs_mult_state: 1.0
+  ctcs_mult_cnst: 1.0
   eps_ctcs: 1e-4
   eps_state: [500, 1, 1, 50, 1, 1]
   eps_cost: 1
-  eps_nfz: [0.1, 0.1]
-  eps_path: [100.0, 100.0, 0.1]
+  eps_nfz: [0.001, 0.001]
+  eps_path: [0.001, 0.001, 0.001]
   eps_term: [333.0, 0.1, 0.1, 100, 0.1, 0.1]
   eps_term_min: [10.0, 1.0, 1.0, 10.0, 1.0, 1.0]
   eps_term_max: [10.0, 1.0, 1.0, 10.0, 1.0, 1.0]

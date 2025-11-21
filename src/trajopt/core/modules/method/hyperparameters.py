@@ -16,14 +16,19 @@ def configure_penalty_weights(problem):
 
     method.weights["W_term"]     = np.zeros(mission.n_term + mission.n_term_ineq + mission.n_term_ctcs)
     method.weights["W_dyn"]      = np.zeros((method.N - 1, model.n_dyn))
-    method.weights["W_plus"]     = np.zeros((method.Npm, method.n_plus))
-    method.weights["W_minus"]    = np.zeros((method.Npm, method.n_minus))
+    method.weights["W_plus_real"]     = np.zeros((method.Npm_real, method.n_plus_real))
+    method.weights["W_minus_real"]    = np.zeros((method.Npm_real, method.n_minus_real))
+    method.weights["W_plus_ctcs"]     = np.zeros((method.Npm_ctcs, method.n_plus_ctcs))
+    method.weights["W_minus_ctcs"]    = np.zeros((method.Npm_ctcs, method.n_minus_ctcs))
 
     method.weights["dual_ineq"]  = np.zeros((method.N, n_ineq))
     method.weights["dual_term"]  = np.zeros(mission.n_term + mission.n_term_ineq + mission.n_term_ctcs)
     method.weights["dual_dyn"]   = np.zeros((method.N - 1, model.n_dyn))
-    method.weights["dual_plus"]  = np.zeros((method.N - 1, model.n_dyn))
-    method.weights["dual_minus"] = np.zeros((method.N - 1, model.n_dyn))
+
+    method.weights["dual_plus_real"]  = np.zeros((method.Npm_real, method.n_plus_real))
+    method.weights["dual_minus_real"] = np.zeros((method.Npm_real, method.n_minus_real))
+    method.weights["dual_plus_ctcs"]  = np.zeros((method.Npm_ctcs, method.n_plus_ctcs))
+    method.weights["dual_minus_ctcs"] = np.zeros((method.Npm_ctcs, method.n_minus_ctcs))
 
     # local block arrays
     W_path          = np.zeros((method.N, mission.n_path))
@@ -90,8 +95,8 @@ def configure_penalty_weights(problem):
                 method.weights["W_dyn"][:, z_state_idx] += w_dyn
 
             elif method.flags["buff_dyn"] in {"quad-1", "quad-2", "quad-3"}:
-                method.weights["W_plus"] += w_dyn
-                method.weights["W_minus"] += w_dyn
+                method.weights["W_plus_real"] += w_dyn
+                method.weights["W_minus_real"] += w_dyn
 
             else:
                 if len(term_idx["eq"]) > 0:
@@ -104,12 +109,9 @@ def configure_penalty_weights(problem):
             if method.flags["ctcs"] in {"l1", "l2"}:
                 method.weights["W_dyn"][:, z_ctcs_idx] += w_dyn
     
-            elif (
-                    method.flags["ctcs"] in {"quad-1", "quad-2", "quad-3"}
-                    and method.flags["buff_dyn"] not in {"quad-1", "quad-2", "quad-3"}
-                ):
-                method.weights["W_plus"]+= w_dyn
-                method.weights["W_minus"] += w_dyn
+            elif method.flags["ctcs"] in {"quad-1", "quad-2", "quad-3"}:
+                method.weights["W_plus_ctcs"]+= w_dyn
+                method.weights["W_minus_ctcs"] += w_dyn
             
             else:
                 method.weights["W_term"][term_idx["ctcs"]] += w_term
@@ -136,7 +138,7 @@ def configure_penalty_weights(problem):
                     method.weights["dual_minus"] += method.weights["eps_nonzero1"]
 
     ### ctcs convergence adjustments ###
-    method.weights["w_ctcs"] = 1.0
+    method.weights["w_ctcs"] = 2.0
 
 
 # -------------- PENALTIES ----------------------------------------------------------------------------------------
@@ -178,7 +180,7 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
     mode_real = method.flags["buff_dyn"]   # {"none","term","l1","l2","quad-1","quad-2"}
 
     if subprob.vb_dyn_real_p is not None and n > 0:
-        diff_real = subprob.vb_dyn_real_p - subprob.vb_dyn_real_m
+        diff_real = subprob.vb_dyn_p[:, :n] - subprob.vb_dyn_m[:, :n]
 
         # --------------------------------------------------------
         # L1 penalty
@@ -197,43 +199,40 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
                 )
 
         # --------------------------------------------------------
-        # QUAD-1 : Global aggregated quadratic penalty (k = 1 only)
+        # QUAD-1 or QUAD-3: k = 1 only
         # --------------------------------------------------------
-        elif mode_real == "quad-1":
-            if subprob.vb_plus is not None:
+        elif mode_real == "quad-1" or mode_real == "quad-3":
+            if subprob.vb_plus_real is not None:
                 VB += cp.sum_squares(
-                    cp.diag(subprob.W_plus_sqrt[0, :]) @ subprob.vb_plus[0, :]
+                    cp.diag(subprob.W_plus_real_sqrt[0, :]) @ subprob.vb_plus_real[0, :]
                 )
-            if subprob.vb_minus is not None:
+            if subprob.vb_minus_real is not None:
                 VB += cp.sum_squares(
-                    cp.diag(subprob.W_minus_sqrt[0, :]) @ subprob.vb_minus[0, :]
+                    cp.diag(subprob.W_minus_real_sqrt[0, :]) @ subprob.vb_minus_real[0, :]
                 )
 
         # --------------------------------------------------------
         # QUAD-2 : Per-time-step quadratic penalties
         # --------------------------------------------------------
         elif mode_real == "quad-2":
-            if subprob.vb_plus is not None:
-                for k in range(subprob.Npm):
+            if subprob.vb_plus_real is not None:
+                for k in range(subprob.Npm_real):
                     VB += cp.sum_squares(
-                        cp.diag(subprob.W_plus_sqrt[k, :]) @ subprob.vb_plus[k, :]
+                        cp.diag(subprob.W_plus_real_sqrt[k, :]) @ subprob.vb_plus_real[k, :]
                     )
-            if subprob.vb_minus is not None:
-                for k in range(subprob.Npm):
+            if subprob.vb_minus_real is not None:
+                for k in range(subprob.Npm_real):
                     VB += cp.sum_squares(
-                        cp.diag(subprob.W_minus_sqrt[k, :]) @ subprob.vb_minus[k, :]
+                        cp.diag(subprob.W_minus_real_sqrt[k, :]) @ subprob.vb_minus_real[k, :]
                     )
-
-        # mode_real == "term" or "none": no dynamic quadratic penalty
-
 
     # ============================================================
     # CTCS DYNAMICS BUFFERING   (last n_ctcs states)
     # ============================================================
     mode_ctcs = method.flags["ctcs"]       # {"none","term","l1","l2","quad-1","quad-2"}
 
-    if subprob.vb_dyn_ctcs_p is not None and n_ctcs > 0:
-        diff_ctcs = subprob.vb_dyn_ctcs_p - subprob.vb_dyn_ctcs_m
+    if subprob.vb_dyn_p is not None and n_ctcs > 0:
+        diff_ctcs = subprob.vb_dyn_p[:, n:] - subprob.vb_dyn_m[:, n:]
 
         # --------------------------------------------------------
         # L1 penalty
@@ -252,40 +251,37 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
                 )
 
         # --------------------------------------------------------
-        # QUAD-1 : Global aggregated quadratic penalty (k = 1 only)
+        # QUAD-1 or QUAD-3: k = 1 only
         # --------------------------------------------------------
-        elif mode_ctcs == "quad-1":
-            if subprob.vb_plus is not None:
+        elif mode_ctcs == "quad-1" or mode_ctcs == "quad-3":
+            if subprob.vb_plus_ctcs is not None:
                 VB += cp.sum_squares(
-                    cp.diag(subprob.W_plus_sqrt[0, :]) @ subprob.vb_plus[0, :]
+                    cp.diag(subprob.W_plus_ctcs_sqrt[0, :]) @ subprob.vb_plus_ctcs[0, :]
                 )
-            if subprob.vb_minus is not None:
+            if subprob.vb_minus_ctcs is not None:
                 VB += cp.sum_squares(
-                    cp.diag(subprob.W_minus_sqrt[0, :]) @ subprob.vb_minus[0, :]
+                    cp.diag(subprob.W_minus_ctcs_sqrt[0, :]) @ subprob.vb_minus_ctcs[0, :]
                 )
 
         # --------------------------------------------------------
         # QUAD-2 : Per-time-step quadratic penalties
         # --------------------------------------------------------
         elif mode_ctcs == "quad-2":
-            if subprob.vb_plus is not None:
-                for k in range(subprob.Npm):
+            if subprob.vb_plus_ctcs is not None:
+                for k in range(subprob.Npm_ctcs):
                     VB += cp.sum_squares(
-                        cp.diag(subprob.W_plus_sqrt[k, :]) @ subprob.vb_plus[k, :]
+                        cp.diag(subprob.W_plus_ctcs_sqrt[k, :]) @ subprob.vb_plus_ctcs[k, :]
                     )
-            if subprob.vb_minus is not None:
-                for k in range(subprob.Npm):
+            if subprob.vb_minus_ctcs is not None:
+                for k in range(subprob.Npm_ctcs):
                     VB += cp.sum_squares(
-                        cp.diag(subprob.W_minus_sqrt[k, :]) @ subprob.vb_minus[k, :]
+                        cp.diag(subprob.W_minus_ctcs_sqrt[k, :]) @ subprob.vb_minus_ctcs[k, :]
                     )
 
     # ------------------------------------------------------------
     # Final scaling (flag multiplies entire VB block)
     # ------------------------------------------------------------
     return 0.5 * subprob.flag_vb * VB
-
-
-
 
 def build_dual_buffer_cost(subprob) -> cp.Expression:
     """
@@ -295,6 +291,8 @@ def build_dual_buffer_cost(subprob) -> cp.Expression:
     method = subprob.problem.method
     mode_real     = method.flags["buff_dyn"]        # {'none','term','l1','l2','quad-1','quad-2','quad-3'}
     mode_real_dual = method.flags["buff_dyn_dual"]  # MATLAB: buff_dyn_dual
+    mode_ctcs     = method.flags["ctcs"]            # {'none','term','l1','l2','quad-1','quad-2','quad-3'}
+    mode_ctcs_dual = method.flags["ctcs_dual"]
 
     DUAL = 0.0
 
@@ -311,30 +309,56 @@ def build_dual_buffer_cost(subprob) -> cp.Expression:
     DUAL += cp.sum(cp.multiply(diff, subprob.dual_dyn))
 
     # ============================================================
-    # QUAD-1 and QUAD-2 dual components
+    # QUAD-1, QUAD-2, QUAD-3 dual components
     # ============================================================
     # These exist ONLY if buff_dyn_dual == 'l1'
     if mode_real_dual == "l1":
 
         # -----------------------
-        # QUAD-1  (k == 1 only)
+        # QUAD-1 or QUAD-3: k == 1 only
         # -----------------------
-        if mode_real == "quad-1":
-            if subprob.vb_plus is not None and subprob.dual_plus is not None:
-                DUAL += subprob.dual_plus[0, :] @ subprob.vb_plus[0, :]
-            if subprob.vb_minus is not None and subprob.dual_minus is not None:
-                DUAL += subprob.dual_minus[0, :] @ subprob.vb_minus[0, :]
+        if mode_real == "quad-1" or mode_real == "quad-3":
+            if subprob.vb_plus_real is not None and subprob.dual_plus_real is not None:
+                DUAL += subprob.dual_plus_real[0, :] @ subprob.vb_plus_real[0, :]
+            if subprob.vb_minus_real is not None and subprob.dual_minus_real is not None:
+                DUAL += subprob.dual_minus_real[0, :] @ subprob.vb_minus_real[0, :]
 
         # -----------------------
         # QUAD-2  (per time index)
         # -----------------------
         elif mode_real == "quad-2":
-            if subprob.vb_plus is not None and subprob.dual_plus is not None:
+            if subprob.vb_plus_real is not None and subprob.dual_plus_real is not None:
                 for k in range(subprob.Npm):
-                    DUAL += subprob.dual_plus[k, :] @ subprob.vb_plus[k, :]
-            if subprob.vb_minus is not None and subprob.dual_minus is not None:
-                for k in range(subprob.Npm):
-                    DUAL += subprob.dual_minus[k, :] @ subprob.vb_minus[k, :]
+                    DUAL += subprob.dual_plus_real[k, :] @ subprob.vb_plus_real[k, :]
+            if subprob.vb_minus_real is not None and subprob.dual_minus_real is not None:
+                for k in range(subprob.Npm_real):
+                    DUAL += subprob.dual_minus_real[k, :] @ subprob.vb_minus_real[k, :]
+
+    # ============================================================
+    # CTCS DUAL COST
+    # ============================================================
+    # These exist ONLY if ctcs_dual == 'l1'
+    if mode_ctcs_dual == "l1":
+
+        # -----------------------
+        # QUAD-1 or QUAD-3: k == 1 only
+        # -----------------------
+        if mode_ctcs == "quad-1" or mode_ctcs == "quad-3":
+            if subprob.vb_plus_ctcs is not None and subprob.dual_plus_ctcs is not None:
+                DUAL += subprob.dual_plus_ctcs[0, :] @ subprob.vb_plus_ctcs[0, :]
+            if subprob.vb_minus_ctcs is not None and subprob.dual_minus_ctcs is not None:
+                DUAL += subprob.dual_minus_ctcs[0, :] @ subprob.vb_minus_ctcs[0, :]
+
+        # -----------------------
+        # QUAD-2  (per time index)
+        # -----------------------
+        elif mode_ctcs == "quad-2":
+            if subprob.vb_plus_ctcs is not None and subprob.dual_plus_ctcs is not None:
+                for k in range(subprob.Npm_ctcs):
+                    DUAL += subprob.dual_plus_ctcs[k, :] @ subprob.vb_plus_ctcs[k, :]
+            if subprob.vb_minus_ctcs is not None and subprob.dual_minus_ctcs is not None:
+                for k in range(subprob.Npm_ctcs):
+                    DUAL += subprob.dual_minus_ctcs[k, :] @ subprob.vb_minus_ctcs[k, :]
 
     # ============================================================
     # Terminal dual cost
@@ -343,8 +367,6 @@ def build_dual_buffer_cost(subprob) -> cp.Expression:
         DUAL += subprob.dual_term @ subprob.vb_term
 
     return DUAL
-
-
 
 
 # -------------- AUTOTUNING SCHEMES ----------------------------------------------------------------------------------------
@@ -363,15 +385,23 @@ def autotune1(problem, iter_record):
     vb_ineq  = np.array(iter_record["conv_data"]["vb_ineq"])
     vb_term  = np.array(iter_record["conv_data"]["vb_term"])
     vb_dyn   = np.array(iter_record["conv_data"]["vb_dyn"])
-    vb_plus  = np.array(iter_record["conv_data"].get("vb_plus", 0))
-    vb_minus = np.array(iter_record["conv_data"].get("vb_minus", 0))
+    
+    vb_plus_real  = np.array(iter_record["conv_data"]["vb_plus_real"])
+    vb_minus_real = np.array(iter_record["conv_data"]["vb_minus_real"])
+    
+    vb_plus_ctcs  = np.array(iter_record["conv_data"]["vb_plus_ctcs"])
+    vb_minus_ctcs = np.array(iter_record["conv_data"]["vb_minus_ctcs"])
 
     # Extract duals
     dual_ineq  = iter_record["weights"]["dual_ineq"]
     dual_dyn   = iter_record["weights"]["dual_dyn"]
     dual_term  = iter_record["weights"]["dual_term"]
-    dual_plus  = iter_record["weights"].get("dual_plus", 0)
-    dual_minus = iter_record["weights"].get("dual_minus", 0)
+    
+    dual_plus_real  = iter_record["weights"]["dual_plus_real"]
+    dual_minus_real = iter_record["weights"]["dual_minus_real"]
+    
+    dual_plus_ctcs  = iter_record["weights"]["dual_plus_ctcs"]
+    dual_minus_ctcs = iter_record["weights"]["dual_minus_ctcs"]
 
     # Hyperparameters
     if method.flags["stepsize_auto_dual"]:
@@ -394,8 +424,11 @@ def autotune1(problem, iter_record):
     dual_term_plus = beta * vb_term + dual_term
 
     # plus/minus (quadratic 1-norm decomposition)
-    dual_plus_plus  = beta * vb_plus  + dual_plus
-    dual_minus_plus = beta * vb_minus + dual_minus
+    dual_plus_plus_real  = beta * vb_plus_real  + dual_plus_real
+    dual_minus_plus_real = beta * vb_minus_real + dual_minus_real
+
+    dual_plus_plus_ctcs  = beta * vb_plus_ctcs  + dual_plus_ctcs
+    dual_minus_plus_ctcs = beta * vb_minus_ctcs + dual_minus_ctcs
 
     # ==========================================
     # Saturation thresholds
@@ -418,13 +451,24 @@ def autotune1(problem, iter_record):
     mask_term = np.abs(vb_term) <= eps_term
     dual_term_plus[mask_term] = dual_term[mask_term]
 
+
+    # real plus/minus
     # plus
-    mask_plus = np.abs(vb_plus) <= eps_quad
-    dual_plus_plus[mask_plus] = dual_plus if np.isscalar(dual_plus) else dual_plus[mask_plus]
+    mask_plus_real = np.abs(vb_plus_real) <= eps_quad
+    dual_plus_plus_real[mask_plus_real] = dual_plus_real[mask_plus_real]
 
     # minus
-    mask_minus = np.abs(vb_minus) <= eps_quad
-    dual_minus_plus[mask_minus] = dual_minus if np.isscalar(dual_minus) else dual_minus[mask_minus]
+    mask_minus_real = np.abs(vb_minus_real) <= eps_quad
+    dual_minus_plus_real[mask_minus_real] = dual_minus_real[mask_minus_real]
+
+    # ctcs plus/minus
+    # plus
+    mask_plus_ctcs = np.abs(vb_plus_ctcs) <= eps_quad
+    dual_plus_plus_ctcs[mask_plus_ctcs] = dual_plus_ctcs[mask_plus_ctcs]
+
+    # minus
+    mask_minus_ctcs = np.abs(vb_minus_ctcs) <= eps_quad
+    dual_minus_plus_ctcs[mask_minus_ctcs] = dual_minus_ctcs[mask_minus_ctcs]
 
     # ==========================================
     # Update weights
@@ -434,13 +478,17 @@ def autotune1(problem, iter_record):
         "dual_ineq": dual_ineq_plus,
         "dual_dyn":  dual_dyn_plus,
         "dual_term": dual_term_plus,
-        "dual_plus": dual_plus_plus,
-        "dual_minus": dual_minus_plus,
+        "dual_plus_real": dual_plus_plus_real,
+        "dual_minus_real": dual_minus_plus_real,
+        "dual_plus_ctcs": dual_plus_plus_ctcs,
+        "dual_minus_ctcs": dual_minus_plus_ctcs,
         "data": {
             "dmu_ineq": dual_ineq_plus - dual_ineq,
             "dmu_eq":   dual_term_plus - dual_term,
-            "dmu_plus": dual_plus_plus  - dual_plus,
-            "dmu_minus": dual_minus_plus - dual_minus
+            "dmu_plus_real": dual_plus_plus_real  - dual_plus_real,
+            "dmu_minus_real": dual_minus_plus_real - dual_minus_real,
+            "dmu_plus_ctcs": dual_plus_plus_ctcs  - dual_plus_ctcs,
+            "dmu_minus_ctcs": dual_minus_plus_ctcs - dual_minus_ctcs,
         }
     })
 
@@ -459,9 +507,19 @@ def autotune2(problem, iter_record):
     vb_dyn  = np.array(iter_record["conv_data"]["vb_dyn"])  # Assuming vb_dyn_plus is in sol_vars
     vb_term = np.array(iter_record["conv_data"]["vb_term"])
 
+    vb_plus_real = np.array(iter_record["conv_data"]["vb_plus_real"])
+    vb_minus_real = np.array(iter_record["conv_data"]["vb_minus_real"])
+    vb_plus_ctcs = np.array(iter_record["conv_data"]["vb_plus_ctcs"])
+    vb_minus_ctcs = np.array(iter_record["conv_data"]["vb_minus_ctcs"])
+
     W_ineq = np.array(iter_record["weights"]["W_ineq"])
     W_dyn  = np.array(iter_record["weights"]["W_dyn"])
     W_term = np.array(iter_record["weights"]["W_term"])
+
+    W_plus_real  = np.array(iter_record["weights"]["W_plus_real"])
+    W_minus_real = np.array(iter_record["weights"]["W_minus_real"])
+    W_plus_ctcs  = np.array(iter_record["weights"]["W_plus_ctcs"])
+    W_minus_ctcs = np.array(iter_record["weights"]["W_minus_ctcs"])
 
     # Extract parameters for autotuning
     eps_feas_ineq = method.conv.get("eps_ineq", 1e-6)
@@ -471,56 +529,89 @@ def autotune2(problem, iter_record):
     eps_nonzero2 = method.weights["eps_nonzero2"]
 
     buff_dyn = method.flags["buff_dyn"]
-
-    dual_ineq_buff = []
-    dual_dyn_buff  = []
+    ctcs = method.flags["ctcs"]
 
     Wh_ineq = np.zeros((N, mission.n_ineq))
     Wh_dyn  = np.zeros((N, model.n_dyn))
     Wh_term = np.zeros(mission.n_term + mission.n_term_ineq + mission.n_term_ctcs)
 
-    Wh_plus  = np.zeros((N, method.n_plus))
-    Wh_minus = np.zeros((N, method.n_minus))
+    Wh_plus_real  = np.zeros((method.Npm_real, method.n_plus_real))
+    Wh_minus_real = np.zeros((method.Npm_real, method.n_minus_real))
+    Wh_plus_ctcs  = np.zeros((method.Npm_ctcs, method.n_plus_ctcs))
+    Wh_minus_ctcs = np.zeros((method.Npm_ctcs, method.n_minus_ctcs))
 
-    # Autotune matrices via dual variables and feasibility tolerance
+    # ==========================================
+    # COMPUTE AUTOTUNE UPDATES
+    # ==========================================
+
+    if buff_dyn == "quad-1":
+        Wh_plus_real = np.abs(W_plus_real @ vb_plus_real) / eps_feas_dyn
+        Wh_minus_real = np.abs(W_minus_real @ vb_minus_real) / eps_feas_dyn
+
+    if ctcs == "quad-1":
+        Wh_plus_ctcs = np.abs(W_plus_ctcs @ vb_plus_ctcs) / eps_feas_dyn
+        Wh_minus_ctcs = np.abs(W_minus_ctcs @ vb_minus_ctcs) / eps_feas_dyn
+
+    # TODO: add quad-3 case
+
+    if buff_dyn == "quad-3":
+        for j in range(model.n):
+            Wh_plus_real[:, j] = np.sum(np.abs(np.diag(W_plus_real[:, j]) @ vb_plus_real[:, j] / eps_feas_dyn))
+            Wh_minus_real[:, j] = np.sum(np.abs(np.diag(W_minus_real[:, j]) @ vb_minus_real[:, j] / eps_feas_dyn))
+    if ctcs == "quad-3":
+        for j in range(model.n_ctcs):
+            Wh_plus_ctcs[:, j] = np.sum(np.abs(np.diag(W_plus_ctcs[:, j]) @ vb_plus_ctcs[:, j] / eps_feas_dyn))
+            Wh_minus_ctcs[:, j] = np.sum(np.abs(np.diag(W_minus_ctcs[:, j]) @ vb_minus_ctcs[:, j] / eps_feas_dyn))
+
     for k in range(N):
-        dual_ineq_buff.append(np.diag(W_ineq[k, :]) @ vb_ineq[k, :].flatten())
+        dual_ineq_buff = np.diag(W_ineq[k, :]) @ vb_ineq[k, :].flatten()
 
         if mission.n_ineq > 0:
-            Wh_ineq[k, :] = np.abs(dual_ineq_buff[-1] / eps_feas_ineq)
+            Wh_ineq[k, :] = np.abs(dual_ineq_buff / eps_feas_ineq)
         else:
-            Wh_ineq[k, :] = np.abs(dual_ineq_buff[-1])
+            Wh_ineq[k, :] = np.abs(dual_ineq_buff)
 
         if k < N - 1:
-            dual_dyn_buff.append(np.diag(W_dyn[k, :]) @ vb_dyn[k, :])
+            dual_dyn_buff = np.diag(W_dyn[k, :]) @ vb_dyn[k, :]
+            
             if buff_dyn:
-                Wh_dyn[k, :] = np.sum(np.abs(dual_dyn_buff[-1]) / eps_feas_dyn)
+                Wh_dyn[k, :] = np.sum(np.abs(dual_dyn_buff) / eps_feas_dyn)
             else:
-                Wh_dyn[k, :] = np.sum(np.abs(dual_dyn_buff[-1]))
+                Wh_dyn[k, :] = np.sum(np.abs(dual_dyn_buff))
+
+            if buff_dyn == "quad-2":
+                Wh_plus_real[k]  = np.sum(np.abs(np.diag(W_plus_real[k, :]) @ vb_plus_real[k, :] / eps_feas_dyn))
+                Wh_minus_real[k] = np.sum(np.abs(np.diag(W_minus_real[k, :]) @ vb_minus_real[k, :] / eps_feas_dyn))
+            
+            if ctcs == "quad-2":
+                Wh_plus_ctcs[k]  = np.sum(np.abs(np.diag(W_plus_ctcs[k, :]) @ vb_plus_ctcs[k, :] / eps_feas_dyn))
+                Wh_minus_ctcs[k] = np.sum(np.abs(np.diag(W_minus_ctcs[k, :]) @ vb_minus_ctcs[k, :] / eps_feas_dyn))
 
     if (mission.n_term + mission.n_term_ineq + mission.n_term_ctcs) > 0:
         dual_term_buff = np.diag(W_term) @ vb_term
         Wh_term = np.abs(dual_term_buff / eps_feas_term).flatten()
 
-    # Extract field names and create buffer nametags
-    W_fn = [key for key in iter_record["weights"].keys() if key.startswith("W")]
-    nametags = [key.split("_")[1] for key in W_fn if key.startswith("W")]
+    # ==========================================
+    # UPDATE WEIGHTS WITH COMPUTED AUTOTUNE UPDATES
+    # ==========================================
 
-    for i_field in nametags:
-        if i_field not in {"plus", "minus"}:
-            W_field = f"W_{i_field}"
-            Wh_field = f"Wh_{i_field}"
-            vb_field = f"vb_{i_field}"
-            eps_feas = f"eps_feas_{i_field}"
-            Wconv_field = f"Wconv_{i_field}"
+    if np.sum(method.weights["W_plus_real"]) > 0: Wh_plus_real[Wh_plus_real <= eps_nonzero2] = eps_nonzero2 
+    if np.sum(method.weights["W_minus_real"]) > 0: Wh_minus_real[Wh_minus_real <= eps_nonzero2] = eps_nonzero2
+    if np.sum(method.weights["W_plus_ctcs"]) > 0: Wh_plus_ctcs[Wh_plus_ctcs <= eps_nonzero2] = eps_nonzero2
+    if np.sum(method.weights["W_minus_ctcs"]) > 0: Wh_minus_ctcs[Wh_minus_ctcs <= eps_nonzero2] = eps_nonzero2
 
-            if np.sum(method.weights[W_field]) == 0:
-                iter_record["weights"][W_field] = eval(W_field)
-            else:
-                exec(f"{Wh_field}[{Wh_field} <= eps_nonzero2] = eps_nonzero2")
+    if np.sum(method.weights["W_ineq"]) > 0: Wh_ineq[Wh_ineq <= eps_nonzero2] = eps_nonzero2  
+    if np.sum(method.weights["W_dyn"]) > 0: Wh_dyn[Wh_dyn <= eps_nonzero2] = eps_nonzero2
+    if np.sum(method.weights["W_term"]) > 0: Wh_term[Wh_term <= eps_nonzero2] = eps_nonzero2
 
-                # Create updated weight
-                iter_record["weights"][W_field] = eval(Wh_field)
+    iter_record["weights"]["W_plus_real"] = Wh_plus_real 
+    iter_record["weights"]["W_minus_real"] = Wh_minus_real
+    iter_record["weights"]["W_plus_ctcs"] = Wh_plus_ctcs
+    iter_record["weights"]["W_minus_ctcs"] = Wh_minus_ctcs
+
+    iter_record["weights"]["W_ineq"] = Wh_ineq
+    iter_record["weights"]["W_dyn"] = Wh_dyn
+    iter_record["weights"]["W_term"] = Wh_term
 
     # --- Store diagnostics ---
     iter_record["weights"]["data"] = {}
@@ -534,7 +625,7 @@ def autotune2(problem, iter_record):
     for k in range(N):
         iter_record["weights"]["data"]["ineq"] = {
             "Wxq": np.diag(W_ineq[k, :]) @ vb_ineq[k, :],
-            "dual": dual_ineq_buff[k]
+            "dual": 0.0 #dual_ineq_buff[k] # TODO (CARLOS): add this back
         }
 
     iter_record["weights"]["data"]["term"]["delta"] = (

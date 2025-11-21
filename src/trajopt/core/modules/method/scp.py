@@ -116,9 +116,12 @@ class Subproblem:
         self.n_term_ctcs = int(mission.n_term_ctcs)
         self.n_term_total = int(self.n_term + self.n_term_ineq + self.n_term_ctcs)
         self.n_dyn      = int(getattr(mission, "n_dyn", model.nz))
-        self.Npm        = int(getattr(method, "Npm", 0))
-        self.n_plus     = int(getattr(method, "n_plus", 0))
-        self.n_minus    = int(getattr(method, "n_minus", 0))
+        self.Npm_real        = int(getattr(method, "Npm_real", 0))
+        self.n_plus_real     = int(getattr(method, "n_plus_real", 0))
+        self.n_minus_real    = int(getattr(method, "n_minus_real", 0))
+        self.Npm_ctcs        = int(getattr(method, "Npm_ctcs", 0))
+        self.n_plus_ctcs     = int(getattr(method, "n_plus_ctcs", 0))
+        self.n_minus_ctcs    = int(getattr(method, "n_minus_ctcs", 0))
 
         # Optional module flags as Parameters (enable gating)
         self.flags          = method.flags
@@ -304,8 +307,10 @@ class Subproblem:
         )
 
         # Aggregate buffers (optional)
-        self.vb_plus  = cp.Variable((self.Npm, self.n_plus),  name="vb_plus")  if self.n_plus  > 0 else None
-        self.vb_minus = cp.Variable((self.Npm, self.n_minus), name="vb_minus") if self.n_minus > 0 else None
+        self.vb_plus_real  = cp.Variable((self.Npm_real, self.n_plus_real),  name="vb_plus_real")  if self.n_plus_real  > 0 else None
+        self.vb_minus_real = cp.Variable((self.Npm_real, self.n_minus_real), name="vb_minus_real") if self.n_minus_real > 0 else None
+        self.vb_plus_ctcs  = cp.Variable((self.Npm_ctcs, self.n_plus_ctcs),  name="vb_plus_ctcs")  if self.n_plus_ctcs  > 0 else None
+        self.vb_minus_ctcs = cp.Variable((self.Npm_ctcs, self.n_minus_ctcs), name="vb_minus_ctcs") if self.n_minus_ctcs > 0 else None
 
     def _create_parameters(self) -> None:
         mission, model, method = self.problem.mission, self.problem.model, self.problem.method
@@ -351,14 +356,20 @@ class Subproblem:
         self.W_ineq  = cp.Parameter((N,  max(self.n_ineq, 1)),  nonneg=True, name="W_ineq")
         self.W_term  = cp.Parameter((max(self.n_term_total, 1),),     nonneg=True, name="W_term")
         self.W_dyn   = cp.Parameter((N - 1, max(nz, 1)),        nonneg=True, name="W_dyn")
-        self.W_plus  = cp.Parameter((max(self.Npm, 1), max(self.n_plus, 1)),  nonneg=True, name="W_plus")
-        self.W_minus = cp.Parameter((max(self.Npm, 1), max(self.n_minus, 1)), nonneg=True, name="W_minus")
+
+        self.W_plus_real  = cp.Parameter((max(self.Npm_real, 1), max(self.n_plus_real, 1)),  nonneg=True, name="W_plus_real")
+        self.W_minus_real = cp.Parameter((max(self.Npm_real, 1), max(self.n_minus_real, 1)), nonneg=True, name="W_minus_real")
+        self.W_plus_ctcs  = cp.Parameter((max(self.Npm_ctcs, 1), max(self.n_plus_ctcs, 1)),  nonneg=True, name="W_plus_ctcs")
+        self.W_minus_ctcs = cp.Parameter((max(self.Npm_ctcs, 1), max(self.n_minus_ctcs, 1)), nonneg=True, name="W_minus_ctcs")
         # ----------------------------------------------------------------------------------------------------------
         self.W_ineq_sqrt  = cp.Parameter((N,  max(self.n_ineq, 1)),  nonneg=True, name="W_ineq_sqrt")
         self.W_term_sqrt  = cp.Parameter((max(self.n_term_total, 1),),     nonneg=True, name="W_term_sqrt")
         self.W_dyn_sqrt   = cp.Parameter((N - 1, max(nz, 1)),        nonneg=True, name="W_dyn_sqrt")
-        self.W_plus_sqrt  = cp.Parameter((max(self.Npm, 1), max(self.n_plus, 1)),  nonneg=True, name="W_plus_sqrt")
-        self.W_minus_sqrt = cp.Parameter((max(self.Npm, 1), max(self.n_minus, 1)), nonneg=True, name="W_minus_sqrt")
+        
+        self.W_plus_real_sqrt  = cp.Parameter((max(self.Npm_real, 1), max(self.n_plus_real, 1)),  nonneg=True, name="W_plus_real_sqrt")
+        self.W_minus_real_sqrt = cp.Parameter((max(self.Npm_real, 1), max(self.n_minus_real, 1)), nonneg=True, name="W_minus_real_sqrt")
+        self.W_plus_ctcs_sqrt  = cp.Parameter((max(self.Npm_ctcs, 1), max(self.n_plus_ctcs, 1)),  nonneg=True, name="W_plus_ctcs_sqrt")
+        self.W_minus_ctcs_sqrt = cp.Parameter((max(self.Npm_ctcs, 1), max(self.n_minus_ctcs, 1)), nonneg=True, name="W_minus_ctcs_sqrt")
         # ----------------------------------------------------------------------------------------------------------
         self.w_ineq_row = cp.Parameter(N,  nonneg=True, name="w_ineq_row")  if self.n_ineq > 0 else None
         self.w_dyn_row  = cp.Parameter(N - 1, nonneg=True, name="w_dyn_row")
@@ -366,14 +377,18 @@ class Subproblem:
         self.W_ineq.value  = np.ones((N,  max(self.n_ineq, 1)))
         self.W_term.value  = np.ones((max(self.n_term_total, 1),))
         self.W_dyn.value   = np.ones((N - 1, max(nz, 1)))
-        self.W_plus.value  = np.ones((max(self.Npm, 1), max(self.n_plus, 1)))
-        self.W_minus.value = np.ones((max(self.Npm, 1), max(self.n_minus, 1)))
+        self.W_plus_real.value  = np.ones((max(self.Npm_real, 1), max(self.n_plus_real, 1)))
+        self.W_minus_real.value = np.ones((max(self.Npm_real, 1), max(self.n_minus_real, 1)))
+        self.W_plus_ctcs.value  = np.ones((max(self.Npm_ctcs, 1), max(self.n_plus_ctcs, 1)))
+        self.W_minus_ctcs.value = np.ones((max(self.Npm_ctcs, 1), max(self.n_minus_ctcs, 1)))
         # ----------------------------------------------------------------------------------------------------------
         self.W_ineq_sqrt.value  = np.sqrt(self.W_ineq.value)
         self.W_term_sqrt.value  = np.sqrt(self.W_term.value)
         self.W_dyn_sqrt.value   = np.sqrt(self.W_dyn.value)
-        self.W_plus_sqrt.value  = np.sqrt(self.W_plus.value)
-        self.W_minus_sqrt.value = np.sqrt(self.W_minus.value)
+        self.W_plus_real_sqrt.value  = np.sqrt(self.W_plus_real.value)
+        self.W_minus_real_sqrt.value = np.sqrt(self.W_minus_real.value)
+        self.W_plus_ctcs_sqrt.value  = np.sqrt(self.W_plus_ctcs.value)
+        self.W_minus_ctcs_sqrt.value = np.sqrt(self.W_minus_ctcs.value)
         # ----------------------------------------------------------------------------------------------------------
         if self.w_ineq_row is not None:
             self.w_ineq_row.value = np.max(self.W_ineq.value, axis=1)
@@ -382,8 +397,12 @@ class Subproblem:
         # duals (same ≥1-column pattern, unified inequality structure)
         self.dual_ineq  = cp.Parameter((N,  max(self.n_ineq, 1)), name="dual_ineq")
         self.dual_dyn   = cp.Parameter((N - 1, nz),              name="dual_dyn")
-        self.dual_plus  = cp.Parameter((max(self.Npm, 1), max(self.n_plus, 1)),  name="dual_plus")
-        self.dual_minus = cp.Parameter((max(self.Npm, 1), max(self.n_minus, 1)), name="dual_minus")
+        
+        self.dual_plus_real  = cp.Parameter((max(self.Npm_real, 1), max(self.n_plus_real, 1)),  name="dual_plus_real")
+        self.dual_minus_real = cp.Parameter((max(self.Npm_real, 1), max(self.n_minus_real, 1)), name="dual_minus_real")
+        self.dual_plus_ctcs  = cp.Parameter((max(self.Npm_ctcs, 1), max(self.n_plus_ctcs, 1)),  name="dual_plus_ctcs")
+        self.dual_minus_ctcs = cp.Parameter((max(self.Npm_ctcs, 1), max(self.n_minus_ctcs, 1)), name="dual_minus_ctcs")
+        
         self.dual_term  = cp.Parameter((max(self.n_term_total, 1),),                  name="dual_term")
 
         # CTCS epsilon (scalar)
@@ -436,14 +455,28 @@ class Subproblem:
             )
         
         if self.buff_dyn == "quad-1":
-            C.append(cp.sum(self.vb_dyn_p) == self.vb_plus)
-            C.append(cp.sum(self.vb_dyn_m) == self.vb_minus)
+            C.append(cp.sum(self.vb_dyn_p) == self.vb_plus_real)
+            C.append(cp.sum(self.vb_dyn_m) == self.vb_minus_real)
+
+        if self.ctcs == "quad-1":
+            C.append(cp.sum(self.vb_dyn_p) == self.vb_plus_ctcs)
+            C.append(cp.sum(self.vb_dyn_m) == self.vb_minus_ctcs)
+
+        if self.buff_dyn == "quad-2":
+            C.append(cp.sum(self.vb_dyn_p[:, indices.z["state"]], axis=1) == self.vb_plus_real[:, 0])
+            C.append(cp.sum(self.vb_dyn_m[:, indices.z["state"]], axis=1) == self.vb_minus_real[:, 0])
+
+        if self.ctcs == "quad-2":
+            C.append(cp.sum(self.vb_dyn_p[:, indices.z["ctcs"]], axis=1) == self.vb_plus_ctcs[:, 0])
+            C.append(cp.sum(self.vb_dyn_m[:, indices.z["ctcs"]], axis=1) == self.vb_minus_ctcs[:, 0])
 
         if self.buff_dyn == "quad-3":
-            for j in range(self.nz):
-                C.append(cp.sum(self.vb_dyn_p[:, j]) == self.vb_plus[j])
-                C.append(cp.sum(self.vb_dyn_m[:, j]) == self.vb_minus[j])
-
+            C.append(cp.sum(self.vb_dyn_p[:, indices.z["state"]], axis=0) == self.vb_plus_real[0, :])
+            C.append(cp.sum(self.vb_dyn_m[:, indices.z["state"]], axis=0) == self.vb_minus_real[0, :])
+        
+        if self.ctcs == "quad-3":
+            C.append(cp.sum(self.vb_dyn_p[:, indices.z["ctcs"]], axis=0) == self.vb_plus_ctcs[0, :])
+            C.append(cp.sum(self.vb_dyn_m[:, indices.z["ctcs"]], axis=0) == self.vb_minus_ctcs[0, :])
 
         # Per-stage constraints
         for k in range(N):
@@ -465,7 +498,7 @@ class Subproblem:
                 if self.ctcs != "term" and n_ctcs > 0:
                     C.append(self.vb_dyn_p[k, indices.z["ctcs"]] >= 0)
                     C.append(self.vb_dyn_m[k, indices.z["ctcs"]] >= 0)
-
+                
                 # CTCS coupling on extra components
                 if method.flags["ctcs"] != "none" and n_ctcs>0:
                     C.append(
@@ -642,22 +675,28 @@ class Subproblem:
         W_ineq_arr = tools.ensure_shape(W.get("W_ineq", 0.0), (self.N, max(self.n_ineq, 1)))
         W_term_arr = tools.ensure_shape(W.get("W_term", 0.0), (max(self.n_term_total, 1),))
         W_dyn_arr  = tools.ensure_shape(W.get("W_dyn",  0.0), (self.N - 1, max(self.nz, 1)))
-        W_plus_arr = tools.ensure_shape(W.get("W_plus", 0.0), (max(self.Npm, 1), max(self.n_plus,  1)))
-        W_minus_arr= tools.ensure_shape(W.get("W_minus",0.0), (max(self.Npm, 1), max(self.n_minus, 1)))
+        W_plus_real_arr = tools.ensure_shape(W.get("W_plus_real", 0.0), (max(self.Npm_real, 1), max(self.n_plus_real,  1)))
+        W_minus_real_arr = tools.ensure_shape(W.get("W_minus_real",0.0), (max(self.Npm_real, 1), max(self.n_minus_real, 1)))
+        W_plus_ctcs_arr = tools.ensure_shape(W.get("W_plus_ctcs", 0.0), (max(self.Npm_ctcs, 1), max(self.n_plus_ctcs,  1)))
+        W_minus_ctcs_arr = tools.ensure_shape(W.get("W_minus_ctcs",0.0), (max(self.Npm_ctcs, 1), max(self.n_minus_ctcs, 1)))
         # ------------------------------------------------------------------
         # Assign to CVXPY parameters
         self.W_ineq.value  = W_ineq_arr
         self.W_term.value  = W_term_arr
         self.W_dyn.value   = W_dyn_arr
-        self.W_plus.value  = W_plus_arr
-        self.W_minus.value = W_minus_arr
+        self.W_plus_real.value  = W_plus_real_arr
+        self.W_minus_real.value = W_minus_real_arr
+        self.W_plus_ctcs.value  = W_plus_ctcs_arr
+        self.W_minus_ctcs.value = W_minus_ctcs_arr
         # ------------------------------------------------------------------
         # Square-rooted parameters (for quadratic penalties)
         self.W_ineq_sqrt.value  = np.sqrt(W_ineq_arr)
         self.W_term_sqrt.value  = np.sqrt(W_term_arr)
         self.W_dyn_sqrt.value   = np.sqrt(W_dyn_arr)
-        self.W_plus_sqrt.value  = np.sqrt(W_plus_arr)
-        self.W_minus_sqrt.value = np.sqrt(W_minus_arr)
+        self.W_plus_real_sqrt.value  = np.sqrt(W_plus_real_arr)
+        self.W_minus_real_sqrt.value = np.sqrt(W_minus_real_arr)
+        self.W_plus_ctcs_sqrt.value  = np.sqrt(W_plus_ctcs_arr)
+        self.W_minus_ctcs_sqrt.value = np.sqrt(W_minus_ctcs_arr)
         # ------------------------------------------------------------------
         # Rowwise scalar reductions (for DCP-safe convex weighting)
         if self.w_ineq_row is not None:
@@ -668,8 +707,10 @@ class Subproblem:
         # Dual variables (unified inequality structure)
         self.dual_ineq.value  = tools.ensure_shape(W.get("dual_ineq", 0.0), (self.N, max(self.n_ineq, 1)))
         self.dual_dyn.value   = tools.ensure_shape(W.get("dual_dyn",  0.0), (self.N - 1, self.nz))
-        self.dual_plus.value  = tools.ensure_shape(W.get("dual_plus", 0.0), (max(self.Npm, 1), max(self.n_plus,  1)))
-        self.dual_minus.value = tools.ensure_shape(W.get("dual_minus",0.0), (max(self.Npm, 1), max(self.n_minus, 1)))
+        self.dual_plus_real.value  = tools.ensure_shape(W.get("dual_plus_real", 0.0), (max(self.Npm_real, 1), max(self.n_plus_real,  1)))
+        self.dual_minus_real.value = tools.ensure_shape(W.get("dual_minus_real",0.0), (max(self.Npm_real, 1), max(self.n_minus_real, 1)))
+        self.dual_plus_ctcs.value  = tools.ensure_shape(W.get("dual_plus_ctcs", 0.0), (max(self.Npm_ctcs, 1), max(self.n_plus_ctcs,  1)))
+        self.dual_minus_ctcs.value = tools.ensure_shape(W.get("dual_minus_ctcs",0.0), (max(self.Npm_ctcs, 1), max(self.n_minus_ctcs, 1)))
         self.dual_term.value  = tools.ensure_shape(W.get("dual_term", 0.0), (max(self.n_term_total,1),))
 
 
@@ -762,6 +803,10 @@ class Subproblem:
         conv["vb_ineq"] = tools.get_val(self.vb_ineq,  rows=self.N, cols=self.n_ineq) if self.vb_ineq  is not None else np.zeros((self.N,self.n_ineq))
         conv["vb_term"] = tools.get_val(self.vb_term,  rows=1, cols=self.n_term_total) if self.vb_term  is not None else np.zeros((1, self.n_term_total))
         conv["vb_dyn"]  = tools.get_val(self.vb_dyn_p, rows=self.N-1,  cols=self.n_dyn) - tools.get_val(self.vb_dyn_m, rows=self.N-1, cols=self.n_dyn)
+        conv["vb_plus_real"] = tools.get_val(self.vb_plus_real, rows=self.Npm_real, cols=self.n_plus_real) if self.vb_plus_real  is not None else np.zeros((self.Npm_real, self.n_plus_real))
+        conv["vb_minus_real"] = tools.get_val(self.vb_minus_real, rows=self.Npm_real, cols=self.n_minus_real) if self.vb_minus_real  is not None else np.zeros((self.Npm_real, self.n_minus_real))
+        conv["vb_plus_ctcs"] = tools.get_val(self.vb_plus_ctcs, rows=self.Npm_ctcs, cols=self.n_plus_ctcs) if self.vb_plus_ctcs  is not None else np.zeros((self.Npm_ctcs, self.n_plus_ctcs))
+        conv["vb_minus_ctcs"] = tools.get_val(self.vb_minus_ctcs, rows=self.Npm_ctcs, cols=self.n_minus_ctcs) if self.vb_minus_ctcs  is not None else np.zeros((self.Npm_ctcs, self.n_minus_ctcs))
 
         conv["defect"]  = tools.safe_val(self.dz, rows=N, cols=n) + input_for_iter["z_ref"] - self.z_m.value
         conv["Jtr"]     = ( float(self.wtr_z.value) * np.sum(tools.safe_val(self.dz, rows=N, cols=n)**2)

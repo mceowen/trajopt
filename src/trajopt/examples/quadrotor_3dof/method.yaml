@@ -5,9 +5,10 @@ flags:
   dynamics_nonconvex: 1       # 0, 1
   equal_dt:           1       # 0, 1
   flag_autotune:      "3"     # '0', '1', '2', '3'
-  buff_dyn:           "term"  # "none", 'term', 'l1', 'l2', 'quad-1', 'quad-2', 'quad-3', 'l1_dual'
+  buff_dyn:           "quad-2"  # "none", 'term', 'l1', 'l2', 'quad-1', 'quad-2', 'quad-3', 'l1_dual'
   buff_dyn_dual:      "none"  # 'l1', 'none'
-  ctcs:               "none"  # 'none', 'term', 'l1', 'l2', 'quad-1', 'quad-2', 'quad-3'
+  ctcs:               "quad-3"  # 'none', 'term', 'l1', 'l2', 'quad-1', 'quad-2', 'quad-3'
+  ctcs_dual:          "none"  # 'l1', 'none'
   ode_fixed_dt:       0       # 0, 1
   nondim:             0       # 0, 1
   jax_dyn:            1       # 0, 1
@@ -36,7 +37,7 @@ conv:
   eps_ctcs:         1e-4
   eps_state:        [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
   eps_cost:         1.0
-  eps_nfz:          [0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
+  eps_nfz:          [0.001, 0.001, 0.001, 0.001, 0.001, 0.001]
   eps_term:         [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
   eps_term_min:     [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
   eps_term_max:     [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
