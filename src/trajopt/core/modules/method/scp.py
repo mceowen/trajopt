@@ -110,10 +110,10 @@ class Subproblem:
         self.n_nfz      = int(mission.n_nfz)
         self.n_custom   = int(getattr(mission, "n_custom", 0))
         self.n_ineq     = int(mission.n_ineq)
-        self.n_term     = int(mission.n_term + mission.n_term_ineq)
+        self.n_term     = int(mission.n_term)
         self.n_term_ineq = int(mission.n_term_ineq)
         self.n_term_ctcs = int(mission.n_term_ctcs)
-        self.n_term_total = self.n_term + mission.n_term_ineq + self.n_term_ctcs
+        self.n_term_total = int(self.n_term + self.n_term_ineq + self.n_term_ctcs)
         self.n_dyn      = int(getattr(mission, "n_dyn", model.nz))
         self.Npm        = int(getattr(method, "Npm", 0))
         self.n_plus     = int(getattr(method, "n_plus", 0))
@@ -419,7 +419,8 @@ class Subproblem:
         if mission.n_term>0 and self.zN is not None:
             vbN = self.vb_term[term_idx["eq"]] if self.vb_term is not None else 0.0
             C.append(
-                self.dz[-1, term_idx["eq"]] + self.z_ref[-1, term_idx["eq"]] - vbN == self.zN
+                #self.dz[-1, term_idx["eq"]] + self.z_ref[-1, term_idx["eq"]] - vbN == self.zN
+                self.dz[-1, mission.zf_idx] + self.z_ref[-1, mission.zf_idx] - vbN == self.zN
             )
         if mission.n_term_ineq>0 and self.zN_min is not None and self.zN_max is not None:
             vbNiq = self.vb_term[term_idx["ineq"]] if self.vb_term is not None else 0.0
@@ -758,7 +759,7 @@ class Subproblem:
         conv = {}
         conv["soln"]    = self.subproblem
         conv["vb_ineq"] = tools.get_val(self.vb_ineq,  rows=self.N, cols=self.n_ineq) if self.vb_ineq  is not None else np.zeros((self.N,self.n_ineq))
-        conv["vb_term"] = tools.get_val(self.vb_term,  rows=1, cols=self.n_term_total) if self.vb_term  is not None else np.zeros((1, self.n_term_total_total))
+        conv["vb_term"] = tools.get_val(self.vb_term,  rows=1, cols=self.n_term_total) if self.vb_term  is not None else np.zeros((1, self.n_term_total))
         conv["vb_dyn"]  = tools.get_val(self.vb_dyn_p, rows=self.N-1,  cols=self.n_dyn) - tools.get_val(self.vb_dyn_m, rows=self.N-1, cols=self.n_dyn)
 
         conv["defect"]  = tools.safe_val(self.dz, rows=N, cols=n) + input_for_iter["z_ref"] - self.z_m.value
