@@ -90,8 +90,8 @@ def configure_penalty_weights(problem):
                 method.weights["W_dyn"][:, z_state_idx] += w_dyn
 
             elif method.flags["buff_dyn"] in {"quad-1", "quad-2", "quad-3"}:
-                method.weights["W_plus"][:, z_state_idx] += w_dyn
-                method.weights["W_minus"][:, z_state_idx] += w_dyn
+                method.weights["W_plus"] += w_dyn
+                method.weights["W_minus"] += w_dyn
 
             else:
                 if len(term_idx["eq"]) > 0:
@@ -104,9 +104,12 @@ def configure_penalty_weights(problem):
             if method.flags["ctcs"] in {"l1", "l2"}:
                 method.weights["W_dyn"][:, z_ctcs_idx] += w_dyn
     
-            elif method.flags["ctcs"] in {"quad-1", "quad-2", "quad-3"}:
-                method.weights["W_plus"][:, z_ctcs_idx] += w_dyn
-                method.weights["W_minus"][:, z_ctcs_idx] += w_dyn
+            elif (
+                    method.flags["ctcs"] in {"quad-1", "quad-2", "quad-3"}
+                    and method.flags["buff_dyn"] not in {"quad-1", "quad-2", "quad-3"}
+                ):
+                method.weights["W_plus"]+= w_dyn
+                method.weights["W_minus"] += w_dyn
             
             else:
                 method.weights["W_term"][term_idx["ctcs"]] += w_term
