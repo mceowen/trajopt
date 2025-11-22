@@ -138,7 +138,7 @@ def configure_penalty_weights(problem):
                     method.weights["dual_minus"] += method.weights["eps_nonzero1"]
 
     ### ctcs convergence adjustments ###
-    method.weights["w_ctcs"] = 1.5
+    method.weights["w_ctcs"] = 2.0
 
 
 # -------------- PENALTIES ----------------------------------------------------------------------------------------

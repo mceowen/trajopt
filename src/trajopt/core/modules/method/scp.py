@@ -799,7 +799,6 @@ class Subproblem:
  
         # Convergence data (buffers, defects, TR cost, ref cost)
         conv = {}
-        conv["soln"]    = self.subproblem
         conv["vb_ineq"] = tools.get_val(self.vb_ineq,  rows=self.N, cols=self.n_ineq) if self.vb_ineq  is not None else np.zeros((self.N,self.n_ineq))
         conv["vb_term"] = tools.get_val(self.vb_term,  rows=1, cols=self.n_term_total) if self.vb_term  is not None else np.zeros((1, self.n_term_total))
         conv["vb_dyn"]  = tools.get_val(self.vb_dyn_p, rows=self.N-1,  cols=self.n_dyn) - tools.get_val(self.vb_dyn_m, rows=self.N-1, cols=self.n_dyn)

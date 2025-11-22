@@ -170,7 +170,6 @@ def check_convergence_tolerance(problem, subprob, iter_record):
 
     # --- Load convergence data
     conv_data = iter_record["conv_data"]
-    soln      = conv_data["soln"]
 
     # --- Extract dimensions from Subproblem
     n = subprob.n
