@@ -83,7 +83,7 @@ def subprob_variable_scaling(problem, local_vars):
     var_scl_flag    = method.flags["var_scl_flag"]
 
     z_ref          = I["z_ref"]
-    nu_ref          = I["us_ref"]
+    nu_ref          = I["nu_ref"]
     z_max           = mission.z_max
     z_min           = mission.z_min
     u_max           = mission.u_max
@@ -235,7 +235,7 @@ if __name__ == "__main__":
 
     # Define a dummy problem for testing
     problem = {
-        "I": [{"z_ref": np.random.rand(3, 4), "us_ref": np.random.rand(2, 4)}],
+        "I": [{"z_ref": np.random.rand(3, 4), "nu_ref": np.random.rand(2, 4)}],
         "params": {
             "nz": 3,
             "m": 2,

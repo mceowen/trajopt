@@ -87,7 +87,7 @@ def custom_variables(problem,local_vars):
 
 def custom_constraints(CNST,local_vars):
 
-    nu_ref     = local_vars["us_ref"]
+    nu_ref     = local_vars["nu_ref"]
     du         = local_vars["sol_vars"]["du"]
     u_slack    = local_vars["u_slack"]
     u_norm_min = local_vars["u_norm_min"]
@@ -114,7 +114,7 @@ def custom_cost(PTR_COST,local_vars):
     t_ref    = local_vars["t_ref"]
     N         = local_vars["N"]
     u_slack   = local_vars["u_slack"]
-    nu_ref    = local_vars["us_ref"]
+    nu_ref    = local_vars["nu_ref"]
     du        = local_vars["sol_vars"]["du"]
     ncost     = local_vars["ncost"]
     # w_jerk  = local_vars["w_jerk"]  # Uncomment if you include JERK_COST term

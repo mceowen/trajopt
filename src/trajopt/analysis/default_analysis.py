@@ -54,47 +54,47 @@ def perform_default_analysis(problem):
     odesettings = {"atol": 1e-12, "rtol": 1e-12}
     N_dense = 20 * N
 
-    for data in iter_data:
+    for data in iter_data[1:]:
         
         # get reference trajectory for this iteration (in nondimensional coordinates)
-        t_ref = np.asarray(data['t_ref'])
-        z_ref = np.asarray(data['z_ref'])
-        nu_ref = np.asarray(data['us_ref'])
+        t_opt = np.asarray(data['t_opt'])
+        z_opt = np.asarray(data['z_opt'])
+        nu_opt = np.asarray(data["nu_opt"])
         
         # create dense time grid for this iteration based on its reference trajectory time span
-        t_dense = np.linspace(t_ref[0], t_ref[-1], N_dense)
+        t_dense = np.linspace(t_opt[0], t_opt[-1], N_dense)
         
         # create dense control interpolation for this iteration
-        nu_ref_dense = np.hstack([np.interp(t_dense, t_ref, nu_ref[:, i]).reshape((-1, 1)) for i in range(m)])
-        u_ref_dense = nu_ref_dense
+        nu_opt_dense = np.hstack([np.interp(t_dense, t_opt, nu_opt[:, i]).reshape((-1, 1)) for i in range(m)])
+        u_ref_dense = nu_opt_dense
         
         # TODO: need to move this to an integrator module
         # choose integrator based on jax_dyn flag
         use_jax = problem.method.flags.get("jax_dyn", 0)
         
-        z_ref_np = np.asarray(z_ref)
+        z_opt_np = np.asarray(z_opt)
         
         if use_jax:
             # use JAX-based RK4 propagation
-            z_nl = integrators.propagate_rk4_dense(z_ref_np[0, :n], nu_ref, t_ref, t_dense, problem)
+            z_nl = integrators.propagate_rk4_dense(z_opt_np[0, :n], nu_opt, t_opt, t_dense, problem)
             
             data['t_nl'] = t_dense * nondim['nt']
             data['z_nl'] = z_nl @ nondim['M']['state']['nd2d']
-            data['u_nl'] = u_ref_dense @ nondim['M']['ctrl']['nd2d']
+            data['nu_nl'] = u_ref_dense @ nondim['M']['ctrl']['nd2d']
         else:
             # use scipy solve_ivp
-            def FOH_dynamics(t, z, nu_ref, t_ref):
+            def FOH_dynamics(t, z, nu_opt, t_opt):
                 """First-order hold dynamics for RK45 integration."""
                 # Interpolate control at time t (each control dimension separately)
-                u_t = np.array([np.interp(t, t_ref, nu_ref[:, i]) for i in range(m)])
+                u_t = np.array([np.interp(t, t_opt, nu_opt[:, i]) for i in range(m)])
                 # Call model dynamics
                 return problem.model.dynamics(t, z, u_t)
             
             sol = solve_ivp(
                 FOH_dynamics,
-                [t_ref[0], t_ref[-1]],
-                z_ref_np[0, :n],
-                args=(nu_ref, t_ref),
+                [t_opt[0], t_opt[-1]],
+                z_opt_np[0, :n],
+                args=(nu_opt, t_opt),
                 t_eval=t_dense,
                 method='RK45',
                 **odesettings
@@ -102,15 +102,18 @@ def perform_default_analysis(problem):
             
             data['t_nl'] = t_dense * nondim['nt']
             data['z_nl'] = sol.y.T @ nondim['M']['state']['nd2d']
-            data['u_nl'] = u_ref_dense
+            data['nu_nl'] = u_ref_dense @ nondim['M']['ctrl']['nd2d']
 
-        data['t_ref'] = data['t_ref'] * nondim['nt']
-        data['z_ref'] = data['z_ref'][:, :n] @ nondim['M']['state']['nd2d']
-        data['u_ref'] = data['us_ref'] @ nondim['M']['ctrl']['nd2d']
+        # data['t_opt'] = data['t_opt'] * nondim['nt']
+        # data['z_opt'] = data['z_opt'][:, :n] @ nondim['M']['state']['nd2d']
+        # data['u_ref'] = data["nu_opt"] @ nondim['M']['ctrl']['nd2d']
 
-        if 'ts' in data:
-            data['t'] = data['ts'] * nondim['nt']
-            data['z'] = data['zs'][:, :n] @ nondim['M']['state']['nd2d']
-            data['u'] = data['us'] @ nondim['M']['ctrl']['nd2d']
+        data['t_init'] = problem.method.t_init * nondim['nt']
+        data['z_init'] = problem.method.z_init[:, :n] @ nondim['M']['state']['nd2d']
+        data['u_init'] = problem.method.nu_init @ nondim['M']['ctrl']['nd2d']
+
+        data['t_opt'] = data["t_opt"] * nondim['nt']
+        data['z_opt'] = data["z_opt"][:, :n] @ nondim['M']['state']['nd2d']
+        data['nu_opt'] = data["nu_opt"] @ nondim['M']['ctrl']['nd2d']
 
     return {'iters': iter_data, 'params': params_dict}
