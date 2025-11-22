@@ -595,14 +595,14 @@ def autotune2(problem, iter_record):
     # UPDATE WEIGHTS WITH COMPUTED AUTOTUNE UPDATES
     # ==========================================
 
-    if np.sum(method.weights["W_plus_real"]) > 0: Wh_plus_real[Wh_plus_real <= eps_nonzero2] = eps_nonzero2 
-    if np.sum(method.weights["W_minus_real"]) > 0: Wh_minus_real[Wh_minus_real <= eps_nonzero2] = eps_nonzero2
-    if np.sum(method.weights["W_plus_ctcs"]) > 0: Wh_plus_ctcs[Wh_plus_ctcs <= eps_nonzero2] = eps_nonzero2
-    if np.sum(method.weights["W_minus_ctcs"]) > 0: Wh_minus_ctcs[Wh_minus_ctcs <= eps_nonzero2] = eps_nonzero2
+    if np.sum(W_plus_real) > 0: Wh_plus_real[Wh_plus_real <= eps_nonzero2] = eps_nonzero2 
+    if np.sum(W_minus_real) > 0: Wh_minus_real[Wh_minus_real <= eps_nonzero2] = eps_nonzero2
+    if np.sum(W_plus_ctcs) > 0: Wh_plus_ctcs[Wh_plus_ctcs <= eps_nonzero2] = eps_nonzero2
+    if np.sum(W_minus_ctcs) > 0: Wh_minus_ctcs[Wh_minus_ctcs <= eps_nonzero2] = eps_nonzero2
 
-    if np.sum(method.weights["W_ineq"]) > 0: Wh_ineq[Wh_ineq <= eps_nonzero2] = eps_nonzero2  
-    if np.sum(method.weights["W_dyn"]) > 0: Wh_dyn[Wh_dyn <= eps_nonzero2] = eps_nonzero2
-    if np.sum(method.weights["W_term"]) > 0: Wh_term[Wh_term <= eps_nonzero2] = eps_nonzero2
+    if np.sum(W_ineq) > 0: Wh_ineq[Wh_ineq <= eps_nonzero2] = eps_nonzero2  
+    if np.sum(W_dyn) > 0: Wh_dyn[Wh_dyn <= eps_nonzero2] = eps_nonzero2
+    if np.sum(W_term) > 0: Wh_term[Wh_term <= eps_nonzero2] = eps_nonzero2
 
     iter_record["weights"]["W_plus_real"] = Wh_plus_real 
     iter_record["weights"]["W_minus_real"] = Wh_minus_real

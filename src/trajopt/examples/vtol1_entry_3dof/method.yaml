@@ -34,11 +34,11 @@ dT_max: 450.0
 conv:
   ctcs_mult_state: 1.0
   ctcs_mult_cnst: 1.0
-  eps_ctcs: 1e-4
+  eps_ctcs: 1e-16
   eps_state: [500, 1, 1, 50, 1, 1]
   eps_cost: 1
   eps_nfz: [0.001, 0.001]
-  eps_path: [0.001, 0.001, 0.001]
+  eps_path: [0.0001, 0.0001, 0.0001]
   eps_term: [333.0, 0.1, 0.1, 100, 0.1, 0.1]
   eps_term_min: [10.0, 1.0, 1.0, 10.0, 1.0, 1.0]
   eps_term_max: [10.0, 1.0, 1.0, 10.0, 1.0, 1.0]
