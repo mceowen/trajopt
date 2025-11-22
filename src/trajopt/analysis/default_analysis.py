@@ -110,7 +110,7 @@ def perform_default_analysis(problem):
 
         data['t_init'] = problem.method.t_init * nondim['nt']
         data['z_init'] = problem.method.z_init[:, :n] @ nondim['M']['state']['nd2d']
-        data['u_init'] = problem.method.nu_init @ nondim['M']['ctrl']['nd2d']
+        data['nu_init'] = problem.method.nu_init @ nondim['M']['ctrl']['nd2d']
 
         data['t_opt'] = data["t_opt"] * nondim['nt']
         data['z_opt'] = data["z_opt"][:, :n] @ nondim['M']['state']['nd2d']

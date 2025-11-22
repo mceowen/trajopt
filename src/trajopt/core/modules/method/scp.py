@@ -163,7 +163,7 @@ class Subproblem:
         self.iter_data: List[Dict[str, Any]] = [{
             "iter_num": 0,  # init only (no outputs yet)
             "z_ref": problem.method.z_init,
-            "us_ref": problem.method.nu_init,
+            "nu_ref": problem.method.nu_init,
             "dt_ref": problem.method.dt_init,
             "t_ref": problem.method.t_init,
             "conv_data": {
@@ -227,7 +227,7 @@ class Subproblem:
                 self.dt = (1 / (N - 1)) * self.dT * np.ones((N - 1, 1))
             else:
                 self.dT = None
-                self.dt = cp.Variable((N - 1, 1), name="dt")
+                self.dt = cp.Variable((N - 1, 1), name="dt_opt")
         else:
             self.dT = None
             self.dt = cp.Constant(np.zeros((N - 1, 1)))  # CVXPY constant, safe in constraints
@@ -328,7 +328,7 @@ class Subproblem:
         self.w_cost_times_cost0   = cp.Parameter(N,      name="cost0")
 
         self.z_ref  = cp.Parameter((N, nz),    name="z_ref")
-        self.nu_ref  = cp.Parameter((N, m),    name="us_ref")
+        self.nu_ref  = cp.Parameter((N, m),    name="nu_ref")
         self.dt_ref = cp.Parameter((N - 1, 1),name="dt_ref", nonneg=True)
 
         # Path/NFZ/AUX linearized constraints
@@ -600,19 +600,19 @@ class Subproblem:
         last_rec = self.iter_data[-1]
         k_prev = int(last_rec.get("iter_num", 0))
 
-        if all(key in last_rec for key in ("zs", "us", "dt", "ts")):
+        if all(key in last_rec for key in ("z_opt", "nu_opt", "dt_opt", "t_opt")):
             refs = {
-                "z_ref": last_rec["zs"],
-                "us_ref": last_rec["us"],
-                "dt_ref": last_rec["dt"],
-                "t_ref": last_rec["ts"],
+                "z_ref": last_rec["z_opt"],
+                "nu_ref": last_rec["nu_opt"],
+                "dt_ref": last_rec["dt_opt"],
+                "t_ref": last_rec["t_opt"],
             }
             weights = copy.deepcopy(last_rec.get("weights", self.problem.method.weights))
             conv_data = last_rec.get("conv_data", {})
         else:
             refs = {
                 "z_ref": last_rec["z_ref"],
-                "us_ref": last_rec["us_ref"],
+                "nu_ref": last_rec["nu_ref"],
                 "dt_ref": last_rec["dt_ref"],
                 "t_ref": last_rec["t_ref"],
             }
@@ -632,14 +632,14 @@ class Subproblem:
 
         start = time.time()
         Ak, Bk, Bkp, Sk, z_minus = discretize.compute_linsys_discrete(
-            inputs["z_ref"], inputs["us_ref"], inputs["dt_ref"], self.problem
+            inputs["z_ref"], inputs["nu_ref"], inputs["dt_ref"], self.problem
         )
         prop_time_ms = (time.time() - start) * 1000.0
 
         # compute linearized terminal and running costs
-        cost, dcostdz, dcostdnu = discretize.compute_linearized_costs(inputs["t_ref"], inputs["z_ref"], inputs["us_ref"], self.problem)
+        cost, dcostdz, dcostdnu = discretize.compute_linearized_costs(inputs["t_ref"], inputs["z_ref"], inputs["nu_ref"], self.problem)
 
-        g, dgdz, dgdnu = discretize.compute_nodal_inequality_constraints(inputs["t_ref"], inputs["z_ref"], inputs["us_ref"], self.problem)
+        g, dgdz, dgdnu = discretize.compute_nodal_inequality_constraints(inputs["t_ref"], inputs["z_ref"], inputs["nu_ref"], self.problem)
 
         # Dynamics & references
         self._set_param(self.Ak,   Ak)
@@ -658,7 +658,7 @@ class Subproblem:
         self.w_cost_times_dcostdnu.value = self.w_cost * dcostdnu[:, 0, :]
         self.w_cost_times_cost0.value   = self.w_cost * cost[:, 0, 0]
         self.z_ref.value  = inputs["z_ref"]
-        self.nu_ref.value  = inputs["us_ref"]
+        self.nu_ref.value  = inputs["nu_ref"]
         self.dt_ref.value = inputs["dt_ref"].reshape(self.N - 1, 1)
 
         if dgdz is not None:
@@ -777,11 +777,11 @@ class Subproblem:
         rec["dt_s"] = dt_val
 
         # outputs (absolute trajectories)
-        rec["zs"]  = tools.safe_val(dz_val, rows=N, cols=n) + input_for_iter["z_ref"]
-        rec["us"]  = tools.safe_val(dnu_val, rows=N, cols=m) + input_for_iter["us_ref"]
-        rec["dt"] = tools.safe_val(dt_val).squeeze() + input_for_iter["dt_ref"].squeeze()
-        rec["ts"]  = np.concatenate(([0], np.cumsum(rec["dt"])))
-        rec["Ts"]  = float(np.sum(rec["dt"]))
+        rec["z_opt"]  = tools.safe_val(dz_val, rows=N, cols=n) + input_for_iter["z_ref"]
+        rec["nu_opt"]  = tools.safe_val(dnu_val, rows=N, cols=m) + input_for_iter["nu_ref"]
+        rec["dt_opt"] = tools.safe_val(dt_val).squeeze() + input_for_iter["dt_ref"].squeeze()
+        rec["t_opt"]  = np.concatenate(([0], np.cumsum(rec["dt_opt"])))
+        rec["T_opt"]  = float(np.sum(rec["dt_opt"]))
 
         # Discretization model (expose for debug/analysis)
         Ak, Bk, Bkp, Sk, z_minus = input_for_iter.get("_linsys_cache", (None, None, None, None, None))
@@ -792,10 +792,10 @@ class Subproblem:
         rec["Sk"]  = self.Sk.value if Sk is None else Sk
 
         # Path residuals and reference cost
-        g, _, _ = discretize.compute_nodal_inequality_constraints(rec["ts"], rec["zs"], rec["us"], self.problem)
+        g, _, _ = discretize.compute_nodal_inequality_constraints(rec["t_opt"], rec["z_opt"], rec["nu_opt"], self.problem)
 
         rec["cnst_path"] = g
-        rec["cost"]      = discretize.compute_linearized_costs(rec["ts"], rec["zs"], rec["us"], self.problem)[0].sum().item()
+        rec["cost"]      = discretize.compute_linearized_costs(rec["t_opt"], rec["z_opt"], rec["nu_opt"], self.problem)[0].sum().item()
  
         # Convergence data (buffers, defects, TR cost, ref cost)
         conv = {}
@@ -811,7 +811,7 @@ class Subproblem:
         conv["defect"]  = tools.safe_val(self.dz, rows=N, cols=n) + input_for_iter["z_ref"] - self.z_m.value
         conv["Jtr"]     = ( float(self.wtr_z.value) * np.sum(tools.safe_val(self.dz, rows=N, cols=n)**2)
                           + float(self.wtr_u.value) * np.sum(tools.safe_val(self.dnu, rows=N, cols=m)**2) )
-        ref_cost = discretize.compute_linearized_costs(input_for_iter["t_ref"], input_for_iter["z_ref"], input_for_iter["us_ref"], self.problem)[0].sum().item()
+        ref_cost = discretize.compute_linearized_costs(input_for_iter["t_ref"], input_for_iter["z_ref"], input_for_iter["nu_ref"], self.problem)[0].sum().item()
         conv["cost_ref"] = ref_cost
 
         rec["conv_data"]  = conv
@@ -859,7 +859,7 @@ def display_subprob_status(problem, rec: Dict[str, Any]) -> None:
     nt    = float(problem.method.nondim.get("nt", 1.0))
     ncost = float(problem.method.nondim.get("ncost", 1.0))
 
-    Ts   = float(rec.get("Ts", 0.0))
+    Ts   = float(rec.get("T_opt", 0.0))
     cost = float(rec.get("cost", 0.0))
 
     prop_ms = float(rec.get("prop_time", 0.0) or 0.0)
