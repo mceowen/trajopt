@@ -46,7 +46,7 @@ def preProcess(PLTS1,problem):
         PLTS1.calcField(tag1,func,func_args = func_args1)
         PLTS1.calcField(tag2,func,func_args = func_args2)
 
-def makePlot1(PLTS1,ins={}):
+def makePlotCtrls(PLTS1,ins={}):
     problem = ins['problem'];
     data = ins['data'];
     versions = ins['versions'];
@@ -144,7 +144,7 @@ def makePlot1(PLTS1,ins={}):
 
 
 
-def makePlot1a(PLTS1,ins={}):
+def makePlotCtrls2(PLTS1,ins={}):
     problem = ins['problem'];
     data = ins['data'];
     versions = ins['versions'];
@@ -236,7 +236,7 @@ def makePlot1a(PLTS1,ins={}):
         if not(displayfigs): plt.clf();            
 
 
-def makePlot2(PLTS1,ins={}):
+def makePlotTrajs(PLTS1,ins={}):
     problem = ins['problem'];
     data = ins['data'];
     versions = ins['versions'];
@@ -379,7 +379,7 @@ def makePlot2(PLTS1,ins={}):
 
 
 # makePlot3(PLTS1,ins=plotparams);
-def makePlot3(PLTS1,ins={}):
+def makePlotStates(PLTS1,ins={}):
     problem = ins['problem'];
     data = ins['data'];
     versions = ins['versions'];
@@ -492,7 +492,7 @@ def makePlot3(PLTS1,ins={}):
 
 
 
-def makePlot4(PLTS1,ins={}):
+def makePlotLoads(PLTS1,ins={}):
     problem = ins['problem'];
     data = ins['data'];
     versions = ins['versions'];
@@ -615,7 +615,7 @@ def makePlot4(PLTS1,ins={}):
         if not(displayfigs): plt.clf();            
 
 
-def makePlot5(PLTS1,ins={}):
+def makePlotWghts(PLTS1,ins={}):
     problem = ins['problem'];
     data = ins['data'];
     versions = ins['versions'];
@@ -739,7 +739,7 @@ def makePlot5(PLTS1,ins={}):
 
 
 # makePlot6(PLTS1,ins=plotparams);
-def makePlot6(PLTS1,ins={}):
+def makePlotWghts2(PLTS1,ins={}):
     problem = ins['problem'];
     data = ins['data'];
     versions = ins['versions'];
@@ -864,7 +864,7 @@ def makePlot6(PLTS1,ins={}):
 
 
 # makePlot6(PLTS1,ins=plotparams);
-def makePlot7(PLTS1,ins={}):
+def makePlotConvs(PLTS1,ins={}):
     problem = ins['problem'];
     data = ins['data'];
     versions = ins['versions'];
@@ -954,7 +954,7 @@ def makePlot7(PLTS1,ins={}):
 
 
 # makePlot6(PLTS1,ins=plotparams);
-def makePlot8(PLTS1,ins={}):
+def makePlotConvs2(PLTS1,ins={}):
     problem = ins['problem'];
     data = ins['data'];
     versions = ins['versions'];
