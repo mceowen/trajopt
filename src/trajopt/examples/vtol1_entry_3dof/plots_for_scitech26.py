@@ -143,7 +143,8 @@ def makePlotCtrls(PLTS1,ins={}):
             if version == 'sa_iters': figadd = '_sa_iters';
             if version in ['methodvar','mvmc']: figadd = '_mv';
             if version == 'montecarlo': figadd = '_mc';
-            if version == 'mvmc': figadd = '_mvmc';            figname = figpaths[kk] + 'bank' + figadd + '.pdf'; #'bankangle1.pdf'
+            if version == 'mvmc': figadd = '_mvmc';
+            figname = figpaths[kk] + 'bank' + figadd + '.pdf'; #'bankangle1.pdf'
             plt.savefig(figname,bbox_inches='tight',pad_inches = 0,transparent=transparentfigs);
         if not(displayfigs): plt.clf();            
 
@@ -240,7 +241,8 @@ def makePlotCtrls2(PLTS1,ins={}):
             if version == 'sa_iters': figadd = '_sa_iters';
             if version in ['methodvar','mvmc']: figadd = '_mv';
             if version == 'montecarlo': figadd = '_mc';
-            if version == 'mvmc': figadd = '_mvmc';            figname = figpaths[kk] + 'bank_w_aoa' + figadd + '.pdf'; #'bankangle1.pdf'
+            if version == 'mvmc': figadd = '_mvmc';
+            figname = figpaths[kk] + 'bank_w_aoa' + figadd + '.pdf'; #'bankangle1.pdf'
             plt.savefig(figname,bbox_inches='tight',pad_inches = 0,transparent=transparentfigs);
         if not(displayfigs): plt.clf();            
 
@@ -383,7 +385,8 @@ def makePlotTrajs(PLTS1,ins={}):
             if version == 'sa_iters': figadd = '_sa_iters';
             if version in ['methodvar','mvmc']: figadd = '_mv';
             if version == 'montecarlo': figadd = '_mc';
-            if version == 'mvmc': figadd = '_mvmc';            figname = figpaths[kk] + 'trajectories' + figadd + '.pdf'; #'bankangle1.pdf'
+            if version == 'mvmc': figadd = '_mvmc';
+            figname = figpaths[kk] + 'trajectories' + figadd + '.pdf'; #'bankangle1.pdf'
             plt.savefig(figname,bbox_inches='tight',pad_inches = 0,transparent=transparentfigs);
         if not(displayfigs): plt.clf();            
 
@@ -500,7 +503,8 @@ def makePlotStates(PLTS1,ins={}):
             if version == 'sa_iters': figadd = '_sa_iters';
             if version in ['methodvar','mvmc']: figadd = '_mv';
             if version == 'montecarlo': figadd = '_mc';
-            if version == 'mvmc': figadd = '_mvmc';            figname = figpaths[kk] + 'states' + figadd + '.pdf'; #'bankangle1.pdf'
+            if version == 'mvmc': figadd = '_mvmc';
+            figname = figpaths[kk] + 'states' + figadd + '.pdf'; #'bankangle1.pdf'
             plt.savefig(figname,bbox_inches='tight',pad_inches = 0,transparent=transparentfigs);
         if not(displayfigs): plt.clf();            
 
@@ -623,7 +627,8 @@ def makePlotLoads(PLTS1,ins={}):
             if version == 'sa_iters': figadd = '_sa_iters';
             if version in ['methodvar','mvmc']: figadd = '_mv';
             if version == 'montecarlo': figadd = '_mc';
-            if version == 'mvmc': figadd = '_mvmc';            figname = figpaths[kk] + 'loads' + figadd + '.pdf'; #'bankangle1.pdf'
+            if version == 'mvmc': figadd = '_mvmc';
+            figname = figpaths[kk] + 'loads' + figadd + '.pdf'; #'bankangle1.pdf'
             plt.savefig(figname,bbox_inches='tight',pad_inches = 0,transparent=transparentfigs);
         if not(displayfigs): plt.clf();            
 
@@ -874,7 +879,8 @@ def makePlotWghts2(PLTS1,ins={}):
             if version == 'sa_iters': figadd = '_sa_iters';
             if version in ['methodvar','mvmc']: figadd = '_mv';
             if version == 'montecarlo': figadd = '_mc';
-            if version == 'mvmc': figadd = '_mvmc';            figname = figpaths[kk] + 'weights2' + figadd + '.pdf'; #'bankangle1.pdf'
+            if version == 'mvmc': figadd = '_mvmc';
+            figname = figpaths[kk] + 'weights2' + figadd + '.pdf'; #'bankangle1.pdf'
             plt.savefig(figname,bbox_inches='tight',pad_inches = 0,transparent=transparentfigs);
         if not(displayfigs): plt.clf();            
 
@@ -966,7 +972,8 @@ def makePlotConvs(PLTS1,ins={}):
             if version == 'sa_iters': figadd = '_sa_iters';
             if version in ['methodvar','mvmc']: figadd = '_mv';
             if version == 'montecarlo': figadd = '_mc';
-            if version == 'mvmc': figadd = '_mvmc';            figname = figpaths[kk] + 'convergence' + figadd + '.pdf'; #'bankangle1.pdf'
+            if version == 'mvmc': figadd = '_mvmc';
+            figname = figpaths[kk] + 'convergence' + figadd + '.pdf'; #'bankangle1.pdf'
             plt.savefig(figname,bbox_inches='tight',pad_inches = 0,transparent=transparentfigs);
         if not(displayfigs): plt.clf();            
 
@@ -1066,6 +1073,7 @@ def makePlotConvs2(PLTS1,ins={}):
             if version == 'sa_iters': figadd = '_sa_iters';
             if version in ['methodvar','mvmc']: figadd = '_mv';
             if version == 'montecarlo': figadd = '_mc';
-            if version == 'mvmc': figadd = '_mvmc';            figname = figpaths[kk] + 'terminal' + figadd + '.pdf'; #'bankangle1.pdf'
+            if version == 'mvmc': figadd = '_mvmc';
+            figname = figpaths[kk] + 'terminal' + figadd + '.pdf'; #'bankangle1.pdf'
             plt.savefig(figname,bbox_inches='tight',pad_inches = 0,transparent=transparentfigs);
         if not(displayfigs): plt.clf();            
