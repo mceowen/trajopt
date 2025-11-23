@@ -172,7 +172,7 @@ def configure_penalty_weights(problem):
 
 
     ### ctcs convergence adjustments ###
-    method.weights["w_ctcs"] = 2.0
+    method.weights["w_ctcs"] = 10.0
 
 
 # -------------- PENALTIES ----------------------------------------------------------------------------------------
