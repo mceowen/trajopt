@@ -92,7 +92,7 @@ def makePlotCtrls(PLTS1,ins={}):
     for kk,version in enumerate(versions): 
         scenarios = ['scenario1'];
         methods = ['standard','autotune'];
-        runs = itrs_all = list(range(1000))[1:];
+        runs = list(range(1000))[1:];
         itrs = list(range(1000))[1:];
         if 'methods' in specs[version]: methods = specs[version]['methods']
         if 'runs' in specs[version]: runs = specs[version]['runs']
@@ -326,7 +326,7 @@ def makePlotTrajs(PLTS1,ins={}):
             sindx = 1; sindy = 2; sindz = 0; 
             if version in ['standalone','sa_iters']:
                 params1 = {'label':'Initial guess','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':[1],'legend':lgnd,};
-                params2 = {'label':'iterations','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':itrs_all,'legend':lgnd};
+                params2 = {'label':'iterations','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':itrs,'legend':lgnd};
                 params3 = {'label':'Propogated','x':('z_nl',sindx),'y':('z_nl',sindy),'z':('z_nl',sindz),'iters':[-1],'legend':lgnd};
                 params4 = {'label':'Optimal Solution','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':[-1],'legend':lgnd};
 
@@ -796,14 +796,27 @@ def makePlotWghts2(PLTS1,ins={}):
 
     # weight_info = weights = 
     nfz_inds = problem.indices.constraints.nonlinear_inequality['nfz'];
-    pth_inds = winds = problem.indices.constraints.nonlinear_inequality['path'];
+    pth_inds = problem.indices.constraints.nonlinear_inequality['path'];
 
     # weight_info = [['W_ineq',nfz_inds],
     #             ['dual_ineq',nfz_inds],
     #             ['W_ineq',pth_inds],
     #             ['dual_ineq',pth_inds]];
-    # weight_info = ['W_plus_real','W_minus_real','W_plus_ctcs','W_minus_ctcs']
-    weight_info = ['W_plus_ctcs','W_minus_ctcs']    
+    # Figure 1:
+    weight_info = [left: 'W_plus_ctcs','W_minus_ctcs']
+    # weight_info = [left: 'W_plus_ctcs','W_minus_ctcs',
+    #                right: 'dual_plus_ctcs','dual_minus_ctcs'];
+    # # Figure 2:
+    # ctcs_idx = problem.indices.z['ctcs']
+    # weight_info = [left: ('W_dyn',ctcs_idx),
+    #                righ: ('dual_dyn',ctcs_idx)];#'W_minus_ctcs','dual_plus_ctcs','dual_minus_ctcs'];
+
+
+    # W_dyn[:,ctcs_idx], dual_dyn[:,ctcs_idx]
+    
+    #,'W_plus_real','W_minus_real']
+    # weight_info = ['W_plus_real','W_minus_real']
+    # weight_info = ['W_plus_ctcs','W_minus_ctcs']    
 
     ##########################################
     if 'figsize' in ins: figsize = ins['figsize'];
