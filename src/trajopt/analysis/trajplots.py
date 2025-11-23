@@ -276,6 +276,7 @@ class SCVXPLOTS:
                                         xdata.append(i);
                                         data = DAT[i];
                                         if dataloc == 'weights': data = DAT[i]['weights']
+                                        if dataloc == 'conv_data': data = DAT[i]['conv_data']
                                         if tind == None: 
                                             if isinstance(ytag,(tuple,list)): ydata.append(data[ytag[0]][ytag[1]]);
                                             else: ydata.append(data[ytag]);                                            
