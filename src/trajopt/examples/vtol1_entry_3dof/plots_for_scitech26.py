@@ -1125,14 +1125,38 @@ def makePlotConvs(PLTS1,ins={}):
                 
                 PLTS1.setCurrent({'scenarios':scenarios,'methods':[method],'runs':runs})
 
-                if version in ['standalone','sa_iters']:
-                    lenval = len(problem.method.subprob.iter_data)
-                    ydat = [problem.method.subprob.iter_data[ii]['conv_data'][tag] for ii in range(lenval)[1:]]; 
+                PLTS1.setCurrent({'scenarios':scenarios,'methods':[method],'runs':runs})
 
-                #     params1 = {'label':method,'tinds':[-1],'y':(tag,sind),'iters':[1],'legend':lgnd,'dataloc':'convergence'};
+                if version in ['standalone','sa_iters']:
+                    params1 = {'label':'Initial guess','tinds':[None],'y':tag,'iters':[1],'legend':lgnd,'dataloc':'conv_data'};
+                    params2 = {'label':'Iterations','tinds':[None],'y':tag,'iters':itrs,'legend':lgnd,'dataloc':'conv_data'};
+                    params3 = {'label':'Propogated','tinds':[None],'y':tag,'iters':[-1],'legend':lgnd,'dataloc':'conv_data'};
+                    params4 = {'label':'Optimal Solution','tinds':[None],'y':tag,'iters':itrs_all,'legend':lgnd,'dataloc':'conv_data'};
+                    PLTS1.addPlot2DIter(ax,pen=PENS['init'] ,ins=params1); 
+                    PLTS1.addPlot2DIter(ax,pen=PENS['itr'] ,ins=params2); 
+                    PLTS1.addPlot2DIter(ax,pen=PENS['prop'] ,ins=params3); 
+                    PLTS1.addPlot2DIter(ax,pen=PENS['opt'] ,ins=params4); 
+                
+                if version in ['methodvar','mvmc']:
+                    params1 = {'label':method,'tinds':[None],'y':tag,'iters':itrs,'legend':lgnd,'dataloc':'conv_data'};
+                    PLTS1.addPlot2DIter(ax,pen=PENS[method] ,ins=params1); 
+                                
+                if version == 'montecarlo':
+                    params1 = {'label':method,'tinds':[None],'y':tag,'iters':itrs,'legend':lgnd,'dataloc':'conv_data'};
+                    PLTS1.addPlot2DIter(ax,pen=PENS[method] ,ins=params1); 
+
+                    if False: 
+                        # temp = data['scenario1']['autotune']['mc_data'][0]['iters'][2]['weights'];#params']['method']['weights']['W_dyn'];
+                        temp = data['scenario1']['autotune']['mc_data'][0]['iters'][2]['conv_data'];#['chk_feas_ineq'];#params']['method']['weights']['W_dyn'];
+                        # ['w_cost', 'alpha_z', 'alpha_u', 'beta', 'gamma', 'eps_nonzero1',
+                        #  'eps_nonzero2', 'wbuff', 'w_path_scale', 'w_custom_scale', 'w_nfz_scale',
+                        lenval = len(problem.method.subprob.iter_data)
+                        ydat = [problem.method.subprob.iter_data[ii]['conv_data'][tag] for ii in range(lenval)[1:]]; 
+                    #     params1 = {'label':method,'tinds':[-1],'y':(tag,sind),'iters':[1],'legend':lgnd,'dataloc':'convergence'};
                 #     PLTS1.addPlot2DIter(ax,pen=PENS['opt'] ,ins=params1); 
                 # if version == 'methods': pass
                 # if version == 'mc': pass
+
 
             params = {};
             params['title'] = {'text':titles[j],'fontsize':20,**titleinfo}
