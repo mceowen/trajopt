@@ -117,7 +117,7 @@ def makePlotCtrls(PLTS1,ins={}):
                     params4 = {'label':'Optimal Solution','x':'t_opt','y':('nu_opt',sind),'iters':[-1],'legend':lgnd};
 
                     PLTS1.addPlot2D(ax,pen=PENS['init'],ins=params1);
-                    # PLTS1.addPlot2D(ax,pen=PENS['itr'] ,ins=params2);
+                    PLTS1.addPlot2D(ax,pen=PENS['itr'] ,ins=params2);
                     PLTS1.addPlot2D(ax,pen=PENS['prop'],ins=params3); 
                     PLTS1.addPlot2D(ax,pen=PENS['opt'] ,ins=params4); 
                 if version in ['methodvar','mvmc']:
@@ -221,9 +221,9 @@ def makePlotCtrls2(PLTS1,ins={}):
             ax = axs[j];
             params = {'label':method,'x':'t_opt','y':('nu_opt',0),'iters':[-1],'legend':lgnd};
             if j in uselegend: PLTS1.addPlot2D(ax,pen=PENS[method] ,ins=params); 
-            # ax = axs[(0,1)];
-            # params = {'label':method,'x':'t_opt','y':('nu_opt',1),'iters':[-1],'legend':lgnd};
-            # PLTS1.addPlot2D(ax,pen=PENS[method] ,ins=params); 
+            ax = axs[(0,1)];
+            params = {'label':method,'x':'t_opt','y':('nu_opt',1),'iters':[-1],'legend':lgnd};
+            PLTS1.addPlot2D(ax,pen=PENS[method] ,ins=params); 
 
         for j in sinds:
             ax = axs[j]; #state_plot_inds[j]];
@@ -802,11 +802,24 @@ def makePlotWghts2(PLTS1,ins={}):
     #             ['dual_ineq',nfz_inds],
     #             ['W_ineq',pth_inds],
     #             ['dual_ineq',pth_inds]];
+
+
+
     # Figure 1:
+    # flag_autotune:      "3"       # '0', '1', '2
+    # buff_dyn:           "term"    # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
+    # buff_dyn_dual:      "none"    # 'l1', 'none'
+    # ctcs:               'quad-2'  # 0, 1
+    # ctcs_dual:          "l1"   # 'l1', 'none'
     weight_info = ['W_plus_ctcs','W_minus_ctcs']
     # weight_info = [left: 'W_plus_ctcs','W_minus_ctcs',
     #                right: 'dual_plus_ctcs','dual_minus_ctcs'];
     # # Figure 2:
+    # flag_autotune:      "3"       # '0', '1', '2
+    # buff_dyn:           "term"    # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
+    # buff_dyn_dual:      "none"    # 'l1', 'none'
+    # ctcs:               'l2'  # 0, 1
+    # ctcs_dual:          "none"   # 'l1', 'none'    
     # ctcs_idx = problem.indices.z['ctcs']
     # weight_info = [left: ('W_dyn',ctcs_idx),
     #                righ: ('dual_dyn',ctcs_idx)];#'W_minus_ctcs','dual_plus_ctcs','dual_minus_ctcs'];
