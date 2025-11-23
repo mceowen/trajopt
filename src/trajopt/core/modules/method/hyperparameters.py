@@ -127,15 +127,49 @@ def configure_penalty_weights(problem):
         method.weights["dual_ineq"] = np.hstack([dual_path, dual_nfz, dual_custom])
 
         if method.flags["dynamics_nonconvex"] or method.flags["ctcs"] != "none":
-            buff_dyn = str(method.flags.get("buff_dyn", ""))
-            if buff_dyn == "term":
-                method.weights["dual_term"] += method.weights["eps_nonzero1"]
-            else:
-                method.weights["dual_dyn"] += method.weights["eps_nonzero1"]
 
-                if str(method.flags.get("buff_dyn_dual", "")) == "l1":
-                    method.weights["dual_plus"] += method.weights["eps_nonzero1"]
-                    method.weights["dual_minus"] += method.weights["eps_nonzero1"]
+            buff_dyn       = str(method.flags.get("buff_dyn", ""))
+            buff_dyn_dual  = str(method.flags.get("buff_dyn_dual", ""))
+            ctcs_flag      = str(method.flags.get("ctcs", ""))
+            ctcs_dual      = str(method.flags.get("ctcs_dual", ""))
+
+            z_state_idx = indices.z["state"]
+            z_ctcs_idx  = indices.z["ctcs"]
+            term_idx    = indices.constraints.terminal
+
+            eps = method.weights["eps_nonzero1"]
+
+            # real dynamics duals
+            if buff_dyn in {"l1", "l2"}:
+                method.weights["dual_dyn"][:, z_state_idx] += eps
+
+            elif buff_dyn in {"quad-1", "quad-2", "quad-3"}:
+                if buff_dyn_dual == "l1":
+                    method.weights["dual_plus_real"]  += eps
+                    method.weights["dual_minus_real"] += eps
+                else:
+                    method.weights["dual_dyn"][:, z_state_idx] += eps
+
+            else:
+                if len(term_idx["eq"]) > 0:
+                    method.weights["dual_term"][term_idx["eq"]] += eps
+                if len(term_idx["ineq"]) > 0:
+                    method.weights["dual_term"][term_idx["ineq"]] += eps
+
+            # ctcs duals
+            if ctcs_flag in {"l1", "l2"}:
+                method.weights["dual_dyn"][:, z_ctcs_idx] += eps
+
+            elif ctcs_flag in {"quad-1", "quad-2", "quad-3"}:
+                if ctcs_dual == "l1":
+                    method.weights["dual_plus_ctcs"]  += eps
+                    method.weights["dual_minus_ctcs"] += eps
+                else:
+                    method.weights["dual_dyn"][:, z_ctcs_idx] += eps
+
+            else:
+                method.weights["dual_term"][term_idx["ctcs"]] += eps
+
 
     ### ctcs convergence adjustments ###
     method.weights["w_ctcs"] = 2.0
@@ -328,7 +362,7 @@ def build_dual_buffer_cost(subprob) -> cp.Expression:
         # -----------------------
         elif mode_real == "quad-2":
             if subprob.vb_plus_real is not None and subprob.dual_plus_real is not None:
-                for k in range(subprob.Npm):
+                for k in range(subprob.Npm_real):
                     DUAL += subprob.dual_plus_real[k, :] @ subprob.vb_plus_real[k, :]
             if subprob.vb_minus_real is not None and subprob.dual_minus_real is not None:
                 for k in range(subprob.Npm_real):
