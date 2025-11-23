@@ -151,7 +151,11 @@ class SCVXPLOTS:
                                         else: ydata = data_with_y[ytag];
                                         if xtag == None: xdata = list(range(len(ydata)));
                                         else:
-                                            if isinstance(xtag,tuple): xdata = DAT[i][xtag[0]][:,xtag[1]];
+                                            if isinstance(xtag,(tuple,list)):
+                                            	xdata = DAT[i][xtag[0]];
+                                            	shp = xdata.shape;
+                                            	if len(shp)==2: xdata = xdata[:,xtag[1]];
+                                            	if len(shp)==1: xdata = xdata[xtag[1]];
                                             else: xdata = DAT[i][xtag];
                                         frgba = penn['frgba']; lrgba = penn['lrgba'];
                                         lw = penn['lw']; ls = penn['ls']
@@ -205,11 +209,11 @@ class SCVXPLOTS:
                                 if i < len(RUN['iters']):
                                     data = RUN['iters'][i];
                                     # if not(ytag == None):
-                                    if isinstance(xtag,tuple): xdata = data[xtag[0]][:,xtag[1]];
+                                    if isinstance(xtag,(tuple,list)): xdata = data[xtag[0]][:,xtag[1]];
                                     else: xdata = data[xtag];                                    
-                                    if isinstance(ytag,tuple): ydata = data[ytag[0]][:,ytag[1]];
+                                    if isinstance(ytag,(tuple,list)): ydata = data[ytag[0]][:,ytag[1]];
                                     else: ydata = data[ytag];
-                                    if isinstance(ztag,tuple): zdata = data[ztag[0]][:,ztag[1]];
+                                    if isinstance(ztag,(tuple,list)): zdata = data[ztag[0]][:,ztag[1]];
                                     else: zdata = data[ztag];
 
                                     frgba = penn['frgba']; lrgba = penn['lrgba'];
