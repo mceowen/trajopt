@@ -803,7 +803,7 @@ def makePlotWghts2(PLTS1,ins={}):
     #             ['W_ineq',pth_inds],
     #             ['dual_ineq',pth_inds]];
     # Figure 1:
-    weight_info = [left: 'W_plus_ctcs','W_minus_ctcs']
+    weight_info = ['W_plus_ctcs','W_minus_ctcs']
     # weight_info = [left: 'W_plus_ctcs','W_minus_ctcs',
     #                right: 'dual_plus_ctcs','dual_minus_ctcs'];
     # # Figure 2:
