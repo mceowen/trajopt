@@ -255,13 +255,13 @@ def makePlot2(PLTS1,ins={}):
     grid[0] = [0.05,0.05,0.5,0.9];
     grid[1] = [0.70,0.05,0.4,0.9];
     titles = {}; ylabels = {}; xlabels = {}; zlabels = {};
-    titles[0] = 'Position(3D) vs Time';
-    titles[1] = 'Position(2D) vs Time';
 
+    titles[0] = 'Position(3D) vs Time';
     xlabels[0] = 'Latitude $\phi$ [deg]';
     ylabels[0] = 'Longitude $\\theta$ [deg]';
     zlabels[0] = 'Altitude $h$ [km]';
 
+    titles[1] = 'Position(2D) vs Time';
     ylabels[1] = 'Latitude $\phi$ [deg]';
     xlabels[1] = 'Longitude $\\theta$ [deg]';
     uselegend = [0,1]
@@ -333,8 +333,8 @@ def makePlot2(PLTS1,ins={}):
 
 
             j = 1;
-            ax = axs[1]; #state_plot_inds[j]];
-            sindx = 1; sindy = 2; j = 1;
+            ax = axs[j]; #state_plot_inds[j]];
+            sindx = 1; sindy = 2;
             if version == 'standalone':
                 params1 = {'label':'Initial guess','x':('z_init',sindx),'y':('z_init',sindy),'iters':[1],'legend':lgnd,};
                 params2 = {'label':'iterations','x':('z_opt',sindx),'y':('z_opt',sindy),'iters':itrs,'legend':lgnd};
@@ -355,26 +355,18 @@ def makePlot2(PLTS1,ins={}):
                 PLTS1.addPlot2D(ax,pen=PENS[method],ins=params1);
 
 
-        j = 0;
-        params = {};
-        params['title'] = {'text':titles[1],'fontsize':20,**titleinfo}
-        params['xlabel'] = {'label':xlabels[1],'fontsize':16,**xlabelinfo}
-        params['ylabel'] = {'label':ylabels[1],'fontsize':16,**ylabelinfo}
-        params['ticks'] = {'labelsize':20,'width':2,**ticksinfo};
-        PLTS1.setParams(ax,params);
-        if j in uselegend: PLTS1.addLegend(ax,lgnd,ins={'fontsize':14,'loc':'best',**legendinfo});
-
-
-        j = 1;
-        params = {};
-        params['title'] = {'text':titles[0],'fontsize':20,**titleinfo}
-        params['xlabel'] = {'label':xlabels[0],'fontsize':16,**xlabelinfo}
-        params['ylabel'] = {'label':ylabels[0],'fontsize':16,**ylabelinfo}
-        params['zlabel'] = {'label':zlabels[0],'fontsize':16,**zlabelinfo}
-        params['ticks'] = {'labelsize':20,'width':2,**ticksinfo};
-        PLTS1.setParams(ax,params);
-        if j in uselegend: PLTS1.addLegend(ax,lgnd,ins={'fontsize':14,'loc':'best',**legendinfo});
-
+        
+        for j in [0,1]:
+            ax = axs[j];
+            params = {};
+            params['title'] = {'text':titles[j],'fontsize':20,**titleinfo}
+            params['xlabel'] = {'label':xlabels[j],'fontsize':16,**xlabelinfo}
+            params['ylabel'] = {'label':ylabels[j],'fontsize':16,**ylabelinfo}
+            if j==0: params['zlabel'] = {'label':zlabels[j],'fontsize':16,**zlabelinfo}
+            params['ticks'] = {'labelsize':20,'width':2,**ticksinfo};
+            PLTS1.setParams(ax,params);
+            if j in uselegend: PLTS1.addLegend(ax,lgnd,ins={'fontsize':14,'loc':'best',**legendinfo});
+        
         if printfigs: 
             figadd = '';
             if version == 'standalone': figadd = '_sa';
@@ -455,8 +447,8 @@ def makePlot3(PLTS1,ins={}):
 
         
         for j,sind in enumerate(state_inds):
+            ax = axs[j];
             for method in methods: 
-                ax = axs[j];
                 PLTS1.setCurrent({'scenarios':scenarios,'methods':[method],'runs':runs})
 
                 if version == 'standalone':
@@ -701,9 +693,10 @@ def makePlot5(PLTS1,ins={}):
         lgnd = 'Fig9'; PLTS1.dumpLegend(lgnd)
 
         for j,info in enumerate(weight_info):
+            ax = axs[j];
             for method in methods: 
                 weight = info[0]; winds = info[1]
-                ax = axs[j];
+                
                 PLTS1.setCurrent({'scenarios':scenarios,'methods':[method],'runs':runs})
 
                 if version == 'standalone': 
@@ -824,9 +817,10 @@ def makePlot6(PLTS1,ins={}):
         lgnd = 'Fig9b'; PLTS1.dumpLegend(lgnd)
 
         for j,info in enumerate(weight_info):
+            ax = axs[j];
             for method in methods: 
                 weight = info; #[0]; winds = info[1]
-                ax = axs[j];
+                
                 PLTS1.setCurrent({'scenarios':scenarios,'methods':[method],'runs':runs})
 
                 t_opt_len = problem.method.N; t_nl_len = int(t_opt_len * 20);
@@ -926,12 +920,10 @@ def makePlot7(PLTS1,ins={}):
         axs = PLTS1.createGrid(fig,grid = grid);
         lgnd = 'Fig9b'; PLTS1.dumpLegend(lgnd)
 
-
-
-
         for j,tag in enumerate(tags):
+            ax = axs[j];#state_plot_inds[j]];
             for method in methods:             
-                ax = axs[j];#state_plot_inds[j]];
+                
                 PLTS1.setCurrent({'scenarios':scenarios,'methods':[method],'runs':runs})
 
                 if version == 'standalone':
@@ -1016,8 +1008,9 @@ def makePlot8(PLTS1,ins={}):
         lgnd = 'Fig11'; PLTS1.dumpLegend(lgnd)
 
         for j,sind in enumerate(sinds):
+            ax = axs[j]; #state_plot_inds[0]];
             for method in methods: 
-                ax = axs[j]; #state_plot_inds[0]];
+                
                 PLTS1.setCurrent({'scenarios':scenarios,'methods':[method],'runs':runs})
 
                 if version == 'standalone':

@@ -138,7 +138,7 @@ class SCVXPLOTS:
                             RUN = RUNS[r];
                             DAT = RUN['iters'];
                             ################################
-                            # if dataloc == 'weights': DATW = [RUN['params']['method']['weights']];
+                            # if dataloc == 'weights': DATW = [RUN['params']['methodp']['weights']];
                             ################################
                             for i in iters:
                                 if i < len(DAT):
@@ -296,6 +296,7 @@ class SCVXPLOTS:
         if 'yticks' in ins: ax.tick_params(**ins['yticks'])
         if 'xlabel' in ins: temp = ins['xlabel']; label = temp['label']; temp.pop('label'); ax.set_xlabel(label,**temp)
         if 'ylabel' in ins: temp = ins['ylabel']; label = temp['label']; temp.pop('label'); ax.set_ylabel(label,**temp)
+        if 'zlabel' in ins: temp = ins['zlabel']; label = temp['label']; temp.pop('label'); ax.set_zlabel(label,**temp)
         if 'title' in ins: temp = ins['title']; title = temp['text']; temp.pop('text'); ax.set_title(title,**temp);
 
 
