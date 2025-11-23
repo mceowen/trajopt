@@ -14,29 +14,29 @@ def configure_penalty_weights(problem):
     n_ineq = mission.n_path + mission.n_nfz + mission.n_custom
     method.weights["W_ineq"] = np.zeros((method.N, n_ineq))
 
-    method.weights["W_term"]     = np.zeros(mission.n_term + mission.n_term_ineq + mission.n_term_ctcs)
-    method.weights["W_dyn"]      = np.zeros((method.N - 1, model.n_dyn))
-    method.weights["W_plus_real"]     = np.zeros((method.Npm_real, method.n_plus_real))
-    method.weights["W_minus_real"]    = np.zeros((method.Npm_real, method.n_minus_real))
-    method.weights["W_plus_ctcs"]     = np.zeros((method.Npm_ctcs, method.n_plus_ctcs))
-    method.weights["W_minus_ctcs"]    = np.zeros((method.Npm_ctcs, method.n_minus_ctcs))
+    method.weights["W_term"]            = np.zeros(mission.n_term + mission.n_term_ineq + mission.n_term_ctcs)
+    method.weights["W_dyn"]             = np.zeros((method.N - 1, model.n_dyn))
+    method.weights["W_plus_real"]       = np.zeros((method.Npm_real, method.n_plus_real))
+    method.weights["W_minus_real"]      = np.zeros((method.Npm_real, method.n_minus_real))
+    method.weights["W_plus_ctcs"]       = np.zeros((method.Npm_ctcs, method.n_plus_ctcs))
+    method.weights["W_minus_ctcs"]      = np.zeros((method.Npm_ctcs, method.n_minus_ctcs))
 
-    method.weights["dual_ineq"]  = np.zeros((method.N, n_ineq))
-    method.weights["dual_term"]  = np.zeros(mission.n_term + mission.n_term_ineq + mission.n_term_ctcs)
-    method.weights["dual_dyn"]   = np.zeros((method.N - 1, model.n_dyn))
+    method.weights["dual_ineq"]         = np.zeros((method.N, n_ineq))
+    method.weights["dual_term"]         = np.zeros(mission.n_term + mission.n_term_ineq + mission.n_term_ctcs)
+    method.weights["dual_dyn"]          = np.zeros((method.N - 1, model.n_dyn))
 
-    method.weights["dual_plus_real"]  = np.zeros((method.Npm_real, method.n_plus_real))
-    method.weights["dual_minus_real"] = np.zeros((method.Npm_real, method.n_minus_real))
-    method.weights["dual_plus_ctcs"]  = np.zeros((method.Npm_ctcs, method.n_plus_ctcs))
-    method.weights["dual_minus_ctcs"] = np.zeros((method.Npm_ctcs, method.n_minus_ctcs))
+    method.weights["dual_plus_real"]    = np.zeros((method.Npm_real, method.n_plus_real))
+    method.weights["dual_minus_real"]   = np.zeros((method.Npm_real, method.n_minus_real))
+    method.weights["dual_plus_ctcs"]    = np.zeros((method.Npm_ctcs, method.n_plus_ctcs))
+    method.weights["dual_minus_ctcs"]   = np.zeros((method.Npm_ctcs, method.n_minus_ctcs))
 
     # local block arrays
-    W_path          = np.zeros((method.N, mission.n_path))
-    W_nfz           = np.zeros((method.N, mission.n_nfz))
-    W_custom        = np.zeros((method.N, mission.n_custom))
-    dual_path       = np.zeros((method.N, mission.n_path))
-    dual_nfz        = np.zeros((method.N, mission.n_nfz))
-    dual_custom     = np.zeros((method.N, mission.n_custom))
+    W_path                              = np.zeros((method.N, mission.n_path))
+    W_nfz                               = np.zeros((method.N, mission.n_nfz))
+    W_custom                            = np.zeros((method.N, mission.n_custom))
+    dual_path                           = np.zeros((method.N, mission.n_path))
+    dual_nfz                            = np.zeros((method.N, mission.n_nfz))
+    dual_custom                         = np.zeros((method.N, mission.n_custom))
 
     # PTR penalty weights
         # Wtr: weight for trust region cost                        

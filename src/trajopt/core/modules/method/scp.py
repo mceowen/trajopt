@@ -13,8 +13,8 @@ import jax.numpy as jnp
 import copy
 
 # trajopt imports
-from trajopt.core.modules.method import discretize as discretize
-from trajopt.core.modules.method import convexify as convexify
+from trajopt.core.modules.method import discretize
+from trajopt.core.modules.method import convexify 
 from trajopt.core.modules.method import hyperparameters as hp
 from trajopt.core.modules.method import convergence
 from trajopt.utils import tools
@@ -102,26 +102,26 @@ class Subproblem:
         method  = self.problem.method
 
         # derive canonical sizes for quick reuse
-        self.N          = int(method.N)
-        self.n          = int(model.n)
-        self.m          = int(model.m)
-        self.nz         = int(model.nz)
-        self.n_ctcs     = int(model.n_ctcs)
-        self.n_path     = int(mission.n_path)
-        self.n_nfz      = int(mission.n_nfz)
-        self.n_custom   = int(getattr(mission, "n_custom", 0))
-        self.n_ineq     = int(mission.n_ineq)
-        self.n_term     = int(mission.n_term)
-        self.n_term_ineq = int(mission.n_term_ineq)
-        self.n_term_ctcs = int(mission.n_term_ctcs)
-        self.n_term_total = int(self.n_term + self.n_term_ineq + self.n_term_ctcs)
-        self.n_dyn      = int(getattr(mission, "n_dyn", model.nz))
-        self.Npm_real        = int(getattr(method, "Npm_real", 0))
-        self.n_plus_real     = int(getattr(method, "n_plus_real", 0))
-        self.n_minus_real    = int(getattr(method, "n_minus_real", 0))
-        self.Npm_ctcs        = int(getattr(method, "Npm_ctcs", 0))
-        self.n_plus_ctcs     = int(getattr(method, "n_plus_ctcs", 0))
-        self.n_minus_ctcs    = int(getattr(method, "n_minus_ctcs", 0))
+        self.N                  = int(method.N)
+        self.n                  = int(model.n)
+        self.m                  = int(model.m)
+        self.nz                 = int(model.nz)
+        self.n_ctcs             = int(model.n_ctcs)
+        self.n_path             = int(mission.n_path)
+        self.n_nfz              = int(mission.n_nfz)
+        self.n_custom           = int(getattr(mission, "n_custom", 0))
+        self.n_ineq             = int(mission.n_ineq)
+        self.n_term             = int(mission.n_term)
+        self.n_term_ineq        = int(mission.n_term_ineq)
+        self.n_term_ctcs        = int(mission.n_term_ctcs)
+        self.n_term_total       = int(self.n_term + self.n_term_ineq + self.n_term_ctcs)
+        self.n_dyn              = int(getattr(mission, "n_dyn", model.nz))
+        self.Npm_real           = int(getattr(method, "Npm_real", 0))
+        self.n_plus_real        = int(getattr(method, "n_plus_real", 0))
+        self.n_minus_real       = int(getattr(method, "n_minus_real", 0))
+        self.Npm_ctcs           = int(getattr(method, "Npm_ctcs", 0))
+        self.n_plus_ctcs        = int(getattr(method, "n_plus_ctcs", 0))
+        self.n_minus_ctcs       = int(getattr(method, "n_minus_ctcs", 0))
 
         # Optional module flags as Parameters (enable gating)
         self.flags          = method.flags
