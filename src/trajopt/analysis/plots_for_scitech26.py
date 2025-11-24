@@ -43,8 +43,8 @@ DPENS['autotune_opt2']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,.0,1.,1.],'lw':1,'l
 
 
 
-cmap1 = matplotlib.cm.get_cmap('hsv')
-# cmap1 = matplotlib.cm.get_cmap('viridis')
+# cmap1 = matplotlib.cm.get_cmap('hsv')
+cmap1 = matplotlib.cm.get_cmap('viridis')
 cmap2 = matplotlib.cm.get_cmap('plasma')
 
 clen = 20;
@@ -53,6 +53,8 @@ COLORVARS['autotune'] = {};
 COLORVARS['standard'] = {};
 COLORVARS['autotune']['lrgba'] = {'by':'runs','typ':'mod','values':[cmap1(jj/clen) for jj in range(clen)]}
 COLORVARS['standard']['lrgba'] = {'by':'runs','typ':'mod','values':[cmap2(jj/clen) for jj in range(clen)]}
+
+
 
 
 
@@ -840,16 +842,16 @@ def makePlotLoads(PLTS1,ins={}):
                 if version in ['methodvar','mvmc']:
                     # params1 = {'label':'Initial guess','x':'t_nl','y':tag,'iters':[1],'legend':lgnd,};
                     # params2 = {'label':'Iterations','x':'t_nl','y':tag,'iters':itrs_all,'legend':lgnd};
-                    params3 = {'label':'Optimal Solution','x':'t_opt','y':tag + '_opt','iters':[-1]};#,'legend':lgnd};
-                    params4 = {'label':'Propogated','x':'t_nl','y':tag + '_nl','iters':[-1],'legend':lgnd};
+                    params3 = {'label':method,'x':'t_opt','y':tag + '_opt','iters':[-1]};#,'legend':lgnd};
+                    params4 = {'label':method,'x':'t_nl','y':tag + '_nl','iters':[-1],'legend':lgnd};
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'] ,ins=params3); # TODO(Skye/Carlos): change to method pen to have dot and line     
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'] ,ins=params4); 
         
                 if version == 'montecarlo':
                     # params1 = {'label':'Initial guess','x':'t_nl','y':tag,'iters':[1],'legend':lgnd,};
                     # params2 = {'label':'Iterations','x':'t_nl','y':tag,'iters':itrs_all,'legend':lgnd};
-                    params3 = {'label':'Optimal Solution','x':'t_opt','y':tag + '_opt','iters':[-1],'color_vars':COLORVARS[method]};#,'legend':lgnd};
-                    params4 = {'label':'Propogated','x':'t_nl','y':tag + '_nl','iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
+                    params3 = {'label':method,'x':'t_opt','y':tag + '_opt','iters':[-1],'color_vars':COLORVARS[method]};#,'legend':lgnd};
+                    params4 = {'label':method,'x':'t_nl','y':tag + '_nl','iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'] ,ins=params3); 
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'] ,ins=params4); 
 
@@ -1489,7 +1491,7 @@ def makePlotConvs2(PLTS1,ins={}):
     titles = {}; ylabels = {};
     xlabels = {ind:'Iterations' for ind in range(1)}
     titles[0] = 'Penalty weights \n for constraints';
-    ylabels[0] = 'Terminal state constraint, \n quadratic penalty weights';    
+    ylabels[0] = 'Cost (Terminal Velocity [m/s])'#Terminal state constraint, \n quadratic penalty weights';    
     uselegend = [1]
 
     ##########################################
@@ -1565,3 +1567,108 @@ def makePlotConvs2(PLTS1,ins={}):
             figname = figpaths[kk] + 'terminal' + figadd + '.pdf'; #'bankangle1.pdf'
             plt.savefig(figname,bbox_inches='tight',pad_inches = 0,transparent=transparentfigs);
         if not(displayfigs): plt.clf();            
+
+
+
+# makePlot6(PLTS1,ins=plotparams);
+def makePlotConvs3(PLTS1,ins={}):
+    problem = ins['problem'];
+    data = ins['data'];
+    versions = ins['versions'];
+    NEWPENS = ins['PENS'];
+    PENS = {**DPENS,**NEWPENS}
+    figpaths = ins['figpaths']
+    specs = ins['specs'];
+    printfigs = True; displayfigs = True; transparentfigs = True;
+    if 'printfigs' in ins: printfigs = ins['printfigs'];
+    if 'displayfigs' in ins: displayfigs = ins['displayfigs'];
+    if 'transparentfigs' in ins: transparentfigs = ins['transparentfigs']
+
+
+    #########################################
+    ######  DEFAULTS FIG INFORMATION ########
+    figsize = (10,2);
+    grid = {};
+    grid[0] = [0.05,0.05,0.9,0.9];
+    sinds = [3] ;#tags = ['max_q','max_Q','max_load']
+    titles = {}; ylabels = {};
+    xlabels = {ind:'Iterations' for ind in range(1)}
+    titles[0] = 'Penalty weights \n for constraints';
+    ylabels[0] = 'Quadratic weights: \n Terminal State Constraint' #Cost (Terminal Velocity [m/s])'#Terminal state constraint, \n quadratic penalty weights';    
+    uselegend = [1]
+
+    ##########################################
+    if 'figsize' in ins: figsize = ins['figsize'];
+    if 'grid' in ins: grid = {**grid,**ins['grid']};
+    if 'titles' in ins: titles = {**titles,**ins['titles']};
+    if 'xlabels' in ins: xlabels = {**xlabels,**ins['xlabels']};
+    if 'ylabels' in ins: ylabels = {**ylabels,**ins['ylabels']};
+    if 'uselegend' in ins: uselegend = ins['uselegend'];
+    
+    titleinfo = {}; xlabelinfo = {}; ylabelinfo = {}; ticksinfo = {}; legendinfo = {};
+    if 'titleinfo' in ins: titleinfo = {**titleinfo,**ins['titleinfo']}
+    if 'xlabelinfo' in ins: xlabelinfo = {**xlabelinfo,**ins['xlabelinfo']}
+    if 'ylabelinfo' in ins: ylabelinfo = {**ylabelinfo,**ins['ylabelinfo']}
+    if 'ticksinfo' in ins:  ticksinfo = {**ticksinfo,**ins['ticksinfo']}
+    if 'legendinfo' in ins: legendinfo = {**legendinfo,**ins['legendinfo']}
+
+    for kk,version in enumerate(versions): 
+        scenarios = ['scenario1'];
+        methods = ['standard','autotune'];
+        runs = itrs_all = list(range(1000))[1:];
+        itrs = list(range(1000))[1:];
+        if 'methods' in specs[version]: methods = specs[version]['methods']
+        if 'runs' in specs[version]: runs = specs[version]['runs']
+        if 'itrs' in specs[version]: itrs = specs[version]['itrs']
+        ###########################################
+
+        # grid = PLTS1.specGrid(typ='2x2'); 
+        fig = plt.figure(figsize=figsize);
+        axs = PLTS1.createGrid(fig,grid = grid);
+
+        lgnd = 'Fig11'; PLTS1.dumpLegend(lgnd)
+
+
+        Wtag = 'W_term'
+        for j,sind in enumerate(sinds):
+            ax = axs[j]; #state_plot_inds[0]];
+            for method in methods: 
+                
+                PLTS1.setCurrent({'scenarios':scenarios,'methods':[method],'runs':runs})
+
+                if version in ['standalone','sa_iters']:
+                    params1 = {'label':'Initial guess','tinds':[-1],'y':Wtag,'iters':[1],'legend':lgnd,'dataloc':'weights'};
+                    params2 = {'label':'Iterations','tinds':[-1],'y':Wtag,'iters':itrs,'legend':lgnd,'dataloc':'weights'};
+                    # params3 = {'label':'Propogated','tinds':[-1],'y':('z_nl',sind),'iters':[-1],'legend':lgnd,'dataloc':'weights'};
+                    params4 = {'label':'Optimal Solution','tinds':[-1],'y':Wtag,'iters':itrs_all,'legend':lgnd,'dataloc':'weights'};
+                    PLTS1.addPlot2DIter(ax,pen=PENS['init'] ,ins=params1); 
+                    PLTS1.addPlot2DIter(ax,pen=PENS['itr_opt'] ,ins=params2); 
+                    # PLTS1.addPlot2DIter(ax,pen=PENS['nl'] ,ins=params3); 
+                    PLTS1.addPlot2DIter(ax,pen=PENS['opt2'] ,ins=params4); 
+                
+                if version in ['methodvar','mvmc']:
+                    params1 = {'label':method,'tinds':[-1],'y':Wtag,'iters':itrs,'legend':lgnd,'dataloc':'weights'};
+                    PLTS1.addPlot2DIter(ax,pen=PENS[method + '_opt2'] ,ins=params1); 
+                                
+                if version == 'montecarlo':
+                    params1 = {'label':method,'tinds':[-1],'y':Wtag,'iters':itrs,'color_vars':COLORVARS[method],'legend':lgnd,'dataloc':'weights'};
+                    PLTS1.addPlot2DIter(ax,pen=PENS[method + '_opt2'] ,ins=params1); 
+
+            params = {};
+            params['title'] = {'text':titles[j],'fontsize':20,**titleinfo}
+            params['xlabel'] = {'label':xlabels[j],'fontsize':16,**xlabelinfo}
+            params['ylabel'] = {'label':ylabels[j],'fontsize':16,**ylabelinfo}
+            params['ticks'] = {'labelsize':20,'width':2,**ticksinfo};
+            PLTS1.setParams(ax,params);
+            if j in uselegend: PLTS1.addLegend(ax,lgnd,ins={'fontsize':14,'loc':'best',**legendinfo});
+
+        if printfigs: 
+            figadd = '';
+            if version in ['standalone','sa_iters']: figadd = '_sa';
+            if version == 'sa_iters': figadd = '_sa_iters';
+            if version in ['methodvar','mvmc']: figadd = '_mv';
+            if version == 'montecarlo': figadd = '_mc';
+            if version == 'mvmc': figadd = '_mvmc';
+            figname = figpaths[kk] + 'terminal' + figadd + '.pdf'; #'bankangle1.pdf'
+            plt.savefig(figname,bbox_inches='tight',pad_inches = 0,transparent=transparentfigs);
+        if not(displayfigs): plt.clf();  
