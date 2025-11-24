@@ -114,21 +114,30 @@ class SCVXPLOTS:
         if 'runs' in ins: runs = ins['runs'];
         if 'iters' in ins: iters = ins['iters'];
 
-        force_lens = True;
-        if 'force_lens' in ins: force_lens = ins['force_lens'];
-
-        dataloc = 'iters';
-        if 'dataloc' in ins: dataloc = ins['dataloc'];
-        # if dataloc == 'weights': iters = [0];
-
         xtag = None; ytag = None;
         if 'x' in ins: xtag = ins['x'];
         if 'y' in ins: ytag = ins['y'];
         leg = None;
         if 'legend' in ins: leg = ins['legend'];
         if not(leg in self.legends):  self.legends[leg] = {};
-        label = 'blarg';
+        label = '';
         if 'label' in ins: label = ins['label']
+
+        ###############################################################
+        ### hacks
+        force_lens = True;
+        if 'force_lens' in ins: force_lens = ins['force_lens'];
+        dataloc = 'iters';
+        if 'dataloc' in ins: dataloc = ins['dataloc'];
+        # if dataloc == 'weights': iters = [0];
+        ###############################################################
+        color_vars = []; use_color_vars = False;
+        if 'color_vars'  in ins: color_vars = ins['color_vars']
+        if 'color_variations'  in ins: color_vars = ins['color_variations']
+        if len(color_vars) > 0: use_color_vars = True;
+        ###############################################################
+        ###############################################################
+
 
         for scenario in scenarios:
             for method in methods:
@@ -158,9 +167,27 @@ class SCVXPLOTS:
                                             	if len(shp)==2: xdata = xdata[:,xtag[1]];
                                             	if len(shp)==1: xdata = xdata[xtag[1]];
                                             else: xdata = DAT[i][xtag];
-                                        frgba = penn['frgba']; lrgba = penn['lrgba'];
-                                        lw = penn['lw']; ls = penn['ls']
-                                        msty = penn['msty']; msz = penn['msz']
+
+                                        penn2 = {};
+                                        ########################################
+                                        if use_color_vars:
+                                            for field in color_vars:
+                                                vals = color_vars[field]['values'];
+                                                by   = color_vars[field]['by'];
+                                                vers  = color_vars[field]['typ'];
+                                                if by == 'runs': ind1 = r; totlen = len(RUNS);
+                                                if by == 'iters': ind1 = i; totlen = len(DAT);
+                                                if vers == 'mod': ind1 = int(np.mod(ind1,len(vals)));
+                                                if vers == 'frac': ind1 = int((ind1/totlen)*len(vals));
+                                                penn2[field] = vals[ind1];
+                                        ########################################
+
+                                        cpenn = {**penn,**penn2}
+                                        frgba = cpenn['frgba']; lrgba = cpenn['lrgba'];
+                                        lw = cpenn['lw']; ls = cpenn['ls']
+                                        msty = cpenn['msty']; msz = cpenn['msz']
+                                        if 'falpha' in cpenn: frgba[3] = cpenn['falpha']
+                                        if 'lalpha' in cpenn: lrgba[3] = cpenn['lalpha']
                                         if typ == 'line':
                                             if force_lens:
                                                 xlen = len(xdata); ylen = len(ydata); totlen = int(np.min([xlen,ylen]));
@@ -202,6 +229,21 @@ class SCVXPLOTS:
         label = 'basic_label';
         if 'label' in ins: label = ins['label']
 
+        ###############################################################
+        ### hacks
+        force_lens = True;
+        if 'force_lens' in ins: force_lens = ins['force_lens'];
+        dataloc = 'iters';
+        if 'dataloc' in ins: dataloc = ins['dataloc'];
+        # if dataloc == 'weights': iters = [0];
+        ###############################################################
+        color_vars = []; use_color_vars = False;
+        if 'color_vars'  in ins: color_vars = ins['color_vars']
+        if 'color_variations'  in ins: color_vars = ins['color_variations']
+        if len(color_vars) > 0: use_color_vars = True;
+        ###############################################################
+        ###############################################################        
+
         for scenario in scenarios:
             for method in methods:
                 if method in self.data[scenario]:
@@ -220,8 +262,29 @@ class SCVXPLOTS:
                                     if isinstance(ztag,(tuple,list)): zdata = data[ztag[0]][:,ztag[1]];
                                     else: zdata = data[ztag];
 
-                                    frgba = penn['frgba']; lrgba = penn['lrgba'];
-                                    lw = penn['lw']; ls = penn['ls']; msty = penn['msty']; msz = penn['msz']
+                                    # frgba = penn['frgba']; lrgba = penn['lrgba'];
+                                    # lw = penn['lw']; ls = penn['ls']; msty = penn['msty']; msz = penn['msz']
+
+                                    penn2 = {};
+                                    ########################################
+                                    if use_color_vars:
+                                        for field in color_vars:
+                                            vals = color_vars[field]['values'];
+                                            by   = color_vars[field]['by'];
+                                            vers  = color_vars[field]['typ'];
+                                            if by == 'runs': ind1 = r; totlen = len(RUNS);
+                                            if by == 'iters': ind1 = i; totlen = len(DAT);
+                                            if vers == 'mod': ind1 = int(np.mod(ind1,len(vals)));
+                                            if vers == 'frac': ind1 = int((ind1/totlen)*len(vals));
+                                            penn2[field] = vals[ind1];
+                                    ########################################
+                                    cpenn = {**penn,**penn2}
+                                    frgba = cpenn['frgba']; lrgba = cpenn['lrgba'];
+                                    lw = cpenn['lw']; ls = cpenn['ls']
+                                    msty = cpenn['msty']; msz = cpenn['msz']
+                                    if 'falpha' in cpenn: frgba[3] = cpenn['falpha']
+                                    if 'lalpha' in cpenn: lrgba[3] = cpenn['lalpha']
+
                                     if typ == 'line':
                                         if leg == None: 
                                             ax.plot(xdata,ydata,zdata,color=lrgba[:3],alpha=lrgba[3],linewidth=lw,linestyle = ls,marker=msty,markersize=msz)
@@ -251,16 +314,27 @@ class SCVXPLOTS:
         if 'tinds' in ins: tinds = ins['tinds'];
         if 'y' in ins: ytag = ins['y'];
 
-        dataloc = 'iters';
-        if 'dataloc' in ins: dataloc = ins['dataloc'];
-        # if dataloc == 'weights': iters = [0];
-
-
         leg = None;
         if 'legend' in ins: leg = ins['legend'];
         if not(leg in self.legends):  self.legends[leg] = {};
-        label = 'blarg';
+        label = '';
         if 'label' in ins: label = ins['label']
+
+        ###############################################################
+        ### hacks
+        force_lens = True;
+        if 'force_lens' in ins: force_lens = ins['force_lens'];
+        dataloc = 'iters';
+        if 'dataloc' in ins: dataloc = ins['dataloc'];
+        # if dataloc == 'weights': iters = [0];
+        ###############################################################
+        color_vars = []; use_color_vars = False;
+        if 'color_vars'  in ins: color_vars = ins['color_vars']
+        if 'color_variations'  in ins: color_vars = ins['color_variations']
+        if len(color_vars) > 0: use_color_vars = True;
+        ###############################################################
+        ###############################################################   
+
         for scenario in scenarios:
             for method in methods:
                 if method in self.data[scenario]:
@@ -286,8 +360,28 @@ class SCVXPLOTS:
 
                                 xdata = np.array(xdata);
                                 ydata = np.array(ydata);
-                                frgba = penn['frgba']; lrgba = penn['lrgba'];
-                                lw = penn['lw']; ls = penn['ls']; msty = penn['msty']; msz = penn['msz']
+
+                                penn2 = {};
+                                ########################################
+                                if use_color_vars:
+                                    for field in color_vars:
+                                        vals = color_vars[field]['values'];
+                                        by   = color_vars[field]['by'];
+                                        vers  = color_vars[field]['typ'];
+                                        if by == 'runs': ind1 = r; totlen = len(RUNS);
+                                        if by == 'times': ind1 = i; totlen = len(tinds);
+                                        if vers == 'mod': ind1 = int(np.mod(ind1,len(vals)));
+                                        if vers == 'frac': ind1 = int((ind1/totlen)*len(vals));
+                                        penn2[field] = vals[ind1];
+                                ########################################
+                                cpenn = {**penn,**penn2}
+                                frgba = cpenn['frgba']; lrgba = cpenn['lrgba'];
+                                lw = cpenn['lw']; ls = cpenn['ls']
+                                msty = cpenn['msty']; msz = cpenn['msz']
+                                if 'falpha' in cpenn: frgba[3] = cpenn['falpha']
+                                if 'lalpha' in cpenn: lrgba[3] = cpenn['lalpha']
+
+
                                 if typ == 'line':
                                     if leg == None: ax.plot(xdata,ydata,color=lrgba[:3],alpha=lrgba[3],linewidth=lw,linestyle = ls,marker=msty,markersize=msz)
                                     else: self.legends[leg][label] = ax.plot(xdata,ydata,
