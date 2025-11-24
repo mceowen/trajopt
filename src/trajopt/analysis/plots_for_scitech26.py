@@ -51,14 +51,13 @@ clen = 20;
 COLORVARS = {};
 COLORVARS['autotune'] = {};
 COLORVARS['standard'] = {};
-COLORVARS['autotune']['lrgba'] = {'by':'runs','typ':'mod','values':[np.array([ii for _,ii in enumerate(cmap1(jj/clen))]) for jj in range(clen)]}
-COLORVARS['standard']['lrgba'] = {'by':'runs','typ':'mod','values':[np.array([ii for _,ii in enumerate(cmap2(jj/clen))]) for jj in range(clen)]}
+COLORVARS['autotune']['lrgba'] = {'by':'runs','typ':'mod','values':[cmap1(jj/clen) for jj in range(clen)]}
+COLORVARS['standard']['lrgba'] = {'by':'runs','typ':'mod','values':[cmap2(jj/clen) for jj in range(clen)]}
 
 
 
 def preProcess(PLTS1,problem,cases={}):
-    newcases = {'scenarios':['scenario1'],'methods':['standard','autotune'],
-                      'runs':list(range(1000)),'iters':list(range(1000))[1:]}
+    newcases = {'scenarios':['scenario1'],'methods':['standard','autotune'],'runs':list(range(1000)),'iters':list(range(1000))[1:]}
     if len(cases)>0: newcases = {**newcases,**cases}
     PLTS1.setCurrent(newcases)
     tags = ['max_q','max_Q','max_load','terminal_cost','altitude'];
