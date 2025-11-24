@@ -41,6 +41,7 @@ DPENS['autotune_nl']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,.0,1.,1.],'lw':1,'ls'
 DPENS['autotune_opt']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,.0,1.,1.],'lw':1,'ls':'','msty':'o','msz':3};
 DPENS['autotune_opt2']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,.0,1.,1.],'lw':1,'ls':'-','msty':'','msz':3};
 
+# TODO(Skye): Tune this line thickness
 DPENS['max-value'] = {'frgba':[.0,.0,.0,.1],'lrgba':[0.0,.0,0.,0.7],'lw':2.5,'ls':'-','msty':'','msz':0};
 
 
@@ -1383,7 +1384,7 @@ def makePlotConvs(PLTS1,ins={}):
     titles = {}; ylabels = {};
     titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
     ylabels[0] = 'Peak Constraint Violation';
-    ylabels[1] = 'Peak trajectory residual [km]';    
+    ylabels[1] = 'Peak trajectory \n  residual [km]';    
     xlabels = {ind:'Iterations' for ind in range(2)}
     uselegend = [1];
 
@@ -1500,7 +1501,7 @@ def makePlotConvs2(PLTS1,ins={}):
     titles = {}; ylabels = {};
     xlabels = {ind:'Iterations' for ind in range(1)}
     titles[0] = 'Cost convergence';
-    ylabels[0] = 'Cost (Terminal Velocity [m/s])'#Terminal state constraint, \n quadratic penalty weights';    
+    ylabels[0] = 'Cost \n (Terminal Velocity [m/s])'#Terminal state constraint, \n quadratic penalty weights';    
     uselegend = [1]
 
     ##########################################
