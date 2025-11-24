@@ -6,6 +6,11 @@ jax.config.update("jax_enable_x64", True)
 import trajopt.core.modules.model.obstacles     as obstacles
 import trajopt.local.modules.mission.aero.cobra_aero_nonjax as aero_nonjax
 
+
+def compute_altitude(t, z, nu, problem):  #dynamic pressure
+    mission = problem.mission; #method = problem.method
+    return z[0] - mission.planet['r'];
+
 def max_q_nonjax(t, z, nu, problem):  #dynamic pressure
     mission = problem.mission; method = problem.method
     rs = z[0]; vs = z[3]

@@ -4,7 +4,7 @@ import jax.numpy as jnp
 import trajopt.utils.tools as tools
 jax.config.update("jax_enable_x64", True)
 import trajopt.core.modules.model.obstacles     as obstacles
-from trajopt.analysis.custom_functions_dan import max_q_nonjax, max_Q_nonjax, max_load_nonjax, terminal_cost
+from trajopt.analysis.custom_functions_dan import max_q_nonjax, max_Q_nonjax, max_load_nonjax, terminal_cost, compute_altitude
 from trajopt.analysis.trajplots import *
 
 
@@ -56,12 +56,14 @@ COLORVARS['standard']['lrgba'] = {'by':'runs','typ':'mod','values':[np.array([ii
 
 
 
-def preProcess(PLTS1,problem):
-    PLTS1.setCurrent({'scenarios':['scenario1'],'methods':['standard','autotune'],
-                      'runs':list(range(1000)),'iters':list(range(1000))[1:]})
-    tags = ['max_q','max_Q','max_load','terminal_cost'];
+def preProcess(PLTS1,problem,cases={}):
+    newcases = {'scenarios':['scenario1'],'methods':['standard','autotune'],
+                      'runs':list(range(1000)),'iters':list(range(1000))[1:]}
+    if len(cases)>0: newcases = {**newcases,**cases}
+    PLTS1.setCurrent(newcases)
+    tags = ['max_q','max_Q','max_load','terminal_cost','altitude'];
     for tag in tags:
-        tag1 = tag + '_sub'; tag2 = tag + '_nl';
+        tag1 = tag + '_opt'; tag2 = tag + '_nl';
         #func_args1 = ['t_opt','z_opt',None,problem];
         func_args1 = ['t_opt','z_opt','nu_opt',problem];
         
@@ -71,6 +73,7 @@ def preProcess(PLTS1,problem):
         if tag == 'max_Q': func = max_Q_nonjax
         if tag == 'max_load': func = max_load_nonjax
         if tag == 'terminal_cost': func = terminal_cost;
+        if tag == 'altitude': func = compute_altitude;
 
         PLTS1.calcField(tag1,func,func_args = func_args1)
         PLTS1.calcField(tag2,func,func_args = func_args2)
@@ -443,11 +446,11 @@ def makePlotTrajs(PLTS1,ins={}):
             ax = axs[j];
             sindx = 1; sindy = 2; sindz = 0; 
             if version in ['standalone']:
-                params1 = {'label':'Initial guess','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':[1],'legend':lgnd,};
+                params1 = {'label':'Initial guess','x':('z_opt',sindx),'y':('z_opt',sindy),'z':'altitude_opt','iters':[1],'legend':lgnd,};
                 # params2 = {'label':'Iterations','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':itrs}; #,'legend':lgnd};
                 # params2b = {'label':'Iterations','x':('z_nl',sindx),'y':('z_nl',sindy),'z':('z_nl',sindz),'iters':itrs,'legend':lgnd};
-                params3 = {'label':'Propogated','x':('z_nl',sindx),'y':('z_nl',sindy),'z':('z_nl',sindz),'iters':[-1],'legend':lgnd};
-                params4 = {'label':'Optimal Solution','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':[-1],'legend':lgnd};
+                params3 = {'label':'Propogated','x':('z_nl',sindx),'y':('z_nl',sindy),'z':'altitude_nl','iters':[-1],'legend':lgnd};
+                params4 = {'label':'Optimal Solution','x':('z_opt',sindx),'y':('z_opt',sindy),'z':'altitude_opt','iters':[-1],'legend':lgnd};
 
                 PLTS1.addPlot3D(ax,pen=PENS['init'],ins=params1);
                 # PLTS1.addPlot3D(ax,pen=PENS['itr_opt'] ,ins=params2);
@@ -456,11 +459,11 @@ def makePlotTrajs(PLTS1,ins={}):
                 PLTS1.addPlot3D(ax,pen=PENS['opt'] ,ins=params4);  
 
             if version in ['sa_iters']:
-                params1 = {'label':'Initial guess','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':[1],'legend':lgnd,};
-                params2 = {'label':'Iterations','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':itrs}; #,'legend':lgnd};
-                params2b = {'label':'Iterations','x':('z_nl',sindx),'y':('z_nl',sindy),'z':('z_nl',sindz),'iters':itrs,'legend':lgnd};
-                params3 = {'label':'Propogated','x':('z_nl',sindx),'y':('z_nl',sindy),'z':('z_nl',sindz),'iters':[-1],'legend':lgnd};
-                params4 = {'label':'Optimal Solution','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':[-1],'legend':lgnd};
+                params1 = {'label':'Initial guess','x':('z_opt',sindx),'y':('z_opt',sindy),'z':'altitude_opt','iters':[1],'legend':lgnd,};
+                params2 = {'label':'Iterations','x':('z_opt',sindx),'y':('z_opt',sindy),'z':'altitude_opt','iters':itrs}; #,'legend':lgnd};
+                params2b = {'label':'Iterations','x':('z_nl',sindx),'y':('z_nl',sindy),'z':'altitude_nl','iters':itrs,'legend':lgnd};
+                params3 = {'label':'Propogated','x':('z_nl',sindx),'y':('z_nl',sindy),'z':'altitude_nl','iters':[-1],'legend':lgnd};
+                params4 = {'label':'Optimal Solution','x':('z_opt',sindx),'y':('z_opt',sindy),'z':'altitude_opt','iters':[-1],'legend':lgnd};
 
                 PLTS1.addPlot3D(ax,pen=PENS['init'],ins=params1);
                 PLTS1.addPlot3D(ax,pen=PENS['itr_opt'] ,ins=params2);
@@ -469,14 +472,14 @@ def makePlotTrajs(PLTS1,ins={}):
                 PLTS1.addPlot3D(ax,pen=PENS['fitr_opt'] ,ins=params4);                 
 
             if version in ['methodvar','mvmc']:
-                params1 = {'label':method,'x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':[-1]};
-                params2 = {'label':method,'x':('z_nl',sindx),'y':('z_nl',sindy),'z':('z_nl',sindz),'iters':[-1],'legend':lgnd};
+                params1 = {'label':method,'x':('z_opt',sindx),'y':('z_opt',sindy),'z':'altitude_opt','iters':[-1]};
+                params2 = {'label':method,'x':('z_nl',sindx),'y':('z_nl',sindy),'z':'altitude_nl','iters':[-1],'legend':lgnd};
                 PLTS1.addPlot3D(ax,pen=PENS[method + '_opt'],ins=params1);
                 PLTS1.addPlot3D(ax,pen=PENS[method + '_nl'],ins=params2);
 
             if version == 'montecarlo':
-                params1 = {'label':method,'x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':[-1],'color_vars':COLORVARS[method]};
-                params2 = {'label':method,'x':('z_nl',sindx),'y':('z_nl',sindy),'z':('z_nl',sindz),'iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
+                params1 = {'label':method,'x':('z_opt',sindx),'y':('z_opt',sindy),'z':'altitude_opt','iters':[-1],'color_vars':COLORVARS[method]};
+                params2 = {'label':method,'x':('z_nl',sindx),'y':('z_nl',sindy),'z':'altitude_nl','iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
                 PLTS1.addPlot3D(ax,pen=PENS[method + '_opt'],ins=params1);
                 PLTS1.addPlot3D(ax,pen=PENS[method + '_nl'],ins=params2);
 
@@ -532,7 +535,7 @@ def makePlotTrajs(PLTS1,ins={}):
             ax = axs[0]
             mission = problem.mission; method = problem.method
             n_nfz = mission.n_nfz;
-            temp = problem.mission.zi[0];# - mission.planet['r']
+            temp = problem.mission.zi[0] - mission.planet['r']
             height = temp; #/ method.nondim['nd']
             # z_traj_max = np.max(z_opt[:, 2])
             # z_traj_min = np.min(z_opt[:, 2])
@@ -547,7 +550,7 @@ def makePlotTrajs(PLTS1,ins={}):
                 rc = mission.obs['rc'][i] #/ method.nondim['nd']
 
                 s = np.linspace(0, 2 * np.pi, 100)
-                z = np.linspace(mission.planet['r'],height, 50)
+                z = np.linspace(0,height, 50)
                 S, Z = np.meshgrid(s, z)
                 X = xc + rc * np.cos(S)
                 Y = yc + rc * np.sin(S)
@@ -619,12 +622,12 @@ def makePlotStates(PLTS1,ins={}):
     titles = {}; ylabels = {}; xlabels = {ind:'Time [s]' for ind in range(4)};
     titles[2] = 'Flight Path Angle vs Time';
     titles[3] = 'Heading vs Time';
-    titles[0] = 'Attitude vs Time';
+    titles[0] = 'Altitude vs Time';
     titles[1] = 'Velocity vs Time';
 
     ylabels[2] = 'Flight Path Angle [deg]';
     ylabels[3] = 'Heading $\psi$ [deg]';
-    ylabels[0] = 'Attitude [km]';
+    ylabels[0] = 'Altitude [km]';
     ylabels[1] = 'Velocity [$m/s$]';    
     uselegend = [3];
 
@@ -667,14 +670,24 @@ def makePlotStates(PLTS1,ins={}):
             for method in methods: 
                 PLTS1.setCurrent({'scenarios':scenarios,'methods':[method],'runs':runs})
 
+
+                ytag_init = ('z_init',sind)
+                ytag_nl = ('z_nl',sind)
+                ytag_opt = ('z_opt',sind)
+                if sind == 0: 
+                    # ytag_init = 'altitude_init'
+                    ytag_nl = 'altitude_nl'
+                    ytag_opt = 'altitude_opt'
+
+
                 if version in ['standalone']:
                     #TODO (CARLOS / SKYE): init should be in a better place, currently need ot index into iter k >= 1
-                    params1 = {'label':'Initial guess','x':'t_init','y':('z_init',sind),'iters':[1],'legend':lgnd,};
+                    params1 = {'label':'Initial guess','x':'t_init','y':ytag_nl,'iters':[1],'legend':lgnd,};
                     # params2 = {'label':'Iterations','x':'t_opt','y':('z_opt',sind),'iters':itrs}; #,'legend':lgnd};
                     # params2b = {'label':'Iterations','x':'t_nl','y':('z_nl',sind),'iters':itrs,'legend':lgnd};
 
-                    params3 = {'label':'Propogated','x':'t_nl','y':('z_nl',sind),'iters':[-1],'legend':lgnd};
-                    params4 = {'label':'Optimal Solution','x':'t_opt','y':('z_opt',sind),'iters':[-1],'legend':lgnd};
+                    params3 = {'label':'Propogated','x':'t_nl','y':ytag_nl,'iters':[-1],'legend':lgnd};
+                    params4 = {'label':'Optimal Solution','x':'t_opt','y':ytag_opt,'iters':[-1],'legend':lgnd};
 
                     PLTS1.addPlot2D(ax,pen=PENS['init'],ins=params1);
                     # PLTS1.addPlot2D(ax,pen=PENS['itr_opt'] ,ins=params2);
@@ -683,11 +696,11 @@ def makePlotStates(PLTS1,ins={}):
                     PLTS1.addPlot2D(ax,pen=PENS['opt'] ,ins=params4); 
                 if version in ['sa_iters']:
                     #TODO (CARLOS / SKYE): init should be in a better place, currently need ot index into iter k >= 1
-                    params1 = {'label':'Initial guess','x':'t_init','y':('z_init',sind),'iters':[1],'legend':lgnd,};
-                    params2 = {'label':'Iterations','x':'t_opt','y':('z_opt',sind),'iters':itrs}; #,'legend':lgnd};
-                    params2b = {'label':'Iterations','x':'t_nl','y':('z_nl',sind),'iters':itrs,'legend':lgnd};
-                    params3 = {'label':'Propogated','x':'t_nl','y':('z_nl',sind),'iters':[-1],'legend':lgnd};
-                    params4 = {'label':'Optimal Solution','x':'t_opt','y':('z_opt',sind),'iters':[-1],'legend':lgnd};
+                    params1 = {'label':'Initial guess','x':'t_init','y':ytag_nl,'iters':[1],'legend':lgnd,};
+                    params2 = {'label':'Iterations','x':'t_opt','y':ytag_opt,'iters':itrs}; #,'legend':lgnd};
+                    params2b = {'label':'Iterations','x':'t_nl','y':ytag_nl,'iters':itrs,'legend':lgnd};
+                    params3 = {'label':'Propogated','x':'t_nl','y':ytag_nl,'iters':[-1],'legend':lgnd};
+                    params4 = {'label':'Optimal Solution','x':'t_opt','y':ytag_opt,'iters':[-1],'legend':lgnd};
 
                     PLTS1.addPlot2D(ax,pen=PENS['init'],ins=params1);
                     PLTS1.addPlot2D(ax,pen=PENS['itr_opt'] ,ins=params2);
@@ -696,14 +709,14 @@ def makePlotStates(PLTS1,ins={}):
                     PLTS1.addPlot2D(ax,pen=PENS['fitr_opt'] ,ins=params4);                 
 
                 if version in ['methodvar','mvmc']:
-                    params4 = {'label':method,'x':'t_opt','y':('z_opt',sind),'iters':[-1]};
-                    params5 = {'label':method,'x':'t_nl','y':('z_nl',sind),'iters':[-1],'legend':lgnd};
+                    params4 = {'label':method,'x':'t_opt','y':ytag_opt,'iters':[-1]};
+                    params5 = {'label':method,'x':'t_nl','y':ytag_nl,'iters':[-1],'legend':lgnd};
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'] ,ins=params4); 
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'] ,ins=params5); 
         
                 if version == 'montecarlo':
-                    params4 = {'label':method,'x':'t_opt','y':('z_opt',sind),'iters':[-1],'color_vars':COLORVARS[method]};
-                    params5 = {'label':method,'x':'t_nl','y':('z_nl',sind),'iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
+                    params4 = {'label':method,'x':'t_opt','y':ytag_opt,'iters':[-1],'color_vars':COLORVARS[method]};
+                    params5 = {'label':method,'x':'t_nl','y':ytag_nl,'iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'] ,ins=params4); 
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'] ,ins=params5); 
         
@@ -800,11 +813,11 @@ def makePlotLoads(PLTS1,ins={}):
                 PLTS1.setCurrent({'scenarios':scenarios,'methods':[method],'runs':runs})
 
                 if version in ['standalone']:
-                    params1 = {'label':'Initial guess','x':'t_opt','y':tag + '_sub','iters':[1],'legend':lgnd,};
-                    # params2 = {'label':'Iterations','x':'t_opt','y':tag + '_sub','iters':itrs}; #,'legend':lgnd};
+                    params1 = {'label':'Initial guess','x':'t_opt','y':tag + '_opt','iters':[1],'legend':lgnd,};
+                    # params2 = {'label':'Iterations','x':'t_opt','y':tag + '_opt','iters':itrs}; #,'legend':lgnd};
                     # params2b = {'label':'Iterations','x':'t_nl','y':tag + '_nl','iters':itrs,'legend':lgnd};
                     params3 = {'label':'Propogated','x':'t_nl','y':tag + '_nl','iters':[-1],'legend':lgnd};
-                    params4 = {'label':'Optimal Solution','x':'t_opt','y':tag + '_sub','iters':[-1],'legend':lgnd};
+                    params4 = {'label':'Optimal Solution','x':'t_opt','y':tag + '_opt','iters':[-1],'legend':lgnd};
 
                     PLTS1.addPlot2D(ax,pen=PENS['init'],ins=params1);
                     # PLTS1.addPlot2D(ax,pen=PENS['itr_opt'] ,ins=params2);
@@ -813,11 +826,11 @@ def makePlotLoads(PLTS1,ins={}):
                     PLTS1.addPlot2D(ax,pen=PENS['opt'] ,ins=params4);
 
                 if version in ['sa_iters']:
-                    params1 = {'label':'Initial guess','x':'t_opt','y':tag + '_sub','iters':[1],'legend':lgnd,};
-                    params2 = {'label':'Iterations','x':'t_opt','y':tag + '_sub','iters':itrs}; #,'legend':lgnd};
+                    params1 = {'label':'Initial guess','x':'t_opt','y':tag + '_opt','iters':[1],'legend':lgnd,};
+                    params2 = {'label':'Iterations','x':'t_opt','y':tag + '_opt','iters':itrs}; #,'legend':lgnd};
                     params2b = {'label':'Iterations','x':'t_nl','y':tag + '_nl','iters':itrs,'legend':lgnd};
                     params3 = {'label':'Propogated','x':'t_nl','y':tag + '_nl','iters':[-1],'legend':lgnd};
-                    params4 = {'label':'Optimal Solution','x':'t_opt','y':tag + '_sub','iters':[-1],'legend':lgnd};
+                    params4 = {'label':'Optimal Solution','x':'t_opt','y':tag + '_opt','iters':[-1],'legend':lgnd};
 
                     PLTS1.addPlot2D(ax,pen=PENS['init'],ins=params1);
                     PLTS1.addPlot2D(ax,pen=PENS['itr_opt'] ,ins=params2);
@@ -828,7 +841,7 @@ def makePlotLoads(PLTS1,ins={}):
                 if version in ['methodvar','mvmc']:
                     # params1 = {'label':'Initial guess','x':'t_nl','y':tag,'iters':[1],'legend':lgnd,};
                     # params2 = {'label':'Iterations','x':'t_nl','y':tag,'iters':itrs_all,'legend':lgnd};
-                    params3 = {'label':'Optimal Solution','x':'t_opt','y':tag + '_sub','iters':[-1],'color_vars':COLORVARS[method]};#,'legend':lgnd};
+                    params3 = {'label':'Optimal Solution','x':'t_opt','y':tag + '_opt','iters':[-1],'color_vars':COLORVARS[method]};#,'legend':lgnd};
                     params4 = {'label':'Propogated','x':'t_nl','y':tag + '_nl','iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'] ,ins=params3); # TODO(Skye/Carlos): change to method pen to have dot and line     
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'] ,ins=params4); 
@@ -836,7 +849,7 @@ def makePlotLoads(PLTS1,ins={}):
                 if version == 'montecarlo':
                     # params1 = {'label':'Initial guess','x':'t_nl','y':tag,'iters':[1],'legend':lgnd,};
                     # params2 = {'label':'Iterations','x':'t_nl','y':tag,'iters':itrs_all,'legend':lgnd};
-                    params3 = {'label':'Optimal Solution','x':'t_opt','y':tag + '_sub','iters':[-1],'color_vars':COLORVARS[method]};#,'legend':lgnd};
+                    params3 = {'label':'Optimal Solution','x':'t_opt','y':tag + '_opt','iters':[-1],'color_vars':COLORVARS[method]};#,'legend':lgnd};
                     params4 = {'label':'Propogated','x':'t_nl','y':tag + '_nl','iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'] ,ins=params3); 
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'] ,ins=params4); 
