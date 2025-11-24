@@ -41,6 +41,8 @@ DPENS['autotune_nl']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,.0,1.,1.],'lw':1,'ls'
 DPENS['autotune_opt']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,.0,1.,1.],'lw':1,'ls':'','msty':'o','msz':3};
 DPENS['autotune_opt2']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,.0,1.,1.],'lw':1,'ls':'-','msty':'','msz':3};
 
+DPENS['max-value'] = {'frgba':[.0,.0,.0,.1],'lrgba':[0.0,.0,0.,0.7],'lw':2.5,'ls':'-','msty':'','msz':0};
+
 
 # cmap1 = matplotlib.cm.get_cmap('hsv')
 cmap1 = matplotlib.cm.get_cmap('viridis')
@@ -187,8 +189,10 @@ def makePlotCtrls(PLTS1,ins={}):
             # line_tag = 'Max-Value'
             # maxval = problem.mission.path_limits[tag];
             # if tag == 'max_load': maxval = maxval/problem.mission.planet['g']
-            line_handle = ax.axhline(y=umin, color=[0,0,0,0.7], linestyle='-', linewidth=1); # label=line_tag)
-            line_handle = ax.axhline(y=umax, color=[0,0,0,0.7], linestyle='-', linewidth=1); #, label=line_tag)
+            penn = PENS['max-value'];
+            lrgba = penn['lrgba']; ls = penn['ls']; lw = penn['lw']
+            line_handle = ax.axhline(y=umin, color=lrgba, linestyle=ls, linewidth=lw); # label=line_tag)
+            line_handle = ax.axhline(y=umax, color=lrgba, linestyle=ls, linewidth=lw); #, label=line_tag)
             # PLTS1.legends[lgnd][line_tag] = line_handle;
 
 # # control min/max constraints
@@ -860,8 +864,11 @@ def makePlotLoads(PLTS1,ins={}):
             #### hack for adding max value line... not that hacky anyway
             line_tag = 'Max-Value'
             maxval = problem.mission.path_limits[tag];
+
+            penn = PENS['max-value'];
+            lrgba = penn['lrgba']; ls = penn['ls']; lw = penn['lw']
             if tag == 'max_load': maxval = maxval/problem.mission.planet['g']
-            line_handle = ax.axhline(y=maxval, color=[0,0,0,0.7], linestyle='-', linewidth=1.5, label=line_tag)
+            line_handle = ax.axhline(y=maxval, color=lrgba, linestyle=ls, linewidth=lw, label=line_tag)
             PLTS1.legends[lgnd][line_tag] = line_handle;
 
             
