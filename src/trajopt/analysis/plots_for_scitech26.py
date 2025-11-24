@@ -1490,7 +1490,7 @@ def makePlotConvs2(PLTS1,ins={}):
     sinds = [3] ;#tags = ['max_q','max_Q','max_load']
     titles = {}; ylabels = {};
     xlabels = {ind:'Iterations' for ind in range(1)}
-    titles[0] = 'Penalty weights \n for constraints';
+    titles[0] = 'Cost convergence';
     ylabels[0] = 'Cost (Terminal Velocity [m/s])'#Terminal state constraint, \n quadratic penalty weights';    
     uselegend = [1]
 
