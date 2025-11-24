@@ -624,10 +624,10 @@ def makePlotStates(PLTS1,ins={}):
     figsize = (10,5);
     grid = {};
     
-    grid[0] = [0.05,0.62,0.35,0.35];
-    grid[1] = [0.55,0.62,0.35,0.35];
+    grid[0] = [0.05,0.6,0.35,0.35];
+    grid[1] = [0.51,0.6,0.35,0.35];
     grid[2] = [0.05,0.05,0.35,0.35];
-    grid[3] = [0.55,0.05,0.35,0.35];    
+    grid[3] = [0.51,0.05,0.35,0.35];    
 
 
     titles = {}; ylabels = {}; xlabels = {ind:'Time [s]' for ind in range(4)};
@@ -773,7 +773,7 @@ def makePlotLoads(PLTS1,ins={}):
     figsize = (10,3)
     grid = {};
     grid[0] = [0.05,0.05,0.25,0.9];
-    grid[1] = [0.4,0.05,0.25,0.9];
+    grid[1] = [0.42,0.05,0.25,0.9];
     grid[2] = [0.75,0.05,0.25,0.9];
     tags = ['max_Q','max_q','max_load']
         # state_names = {0:'Altitude',1:'Velocity',2:'Flight Path Angle',3:'Heading'};
@@ -915,10 +915,10 @@ def makePlotWghts(PLTS1,ins={}):
     ######  DEFAULTS FIG INFORMATION ########
     figsize = (10,4);
     grid = {};
-    grid[3] = [0.55,0.05,0.4,0.35];
-    grid[2] = [0.55,0.6,0.4,0.35];
-    grid[1] = [0.05,0.05,0.4,0.35];
-    grid[0] = [0.05,0.6,0.4,0.35];
+    grid[3] = [0.55,0.05,0.35,0.35];
+    grid[2] = [0.55,0.60,0.35,0.35];
+    grid[1] = [0.05,0.05,0.35,0.35];
+    grid[0] = [0.05,0.60,0.35,0.35];
     state_inds = [0,3,4,5] # replace with appropriate state indices
     titles = {}; ylabels = {}; xlabels = {ind:'Time [s]' for ind in range(4)}
     titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
@@ -1382,11 +1382,11 @@ def makePlotConvs(PLTS1,ins={}):
     figsize = (10,2);
     grid = {};
     grid[0] = [0.05,0.05,0.4,0.9];
-    grid[1] = [0.6,0.05,0.4,0.9];
+    grid[1] = [0.55,0.05,0.4,0.9];
     tags = ['chk_feas_term','chk_feas_dyn'];
     titles = {}; ylabels = {};
     titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
-    ylabels[0] = 'Peak Constraint Violation';
+    ylabels[0] = 'Peak Constraint \n Violation';
     ylabels[1] = 'Peak trajectory \n  residual [km]';    
     xlabels = {ind:'Iterations' for ind in range(2)}
     uselegend = [1];
