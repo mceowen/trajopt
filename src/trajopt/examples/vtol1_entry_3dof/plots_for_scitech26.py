@@ -627,14 +627,13 @@ def makePlotLoads(PLTS1,ins={}):
             line_handle = ax.axhline(y=maxval, color=[0,0,0,0.7], linestyle='--', linewidth=2, label=line_tag)
             PLTS1.legends[lgnd][line_tag] = line_handle;
 
-            
-        params = {};
-        params['title'] = {'text':titles[j],'fontsize':20,**titleinfo}
-        params['xlabel'] = {'label':xlabels[j],'fontsize':16,**xlabelinfo}
-        params['ylabel'] = {'label':ylabels[j],'fontsize':16,**ylabelinfo}
-        params['ticks'] = {'labelsize':20,'width':2,**ticksinfo};
-        PLTS1.setParams(ax,params);
-        if j in uselegend: PLTS1.addLegend(ax,lgnd,ins={'fontsize':14,'loc':'best',**legendinfo});
+            params = {};
+            params['title'] = {'text':titles[j],'fontsize':20,**titleinfo}
+            params['xlabel'] = {'label':xlabels[j],'fontsize':16,**xlabelinfo}
+            params['ylabel'] = {'label':ylabels[j],'fontsize':16,**ylabelinfo}
+            params['ticks'] = {'labelsize':20,'width':2,**ticksinfo};
+            PLTS1.setParams(ax,params);
+            if j in uselegend: PLTS1.addLegend(ax,lgnd,ins={'fontsize':14,'loc':'best',**legendinfo});
 
         if printfigs: 
             figadd = '';
