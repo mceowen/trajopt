@@ -42,7 +42,6 @@ DPENS['autotune_opt']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,.0,1.,1.],'lw':1,'ls
 DPENS['autotune_opt2']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,.0,1.,1.],'lw':1,'ls':'-','msty':'','msz':3};
 
 
-
 # cmap1 = matplotlib.cm.get_cmap('hsv')
 cmap1 = matplotlib.cm.get_cmap('viridis')
 cmap2 = matplotlib.cm.get_cmap('plasma')
@@ -55,6 +54,9 @@ COLORVARS['autotune']['lrgba'] = {'by':'runs','typ':'mod','values':[cmap1(jj/cle
 COLORVARS['standard']['lrgba'] = {'by':'runs','typ':'mod','values':[cmap2(jj/clen) for jj in range(clen)]}
 
 
+method_labels = {};
+method_labels['autotune'] = 'Continuous-time Auto-SCvx'
+method_labels['standard'] = 'Discrete-time Auto-SCvx'
 
 
 
@@ -168,14 +170,14 @@ def makePlotCtrls(PLTS1,ins={}):
                     PLTS1.addPlot2D(ax,pen=PENS['fitr_opt'] ,ins=params4); 
 
                 if version in ['methodvar','mvmc']:
-                    params4 = {'label':method,'x':'t_opt','y':('nu_opt',sind),'iters':[-1]};
-                    params5 = {'label':method,'x':'t_nl','y':('nu_nl',sind),'iters':[-1],'legend':lgnd};
+                    params4 = {'label':method_labels[method],'x':'t_opt','y':('nu_opt',sind),'iters':[-1]};
+                    params5 = {'label':method_labels[method],'x':'t_nl','y':('nu_nl',sind),'iters':[-1],'legend':lgnd};
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'] ,ins=params4); 
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'] ,ins=params4); 
 
                 if version == 'montecarlo':
-                    params4 = {'label':method,'x':'t_opt','y':('nu_opt',sind),'iters':[-1],'color_vars':COLORVARS[method]};
-                    params5 = {'label':method,'x':'t_nl','y':('nu_nl',sind),'iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
+                    params4 = {'label':method_labels[method],'x':'t_opt','y':('nu_opt',sind),'iters':[-1],'color_vars':COLORVARS[method]};
+                    params5 = {'label':method_labels[method],'x':'t_nl','y':('nu_nl',sind),'iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'] ,ins=params4); 
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'] ,ins=params4); 
 
@@ -315,15 +317,15 @@ def makePlotCtrls2(PLTS1,ins={}):
 
                 
                 if version in ['methodvar','mvmc']:
-                    params4 = {'label':method,'x':'t_opt','y':('nu_opt',j),'iters':[-1]};
-                    params5 = {'label':method,'x':'t_nl','y':('nu_nl',j),'iters':[-1],'legend':lgnd};
+                    params4 = {'label':method_labels[method],'x':'t_opt','y':('nu_opt',j),'iters':[-1]};
+                    params5 = {'label':method_labels[method],'x':'t_nl','y':('nu_nl',j),'iters':[-1],'legend':lgnd};
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'] ,ins=params4); 
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'] ,ins=params5); 
 
                 if version == 'montecarlo':
                     print(method)
-                    params4 = {'label':method,'x':'t_opt','y':('nu_opt',j),'iters':[-1],'color_vars':COLORVARS[method],};
-                    params5 = {'label':method,'x':'t_nl','y':('nu_nl',j),'iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
+                    params4 = {'label':method_labels[method],'x':'t_opt','y':('nu_opt',j),'iters':[-1],'color_vars':COLORVARS[method],};
+                    params5 = {'label':method_labels[method],'x':'t_nl','y':('nu_nl',j),'iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'] ,ins=params4); 
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'] ,ins=params5); 
 
@@ -473,14 +475,14 @@ def makePlotTrajs(PLTS1,ins={}):
                 PLTS1.addPlot3D(ax,pen=PENS['fitr_opt'] ,ins=params4);                 
 
             if version in ['methodvar','mvmc']:
-                params1 = {'label':method,'x':('z_opt',sindx),'y':('z_opt',sindy),'z':'altitude_opt','iters':[-1]};
-                params2 = {'label':method,'x':('z_nl',sindx),'y':('z_nl',sindy),'z':'altitude_nl','iters':[-1],'legend':lgnd};
+                params1 = {'label':method_labels[method],'x':('z_opt',sindx),'y':('z_opt',sindy),'z':'altitude_opt','iters':[-1]};
+                params2 = {'label':method_labels[method],'x':('z_nl',sindx),'y':('z_nl',sindy),'z':'altitude_nl','iters':[-1],'legend':lgnd};
                 PLTS1.addPlot3D(ax,pen=PENS[method + '_opt'],ins=params1);
                 PLTS1.addPlot3D(ax,pen=PENS[method + '_nl'],ins=params2);
 
             if version == 'montecarlo':
-                params1 = {'label':method,'x':('z_opt',sindx),'y':('z_opt',sindy),'z':'altitude_opt','iters':[-1],'color_vars':COLORVARS[method]};
-                params2 = {'label':method,'x':('z_nl',sindx),'y':('z_nl',sindy),'z':'altitude_nl','iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
+                params1 = {'label':method_labels[method],'x':('z_opt',sindx),'y':('z_opt',sindy),'z':'altitude_opt','iters':[-1],'color_vars':COLORVARS[method]};
+                params2 = {'label':method_labels[method],'x':('z_nl',sindx),'y':('z_nl',sindy),'z':'altitude_nl','iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
                 PLTS1.addPlot3D(ax,pen=PENS[method + '_opt'],ins=params1);
                 PLTS1.addPlot3D(ax,pen=PENS[method + '_nl'],ins=params2);
 
@@ -516,14 +518,14 @@ def makePlotTrajs(PLTS1,ins={}):
                 PLTS1.addPlot2D(ax,pen=PENS['fitr_opt'] ,ins=params4);                
 
             if version in ['methodvar','mvmc']:
-                params1 = {'label':method,'x':('z_opt',sindx),'y':('z_opt',sindy),'iters':[-1]};
-                params2 = {'label':method,'x':('z_nl',sindx),'y':('z_nl',sindy),'iters':[-1],'legend':lgnd};
+                params1 = {'label':method_labels[method],'x':('z_opt',sindx),'y':('z_opt',sindy),'iters':[-1]};
+                params2 = {'label':method_labels[method],'x':('z_nl',sindx),'y':('z_nl',sindy),'iters':[-1],'legend':lgnd};
                 PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'],ins=params1);
                 PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'],ins=params2);
 
             if version == 'montecarlo':
-                params1 = {'label':method,'x':('z_opt',sindx),'y':('z_opt',sindy),'iters':[-1],'color_vars':COLORVARS[method]};
-                params2 = {'label':method,'x':('z_nl',sindx),'y':('z_nl',sindy),'iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
+                params1 = {'label':method_labels[method],'x':('z_opt',sindx),'y':('z_opt',sindy),'iters':[-1],'color_vars':COLORVARS[method]};
+                params2 = {'label':method_labels[method],'x':('z_nl',sindx),'y':('z_nl',sindy),'iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
                 PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'],ins=params1);
                 PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'],ins=params2);
 
@@ -710,14 +712,14 @@ def makePlotStates(PLTS1,ins={}):
                     PLTS1.addPlot2D(ax,pen=PENS['fitr_opt'] ,ins=params4);                 
 
                 if version in ['methodvar','mvmc']:
-                    params4 = {'label':method,'x':'t_opt','y':ytag_opt,'iters':[-1]};
-                    params5 = {'label':method,'x':'t_nl','y':ytag_nl,'iters':[-1],'legend':lgnd};
+                    params4 = {'label':method_labels[method],'x':'t_opt','y':ytag_opt,'iters':[-1]};
+                    params5 = {'label':method_labels[method],'x':'t_nl','y':ytag_nl,'iters':[-1],'legend':lgnd};
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'] ,ins=params4); 
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'] ,ins=params5); 
         
                 if version == 'montecarlo':
-                    params4 = {'label':method,'x':'t_opt','y':ytag_opt,'iters':[-1],'color_vars':COLORVARS[method]};
-                    params5 = {'label':method,'x':'t_nl','y':ytag_nl,'iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
+                    params4 = {'label':method_labels[method],'x':'t_opt','y':ytag_opt,'iters':[-1],'color_vars':COLORVARS[method]};
+                    params5 = {'label':method_labels[method],'x':'t_nl','y':ytag_nl,'iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'] ,ins=params4); 
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'] ,ins=params5); 
         
@@ -842,16 +844,16 @@ def makePlotLoads(PLTS1,ins={}):
                 if version in ['methodvar','mvmc']:
                     # params1 = {'label':'Initial guess','x':'t_nl','y':tag,'iters':[1],'legend':lgnd,};
                     # params2 = {'label':'Iterations','x':'t_nl','y':tag,'iters':itrs_all,'legend':lgnd};
-                    params3 = {'label':method,'x':'t_opt','y':tag + '_opt','iters':[-1]};#,'legend':lgnd};
-                    params4 = {'label':method,'x':'t_nl','y':tag + '_nl','iters':[-1],'legend':lgnd};
+                    params3 = {'label':method_labels[method],'x':'t_opt','y':tag + '_opt','iters':[-1]};#,'legend':lgnd};
+                    params4 = {'label':method_labels[method],'x':'t_nl','y':tag + '_nl','iters':[-1],'legend':lgnd};
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'] ,ins=params3); # TODO(Skye/Carlos): change to method pen to have dot and line     
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'] ,ins=params4); 
         
                 if version == 'montecarlo':
                     # params1 = {'label':'Initial guess','x':'t_nl','y':tag,'iters':[1],'legend':lgnd,};
                     # params2 = {'label':'Iterations','x':'t_nl','y':tag,'iters':itrs_all,'legend':lgnd};
-                    params3 = {'label':method,'x':'t_opt','y':tag + '_opt','iters':[-1],'color_vars':COLORVARS[method]};#,'legend':lgnd};
-                    params4 = {'label':method,'x':'t_nl','y':tag + '_nl','iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
+                    params3 = {'label':method_labels[method],'x':'t_opt','y':tag + '_opt','iters':[-1],'color_vars':COLORVARS[method]};#,'legend':lgnd};
+                    params4 = {'label':method_labels[method],'x':'t_nl','y':tag + '_nl','iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'] ,ins=params3); 
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'] ,ins=params4); 
 
@@ -992,11 +994,11 @@ def makePlotWghts(PLTS1,ins={}):
 
                     # except: pass
                 if version in ['methodvar','mvmc']:
-                    params4 = {'label':method,'x':'t_opt','y':(weight,winds),'iters':[-1],'legend':lgnd,'dataloc':'weights'};
+                    params4 = {'label':method_labels[method],'x':'t_opt','y':(weight,winds),'iters':[-1],'legend':lgnd,'dataloc':'weights'};
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt2'] ,ins=params4);
 
                 if version == 'montecarlo':
-                    params4 = {'label':method,'x':'t_opt','y':(weight,winds),'iters':[-1],'legend':lgnd,'color_vars':COLORVARS[method],'dataloc':'weights'};
+                    params4 = {'label':method_labels[method],'x':'t_opt','y':(weight,winds),'iters':[-1],'legend':lgnd,'color_vars':COLORVARS[method],'dataloc':'weights'};
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt2'] ,ins=params4);
 
             
@@ -1154,10 +1156,10 @@ def makePlotWghts2(PLTS1,ins={}):
 
 
                 if version in ['methodvar','mvmc']:
-                    params4 = {'label':method,'x':ttag,'y':weight,'iters':[-1],'legend':lgnd,'dataloc':'weights'};
+                    params4 = {'label':method_labels[method],'x':ttag,'y':weight,'iters':[-1],'legend':lgnd,'dataloc':'weights'};
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'] ,ins=params4);
                 if version == 'montecarlo':
-                    params4 = {'label':method,'x':ttag,'y':weight,'iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd,'dataloc':'weights'};
+                    params4 = {'label':method_labels[method],'x':ttag,'y':weight,'iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd,'dataloc':'weights'};
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'] ,ins=params4);
 
 
@@ -1319,11 +1321,11 @@ def makePlotWghts3(PLTS1,ins={}):
                     # if j == 0: ttag = ['t_opt',list(range(t_opt_len))]; #[:-1]];
                     # if j == 1: 
                     ttag = ['t_opt',list(range(t_opt_len))]; #[:-1]];
-                    params4 = {'label':method,'x':ttag,'y':(weight,ctcs_inds),'iters':[-1],'legend':lgnd,'dataloc':'weights'};
+                    params4 = {'label':method_labels[method],'x':ttag,'y':(weight,ctcs_inds),'iters':[-1],'legend':lgnd,'dataloc':'weights'};
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt2'] ,ins=params4);
                 if version == 'montecarlo':
                     ttag = ['t_opt',list(range(t_opt_len))]; #[:-1]];
-                    params4 = {'label':method,'x':ttag,'y':(weight,ctcs_inds),'iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd,'dataloc':'weights'};
+                    params4 = {'label':method_labels[method],'x':ttag,'y':(weight,ctcs_inds),'iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd,'dataloc':'weights'};
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt2'] ,ins=params4);
 
 
@@ -1427,11 +1429,11 @@ def makePlotConvs(PLTS1,ins={}):
                     PLTS1.addPlot2DIter(ax,pen=PENS['opt2'] ,ins=params4); 
                 
                 if version in ['methodvar','mvmc']:
-                    params1 = {'label':method,'tinds':[None],'y':tag,'iters':itrs,'legend':lgnd,'dataloc':'conv_data'};
+                    params1 = {'label':method_labels[method],'tinds':[None],'y':tag,'iters':itrs,'legend':lgnd,'dataloc':'conv_data'};
                     PLTS1.addPlot2DIter(ax,pen=PENS[method + '_opt2'] ,ins=params1); 
                                 
                 if version == 'montecarlo':
-                    params1 = {'label':method,'tinds':[None],'y':tag,'iters':itrs,'color_vars':COLORVARS[method],'legend':lgnd,'dataloc':'conv_data'};
+                    params1 = {'label':method_labels[method],'tinds':[None],'y':tag,'iters':itrs,'color_vars':COLORVARS[method],'legend':lgnd,'dataloc':'conv_data'};
                     PLTS1.addPlot2DIter(ax,pen=PENS[method + '_opt2'] ,ins=params1); 
 
                     if False: 
@@ -1441,7 +1443,7 @@ def makePlotConvs(PLTS1,ins={}):
                         #  'eps_nonzero2', 'wbuff', 'w_path_scale', 'w_custom_scale', 'w_nfz_scale',
                         lenval = len(problem.method.subprob.iter_data)
                         ydat = [problem.method.subprob.iter_data[ii]['conv_data'][tag] for ii in range(lenval)[1:]]; 
-                    #     params1 = {'label':method,'tinds':[-1],'y':(tag,sind),'iters':[1],'legend':lgnd,'dataloc':'convergence'};
+                    #     params1 = {'label':method_labels[method],'tinds':[-1],'y':(tag,sind),'iters':[1],'legend':lgnd,'dataloc':'convergence'};
                 #     PLTS1.addPlot2DIter(ax,pen=PENS['opt'] ,ins=params1); 
                 # if version == 'methods': pass
                 # if version == 'mc': pass
@@ -1542,11 +1544,11 @@ def makePlotConvs2(PLTS1,ins={}):
                     PLTS1.addPlot2DIter(ax,pen=PENS['opt2'] ,ins=params4); 
                 
                 if version in ['methodvar','mvmc']:
-                    params1 = {'label':method,'tinds':[-1],'y':('z_opt',sind),'iters':itrs,'legend':lgnd};
+                    params1 = {'label':method_labels[method],'tinds':[-1],'y':('z_opt',sind),'iters':itrs,'legend':lgnd};
                     PLTS1.addPlot2DIter(ax,pen=PENS[method + '_opt2'] ,ins=params1); 
                                 
                 if version == 'montecarlo':
-                    params1 = {'label':method,'tinds':[-1],'y':('z_opt',sind),'iters':itrs,'color_vars':COLORVARS[method],'legend':lgnd};
+                    params1 = {'label':method_labels[method],'tinds':[-1],'y':('z_opt',sind),'iters':itrs,'color_vars':COLORVARS[method],'legend':lgnd};
                     PLTS1.addPlot2DIter(ax,pen=PENS[method + '_opt2'] ,ins=params1); 
 
             params = {};
@@ -1647,11 +1649,11 @@ def makePlotConvs3(PLTS1,ins={}):
                     PLTS1.addPlot2DIter(ax,pen=PENS['opt2'] ,ins=params4); 
                 
                 if version in ['methodvar','mvmc']:
-                    params1 = {'label':method,'tinds':[-1],'y':Wtag,'iters':itrs,'legend':lgnd,'dataloc':'weights'};
+                    params1 = {'label':method_labels[method],'tinds':[-1],'y':Wtag,'iters':itrs,'legend':lgnd,'dataloc':'weights'};
                     PLTS1.addPlot2DIter(ax,pen=PENS[method + '_opt2'] ,ins=params1); 
                                 
                 if version == 'montecarlo':
-                    params1 = {'label':method,'tinds':[-1],'y':Wtag,'iters':itrs,'color_vars':COLORVARS[method],'legend':lgnd,'dataloc':'weights'};
+                    params1 = {'label':method_labels[method],'tinds':[-1],'y':Wtag,'iters':itrs,'color_vars':COLORVARS[method],'legend':lgnd,'dataloc':'weights'};
                     PLTS1.addPlot2DIter(ax,pen=PENS[method + '_opt2'] ,ins=params1); 
 
             params = {};
