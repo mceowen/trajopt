@@ -17,8 +17,8 @@ def set_convergence_tolerance(problem):
     # STATE CONVERGENCE
     # =======================
     n = model.nz
-    ctcs_mult_state = method.conv["ctcs_mult_state"]
-    ctcs_mult_cnst  = method.conv["ctcs_mult_cnst"]
+    ctcs_mult_state = 1.0; #method.conv["ctcs_mult_state"]
+    ctcs_mult_cnst  =  method.conv["ctcs_fac_cnst"] * method.T_init / (method.N-1)
 
     if len(method.conv["eps_state"]) == 1:
         eps_state    = method.conv["eps_state"] * np.ones(n)
@@ -29,14 +29,15 @@ def set_convergence_tolerance(problem):
 
     if method.flags["ctcs"] != "none" and mission.n_ineq > 0:
         eps_state = np.concatenate([
-            ctcs_mult_state * eps_state,
-            ctcs_mult_cnst  * eps_path_config,
-            ctcs_mult_cnst  * eps_nfz_config,
-            ctcs_mult_cnst  * eps_custom_config
+            # (method.weights['w_ctcs']*eps_path_config)**2  
+            ctcs_mult_state * (method.weights['w_ctcs']*eps_state)**2 ,
+            ctcs_mult_cnst  * (method.weights['w_ctcs']*eps_path_config)**2 ,
+            ctcs_mult_cnst  * (method.weights['w_ctcs']*eps_nfz_config)**2 ,
+            ctcs_mult_cnst  * (method.weights['w_ctcs']*eps_custom_config)**2 
         ])
         M_state_d2nd = np.diag(np.concatenate([
             np.diag(M_state_d2nd),
-            np.diag(method.nondim["M"]["cnst"]["d2nd"])
+            np.diag(method.nondim["M"]["cnst"]["d2nd"])**2 / method.nondim['nt']
         ]))
     
     eps_state_nd  = M_state_d2nd @ eps_state
@@ -139,13 +140,13 @@ def set_convergence_tolerance(problem):
     if method.flags["ctcs"] != "none" and mission.n_ineq > 0:
         eps_dyn = np.concatenate([
             ctcs_mult_state * eps_dyn,
-            ctcs_mult_cnst  * eps_path_config,
-            ctcs_mult_cnst  * eps_nfz_config,
-            ctcs_mult_cnst  * eps_custom_config
+            ctcs_mult_cnst  * (method.weights['w_ctcs']*eps_path_config)**2  ,
+            ctcs_mult_cnst  * (method.weights['w_ctcs']*eps_nfz_config)**2    ,
+            ctcs_mult_cnst  * (method.weights['w_ctcs']*eps_custom_config)**2
         ])
         M_dyn_d2nd = np.diag(np.concatenate([
             np.diag(M_dyn_d2nd),
-            np.diag(method.nondim["M"]["cnst"]["d2nd"])
+            np.diag(method.nondim["M"]["cnst"]["d2nd"])**2 / method.nondim['nt']
         ]))
     
     eps_dyn_nd  = M_dyn_d2nd @ eps_dyn

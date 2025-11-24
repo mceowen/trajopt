@@ -630,7 +630,7 @@ def makePlotLoads(PLTS1,ins={}):
             if version == 'mvmc': figadd = '_mvmc';
             figname = figpaths[kk] + 'loads' + figadd + '.pdf'; #'bankangle1.pdf'
             plt.savefig(figname,bbox_inches='tight',pad_inches = 0,transparent=transparentfigs);
-        if not(displayfigs): plt.clf();            
+        if not(displayfigs): plt.clf();      
 
 
 def makePlotWghts(PLTS1,ins={}):

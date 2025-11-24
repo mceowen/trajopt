@@ -233,7 +233,10 @@ def ctcs_initial_guess(problem):
     mission = problem.mission
     method = problem.method
     # Extend z_init with zeros for the inequality constraints
-    method.z_init = np.hstack([method.z_init, np.zeros((method.z_init.shape[0], mission.n_ineq))])
+
+    ctcs_init = np.zeros((method.z_init.shape[0], mission.n_ineq))
+
+    method.z_init = np.hstack([method.z_init, ctcs_init])
 
 # Example usage
 if __name__ == "__main__":
