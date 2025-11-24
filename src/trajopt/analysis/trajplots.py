@@ -114,11 +114,12 @@ class SCVXPLOTS:
         if 'runs' in ins: runs = ins['runs'];
         if 'iters' in ins: iters = ins['iters'];
 
+        force_lens = True;
+        if 'force_lens' in ins: force_lens = ins['force_lens'];
+
         dataloc = 'iters';
         if 'dataloc' in ins: dataloc = ins['dataloc'];
         # if dataloc == 'weights': iters = [0];
-
-
 
         xtag = None; ytag = None;
         if 'x' in ins: xtag = ins['x'];
@@ -146,7 +147,7 @@ class SCVXPLOTS:
                                     if not(ytag == None):
                                         data_with_y = DAT[i]; 
                                         if dataloc == 'weights': data_with_y = DAT[i]['weights']
-                                        if isinstance(ytag,tuple):
+                                        if isinstance(ytag,(tuple,list)):
                                             ydata = data_with_y[ytag[0]][:,ytag[1]];
                                         else: ydata = data_with_y[ytag];
                                         if xtag == None: xdata = list(range(len(ydata)));
@@ -161,6 +162,9 @@ class SCVXPLOTS:
                                         lw = penn['lw']; ls = penn['ls']
                                         msty = penn['msty']; msz = penn['msz']
                                         if typ == 'line':
+                                            if force_lens:
+                                                xlen = len(xdata); ylen = len(ydata); totlen = int(np.min([xlen,ylen]));
+                                                xdata = xdata[:totlen]; ydata = ydata[:totlen]
                                             if leg == None: 
                                                 ax.plot(xdata,ydata,color=lrgba[:3],alpha=lrgba[3],linewidth=lw,linestyle = ls,marker=msty,markersize=msz)
                                             else: 
@@ -272,11 +276,12 @@ class SCVXPLOTS:
                                         xdata.append(i);
                                         data = DAT[i];
                                         if dataloc == 'weights': data = DAT[i]['weights']
+                                        if dataloc == 'conv_data': data = DAT[i]['conv_data']
                                         if tind == None: 
-                                            if isinstance(ytag,tuple): ydata.append(data[ytag[0]][ytag[1]]);
+                                            if isinstance(ytag,(tuple,list)): ydata.append(data[ytag[0]][ytag[1]]);
                                             else: ydata.append(data[ytag]);                                            
                                         else: 
-                                            if isinstance(ytag,tuple): ydata.append(data[ytag[0]][tind,ytag[1]]);
+                                            if isinstance(ytag,(tuple,list)): ydata.append(data[ytag[0]][tind,ytag[1]]);
                                             else: ydata.append(data[ytag][tind]);
 
                                 xdata = np.array(xdata);
