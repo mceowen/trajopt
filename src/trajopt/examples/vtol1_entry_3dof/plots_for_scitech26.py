@@ -217,13 +217,28 @@ def makePlotCtrls2(PLTS1,ins={}):
         lgnd = 'Fig12'; PLTS1.dumpLegend(lgnd)
         for method in methods:
             PLTS1.setCurrent({'scenarios':scenarios,'methods':[method],'runs':runs})
-            j = 0;
-            ax = axs[j];
-            params = {'label':method,'x':'t_opt','y':('nu_opt',0),'iters':[-1],'legend':lgnd};
-            if j in uselegend: PLTS1.addPlot2D(ax,pen=PENS[method] ,ins=params); 
-            ax = axs[(0,1)];
-            params = {'label':method,'x':'t_opt','y':('nu_opt',1),'iters':[-1],'legend':lgnd};
-            PLTS1.addPlot2D(ax,pen=PENS[method] ,ins=params); 
+            for j in sinds:
+                ax = axs[j];
+
+                if version in ['standalone','sa_iters']:
+                    params1 = {'label':'Initial guess','x':'t_init','y':('nu_init',j),'iters':[1],'legend':lgnd};
+                    params2 = {'label':'Iterations','x':'t_opt','y':('nu_opt',j),'iters':itrs,'legend':lgnd};
+                    params3 = {'label':'Propogated','x':'t_nl','y':('nu_nl',j),'iters':[-1],'legend':lgnd};
+                    params4 = {'label':'Optimal Solution','x':'t_opt','y':('nu_opt',j),'iters':[-1],'legend':lgnd};
+
+                    PLTS1.addPlot2D(ax,pen=PENS['init'],ins=params1); 
+                    PLTS1.addPlot2D(ax,pen=PENS['itr'] ,ins=params2); 
+                    PLTS1.addPlot2D(ax,pen=PENS['prop'],ins=params3); 
+                    PLTS1.addPlot2D(ax,pen=PENS['opt'] ,ins=params4); 
+                
+                if version in ['methodvar','mvmc']:
+                    params4 = {'label':method,'x':'t_opt','y':('nu_opt',j),'iters':[-1],'legend':lgnd};
+                    PLTS1.addPlot2D(ax,pen=PENS[method] ,ins=params4); 
+
+                if version == 'montecarlo':
+                    params4 = {'label':method,'x':'t_opt','y':('nu_opt',j),'iters':[-1],'legend':lgnd};
+                    PLTS1.addPlot2D(ax,pen=PENS[method] ,ins=params4); 
+
 
         for j in sinds:
             ax = axs[j]; #state_plot_inds[j]];
