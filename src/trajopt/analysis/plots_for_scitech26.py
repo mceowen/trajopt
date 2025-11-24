@@ -840,8 +840,8 @@ def makePlotLoads(PLTS1,ins={}):
                 if version in ['methodvar','mvmc']:
                     # params1 = {'label':'Initial guess','x':'t_nl','y':tag,'iters':[1],'legend':lgnd,};
                     # params2 = {'label':'Iterations','x':'t_nl','y':tag,'iters':itrs_all,'legend':lgnd};
-                    params3 = {'label':'Optimal Solution','x':'t_opt','y':tag + '_opt','iters':[-1],'color_vars':COLORVARS[method]};#,'legend':lgnd};
-                    params4 = {'label':'Propogated','x':'t_nl','y':tag + '_nl','iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
+                    params3 = {'label':'Optimal Solution','x':'t_opt','y':tag + '_opt','iters':[-1]};#,'legend':lgnd};
+                    params4 = {'label':'Propogated','x':'t_nl','y':tag + '_nl','iters':[-1],'legend':lgnd};
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'] ,ins=params3); # TODO(Skye/Carlos): change to method pen to have dot and line     
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'] ,ins=params4); 
         

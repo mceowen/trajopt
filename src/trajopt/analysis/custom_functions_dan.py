@@ -9,7 +9,7 @@ import trajopt.local.modules.mission.aero.cobra_aero_nonjax as aero_nonjax
 
 def compute_altitude(t, z, nu, problem):  #dynamic pressure
     mission = problem.mission; #method = problem.method
-    return z[0] - mission.planet['r'];
+    return (z[0] - mission.planet['r'])/1000;
 
 def max_q_nonjax(t, z, nu, problem):  #dynamic pressure
     mission = problem.mission; method = problem.method
