@@ -413,8 +413,8 @@ def makePlotTrajs(PLTS1,ins={}):
     grid = {}; grid2D = {}; grid3D = {};
     # grid[0] = [0.05,0.05,0.5,0.9];
     # grid[1] = [0.70,0.05,0.4,0.9];
-    grid[0] = [0.05,0.05,0.6,0.9];
-    grid[1] = [0.75,0.05,0.25,0.9];
+    grid[1] = [0.05,0.05,0.25,0.9];
+    grid[0] = [0.35,0.05,0.6,0.9];
     titles = {}; ylabels = {}; xlabels = {}; zlabels = {};
 
     titles[0] = 'Position(3D) vs Time';
@@ -1653,7 +1653,7 @@ def makePlotConvs3(PLTS1,ins={}):
     for kk,version in enumerate(versions): 
         scenarios = ['scenario1'];
         methods = ['standard','autotune'];
-        runs = itrs_all = list(range(1000))[1:];
+        runs = list(range(1000))[1:];
         itrs = list(range(1000))[1:];
         if 'methods' in specs[version]: methods = specs[version]['methods']
         if 'runs' in specs[version]: runs = specs[version]['runs']
@@ -1675,21 +1675,21 @@ def makePlotConvs3(PLTS1,ins={}):
                 PLTS1.setCurrent({'scenarios':scenarios,'methods':[method],'runs':runs})
 
                 if version in ['standalone','sa_iters']:
-                    params1 = {'label':'Initial guess','tinds':[-1],'y':Wtag,'iters':[1],'legend':lgnd,'dataloc':'weights'};
-                    params2 = {'label':'Iterations','tinds':[-1],'y':Wtag,'iters':itrs,'legend':lgnd,'dataloc':'weights'};
+                    # params1 = {'label':'Initial guess','tinds':[None],'y':Wtag,'iters':[1],'legend':lgnd,'dataloc':'weights'};
+                    # params2 = {'label':'Iterations','tinds':[-1],'y':Wtag,'iters':itrs,'legend':lgnd,'dataloc':'weights'};
                     # params3 = {'label':'Propogated','tinds':[-1],'y':('z_nl',sind),'iters':[-1],'legend':lgnd,'dataloc':'weights'};
-                    params4 = {'label':'Optimal Solution','tinds':[-1],'y':Wtag,'iters':itrs_all,'legend':lgnd,'dataloc':'weights'};
-                    PLTS1.addPlot2DIter(ax,pen=PENS['init'] ,ins=params1); 
-                    PLTS1.addPlot2DIter(ax,pen=PENS['itr_opt'] ,ins=params2); 
+                    params4 = {'label':'Optimal Solution','tinds':[None],'y':Wtag,'iters':itrs,'legend':lgnd,'dataloc':'weights'};
+                    # PLTS1.addPlot2DIter(ax,pen=PENS['init'] ,ins=params1); 
+                    # PLTS1.addPlot2DIter(ax,pen=PENS['itr_opt'] ,ins=params2); 
                     # PLTS1.addPlot2DIter(ax,pen=PENS['nl'] ,ins=params3); 
                     PLTS1.addPlot2DIter(ax,pen=PENS['opt2'] ,ins=params4); 
                 
                 if version in ['methodvar','mvmc']:
-                    params1 = {'label':method_labels[method],'tinds':[-1],'y':Wtag,'iters':itrs,'legend':lgnd,'dataloc':'weights'};
+                    params1 = {'label':method_labels[method],'tinds':[None],'y':Wtag,'iters':itrs,'legend':lgnd,'dataloc':'weights'};
                     PLTS1.addPlot2DIter(ax,pen=PENS[method + '_opt2'] ,ins=params1); 
                                 
                 if version == 'montecarlo':
-                    params1 = {'label':method_labels[method],'tinds':[-1],'y':Wtag,'iters':itrs,'color_vars':COLORVARS[method],'legend':lgnd,'dataloc':'weights'};
+                    params1 = {'label':method_labels[method],'tinds':[None],'y':Wtag,'iters':itrs,'color_vars':COLORVARS[method],'legend':lgnd,'dataloc':'weights'};
                     PLTS1.addPlot2DIter(ax,pen=PENS[method + '_opt2'] ,ins=params1); 
 
             params = {};
