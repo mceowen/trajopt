@@ -1,0 +1,73 @@
+# Dimensional model configuration (no nondim)
+module_path: "trajopt.core.modules.model.lander_6dof"
+
+# State/control dimensions
+n: 14
+m: 3
+
+obs:
+  x_idx: 2
+  y_idx: 3
+  z_idx: 4
+
+z_types: ["m", "d", "d", "d", "v", "v", "v", "none", "none", "none", "none", "none", "none", "none"]
+u_types: ["f", "f", "f"]
+
+anchor_types : ["t", "v", "m"]
+
+anchor_scales: [1.0, 1.0, 1.0]
+
+base_unit_labels: ["m", "s", "kg"]
+
+flags: {}
+
+constraints:
+- fcn: "trajopt.core.modules.model.lander_6dof.gimbal_cone"
+  analytical_affine_approximation: "None"
+  type: "inequality"
+  convex: 1
+  auto_diff: 0
+  jax: 0
+  always: 0
+  dimension: 1
+  category: "path"
+
+# - fcn: "trajopt.core.modules.model.lander_6dof.tilt_cone"
+#   analytical_affine_approximation: "None"
+#   type: "inequality"
+#   convex: 1
+#   auto_diff: 0
+#   jax: 0
+#   always: 0
+#   dimension: 1
+#   category: "path"
+
+- fcn: "trajopt.core.modules.model.lander_6dof.angular_velocity"
+  analytical_affine_approximation: "None"
+  type: "inequality"
+  convex: 1
+  auto_diff: 0
+  jax: 0
+  always: 0
+  dimension: 1
+  category: "path"
+
+- fcn: "trajopt.core.modules.model.lander_6dof.max_norm_thrust"
+  analytical_affine_approximation: "None"
+  type: "inequality"
+  convex: 1
+  auto_diff: 0
+  jax: 0
+  always: 0
+  dimension: 1
+  category: "path"
+
+- fcn: "trajopt.core.modules.model.lander_6dof.glideslope"
+  analytical_affine_approximation: "None"
+  type: "inequality"
+  convex: 1
+  auto_diff: 0
+  jax: 0
+  always: 0
+  dimension: 1
+  category: "path"

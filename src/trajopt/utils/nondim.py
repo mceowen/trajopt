@@ -52,7 +52,8 @@ def set_nondim_params(problem, base_unit_labels=["m", "s", "kg"]):
         "a"    : nd / (nt**2),
         "f"    : nm * nd / (nt**2),
         "ang"  : 180 / np.pi,
-        "angv" : (180 / np.pi) / nt 
+        "angv" : (180 / np.pi) / nt,
+        "none": 1.0 
     }
 
     d_lbl = base_unit_labels[0]
@@ -67,7 +68,8 @@ def set_nondim_params(problem, base_unit_labels=["m", "s", "kg"]):
         "a"    : f"{d_lbl} / ({t_lbl}^2)",
         "f"    : f"{m_lbl} * {d_lbl} / ({t_lbl}^2)",
         "ang"  : "deg",
-        "angv" : f"deg / {t_lbl}"
+        "angv" : f"deg / {t_lbl}",
+        "none": ""
     }
 
     print("scales: ")

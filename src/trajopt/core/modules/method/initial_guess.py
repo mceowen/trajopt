@@ -19,11 +19,11 @@ def rk4_propagate_jax(dynamics, z0, nu_ref, t_ref, problem):
     n = len(z0_jax)
     
     def rk4_step(zi, ti, dt, ui, ui_next):
-        k1 = dynamics(ti, zi, ui, problem)
+        k1 = dynamics(ti, zi, ui)
         u2 = 0.5 * ui + 0.5 * ui_next
-        k2 = dynamics(ti + 0.5*dt, zi + 0.5*dt*k1, u2, problem)
-        k3 = dynamics(ti + 0.5*dt, zi + 0.5*dt*k2, u2, problem)
-        k4 = dynamics(ti + dt, zi + dt*k3, ui_next, problem)
+        k2 = dynamics(ti + 0.5*dt, zi + 0.5*dt*k1, u2)
+        k3 = dynamics(ti + 0.5*dt, zi + 0.5*dt*k2, u2)
+        k4 = dynamics(ti + dt, zi + dt*k3, ui_next)
     
         zi_next = zi + (dt/6.0) * (k1 + 2*k2 + 2*k3 + k4)
         return zi_next
@@ -76,7 +76,7 @@ def straight_line_initial_guess(problem):
     t_init             = np.cumsum(np.concatenate(([0], method.dt_init)))
 
     # Initial state
-    z_init             = np.array([np.linspace(mission.zi[i], mission.zf_guess[i], method.N) for i in range(model.n)]).T
+    z_init             = np.array([np.linspace(mission.zi_guess[i], mission.zf_guess[i], method.N) for i in range(model.n)]).T
 
     # Initial control
     nu_init             = np.zeros((method.N,model.m))
@@ -142,7 +142,7 @@ def waypoint_initial_guess(problem):
             z_init[idx2, i_state]      = np.linspace(method.z_waypt[i_state], mission.zf[i_term], N2)
 
     # Initial control
-    nu_init             = np.zeros((method.N, model.m))
+    nu_init             = method.line_guess_u_init
 
     # Create initial state and control vector
     method.t_init   = t_init
@@ -189,8 +189,8 @@ def nonlinear_initial_guess(nu_range, problem):
     
     if use_jax:
         z_init = rk4_propagate_jax(
-            model._dynamics,
-            mission.zi,
+            model.dynamics,
+            mission.zi_guess,
             nu_init,
             t_init,
             problem

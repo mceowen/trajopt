@@ -142,7 +142,8 @@ class Method:
         hyperparameters.configure_penalty_weights(problem)
 
         # ### NFZ convergence values ###
-        self.conv["eps_nfz"] = 2 * self.conv["eps_nfz"] / mission.obs["rc"] - self.conv["eps_nfz"]**2 / mission.obs["rc"]**2
+        if mission.n_nfz > 0:
+            self.conv["eps_nfz"] = 2 * self.conv["eps_nfz"] / mission.obs["rc"] - self.conv["eps_nfz"]**2 / mission.obs["rc"]**2
 
         # Extract only those terminal constraints used
         self.conv["eps_term"] = np.concatenate((self.conv["eps_term"][mission.zf_idx], self.conv["eps_term_min"][mission.zf_min_idx], self.conv["eps_term_max"][mission.zf_max_idx]))

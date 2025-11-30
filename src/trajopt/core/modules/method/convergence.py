@@ -200,7 +200,8 @@ def check_convergence_tolerance(problem, subprob, iter_record):
 
     # --- Extract linearized inequality constraint residuals
     cnst_all  = iter_record["cnst_path"]  # full stacked nonlinear constraints
-    conv_ineq_nl = np.maximum(0.0, cnst_all) if cnst_all.size else np.zeros((N, 0))
+
+    conv_ineq_nl = np.maximum(0.0, cnst_all) if cnst_all is not None else np.zeros((N, 0))
 
     # === Optimality ===
     dz_array = tools.safe_val(dz, rows=N, cols=n)
@@ -208,25 +209,13 @@ def check_convergence_tolerance(problem, subprob, iter_record):
     chk_cost = np.abs(dcost)
 
     # === Feasibility: Virtual Buffer violations ===
-    chk_vb_ineq = (
-        np.max([np.max(W_ineq @ vb_ineq[k].reshape(-1, 1)) for k in range(N)])
-        if vb_ineq.size else 0.0
-    )
+    chk_vb_ineq = (np.max([np.max(W_ineq @ vb_ineq[k].reshape(-1, 1)) for k in range(N)]) if vb_ineq.size else 0.0)
     chk_vb_term = np.max(W_term * vb_term)
-    chk_vb_dyn  = (
-        np.max([np.max(W_dyn @ vb_dyn[k].reshape(-1, 1)) for k in range(N - 1)])
-        if vb_dyn.size else 0.0
-    )
-    chk_defect = (
-        np.max([np.max(W_defect @ defect[k].reshape(-1, 1)) for k in range(N)])
-        if defect.size else 0.0
-    )
+    chk_vb_dyn  = (np.max([np.max(W_dyn @ vb_dyn[k].reshape(-1, 1)) for k in range(N - 1)]) if vb_dyn.size else 0.0)
+    chk_defect = (np.max([np.max(W_defect @ defect[k].reshape(-1, 1)) for k in range(N)]) if defect.size else 0.0)
 
     # === Feasibility: Linearized constraint residuals ===
-    chk_ineq_2 = (
-        np.max([np.max(W_ineq @ conv_ineq_nl[k].reshape(-1, 1)) for k in range(N)])
-        if conv_ineq_nl.size else 0.0
-    )
+    chk_ineq_2 = (np.max([np.max(W_ineq @ conv_ineq_nl[k].reshape(-1, 1)) for k in range(N)]) if conv_ineq_nl.size else 0.0)
 
     if method.flags["ctcs"] != "none":
         chk_feas_1 = np.array([chk_vb_term, chk_vb_dyn])

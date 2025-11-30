@@ -39,6 +39,7 @@ zf_max: []
 zf_max_idx: []
 
 # final state guess for straight line initial guess
+zi_guess: "eval: np.array([mission['planet']['r'] + 100e3, 0.0, 0.0, 7450, -0.5, 0.0])"
 zf_guess: "eval: np.array([(mission['planet']['r'] + 15e3), 12, 70, 500, -10, 90])"
 
 # control min/max constraints
@@ -65,6 +66,8 @@ path_limits:
   max_load: 24.525
 
 custom_limits: {}
+
+convex_limits: {}
 
 custom_input_dict: {}
 

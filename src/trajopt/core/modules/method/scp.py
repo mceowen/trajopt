@@ -115,7 +115,7 @@ class Subproblem:
         self.n_term_ineq        = int(mission.n_term_ineq)
         self.n_term_ctcs        = int(mission.n_term_ctcs)
         self.n_term_total       = int(self.n_term + self.n_term_ineq + self.n_term_ctcs)
-        self.n_dyn              = int(getattr(mission, "n_dyn", model.nz))
+        self.n_dyn              = int(getattr(model, "n_dyn", model.nz))
         self.Npm_real           = int(getattr(method, "Npm_real", 0))
         self.n_plus_real        = int(getattr(method, "n_plus_real", 0))
         self.n_minus_real       = int(getattr(method, "n_minus_real", 0))
@@ -542,6 +542,13 @@ class Subproblem:
                 C.append(self.dgdz[k] @ self.dz[k] + self.dgdnu[k] @ self.dnu[k] + self.g0[k] - self.vb_ineq[k] <= 0)
                 if str(self.flag_autotune) in {"1", "3", "al-scvx"} and self.vb_ineq[k]:
                     C.append(self.vb_ineq[k] >= 0)
+
+            if model.n_cvx > 0:
+                for i in range(model.n_cvx):
+                    z = self.z_ref[k] + self.dz[k]
+                    nu = self.nu_ref[k] + self.dnu[k]
+
+                    C.append(model.convex_constraints[i].fcn(0, z, nu, self.problem))
 
         # Fixed-time tying
         if not self.free_T:

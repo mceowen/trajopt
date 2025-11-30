@@ -24,6 +24,7 @@ class Mission:
         # standard constraint parameters
         self.zi                = mission_config["zi"]
         self.zi_idx            = mission_config["zi_idx"]
+        self.zi_guess          = mission_config["zi_guess"]
         self.zf                = mission_config["zf"]
         self.zf_idx            = mission_config["zf_idx"]
         self.zf_guess          = mission_config["zf_guess"]
@@ -54,6 +55,7 @@ class Mission:
         self.path_limits       = mission_config["path_limits"]
         self.custom_limits        = mission_config["custom_limits"]
         self.custom_input_dict = mission_config["custom_input_dict"]
+        self.convex_limits     = mission_config["convex_limits"]
 
         self.planet            = mission_config["planet"]
         self.vehicle           = mission_config["vehicle"]

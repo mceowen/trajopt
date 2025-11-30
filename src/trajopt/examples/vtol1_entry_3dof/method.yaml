@@ -34,6 +34,7 @@ dT_max: 450.0
 conv:
   ctcs_mult_state: 1.0
   ctcs_mult_cnst: 1.0
+  ctcs_fac_cnst: 1.0
   eps_ctcs: 1e-16
   eps_state: [500, 1, 1, 50, 1, 1]
   eps_cost: 1
@@ -60,6 +61,7 @@ weights:
   w_custom_scale: 0.0
   w_dyn_scale:    10000.0
   w_term_scale:   100.0
+  w_ctcs:         1.0
   
 nl_guess_u_start: [0.0]
 nl_guess_u_stop: [0.0]

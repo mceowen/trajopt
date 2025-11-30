@@ -49,7 +49,21 @@ class Model:
     # member functions point to selected fcns from selected module
     # ===============================================================
 
+    # updated nondim will look like this, i commented it out to keep compatibility with old code
+    # def dynamics(self, t, z, nu):
+
+    #     method = self.problem.method
+
+    #     t_dim = method.nondim["nt"] * t
+    #     z_dim = method.nondim["M"]["state"]["nd2d"] @ z
+    #     nu_dim = method.nondim["M"]["ctrl"]["nd2d"] @ nu
+
+    #     x_dot_dim = self._dynamics(t_dim, z_dim, nu_dim, self.problem)
+
+    #     return method.nondim["M"]["dyn"]["d2nd"] @ x_dot_dim
+
     def dynamics(self, t, z, nu):
+
         return self._dynamics(t, z, nu, self.problem)
     
     def update_model_params(self):
@@ -128,6 +142,8 @@ class Model:
         self.nonconvex_inequality_constraints = [c for c in self.constraints if not c.convex]
         self.convex_constraints               = [c for c in self.constraints if     c.convex]
 
+        self.n_cvx = len(self.convex_constraints)
+
         # ------------------------------------------------------------
         # CTCS / state bookkeeping
         # ------------------------------------------------------------
@@ -137,7 +153,7 @@ class Model:
             self.n_ctcs = mission.n_ineq 
             self.nz = self.n + self.n_ctcs
         else:
-            self.n_ctcs = 0.
+            self.n_ctcs = 0
             self.nz     = self.n
         self.n_dyn = self.nz
 
