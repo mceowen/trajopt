@@ -2,7 +2,7 @@
 
 standard:
   flags:
-    flag_autotune: "0"
+    flag_autotune: "3"
 
 autotune:
   flags:
