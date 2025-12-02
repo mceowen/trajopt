@@ -226,7 +226,7 @@ def makePlotTrajs(PLTS1,ins={}):
 
             j = 0;
             ax = axs[j];
-            sindx = 1; sindy = 2; sindz = 0; 
+            sindx = 2; sindy = 3; sindz = 1; 
             if version in ['standalone']:
                 params1 = {'label':'Initial guess','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':[1],'legend':lgnd,};
                 # params2 = {'label':'Iterations','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':itrs}; #,'legend':lgnd};
