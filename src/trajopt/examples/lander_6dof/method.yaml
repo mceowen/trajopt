@@ -13,6 +13,7 @@ flags:
   nondim:             1       # 0, 1
   jax_dyn:            1       # 0, 1
   flag_conv:          1       # 0, 1, 2
+  ignore_dpp:         1       # this flag is optional, will be removed soon
 
   flag_path:    1.0
   flag_nfz:     1.0
@@ -25,7 +26,7 @@ flags:
   flag_vb:      1.0
 
 solver_opts:
-  solver: "CLARABEL"
+  solver: "QOCO"
 
 T_init: 5
 T_min: 1

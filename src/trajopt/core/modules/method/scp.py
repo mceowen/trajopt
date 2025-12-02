@@ -744,7 +744,8 @@ class Subproblem:
 
         # Solve subproblem
         solver_name = self.problem.method.solver_opts.get("solver", "ECOS")
-        self.subproblem.solve(solver=solver_name, warm_start=True)  # ignore_dpp=True if desired
+        ignore_dpp = self.problem.method.flags.get("ignore_dpp", False)
+        self.subproblem.solve(solver=solver_name, warm_start=True, ignore_dpp=ignore_dpp)  # ignore_dpp=True if desired
 
         # Create unified record for this iteration and append
         iter_record = self._load_outputs(input_for_iter, prop_time_ms)

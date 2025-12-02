@@ -77,7 +77,7 @@ def set_convergence_tolerance(problem):
     eps_nfz_nd  = M_nfz_d2nd  @ eps_nfz  if n_nfz  > 0 else np.array([])
     eps_custom_nd  = M_custom_d2nd  @ eps_custom  if n_custom  > 0 else np.array([])
 
-    eps_ineq_nd = np.concatenate([eps_path_nd, eps_nfz_nd, eps_custom_nd]) if n_ineq > 0 else np.array([0.])
+    eps_ineq_nd = np.concatenate([eps_path_nd, eps_nfz_nd, eps_custom_nd]) if n_ineq > 0 else np.array([])
     eps_min_ineq = float(np.min(eps_ineq_nd)) if eps_ineq_nd.size > 0 else 0.
 
     Wconv_ineq = np.diag(eps_min_ineq / eps_ineq_nd) if eps_ineq_nd.size > 0 else np.zeros((1,1))
