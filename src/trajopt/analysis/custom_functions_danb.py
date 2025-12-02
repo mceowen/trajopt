@@ -7,6 +7,57 @@ import trajopt.core.modules.model.obstacles     as obstacles
 import trajopt.local.modules.mission.aero.cobra_aero_nonjax as aero_nonjax
 
 
+
+# Direction Cosine Matrix Function
+def DCM(q): 
+    return np.array(
+        [
+            [
+                1 - 2 * (q[2] ** 2 + q[3] ** 2),
+                2 * (q[1] * q[2] + q[0] * q[3]),
+                2 * (q[1] * q[3] - q[0] * q[2]),
+            ],
+            [
+                2 * (q[1] * q[2] - q[0] * q[3]),
+                1 - 2 * (q[1] ** 2 + q[3] ** 2),
+                2 * (q[2] * q[3] + q[0] * q[1]),
+            ],
+            [
+                2 * (q[1] * q[3] + q[0] * q[2]),
+                2 * (q[2] * q[3] - q[0] * q[1]),
+                1 - 2 * (q[1] ** 2 + q[2] ** 2),
+            ],
+        ]
+    )
+
+def calc_DCMs(t, z, nu, problem):
+    veh = problem.mission.vehicle
+    rt = np.array([veh["rt1"], veh["rt2"], veh["rt3"]])
+    dcm = DCM(z[7:11])
+    return dcm 
+
+def calc_u_vecs(t, z, nu, problem):
+    veh = problem.mission.vehicle
+    rt = np.array([veh["rt1"], veh["rt2"], veh["rt3"]])
+    dcm = DCM(z[7:11])
+    return 0.3* dcm.T @ nu[:problem.model.m]
+
+def calc_rt_I(t, z, nu, problem):
+    veh = problem.mission.vehicle
+    rt = np.array([veh["rt1"], veh["rt2"], veh["rt3"]])
+    dcm = DCM(z[7:11])
+    return dcm.T @ rt
+
+def calc_body_vecs(t, z, nu, problem):
+    veh = problem.mission.vehicle
+    rt = np.array([veh["rt1"], veh["rt2"], veh["rt3"]])
+    dcm = DCM(z[7:11])
+    return 0.5 * dcm.T @ np.array([1, 0, 0]);
+
+
+
+
+
 def compute_altitude(t, z, nu, problem):  #dynamic pressure
     mission = problem.mission; #method = problem.method
     return (z[0] - mission.planet['r'])/1000;
