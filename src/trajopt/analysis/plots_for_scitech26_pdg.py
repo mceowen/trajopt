@@ -4,10 +4,10 @@ import jax.numpy as jnp
 import trajopt.utils.tools as tools
 jax.config.update("jax_enable_x64", True)
 import trajopt.core.modules.model.obstacles     as obstacles
-from trajopt.analysis.custom_functions_danb import DCM, calc_DCMs, calc_rt_I
-from trajopt.analysis.custom_functions_danb import thrust_mag, compute_tilt, ang_rate
-from trajopt.analysis.custom_functions_danb import calc_u_vecs_scale1, calc_u_vecs_scale2
-from trajopt.analysis.custom_functions_danb import calc_body_vecs_scale1, calc_body_vecs_scale2
+from trajopt.analysis.custom_functions_dan_pdg import DCM, calc_DCMs, calc_rt_I
+from trajopt.analysis.custom_functions_dan_pdg import thrust_mag, compute_tilt, ang_rate, omega_degrees
+from trajopt.analysis.custom_functions_dan_pdg import calc_u_vecs_scale1, calc_u_vecs_scale2
+from trajopt.analysis.custom_functions_dan_pdg import calc_body_vecs_scale1, calc_body_vecs_scale2
 
 from trajopt.analysis.trajplots import *
 
@@ -96,7 +96,8 @@ def preProcess(PLTS1,problem,cases={}):
     if len(cases)>0: newcases = {**newcases,**cases}
     PLTS1.setCurrent(newcases)
 
-    tags = ['DCM','u_vec1','u_vec2','rt_I','body_vec1','body_vec2','thrust_mag','tilt','ang_rate'];    
+    tags = ['DCM','u_vec1','u_vec2','rt_I',
+            'body_vec1','body_vec2','thrust_mag','tilt','ang_rate','omega_deg'];    
     for tag in tags:
         tag1 = tag + '_opt';
         tag2 = tag + '_nl';
@@ -114,6 +115,7 @@ def preProcess(PLTS1,problem,cases={}):
         if tag == 'thrust_mag': func = thrust_mag
         if tag == 'tilt': func = compute_tilt
         if tag == 'ang_rate': func = ang_rate
+        if tag == 'omega_deg': func = omega_degrees
         
         PLTS1.calcField(tag1,func,func_args = func_args1)
         PLTS1.calcField(tag2,func,func_args = func_args2)
@@ -158,7 +160,7 @@ def makePlotTrajs(PLTS1,ins={}):
     grid[3] = [0.65,0.15,temp,temp]
 
     if sideviews: grid[0] = [0.05,0.05,0.5,0.5];
-    else: grid[0] = [0.05,0.05,0.9,0.9];
+    else: grid[0] = [0.15,0.15,0.7,0.7];
 
 
     grid2D = {}; grid3D = {};
@@ -189,14 +191,6 @@ def makePlotTrajs(PLTS1,ins={}):
     usequiver = True;
 
 
-    grid3D[0] = grid[0];
-    ####################
-    grid2D[1] = grid[1];
-    grid2D[2] = grid[2];
-    grid2D[3] = grid[3];
-    
-
-
 
     ##########################################
     if 'figsize' in ins: figsize = ins['figsize'];
@@ -206,6 +200,13 @@ def makePlotTrajs(PLTS1,ins={}):
     if 'ylabels' in ins: ylabels = {**ylabels,**ins['ylabels']};
     if 'uselegend' in ins: uselegend = ins['uselegend'];
     if 'usequiver' in ins: usequiver = ins['usequiver'];
+
+    grid3D[0] = grid[0];
+    ####################
+    grid2D[1] = grid[1];
+    grid2D[2] = grid[2];
+    grid2D[3] = grid[3];
+
 
 
     titleinfo = {}; xlabelinfo = {}; ylabelinfo = {}; zlabelinfo = {};
@@ -442,11 +443,18 @@ def makePlotTrajs(PLTS1,ins={}):
 
         # axs[0].view_init(elev=50,azim=-20); #, azim=45)
         
+
         
         for j in plot_inds:
          
             ax = axs[j];
             ax.grid('True')
+
+            # xlabelpad = 0; ylabelpad = 0; zlabelpad = 0;
+            # labelpads = 
+            # if 'xlabelpad' in xlabelpad = ins['xlabelpad']
+            # if 'ylabelpad' in ylabelpad = ins['ylabelpad']
+            # if 'zlabelpad' in zlabelpad = ins['zlabelpad']
 
             params = {};
             params['title'] = {'text':titles[j],'fontsize':20,**titleinfo}
@@ -522,7 +530,6 @@ def makePlotStates(PLTS1,ins={}):
     grid[1] = [0.51,0.6,0.35,0.35];
     grid[2] = [0.05,0.05,0.35,0.35];
     grid[3] = [0.51,0.05,0.35,0.35];    
-
 
     titles = {}; ylabels = {}; xlabels = {ind:'Time [$U_T$]' for ind in range(4)};
     titles[2] = 'Flight Path Angle vs Time';
@@ -639,10 +646,11 @@ def makePlotStates(PLTS1,ins={}):
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'] ,ins=params5); 
         
 
+
             params = {};
             params['title'] = {'text':titles[j],'fontsize':20,**titleinfo}
-            params['xlabel'] = {'label':'Time [s]','fontsize':16,**xlabelinfo}
-            params['ylabel'] = {'label':ylabels[j],'fontsize':16,**ylabelinfo}
+            params['xlabel'] = {'label':xlabels[j],'fontsize':16,**xlabelinfo}
+            params['ylabel'] = {'label':ylabels[j],'fontsize':16,**ylabelinfo0}
             params['ticks'] = {'labelsize':20,'width':2,**ticksinfo};
             PLTS1.setParams(ax,params);
             if j in uselegend: PLTS1.addLegend(ax,lgnd,ins={'fontsize':12,'loc':'best',**legendinfo});
@@ -657,17 +665,8 @@ def makePlotStates(PLTS1,ins={}):
             if version == 'mvmc': figadd = '_mvmc';
             figname = figpaths[kk] + 'states' + figadd + '.pdf'; #'bankangle1.pdf'
             plt.savefig(figname,bbox_inches='tight',pad_inches = 0,transparent=transparentfigs);
-        if not(displayfigs): plt.clf();            
-
-
-
-
-
-
-
-
-
-
+        if not(displayfigs): plt.clf();
+    # ax.tight_layout()
 
 def makePlotCtrls(PLTS1,ins={}):
 
