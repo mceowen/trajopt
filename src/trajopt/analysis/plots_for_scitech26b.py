@@ -4,7 +4,9 @@ import jax.numpy as jnp
 import trajopt.utils.tools as tools
 jax.config.update("jax_enable_x64", True)
 import trajopt.core.modules.model.obstacles     as obstacles
-from trajopt.analysis.custom_functions_danb import DCM, calc_DCMs, calc_u_vecs, calc_rt_I, calc_body_vecs
+from trajopt.analysis.custom_functions_danb import DCM, calc_DCMs, calc_rt_I
+from trajopt.analysis.custom_functions_danb import calc_u_vecs_scale1, calc_u_vecs_scale2
+from trajopt.analysis.custom_functions_danb import calc_body_vecs_scale1, calc_body_vecs_scale2
 
 from trajopt.analysis.trajplots import *
 
@@ -56,6 +58,14 @@ DPENS['autotune_opt2']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,.0,1.,1.],'lw':1,'l
 # TODO(Skye): Tune this line thickness
 DPENS['max-value'] = {'frgba':[.0,.0,.0,.1],'lrgba':[0.0,.0,0.,0.7],'lw':2.5,'ls':'-','msty':'','msz':0};
 
+# for 3D plot
+DPENS['u_vec']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,0.25,0.,1.],'lw':2,'ls':'-','msty':'','msz':0};
+DPENS['body_vec'] = {'frgba':[.0,.0,.0,.1],'lrgba':[0.,0.,0.,1.],'lw':2,'ls':'-','msty':'','msz':0};
+# for 2D plots...
+DPENS['u_vec2']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,0.25,0.,1.],'lw':4,'ls':'-','msty':'','msz':0};
+DPENS['body_vec2'] = {'frgba':[.0,.0,.0,.1],'lrgba':[0.,0.,0.,1.],'lw':4,'ls':'-','msty':'','msz':0};
+
+#             color=(1, 60/255, 0),
 
 # cmap1 = matplotlib.cm.get_cmap('hsv')
 cmap1 = matplotlib.cm.get_cmap('viridis')
@@ -85,7 +95,7 @@ def preProcess(PLTS1,problem,cases={}):
     if len(cases)>0: newcases = {**newcases,**cases}
     PLTS1.setCurrent(newcases)
 
-    tags = ['DCM','u_vec','rt_I','body_vec'];    
+    tags = ['DCM','u_vec1','u_vec2','rt_I','body_vec1','body_vec2'];    
     for tag in tags:
         tag1 = tag + '_opt';
         tag2 = tag + '_nl';
@@ -93,9 +103,11 @@ def preProcess(PLTS1,problem,cases={}):
         func_args2 = ['t_nl','z_nl','nu_nl',problem];
 
         if tag == 'DCM': func = calc_DCMs
-        if tag == 'u_vec': func = calc_u_vecs
+        if tag == 'u_vec1': func = calc_u_vecs_scale1
+        if tag == 'u_vec2': func = calc_u_vecs_scale2
         if tag == 'rt_I': func = calc_rt_I
-        if tag == 'body_vec': func = calc_body_vecs;
+        if tag == 'body_vec1': func = calc_body_vecs_scale1;
+        if tag == 'body_vec2': func = calc_body_vecs_scale2;
         
         PLTS1.calcField(tag1,func,func_args = func_args1)
         PLTS1.calcField(tag2,func,func_args = func_args2)
@@ -120,23 +132,64 @@ def makePlotTrajs(PLTS1,ins={}):
 
     #########################################
     ######  DEFAULTS FIG INFORMATION ########
-    figsize = (10,4);
-    grid = {}; grid2D = {}; grid3D = {};
+
+
+
+    figsize = (9,9);
+
+    sideviews = True; 
+    if 'sideviews' in ins: sideviews = ins['sideviews'];
+    if sideviews: plot_inds = [0,1,2,3]
+    else: plot_inds = [0];
+
+
+
+    grid = {};
+    temp = 0.30
+    grid[1] = [0.65,0.65,temp,temp]
+    grid[2] = [0.15,0.65,temp,temp]
+    grid[3] = [0.65,0.15,temp,temp]
+
+    if sideviews: grid[0] = [0.05,0.05,0.5,0.5];
+    else: grid[0] = [0.05,0.05,0.9,0.9];
+
+
+    grid2D = {}; grid3D = {};
     # grid[0] = [0.05,0.05,0.5,0.9];
     # grid[1] = [0.70,0.05,0.4,0.9];
-    grid[1] = [0.05,0.05,0.25,0.9];
-    grid[0] = [0.35,0.05,0.6,0.9];
     titles = {}; ylabels = {}; xlabels = {}; zlabels = {};
 
-    titles[0] = 'Position(3D) vs Time';
-    xlabels[0] = 'Latitude $\phi$ [deg]';
-    ylabels[0] = 'Longitude $\\theta$ [deg]';
-    zlabels[0] = 'Altitude $h$ [km]';
+    titles[0] = '';#Position(3D) vs Time';
 
-    titles[1] = 'Position(2D) vs Time';
-    ylabels[1] = 'Latitude $\phi$ [deg]';
-    xlabels[1] = 'Longitude $\\theta$ [deg]';
-    uselegend = [1]
+    xlabels[0] = 'East';
+    ylabels[0] = 'North';
+    zlabels[0] = 'Up';
+
+    titles[1] = '';#Position(2D) vs Time';
+    ylabels[1] = 'North';
+    xlabels[1] = 'East';
+
+    titles[2] = '';#Position(2D) vs Time';
+    ylabels[2] = 'Up';
+    xlabels[2] = 'East';
+
+    titles[3] = '';#Position(2D) vs Time';
+    ylabels[3] = 'Up';
+    xlabels[3] = 'North';
+
+
+    uselegend = [0]
+    usequiver = True;
+
+
+    grid3D[0] = grid[0];
+    ####################
+    grid2D[1] = grid[1];
+    grid2D[2] = grid[2];
+    grid2D[3] = grid[3];
+    
+
+
 
     ##########################################
     if 'figsize' in ins: figsize = ins['figsize'];
@@ -145,9 +198,8 @@ def makePlotTrajs(PLTS1,ins={}):
     if 'xlabels' in ins: xlabels = {**xlabels,**ins['xlabels']};
     if 'ylabels' in ins: ylabels = {**ylabels,**ins['ylabels']};
     if 'uselegend' in ins: uselegend = ins['uselegend'];
+    if 'usequiver' in ins: usequiver = ins['usequiver'];
 
-    grid2D[1] = grid[1];
-    grid3D[0] = grid[0];
 
     titleinfo = {}; xlabelinfo = {}; ylabelinfo = {}; zlabelinfo = {};
     ticksinfo = {}; legendinfo = {};
@@ -170,101 +222,116 @@ def makePlotTrajs(PLTS1,ins={}):
 
         # grid = PLTS1.specGrid(typ='2x2'); 
         fig = plt.figure(figsize=figsize);
-        axs1 = PLTS1.createGrid(fig,grid = grid2D);
 
-        # axs2 = PLTS1.createGrid(fig,grid = grid3D,ins={'plt_typ':'3d'});
-        axs2 = {0: fig.add_axes(grid3D[0],projection='3d')} # colorbar axis]
-        axs = {**axs1,**axs2};
+        if sideviews: 
+            axs1 = PLTS1.createGrid(fig,grid = grid2D);
+            axs2 = {0: fig.add_axes(grid3D[0],projection='3d')} # colorbar axis]
+            axs = {**axs1,**axs2};
+        else:
+            axs = {0: fig.add_axes(grid3D[0],projection='3d')} # colorbar axis]
 
         lgnd = 'Fig6'; PLTS1.dumpLegend(lgnd)
         
         for method in methods: 
             PLTS1.setCurrent({'scenarios':scenarios,'methods':[method],'runs':runs})
+            for j in plot_inds:
+                ax = axs[j];
+                if j == 0:
+                    sindx = 2; sindy = 3; sindz = 1; 
+                    qinds = (1,2,0)
 
-# skip = 3
-# # 3D position plot
-# fig = plt.figure()
-# ax = fig.add_subplot(111, projection='3d')
-# ax.plot(z_nl[:, 2], z_nl[:, 3], z_nl[:, 1], linestyle='--')
-# ax.quiver3D(z_opt[::skip, 2], z_opt[::skip, 3], z_opt[::skip, 1], body_vecs[::skip, 1], body_vecs[::skip, 2], body_vecs[::skip, 0],
-#             normalize=False,
-#             arrow_length_ratio=0,
-#             color=(0.1, 0.1, 0.1),
-#             linewidth=2.0)
+                    if usequiver: 
+                        params5 = {'label':'u quiver','quiver':('u_vec1_opt',qinds),'iters':[-1],'x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz)};
+                        params6 = {'label':'body quiver','quiver':('body_vec1_opt',qinds),'iters':[-1],'x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz)};
+                        PLTS1.addPlot3D(ax,pen=PENS['u_vec'],ins=params5)
+                        PLTS1.addPlot3D(ax,pen=PENS['body_vec'],ins=params6)
 
-# ax.quiver3D(z_opt[::skip, 2] - u_vecs[::skip, 1],
-#              z_opt[::skip, 3] - u_vecs[::skip, 2],
-#              z_opt[::skip, 1] - u_vecs[::skip, 0],
-#             u_vecs[::skip, 1], u_vecs[::skip, 2], u_vecs[::skip, 0],
-#             normalize=False,
-#             arrow_length_ratio=0.1,
-#             color=(1, 60/255, 0),
-#             linewidth=1)
 
-# # PLOT ASPECT RATIO FIXING (NEEDS TO BE DONE MANUALLY FOR 3D PLOTS :( )
+                    if version in ['standalone']:
+                        params1 = {'label':'Initial guess','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':[1],'legend':lgnd,};
+                        # params2 = {'label':'Iterations','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':itrs}; #,'legend':lgnd};
+                        # params2b = {'label':'Iterations','x':('z_nl',sindx),'y':('z_nl',sindy),'z':('z_nl',sindz),'iters':itrs,'legend':lgnd};
+                        params3 = {'label':'Propogated','x':('z_nl',sindx),'y':('z_nl',sindy),'z':('z_nl',sindz),'iters':[-1],'legend':lgnd};
+                        params4 = {'label':'Optimal Solution','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':[-1],'legend':lgnd};
+                        PLTS1.addPlot3D(ax,pen=PENS['init'],ins=params1);
+                        # PLTS1.addPlot3D(ax,pen=PENS['itr_opt'] ,ins=params2);
+                        # PLTS1.addPlot3D(ax,pen=PENS['itr_nl'] ,ins=params2b);
+                        PLTS1.addPlot3D(ax,pen=PENS['nl'],ins=params3); 
+                        PLTS1.addPlot3D(ax,pen=PENS['opt'] ,ins=params4);
 
-# # fix aspect ratio of 3d plot
-# x_lim = ax.get_xlim3d()
-# y_lim = ax.get_ylim3d()
-# z_lim = ax.get_zlim3d()
 
-# max_lim = max(abs(x_lim[1] - x_lim[0]), abs(y_lim[1] - y_lim[0]), abs(z_lim[1] - z_lim[0]))
-# x_mid = sum(x_lim) * 0.5
-# y_mid = sum(y_lim) * 0.5
+                    if version in ['sa_iters']:
+                        params1 = {'label':'Initial guess','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':[1],'legend':lgnd,};
+                        params2 = {'label':'Iterations','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':itrs}; #,'legend':lgnd};
+                        params2b = {'label':'Iterations','x':('z_nl',sindx),'y':('z_nl',sindy),'z':('z_nl',sindz),'iters':itrs,'legend':lgnd};
+                        params3 = {'label':'Propogated','x':('z_nl',sindx),'y':('z_nl',sindy),'z':('z_nl',sindz),'iters':[-1],'legend':lgnd};
+                        params4 = {'label':'Optimal Solution','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':[-1],'legend':lgnd};
 
-# ax.set_xlim3d([x_mid - max_lim * 0.5, x_mid + max_lim * 0.5])
-# ax.set_ylim3d([y_mid - max_lim * 0.5, y_mid + max_lim * 0.5])
-# ax.set_zlim3d([0, max_lim])
+                        PLTS1.addPlot3D(ax,pen=PENS['init'],ins=params1);
+                        PLTS1.addPlot3D(ax,pen=PENS['itr_opt'] ,ins=params2);
+                        PLTS1.addPlot3D(ax,pen=PENS['itr_nl'] ,ins=params2b);
+                        PLTS1.addPlot3D(ax,pen=PENS['fitr_nl'],ins=params3); 
+                        PLTS1.addPlot3D(ax,pen=PENS['fitr_opt'] ,ins=params4);
 
-# ax.view_init(elev=20, azim=160)
+                    if version in ['methodvar','mvmc']:
+                        params1 = {'label':method_labels[method],'x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':[-1]};
+                        params2 = {'label':method_labels[method],'x':('z_nl',sindx),'y':('z_nl',sindy),'z':('z_nl',sindz),'iters':[-1],'legend':lgnd};
+                        PLTS1.addPlot3D(ax,pen=PENS[method + '_opt'],ins=params1);
+                        PLTS1.addPlot3D(ax,pen=PENS[method + '_nl'],ins=params2);
 
-# plt.figure()
-# plt.plot(t_opt, np.linalg.norm(nu_opt[:, :3], axis=1))
+                    if version == 'montecarlo':
+                        params1 = {'label':method_labels[method],'x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':[-1],'color_vars':COLORVARS[method]};
+                        params2 = {'label':method_labels[method],'x':('z_nl',sindx),'y':('z_nl',sindy),'z':('z_nl',sindz),'iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
+                        PLTS1.addPlot3D(ax,pen=PENS[method + '_opt'],ins=params1);
+                        PLTS1.addPlot3D(ax,pen=PENS[method + '_nl'],ins=params2);
 
-# plt.tight_layout()
-# plt.show()
 
-            j = 0;
-            ax = axs[j];
-            sindx = 2; sindy = 3; sindz = 1; 
-            if version in ['standalone']:
-                params1 = {'label':'Initial guess','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':[1],'legend':lgnd,};
-                # params2 = {'label':'Iterations','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':itrs}; #,'legend':lgnd};
-                # params2b = {'label':'Iterations','x':('z_nl',sindx),'y':('z_nl',sindy),'z':('z_nl',sindz),'iters':itrs,'legend':lgnd};
-                params3 = {'label':'Propogated','x':('z_nl',sindx),'y':('z_nl',sindy),'z':('z_nl',sindz),'iters':[-1],'legend':lgnd};
-                params4 = {'label':'Optimal Solution','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':[-1],'legend':lgnd};
+                if j in [1,2,3]:
+                    if j == 1: sindx = 2; sindy = 3; qinds = (1,2)
+                    if j == 2: sindx = 2; sindy = 1; qinds = (1,0)
+                    if j == 3: sindx = 3; sindy = 1; qinds = (2,0)
 
-                PLTS1.addPlot3D(ax,pen=PENS['init'],ins=params1);
-                # PLTS1.addPlot3D(ax,pen=PENS['itr_opt'] ,ins=params2);
-                # PLTS1.addPlot3D(ax,pen=PENS['itr_nl'] ,ins=params2b);
-                PLTS1.addPlot3D(ax,pen=PENS['nl'],ins=params3); 
-                PLTS1.addPlot3D(ax,pen=PENS['opt'] ,ins=params4);  
+                    if usequiver: 
+                        params5 = {'label':'u quiver','quiver':('u_vec2_opt',qinds),'iters':[-1],'x':('z_opt',sindx),'y':('z_opt',sindy)};
+                        params6 = {'label':'body quiver','quiver':('body_vec2_opt',qinds),'iters':[-1],'x':('z_opt',sindx),'y':('z_opt',sindy)};
+                        PLTS1.addPlot2D(ax,pen=PENS['u_vec2'],ins=params5)
+                        PLTS1.addPlot2D(ax,pen=PENS['body_vec2'],ins=params6)
 
-            if version in ['sa_iters']:
-                params1 = {'label':'Initial guess','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':[1],'legend':lgnd,};
-                params2 = {'label':'Iterations','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':itrs}; #,'legend':lgnd};
-                params2b = {'label':'Iterations','x':('z_nl',sindx),'y':('z_nl',sindy),'z':('z_nl',sindz),'iters':itrs,'legend':lgnd};
-                params3 = {'label':'Propogated','x':('z_nl',sindx),'y':('z_nl',sindy),'z':('z_nl',sindz),'iters':[-1],'legend':lgnd};
-                params4 = {'label':'Optimal Solution','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':[-1],'legend':lgnd};
+                    
+                    if version in ['standalone']:
+                        params1 = {'label':'Initial guess','x':('z_opt',sindx),'y':('z_opt',sindy),'iters':[1],'legend':lgnd,};
+                        params3 = {'label':'Propogated','x':('z_nl',sindx),'y':('z_nl',sindy),'iters':[-1],'legend':lgnd};
+                        params4 = {'label':'Optimal Solution','x':('z_opt',sindx),'y':('z_opt',sindy),'iters':[-1],'legend':lgnd};
+                        PLTS1.addPlot2D(ax,pen=PENS['init'],ins=params1);
+                        PLTS1.addPlot2D(ax,pen=PENS['nl'],ins=params3); 
+                        PLTS1.addPlot2D(ax,pen=PENS['opt'] ,ins=params4);
 
-                PLTS1.addPlot3D(ax,pen=PENS['init'],ins=params1);
-                PLTS1.addPlot3D(ax,pen=PENS['itr_opt'] ,ins=params2);
-                PLTS1.addPlot3D(ax,pen=PENS['itr_nl'] ,ins=params2b);
-                PLTS1.addPlot3D(ax,pen=PENS['fitr_nl'],ins=params3); 
-                PLTS1.addPlot3D(ax,pen=PENS['fitr_opt'] ,ins=params4);                 
 
-            if version in ['methodvar','mvmc']:
-                params1 = {'label':method_labels[method],'x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':[-1]};
-                params2 = {'label':method_labels[method],'x':('z_nl',sindx),'y':('z_nl',sindy),'z':('z_nl',sindz),'iters':[-1],'legend':lgnd};
-                PLTS1.addPlot3D(ax,pen=PENS[method + '_opt'],ins=params1);
-                PLTS1.addPlot3D(ax,pen=PENS[method + '_nl'],ins=params2);
+                    if version in ['sa_iters']:
+                        params1 = {'label':'Initial guess','x':('z_opt',sindx),'y':('z_opt',sindy),'iters':[1],'legend':lgnd,};
+                        params2 = {'label':'Iterations','x':('z_opt',sindx),'y':('z_opt',sindy),'iters':itrs}; #,'legend':lgnd};
+                        params2b = {'label':'Iterations','x':('z_nl',sindx),'y':('z_nl',sindy),'iters':itrs,'legend':lgnd};
+                        params3 = {'label':'Propogated','x':('z_nl',sindx),'y':('z_nl',sindy),'iters':[-1],'legend':lgnd};
+                        params4 = {'label':'Optimal Solution','x':('z_opt',sindx),'y':('z_opt',sindy),'iters':[-1],'legend':lgnd};
 
-            if version == 'montecarlo':
-                params1 = {'label':method_labels[method],'x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':[-1],'color_vars':COLORVARS[method]};
-                params2 = {'label':method_labels[method],'x':('z_nl',sindx),'y':('z_nl',sindy),'z':('z_nl',sindz),'iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
-                PLTS1.addPlot3D(ax,pen=PENS[method + '_opt'],ins=params1);
-                PLTS1.addPlot3D(ax,pen=PENS[method + '_nl'],ins=params2);
+                        PLTS1.addPlot2D(ax,pen=PENS['init'],ins=params1);
+                        PLTS1.addPlot2D(ax,pen=PENS['itr_opt'] ,ins=params2);
+                        PLTS1.addPlot2D(ax,pen=PENS['itr_nl'] ,ins=params2b);
+                        PLTS1.addPlot2D(ax,pen=PENS['fitr_nl'],ins=params3); 
+                        PLTS1.addPlot2D(ax,pen=PENS['fitr_opt'] ,ins=params4);
 
+                    if version in ['methodvar','mvmc']:
+                        params1 = {'label':method_labels[method],'x':('z_opt',sindx),'y':('z_opt',sindy),'iters':[-1]};
+                        params2 = {'label':method_labels[method],'x':('z_nl',sindx),'y':('z_nl',sindy),'iters':[-1],'legend':lgnd};
+                        PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'],ins=params1);
+                        PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'],ins=params2);
+
+
+                    if version == 'montecarlo':
+                        params1 = {'label':method_labels[method],'x':('z_opt',sindx),'y':('z_opt',sindy),'iters':[-1],'color_vars':COLORVARS[method]};
+                        params2 = {'label':method_labels[method],'x':('z_nl',sindx),'y':('z_nl',sindy),'iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
+                        PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'],ins=params1);
+                        PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'],ins=params2);
 
 
             # j = 1;
@@ -354,10 +421,9 @@ def makePlotTrajs(PLTS1,ins={}):
         # axs[1].set_aspect('equal')
 
         # axs[0].view_init(elev=50,azim=-20); #, azim=45)
-        axs[0].view_init(elev=25,azim=30); #, azim=45)        
-
         
-        for j in [0,1]:
+        
+        for j in plot_inds:
             ax = axs[j];
 
             params = {};
@@ -368,6 +434,32 @@ def makePlotTrajs(PLTS1,ins={}):
             params['ticks'] = {'labelsize':20,'width':2,**ticksinfo};
             PLTS1.setParams(ax,params);
             if j in uselegend: PLTS1.addLegend(ax,lgnd,ins={'fontsize':12,'loc':'best',**legendinfo});
+
+
+            if j == 0: 
+                # # PLOT ASPECT RATIO FIXING (NEEDS TO BE DONE MANUALLY FOR 3D PLOTS :( )
+                x_lim = ax.get_xlim3d()
+                y_lim = ax.get_ylim3d()
+                z_lim = ax.get_zlim3d()
+                max_lim = max(abs(x_lim[1] - x_lim[0]), abs(y_lim[1] - y_lim[0]), abs(z_lim[1] - z_lim[0]))
+                x_mid = sum(x_lim) * 0.5
+                y_mid = sum(y_lim) * 0.5
+                ax.set_xlim3d([x_mid - max_lim * 0.5, x_mid + max_lim * 0.5])
+                ax.set_ylim3d([y_mid - max_lim * 0.5, y_mid + max_lim * 0.5])
+                ax.set_zlim3d([0, max_lim])
+                ax.view_init(elev=20, azim=160)
+                # axs[0].view_init(elev=25,azim=30); #, azim=45)        
+            else: 
+
+                x_lim = ax.get_xlim()
+                y_lim = ax.get_ylim()
+                max_lim = max(abs(x_lim[1] - x_lim[0]), abs(y_lim[1] - y_lim[0]))
+                x_mid = sum(x_lim) * 0.5
+                y_mid = sum(y_lim) * 0.5
+                ax.set_xlim([x_mid - max_lim * 1.0, x_mid + max_lim * 1.0])
+                ax.set_ylim([y_mid - max_lim * 1.0, y_mid + max_lim * 1.0])
+
+
         
         if printfigs: 
             figadd = '';
@@ -402,6 +494,7 @@ def makePlotStates(PLTS1,ins={}):
     figsize = (10,5);
     grid = {};
     
+
     grid[0] = [0.05,0.6,0.35,0.35];
     grid[1] = [0.51,0.6,0.35,0.35];
     grid[2] = [0.05,0.05,0.35,0.35];

@@ -129,6 +129,8 @@ class SCVXPLOTS:
         if 'force_lens' in ins: force_lens = ins['force_lens'];
         dataloc = 'iters';
         if 'dataloc' in ins: dataloc = ins['dataloc'];
+        use_quiver = False; qtag = None;
+        if 'quiver' in ins: qtag = ins['quiver']; use_quiver = True; 
         # if dataloc == 'weights': iters = [0];
         ###############################################################
         color_vars = []; use_color_vars = False;
@@ -180,6 +182,12 @@ class SCVXPLOTS:
                                                 if vers == 'mod': ind1 = int(np.mod(ind1,len(vals)));
                                                 if vers == 'frac': ind1 = int((ind1/totlen)*len(vals));
                                                 penn2[field] = vals[ind1];
+
+                                        ########################################
+                                        if use_quiver: #not(vectag==None):
+                                            if isinstance(qtag,(tuple,list)):
+                                                qdata = DAT[i][qtag[0]][:,qtag[1]];
+                                            else: qdata = DAT[i][qtag];
                                         ########################################
 
                                         cpenn = {**penn,**penn2}
@@ -193,11 +201,22 @@ class SCVXPLOTS:
                                                 xlen = len(xdata); ylen = len(ydata); totlen = int(np.min([xlen,ylen]));
                                                 xdata = xdata[:totlen]; ydata = ydata[:totlen]
                                             if leg == None: 
-                                                ax.plot(xdata,ydata,color=lrgba[:3],alpha=lrgba[3],linewidth=lw,linestyle = ls,marker=msty,markersize=msz)
+                                                if use_quiver:
+                                                    ax.quiver(xdata,ydata,qdata[:,0],qdata[:,1],
+                                                              headlength=0,headwidth=1,scale=1,
+                                                              color=lrgba[:3],alpha=lrgba[3],linewidth=lw,linestyle = ls)
+                                                else: ax.plot(xdata,ydata,color=lrgba[:3],alpha=lrgba[3],linewidth=lw,linestyle = ls,marker=msty,markersize=msz)
                                             else: 
-                                                self.legends[leg][label] = ax.plot(xdata,ydata,
-                                                    label=label,color=lrgba[:3],alpha=lrgba[3],
-                                                    linewidth=lw,linestyle = ls,marker=msty,markersize=msz)[0]
+                                                if use_quiver: 
+                                                    self.legends[leg][label] = ax.quiver(xdata,ydata,qdata[:,0],qdata[:,1],
+                                                                                    headlength=0,headwidth=1,scale=1,
+                                                                                    color=lrgba[:3],alpha=lrgba[3],linewidth=lw,
+                                                                                    linestyle = ls)[0]
+                                                else:
+                                                    self.legends[leg][label] = ax.plot(xdata,ydata,
+                                                        label=label,color=lrgba[:3],alpha=lrgba[3],
+                                                        linewidth=lw,linestyle = ls,marker=msty,markersize=msz)[0]
+ 
 
 
     ########### BASIC 2D-PLOTTING ###############
@@ -236,6 +255,8 @@ class SCVXPLOTS:
         dataloc = 'iters';
         if 'dataloc' in ins: dataloc = ins['dataloc'];
         # if dataloc == 'weights': iters = [0];
+        use_quiver = False; qtag = None;
+        if 'quiver' in ins: qtag = ins['quiver']; use_quiver = True; 
         ###############################################################
         color_vars = []; use_color_vars = False;
         if 'color_vars'  in ins: color_vars = ins['color_vars']
@@ -278,6 +299,14 @@ class SCVXPLOTS:
                                             if vers == 'frac': ind1 = int((ind1/totlen)*len(vals));
                                             penn2[field] = vals[ind1];
                                     ########################################
+
+                                    ########################################
+                                    if use_quiver: #not(vectag==None):
+                                        if isinstance(qtag,(tuple,list)):
+                                            qdata = data[qtag[0]][:,qtag[1]];
+                                        else: qdata = data[qtag];
+                                    ########################################
+
                                     cpenn = {**penn,**penn2}
                                     frgba = cpenn['frgba']; lrgba = cpenn['lrgba'];
                                     lw = cpenn['lw']; ls = cpenn['ls']
@@ -287,10 +316,23 @@ class SCVXPLOTS:
 
                                     if typ == 'line':
                                         if leg == None: 
-                                            ax.plot(xdata,ydata,zdata,color=lrgba[:3],alpha=lrgba[3],linewidth=lw,linestyle = ls,marker=msty,markersize=msz)
-                                        else: 
-                                            self.legends[leg][label] = ax.plot(xdata,ydata,zdata,label=label,color=lrgba[:3],alpha=lrgba[3],
-                                                                                linewidth=lw,linestyle = ls,marker=msty,markersize=msz)[0]                                                
+                                            if use_quiver:
+                                                ax.quiver3D(xdata,ydata,zdata,
+                                                            qdata[:,0],qdata[:,1],qdata[:,2],
+                                                            normalize = False,arrow_length_ratio = 0,
+                                                            color=lrgba[:3],alpha=lrgba[3],linewidth=lw,linestyle = ls)
+                                            else: ax.plot(xdata,ydata,zdata,color=lrgba[:3],alpha=lrgba[3],linewidth=lw,linestyle = ls,marker=msty,markersize=msz)
+                                        else:
+                                            if use_quiver: 
+                                                self.legends[leg][label] = ax.quiver3D(xdata,ydata,zdata,qdata[:,0],qdata[:,1],qdata[:,2],
+                                                                                        normalize = False,arrow_length_ratio = 0,
+                                                                                        color=lrgba[:3],alpha=lrgba[3],linewidth=lw,
+                                                                                        linestyle = ls)[0]
+
+                                            else: self.legends[leg][label] = ax.plot(xdata,ydata,zdata,label=label,color=lrgba[:3],alpha=lrgba[3],
+                                                                                linewidth=lw,linestyle = ls,marker=msty,markersize=msz)[0]
+
+
 
 
     ########### BASIC 2D-PLOTTING ###############

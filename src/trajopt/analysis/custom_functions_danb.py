@@ -36,24 +36,40 @@ def calc_DCMs(t, z, nu, problem):
     dcm = DCM(z[7:11])
     return dcm 
 
-def calc_u_vecs(t, z, nu, problem):
-    veh = problem.mission.vehicle
-    rt = np.array([veh["rt1"], veh["rt2"], veh["rt3"]])
-    dcm = DCM(z[7:11])
-    return 0.3* dcm.T @ nu[:problem.model.m]
-
 def calc_rt_I(t, z, nu, problem):
     veh = problem.mission.vehicle
     rt = np.array([veh["rt1"], veh["rt2"], veh["rt3"]])
     dcm = DCM(z[7:11])
     return dcm.T @ rt
 
-def calc_body_vecs(t, z, nu, problem):
+
+scale2d = 0.2
+
+
+def calc_u_vecs_scale1(t, z, nu, problem):
+    veh = problem.mission.vehicle
+    rt = np.array([veh["rt1"], veh["rt2"], veh["rt3"]])
+    dcm = DCM(z[7:11])
+    return -0.3* dcm.T @ nu[:problem.model.m]
+
+def calc_u_vecs_scale2(t, z, nu, problem):
+    veh = problem.mission.vehicle
+    rt = np.array([veh["rt1"], veh["rt2"], veh["rt3"]])
+    dcm = DCM(z[7:11])
+    return -0.3*scale2d* dcm.T @ nu[:problem.model.m]
+
+
+def calc_body_vecs_scale1(t, z, nu, problem):
     veh = problem.mission.vehicle
     rt = np.array([veh["rt1"], veh["rt2"], veh["rt3"]])
     dcm = DCM(z[7:11])
     return 0.5 * dcm.T @ np.array([1, 0, 0]);
 
+def calc_body_vecs_scale2(t, z, nu, problem):
+    veh = problem.mission.vehicle
+    rt = np.array([veh["rt1"], veh["rt2"], veh["rt3"]])
+    dcm = DCM(z[7:11])
+    return 0.5*scale2d * dcm.T @ np.array([1, 0, 0]);
 
 
 
