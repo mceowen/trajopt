@@ -26,7 +26,7 @@ flags:
   flag_vb:      1.0
 
 solver_opts:
-  solver: "CLARABEL"
+  solver: "QOCO"
 
 T_init: 5
 T_min: 1

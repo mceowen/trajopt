@@ -42,15 +42,15 @@ constraints:
   dimension: 1
   category: "path"
 
-- fcn: "trajopt.core.modules.model.lander_6dof.tilt_cone"
-  analytical_affine_approximation: "None"
-  type: "inequality"
-  convex: 1
-  auto_diff: 0
-  jax: 0
-  always: 0
-  dimension: 1
-  category: "path"
+# - fcn: "trajopt.core.modules.model.lander_6dof.tilt_cone"
+#   analytical_affine_approximation: "None"
+#   type: "inequality"
+#   convex: 1
+#   auto_diff: 0
+#   jax: 0
+#   always: 0
+#   dimension: 1
+#   category: "path"
 
 - fcn: "trajopt.core.modules.model.lander_6dof.glideslope"
   analytical_affine_approximation: "None"

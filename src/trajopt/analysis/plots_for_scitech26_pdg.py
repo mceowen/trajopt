@@ -604,6 +604,42 @@ def makePlotStates(PLTS1,ins={}):
                     ytag_nl = 'ang_rate_nl'
                     ytag_opt ='ang_rate_opt'
 
+                ###############################################################
+                ### NEEDS TO BE UPDATED 
+                if False: 
+                    if j == 0: #thrust mag
+                        # #### hack for adding max value line... not that hacky anyway
+                        penn = PENS['max-value'];
+                        valmin = problem.mission.u_min[0]*(180/np.pi) # CHANGE 
+                        valmax = problem.mission.u_max[0]*(180/np.pi) # CHANGE 
+                        lrgba = penn['lrgba']; ls = penn['ls']; lw = penn['lw']
+                        line_handle = ax.axhline(y=valmin, color=lrgba, linestyle=ls, linewidth=lw); # label=line_tag)
+                        line_handle = ax.axhline(y=valmax, color=lrgba, linestyle=ls, linewidth=lw); #, label=line_tag)                    
+                    if j == 1: # angular vector
+                        penn = PENS['max-value'];
+                        valmin = problem.mission.u_min[0]*(180/np.pi) # CHANGE 
+                        valmax = problem.mission.u_max[0]*(180/np.pi) # CHANGE 
+                        lrgba = penn['lrgba']; ls = penn['ls']; lw = penn['lw']
+                        line_handle = ax.axhline(y=valmin, color=lrgba, linestyle=ls, linewidth=lw); # label=line_tag)
+                        line_handle = ax.axhline(y=valmax, color=lrgba, linestyle=ls, linewidth=lw); #, label=line_tag)                    
+                    if j == 2: # tilt
+                        penn = PENS['max-value'];
+                        valmin = problem.mission.u_min[0]*(180/np.pi) # CHANGE 
+                        valmax = problem.mission.u_max[0]*(180/np.pi) # CHANGE 
+                        lrgba = penn['lrgba']; ls = penn['ls']; lw = penn['lw']
+                        line_handle = ax.axhline(y=valmin, color=lrgba, linestyle=ls, linewidth=lw); # label=line_tag)
+                        line_handle = ax.axhline(y=valmax, color=lrgba, linestyle=ls, linewidth=lw); #, label=line_tag)                    
+                    if j == 3: # angular rate
+                        penn = PENS['max-value'];
+                        valmin = problem.mission.u_min[0]*(180/np.pi) # CHANGE 
+                        valmax = problem.mission.u_max[0]*(180/np.pi) # CHANGE 
+                        lrgba = penn['lrgba']; ls = penn['ls']; lw = penn['lw']
+                        line_handle = ax.axhline(y=valmin, color=lrgba, linestyle=ls, linewidth=lw); # label=line_tag)
+                        line_handle = ax.axhline(y=valmax, color=lrgba, linestyle=ls, linewidth=lw); #, label=line_tag)                    
+
+
+
+                ###############################################################
 
                 if version in ['standalone']:
                     #TODO (CARLOS / SKYE): init should be in a better place, currently need ot index into iter k >= 1
@@ -644,13 +680,14 @@ def makePlotStates(PLTS1,ins={}):
                     params5 = {'label':method_labels[method],'x':'t_nl','y':ytag_nl,'iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'] ,ins=params4); 
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'] ,ins=params5); 
+
         
 
 
             params = {};
             params['title'] = {'text':titles[j],'fontsize':20,**titleinfo}
             params['xlabel'] = {'label':xlabels[j],'fontsize':16,**xlabelinfo}
-            params['ylabel'] = {'label':ylabels[j],'fontsize':16,**ylabelinfo0}
+            params['ylabel'] = {'label':ylabels[j],'fontsize':16,**ylabelinfo}
             params['ticks'] = {'labelsize':20,'width':2,**ticksinfo};
             PLTS1.setParams(ax,params);
             if j in uselegend: PLTS1.addLegend(ax,lgnd,ins={'fontsize':12,'loc':'best',**legendinfo});
@@ -1295,6 +1332,8 @@ def makePlotWghts2(PLTS1,ins={}):
     # ctcs:               'quad-2'  # 0, 1
     # ctcs_dual:          "l1"   # 'l1', 'none'
     weight_info = ['W_plus_ctcs','W_minus_ctcs','dual_plus_ctcs','dual_minus_ctcs']
+
+
     # weight_info = [left: 'W_plus_ctcs','W_minus_ctcs',
     #                right: ];
 
@@ -1566,6 +1605,156 @@ def makePlotWghts3(PLTS1,ins={}):
         if not(displayfigs): plt.clf();            
 
 
+# makePlot6(PLTS1,ins=plotparams);
+def makePlotWghtsFlex(PLTS1,ins={}):
+    problem = ins['problem'];
+    data = ins['data'];
+    versions = ins['versions'];
+    NEWPENS = ins['PENS'];
+    PENS = {**DPENS,**NEWPENS}
+    figpaths = ins['figpaths']
+    specs = ins['specs'];
+    printfigs = True; displayfigs = True; transparentfigs = True;
+    if 'printfigs' in ins: printfigs = ins['printfigs'];
+    if 'displayfigs' in ins: displayfigs = ins['displayfigs'];
+    if 'transparentfigs' in ins: transparentfigs = ins['transparentfigs']
+
+    weights_info = ['W_dyn','dual_dyn'];
+    if 'weights_info' in ins: weights_info = ins['weights_info']
+
+    #########################################
+    ######  DEFAULTS FIG INFORMATION ########
+    figsize = (10,4);
+    grid = {};
+    if len(weights_info) == 1:
+        grid[0] = [0.05,0.05,0.9,0.9];    
+        titles = {}; ylabels = {};
+        titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
+        xlabels = {ind:'Time [s]' for ind in range(1)}
+        ylabels[0] = 'Quadratic weights: \n CTCS dynamics';
+        uselegend = [0]
+
+    if len(weights_info)==2:
+        grid[0] = [0.05,0.05,0.4,0.9];    
+        grid[1] = [0.6,0.05,0.4,0.9];        
+        titles = {}; ylabels = {};
+        titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
+        xlabels = {ind:'Time [s]' for ind in range(2)}
+        ylabels[0] = 'Quadratic weights: \n CTCS dynamics';
+        ylabels[1] = 'Dual weights: \n CTCS dynamics';
+        uselegend = [1]
+
+    if len(weights_info)==3:
+        figsize = (10,3);
+        grid[0] = [0.05,0.05,0.17,0.9];    
+        grid[1] = [0.38,0.05,0.17,0.9];        
+        grid[2] = [0.7,0.05,0.17,0.9];        
+        titles = {}; ylabels = {};
+        titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
+        xlabels = {ind:'Time [s]' for ind in range(3)}
+        ylabels[0] = 'Quadratic weights: \n CTCS dynamics';
+        ylabels[1] = 'Dual weights: \n CTCS dynamics';
+        ylabels[2] = 'Dual weights: \n CTCS dynamics';
+        uselegend = [0]
+
+    if len(weights_info)==4:
+        grid[0] = [0.05,0.60,0.3,0.35];
+        grid[1] = [0.05,0.05,0.3,0.35];
+        grid[2] = [0.55,0.60,0.3,0.35];
+        grid[3] = [0.55,0.05,0.3,0.35];        
+        state_inds = [0,3,4,5] # replace with appropriate state indices
+        titles = {}; ylabels = {}; xlabels = {ind:'Time [s]' for ind in range(4)}
+        titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
+        ylabels[0] = 'No-fly zone \n quadratic \n penalty weights';
+        ylabels[1] = 'Path constraint \n quadratic \n penalty weights';
+        ylabels[2] = 'No-fly zone linear \n penalty weights';
+        ylabels[3] = 'Path constraint \n linear \n penalty weights';
+        uselegend = [3];        
+
+    ##########################################
+    if 'figsize' in ins: figsize = ins['figsize'];
+    if 'grid' in ins: grid = {**grid,**ins['grid']};
+    if 'titles' in ins: titles = {**titles,**ins['titles']};
+    if 'xlabels' in ins: xlabels = {**xlabels,**ins['xlabels']};
+    if 'ylabels' in ins: ylabels = {**ylabels,**ins['ylabels']};
+    if 'uselegend' in ins: uselegend = ins['uselegend'];
+    
+    titleinfo = {}; xlabelinfo = {}; ylabelinfo = {}; ticksinfo = {}; legendinfo = {};
+    if 'titleinfo' in ins: titleinfo = {**titleinfo,**ins['titleinfo']}
+    if 'xlabelinfo' in ins: xlabelinfo = {**xlabelinfo,**ins['xlabelinfo']}
+    if 'ylabelinfo' in ins: ylabelinfo = {**ylabelinfo,**ins['ylabelinfo']}
+    if 'ticksinfo' in ins:  ticksinfo = {**ticksinfo,**ins['ticksinfo']}
+    if 'legendinfo' in ins: legendinfo = {**legendinfo,**ins['legendinfo']}
+
+    for kk,version in enumerate(versions): 
+        scenarios = ['scenario1'];
+        methods = ['standard','autotune'];
+        runs = itrs_all = list(range(1000))[1:];
+        itrs = list(range(1000))[1:];
+        if 'methods' in specs[version]: methods = specs[version]['methods']
+        if 'runs' in specs[version]: runs = specs[version]['runs']
+        if 'itrs' in specs[version]: itrs = specs[version]['itrs']
+        ############################################
+
+        # grid = PLTS1.specGrid(typ='2x2'); 
+        fig = plt.figure(figsize=figsize);
+        axs = PLTS1.createGrid(fig,grid = grid);
+
+        lgnd = 'Fig9wflex'; PLTS1.dumpLegend(lgnd)
+
+        for j,info in enumerate(weights_info):
+            ax = axs[j];
+
+            for method in methods: 
+                PLTS1.setCurrent({'scenarios':scenarios,'methods':[method],'runs':runs})
+                t_opt_len = problem.method.N;
+                t_nl_len = int(t_opt_len * 20); # Hack
+                if version in ['standalone']: 
+                    ttag = ['t_opt',list(range(t_opt_len))]; #[:-1]];
+                    params1 = {'label':'Initial guess','x':ttag,'y':info,'iters':[1],'legend':lgnd,'dataloc':'weights'};
+                    params2 = {'label':'Iterations','x':ttag,'y':info,'iters':itrs,'legend':lgnd,'dataloc':'weights'};
+                    params4 = {'label':'Optimal Solution','x':ttag,'y':info,'iters':[-1],'legend':lgnd,'dataloc':'weights'};
+                    PLTS1.addPlot2D(ax,pen=PENS['init'],ins=params1);
+                    PLTS1.addPlot2D(ax,pen=PENS['opt2'] ,ins=params4);
+                if version in ['sa_iters']: 
+                    ttag = ['t_opt',list(range(t_opt_len))];
+                    params1 = {'label':'Initial guess','x':ttag,'y':info,'iters':[1],'legend':lgnd,'dataloc':'weights'};
+                    params2 = {'label':'Iterations','x':ttag,'y':info,'iters':itrs,'legend':lgnd,'dataloc':'weights'};
+                    params4 = {'label':'Optimal Solution','x':ttag,'y':info,'iters':[-1],'legend':lgnd,'dataloc':'weights'};
+
+                    PLTS1.addPlot2D(ax,pen=PENS['init'],ins=params1);
+                    PLTS1.addPlot2D(ax,pen=PENS['itr_opt'] ,ins=params2);
+                    PLTS1.addPlot2D(ax,pen=PENS['fitr_opt2'] ,ins=params4);
+
+                if version in ['methodvar','mvmc']:
+                    ttag = ['t_opt',list(range(t_opt_len))];
+                    params4 = {'label':method_labels[method],'x':ttag,'y':info,'iters':[-1],'legend':lgnd,'dataloc':'weights'};
+                    PLTS1.addPlot2D(ax,pen=PENS[method + '_opt2'] ,ins=params4);
+                if version == 'montecarlo':
+                    ttag = ['t_opt',list(range(t_opt_len))]; #[:-1]];
+                    params4 = {'label':method_labels[method],'x':ttag,'y':info,'iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd,'dataloc':'weights'};
+                    PLTS1.addPlot2D(ax,pen=PENS[method + '_opt2'] ,ins=params4);
+
+            params = {};
+            params['title'] = {'text':titles[j],'fontsize':20,**titleinfo}
+            params['xlabel'] = {'label':xlabels[j],'fontsize':16,**xlabelinfo}
+            params['ylabel'] = {'label':ylabels[j],'fontsize':16,**ylabelinfo}
+            params['ticks'] = {'labelsize':20,'width':2,**ticksinfo};
+            PLTS1.setParams(ax,params);
+            if j in uselegend: PLTS1.addLegend(ax,lgnd,ins={'fontsize':14,'loc':'best',**legendinfo});
+
+        if printfigs: 
+            figadd = '';
+            if version in ['standalone','sa_iters']: figadd = '_sa';
+            if version == 'sa_iters': figadd = '_sa_iters';
+            if version in ['methodvar','mvmc']: figadd = '_mv';
+            if version == 'montecarlo': figadd = '_mc';
+            if version == 'mvmc': figadd = '_mvmc';
+            figname = figpaths[kk] + 'weights2' + figadd + '.pdf'; #'bankangle1.pdf'
+            plt.savefig(figname,bbox_inches='tight',pad_inches = 0,transparent=transparentfigs);
+        if not(displayfigs): plt.clf();                    
+
+
 
 # makePlot6(PLTS1,ins=plotparams);
 def makePlotConvs(PLTS1,ins={}):
@@ -1629,8 +1818,6 @@ def makePlotConvs(PLTS1,ins={}):
             ax = axs[j];#state_plot_inds[j]];
             for method in methods:             
                 
-                PLTS1.setCurrent({'scenarios':scenarios,'methods':[method],'runs':runs})
-
                 PLTS1.setCurrent({'scenarios':scenarios,'methods':[method],'runs':runs})
 
                 if version in ['standalone','sa_iters']:
@@ -1889,3 +2076,149 @@ def makePlotConvs3(PLTS1,ins={}):
             figname = figpaths[kk] + 'terminal' + figadd + '.pdf'; #'bankangle1.pdf'
             plt.savefig(figname,bbox_inches='tight',pad_inches = 0,transparent=transparentfigs);
         if not(displayfigs): plt.clf();  
+
+
+
+
+
+# makePlot6(PLTS1,ins=plotparams);
+def makePlotConvsFlex(PLTS1,ins={}):
+    problem = ins['problem'];
+    data = ins['data'];
+    versions = ins['versions'];
+    NEWPENS = ins['PENS'];
+    PENS = {**DPENS,**NEWPENS}
+    figpaths = ins['figpaths']
+    specs = ins['specs'];
+    printfigs = True; displayfigs = True; transparentfigs = True;
+    if 'printfigs' in ins: printfigs = ins['printfigs'];
+    if 'displayfigs' in ins: displayfigs = ins['displayfigs'];
+    if 'transparentfigs' in ins: transparentfigs = ins['transparentfigs']
+    
+    converge_info = ['chk_feas_term','chk_feas_dyn'];
+    if 'converge_info' in ins: converge_info = ins['converge_info']
+
+    #########################################
+    ######  DEFAULTS FIG INFORMATION ########
+    figsize = (10,4);
+    grid = {};
+    if len(converge_info) == 1:
+        grid[0] = [0.05,0.05,0.9,0.9];    
+        titles = {}; ylabels = {};
+        titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
+        xlabels = {ind:'Iterations' for ind in range(1)}
+        ylabels[0] = 'Peak Constraint \n Violation';
+        uselegend = [0]
+
+    if len(converge_info)==2:
+        grid[0] = [0.05,0.05,0.4,0.9];    
+        grid[1] = [0.6,0.05,0.4,0.9];        
+        titles = {}; ylabels = {};
+        titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
+        xlabels = {ind:'Iterations' for ind in range(2)}
+        ylabels[0] = 'Peak Constraint \n Violation';
+        ylabels[1] = 'Peak trajectory \n  residual [km]';    
+        uselegend = [1]
+
+    if len(converge_info)==3:
+        figsize = (10,3);
+        grid[0] = [0.05,0.05,0.17,0.9];    
+        grid[1] = [0.38,0.05,0.17,0.9];        
+        grid[2] = [0.7,0.05,0.17,0.9];        
+        titles = {}; ylabels = {};
+        titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
+        xlabels = {ind:'Iterations' for ind in range(3)}
+        ylabels[0] = 'Peak Constraint \n Violation';
+        ylabels[1] = 'Peak trajectory \n  residual [km]';    
+        ylabels[2] = 'Dual weights: \n CTCS dynamics';
+        uselegend = [0]
+
+    if len(converge_info)==4:
+        grid[0] = [0.05,0.60,0.3,0.35];
+        grid[1] = [0.05,0.05,0.3,0.35];
+        grid[2] = [0.55,0.60,0.3,0.35];
+        grid[3] = [0.55,0.05,0.3,0.35];        
+        state_inds = [0,3,4,5] # replace with appropriate state indices
+        titles = {}; ylabels = {};
+        xlabels = {ind:'Iterations' for ind in range(4)}
+        titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
+        ylabels[0] = 'Peak Constraint \n Violation';
+        ylabels[1] = 'Peak trajectory \n  residual [km]';    
+        ylabels[2] = 'No-fly zone linear \n penalty weights';
+        ylabels[3] = 'Path constraint \n linear \n penalty weights';
+        uselegend = [3];            
+
+
+    ##########################################
+    if 'figsize' in ins: figsize = ins['figsize'];
+    if 'grid' in ins: grid = {**grid,**ins['grid']};
+    if 'titles' in ins: titles = {**titles,**ins['titles']};
+    if 'xlabels' in ins: xlabels = {**xlabels,**ins['xlabels']};
+    if 'ylabels' in ins: ylabels = {**ylabels,**ins['ylabels']};
+    if 'uselegend' in ins: uselegend = ins['uselegend'];
+    
+    titleinfo = {}; xlabelinfo = {}; ylabelinfo = {}; ticksinfo = {}; legendinfo = {};
+    if 'titleinfo' in ins: titleinfo = {**titleinfo,**ins['titleinfo']}
+    if 'xlabelinfo' in ins: xlabelinfo = {**xlabelinfo,**ins['xlabelinfo']}
+    if 'ylabelinfo' in ins: ylabelinfo = {**ylabelinfo,**ins['ylabelinfo']}
+    if 'ticksinfo' in ins:  ticksinfo = {**ticksinfo,**ins['ticksinfo']}
+    if 'legendinfo' in ins: legendinfo = {**legendinfo,**ins['legendinfo']}
+
+    for kk,version in enumerate(versions): 
+        scenarios = ['scenario1'];
+        methods = ['standard','autotune'];
+        runs = itrs_all = list(range(1000))[1:];
+        itrs = list(range(1000))[1:];
+        if 'methods' in specs[version]: methods = specs[version]['methods']
+        if 'runs' in specs[version]: runs = specs[version]['runs']
+        if 'itrs' in specs[version]: itrs = specs[version]['itrs']
+        ###########################################
+
+        # grid = PLTS1.specGrid(typ='2x2'); 
+        fig = plt.figure(figsize=figsize);
+        axs = PLTS1.createGrid(fig,grid = grid);
+        lgnd = 'Fig9cflex'; PLTS1.dumpLegend(lgnd)
+
+        for j,tag in enumerate(converge_info):
+            ax = axs[j];#state_plot_inds[j]];
+            for method in methods:             
+                
+                PLTS1.setCurrent({'scenarios':scenarios,'methods':[method],'runs':runs})
+
+                if version in ['standalone','sa_iters']:
+                    params1 = {'label':'Initial guess','tinds':[None],'y':tag,'iters':[1],'legend':lgnd,'dataloc':'conv_data'};
+                    params2 = {'label':'Iterations','tinds':[None],'y':tag,'iters':itrs,'legend':lgnd,'dataloc':'conv_data'};
+                    params3 = {'label':'Propogated','tinds':[None],'y':tag,'iters':[-1],'legend':lgnd,'dataloc':'conv_data'};
+                    params4 = {'label':'Optimal Solution','tinds':[None],'y':tag,'iters':itrs_all,'legend':lgnd,'dataloc':'conv_data'};
+                    PLTS1.addPlot2DIter(ax,pen=PENS['init'] ,ins=params1); 
+                    PLTS1.addPlot2DIter(ax,pen=PENS['itr_opt'] ,ins=params2); 
+                    PLTS1.addPlot2DIter(ax,pen=PENS['nl'] ,ins=params3); 
+                    PLTS1.addPlot2DIter(ax,pen=PENS['opt2'] ,ins=params4); 
+                
+                if version in ['methodvar','mvmc']:
+                    params1 = {'label':method_labels[method],'tinds':[None],'y':tag,'iters':itrs,'legend':lgnd,'dataloc':'conv_data'};
+                    PLTS1.addPlot2DIter(ax,pen=PENS[method + '_opt2'] ,ins=params1); 
+                                
+                if version == 'montecarlo':
+                    params1 = {'label':method_labels[method],'tinds':[None],'y':tag,'iters':itrs,'color_vars':COLORVARS[method],'legend':lgnd,'dataloc':'conv_data'};
+                    PLTS1.addPlot2DIter(ax,pen=PENS[method + '_opt2'] ,ins=params1); 
+
+
+            params = {};
+            params['title'] = {'text':titles[j],'fontsize':20,**titleinfo}
+            params['xlabel'] = {'label':xlabels[j],'fontsize':16,**xlabelinfo}
+            params['ylabel'] = {'label':ylabels[j],'fontsize':16,**ylabelinfo}
+            params['ticks'] = {'labelsize':20,'width':2,**ticksinfo};
+            PLTS1.setParams(ax,params);
+            if j in uselegend: PLTS1.addLegend(ax,lgnd,ins={'fontsize':14,'loc':'best',**legendinfo});
+
+        if printfigs: 
+            figadd = '';
+            if version in ['standalone','sa_iters']: figadd = '_sa';
+            if version == 'sa_iters': figadd = '_sa_iters';
+            if version in ['methodvar','mvmc']: figadd = '_mv';
+            if version == 'montecarlo': figadd = '_mc';
+            if version == 'mvmc': figadd = '_mvmc';
+            figname = figpaths[kk] + 'convergence' + figadd + '.pdf'; #'bankangle1.pdf'
+            plt.savefig(figname,bbox_inches='tight',pad_inches = 0,transparent=transparentfigs);
+        if not(displayfigs): plt.clf();            
