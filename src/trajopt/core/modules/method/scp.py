@@ -157,6 +157,9 @@ class Subproblem:
         # Compile CVXPY problem once
         self.subproblem = cp.Problem(cp.Minimize(self.cost_expr), self.constraints)
 
+        total_param_scalars = sum(p.size for p in self.subproblem.parameters())
+        print(f"total number of parameters: {total_param_scalars}")
+
         # --------------------------
         # Initialize unified history
         # --------------------------
@@ -330,6 +333,8 @@ class Subproblem:
         self.z_ref  = cp.Parameter((N, nz),    name="z_ref")
         self.nu_ref  = cp.Parameter((N, m),    name="nu_ref")
         self.dt_ref = cp.Parameter((N - 1, 1),name="dt_ref", nonneg=True)
+
+        self.nu_ref_sq = cp.Parameter((N,), name="nu_ref_sq")
 
         # Path/NFZ/AUX linearized constraints
         if mission.n_ineq > 0:
@@ -667,6 +672,8 @@ class Subproblem:
         self.z_ref.value  = inputs["z_ref"]
         self.nu_ref.value  = inputs["nu_ref"]
         self.dt_ref.value = inputs["dt_ref"].reshape(self.N - 1, 1)
+
+        self.nu_ref_sq.value = np.sum(inputs["nu_ref"] * inputs["nu_ref"], axis=1)
 
         if dgdz is not None:
             self.dgdz.value = dgdz

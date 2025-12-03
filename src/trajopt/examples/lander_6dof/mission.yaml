@@ -61,6 +61,9 @@ udot_max: []
 udot_max_idx: []
 
 path_limits: {}
+  # cos_theta_max: 0.86602540378
+  # w_max: 1.57079632679
+  # tan_gamma_gs: 0.1763
 
 aux_limits: {}
 
@@ -70,7 +73,7 @@ custom_limits : {}
 
 convex_limits: 
   cos_delta_max: 0.93969262  
-  # cos_theta_max: 0.86602540378
+  cos_theta_max: 0.86602540378
   w_max: 1.57079632679
   max_thrust: 4.0
   tan_gamma_gs: 0.1763

@@ -32,17 +32,7 @@ constraints:
   dimension: 1
   category: "path"
 
-# - fcn: "trajopt.core.modules.model.lander_6dof.tilt_cone"
-#   analytical_affine_approximation: "None"
-#   type: "inequality"
-#   convex: 1
-#   auto_diff: 0
-#   jax: 0
-#   always: 0
-#   dimension: 1
-#   category: "path"
-
-- fcn: "trajopt.core.modules.model.lander_6dof.angular_velocity"
+- fcn: "trajopt.core.modules.model.lander_6dof.max_norm_thrust"
   analytical_affine_approximation: "None"
   type: "inequality"
   convex: 1
@@ -52,7 +42,7 @@ constraints:
   dimension: 1
   category: "path"
 
-- fcn: "trajopt.core.modules.model.lander_6dof.max_norm_thrust"
+- fcn: "trajopt.core.modules.model.lander_6dof.tilt_cone"
   analytical_affine_approximation: "None"
   type: "inequality"
   convex: 1
@@ -71,3 +61,45 @@ constraints:
   always: 0
   dimension: 1
   category: "path"
+
+- fcn: "trajopt.core.modules.model.lander_6dof.angular_velocity"
+  analytical_affine_approximation: "None"
+  type: "inequality"
+  convex: 1
+  auto_diff: 0
+  jax: 0
+  always: 0
+  dimension: 1
+  category: "path"
+
+############################################
+
+# - fcn: "trajopt.core.modules.model.lander_6dof.tilt_cone_jax"
+#   analytical_affine_approximation: "None"
+#   type: "inequality"
+#   convex: 0
+#   auto_diff: 1
+#   jax: 1
+#   always: 0
+#   dimension: 1
+#   category: "path"
+
+# - fcn: "trajopt.core.modules.model.lander_6dof.glideslope_jax"
+#   analytical_affine_approximation: "None"
+#   type: "inequality"
+#   convex: 0
+#   auto_diff: 1
+#   jax: 1
+#   always: 0
+#   dimension: 1
+#   category: "path"
+
+# - fcn: "trajopt.core.modules.model.lander_6dof.angular_velocity_jax"
+#   analytical_affine_approximation: "None"
+#   type: "inequality"
+#   convex: 0
+#   auto_diff: 1
+#   jax: 1
+#   always: 0
+#   dimension: 1
+#   category: "path"

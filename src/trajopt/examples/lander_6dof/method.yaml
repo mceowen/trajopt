@@ -13,7 +13,7 @@ flags:
   nondim:             1       # 0, 1
   jax_dyn:            1       # 0, 1
   flag_conv:          1       # 0, 1, 2
-  ignore_dpp:         1       # this flag is optional, will be removed soon
+  ignore_dpp:         1       # number of parameters is too large for this problem, need to look into this
 
   flag_path:    1.0
   flag_nfz:     1.0
@@ -26,7 +26,7 @@ flags:
   flag_vb:      1.0
 
 solver_opts:
-  solver: "QOCO"
+  solver: "CLARABEL"
 
 T_init: 5
 T_min: 1
@@ -47,7 +47,7 @@ conv:
   eps_term_min: []
   eps_term_max: []
   eps_defect: [0.0001]
-  eps_dyn: [0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005]
+  eps_dyn: [0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005]
   iter_max: 20
 
 weights:

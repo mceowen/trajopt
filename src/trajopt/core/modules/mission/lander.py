@@ -51,7 +51,7 @@ def get_cost_cnstr_nondim(problem):
     method = problem.method
 
     ncost = method.nondim["nt"]
-    np_ineq = np.array([])
+    np_ineq = np.array([1.0])
 
     return ncost, np_ineq
 
@@ -68,12 +68,11 @@ def custom_constraints(subproblem):
     method = problem.method
 
     for k in range(method.N):
-        nu_k = subproblem.nu_ref[k] + subproblem.dnu[k]
+        dnu_k = subproblem.dnu[k]
         nu_ref_k = subproblem.nu_ref[k]
+        nu_ref_sq_k = subproblem.nu_ref_sq[k]
 
-        # TODO (CARLOS, ask DAN): THIS CONSTRAINT IS NOT DPP DUE TO nu_ref_k[:3] @ nu_k[:3], NEED TO ADD SEPERATE nu_ref^2 parameter? how does this generalize?
-        # maybe this will need to be one of the convexifications in the cosntraint module/library (circle keep-out)
-        subproblem.constraints.append(mission.custom_input_dict["min_thrust"] * cp.norm(nu_ref_k[:3]) <= nu_ref_k[:3] @ nu_k[:3])
+        subproblem.constraints.append(mission.custom_input_dict["min_thrust"] * cp.norm(nu_ref_k[:3]) <= nu_ref_sq_k + nu_ref_k[:3] @ dnu_k[:3])
 
 def set_custom_params(problem):
     pass
