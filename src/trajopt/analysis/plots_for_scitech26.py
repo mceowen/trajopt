@@ -409,17 +409,17 @@ def makePlotTrajs(PLTS1,ins={}):
 
     #########################################
     ######  DEFAULTS FIG INFORMATION ########
-    figsize = (10,4);
+    figsize = (12,4);
     grid = {}; grid2D = {}; grid3D = {};
     # grid[0] = [0.05,0.05,0.5,0.9];
     # grid[1] = [0.70,0.05,0.4,0.9];
-    grid[1] = [0.05,0.05,0.25,0.9];
-    grid[0] = [0.35,0.05,0.6,0.9];
+    grid[1] = [0.05,0.05,0.23,0.9];
+    grid[0] = [0.2,0.05,0.6,0.9];
     titles = {}; ylabels = {}; xlabels = {}; zlabels = {};
 
     titles[0] = 'Position(3D) vs Time';
-    xlabels[0] = 'Latitude $\phi$ [deg]';
-    ylabels[0] = 'Longitude $\\theta$ [deg]';
+    ylabels[0] = 'Latitude $\phi$ [deg]';
+    xlabels[0] = 'Longitude $\\theta$ [deg]';
     zlabels[0] = 'Altitude $h$ [km]';
 
     titles[1] = 'Position(2D) vs Time';
@@ -438,7 +438,7 @@ def makePlotTrajs(PLTS1,ins={}):
     grid2D[1] = grid[1];
     grid3D[0] = grid[0];
 
-    titleinfo = {}; xlabelinfo = {}; ylabelinfo = {}; zlabelinfo = {};
+    titleinfo = {}; xlabelinfo = {'labelpad':10.}; ylabelinfo = {'labelpad':10}; zlabelinfo = {'y':3};
     ticksinfo = {}; legendinfo = {};
     if 'titleinfo' in ins: titleinfo = {**titleinfo,**ins['titleinfo']}
     if 'xlabelinfo' in ins: xlabelinfo = {**xlabelinfo,**ins['xlabelinfo']}
@@ -472,7 +472,7 @@ def makePlotTrajs(PLTS1,ins={}):
 
             j = 0;
             ax = axs[j];
-            sindx = 1; sindy = 2; sindz = 0; 
+            sindz = 0; sindx = 1; sindy = 2; 
             if version in ['standalone']:
                 params1 = {'label':'Initial guess','x':('z_opt',sindx),'y':('z_opt',sindy),'z':'altitude_opt','iters':[1],'legend':lgnd,};
                 # params2 = {'label':'Iterations','x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz),'iters':itrs}; #,'legend':lgnd};
@@ -600,7 +600,7 @@ def makePlotTrajs(PLTS1,ins={}):
         # axs[1].set_aspect('equal')
 
         # axs[0].view_init(elev=50,azim=-20); #, azim=45)
-        axs[0].view_init(elev=25,azim=30); #, azim=45)        
+        axs[0].view_init(elev=25,azim=45); #, azim=45)        
 
         
         for j in [0,1]:
@@ -940,17 +940,19 @@ def makePlotWghts(PLTS1,ins={}):
     ######  DEFAULTS FIG INFORMATION ########
     figsize = (10,4);
     grid = {};
-    grid[3] = [0.55,0.05,0.35,0.35];
-    grid[2] = [0.55,0.60,0.35,0.35];
-    grid[1] = [0.05,0.05,0.35,0.35];
-    grid[0] = [0.05,0.60,0.35,0.35];
+    
+    grid[0] = [0.05,0.60,0.3,0.33];
+    grid[1] = [0.05,0.05,0.3,0.33];
+    grid[2] = [0.55,0.60,0.3,0.33];
+    grid[3] = [0.55,0.05,0.3,0.33];
+    
     state_inds = [0,3,4,5] # replace with appropriate state indices
     titles = {}; ylabels = {}; xlabels = {ind:'Time [s]' for ind in range(4)}
     titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
-    ylabels[0] = 'No-fly zone quadratic \n penalty weights';
-    ylabels[1] = 'Path constraint quadratic \n penalty weights';
+    ylabels[0] = 'No-fly zone \n quadratic \n penalty weights';
+    ylabels[1] = 'Path constraint \n quadratic \n penalty weights';
     ylabels[2] = 'No-fly zone linear \n penalty weights';
-    ylabels[3] = 'Path constraint linear \n penalty weights';
+    ylabels[3] = 'Path constraint \n linear \n penalty weights';
     uselegend = [3];
     #'W_term','W_dyn']; #,'W_plus','W_minus']
     # 'W_ineq' -> path constraints
@@ -973,7 +975,7 @@ def makePlotWghts(PLTS1,ins={}):
     if 'ylabels' in ins: ylabels = {**ylabels,**ins['ylabels']};
     if 'uselegend' in ins: uselegend = ins['uselegend'];
     
-    titleinfo = {}; xlabelinfo = {}; ylabelinfo = {}; ticksinfo = {}; legendinfo = {};
+    titleinfo = {}; xlabelinfo = {}; ylabelinfo = {'labelpad':15}; ticksinfo = {}; legendinfo = {};
     if 'titleinfo' in ins: titleinfo = {**titleinfo,**ins['titleinfo']}
     if 'xlabelinfo' in ins: xlabelinfo = {**xlabelinfo,**ins['xlabelinfo']}
     if 'ylabelinfo' in ins: ylabelinfo = {**ylabelinfo,**ins['ylabelinfo']}
