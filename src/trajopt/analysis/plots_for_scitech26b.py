@@ -5,6 +5,7 @@ import trajopt.utils.tools as tools
 jax.config.update("jax_enable_x64", True)
 import trajopt.core.modules.model.obstacles     as obstacles
 from trajopt.analysis.custom_functions_danb import DCM, calc_DCMs, calc_rt_I
+from trajopt.analysis.custom_functions_danb import thrust_mag, compute_tilt, ang_rate
 from trajopt.analysis.custom_functions_danb import calc_u_vecs_scale1, calc_u_vecs_scale2
 from trajopt.analysis.custom_functions_danb import calc_body_vecs_scale1, calc_body_vecs_scale2
 
@@ -95,12 +96,14 @@ def preProcess(PLTS1,problem,cases={}):
     if len(cases)>0: newcases = {**newcases,**cases}
     PLTS1.setCurrent(newcases)
 
-    tags = ['DCM','u_vec1','u_vec2','rt_I','body_vec1','body_vec2'];    
+    tags = ['DCM','u_vec1','u_vec2','rt_I','body_vec1','body_vec2','thrust_mag','tilt','ang_rate'];    
     for tag in tags:
         tag1 = tag + '_opt';
         tag2 = tag + '_nl';
+        tag3 = tag + '_init';
         func_args1 = ['t_opt','z_opt','nu_opt',problem];
         func_args2 = ['t_nl','z_nl','nu_nl',problem];
+        func_args3 = ['t_init','z_init','nu_init',problem];
 
         if tag == 'DCM': func = calc_DCMs
         if tag == 'u_vec1': func = calc_u_vecs_scale1
@@ -108,9 +111,13 @@ def preProcess(PLTS1,problem,cases={}):
         if tag == 'rt_I': func = calc_rt_I
         if tag == 'body_vec1': func = calc_body_vecs_scale1;
         if tag == 'body_vec2': func = calc_body_vecs_scale2;
+        if tag == 'thrust_mag': func = thrust_mag
+        if tag == 'tilt': func = compute_tilt
+        if tag == 'ang_rate': func = ang_rate
         
         PLTS1.calcField(tag1,func,func_args = func_args1)
         PLTS1.calcField(tag2,func,func_args = func_args2)
+        PLTS1.calcField(tag3,func,func_args = func_args3)
 
 
 
@@ -210,6 +217,9 @@ def makePlotTrajs(PLTS1,ins={}):
     if 'ticksinfo' in ins:  ticksinfo = {**ticksinfo,**ins['ticksinfo']}
     if 'legendinfo' in ins: legendinfo = {**legendinfo,**ins['legendinfo']}    
 
+    skip = 1;
+    if 'skip' in ins: skip = ins['skip'];
+
     for kk,version in enumerate(versions): 
         scenarios = ['scenario1'];
         methods = ['standard','autotune'];
@@ -229,20 +239,29 @@ def makePlotTrajs(PLTS1,ins={}):
             axs = {**axs1,**axs2};
         else:
             axs = {0: fig.add_axes(grid3D[0],projection='3d')} # colorbar axis]
-
         lgnd = 'Fig6'; PLTS1.dumpLegend(lgnd)
         
-        for method in methods: 
+        for method in methods:
             PLTS1.setCurrent({'scenarios':scenarios,'methods':[method],'runs':runs})
             for j in plot_inds:
                 ax = axs[j];
+                
+                if j == 0: sindx = 2; sindy = 3; sindz = 1; qinds = (1,2,0)
+                if j == 1: sindx = 2; sindy = 3; qinds = (1,2)
+                if j == 2: sindx = 2; sindy = 1; qinds = (1,0)
+                if j == 3: sindx = 3; sindy = 1; qinds = (2,0)
+
+
                 if j == 0:
-                    sindx = 2; sindy = 3; sindz = 1; 
-                    qinds = (1,2,0)
+
+                    ### ADD CODE FOR 3D CONE...
+                    # ax.DRAWCONE 
+                    ################
+
 
                     if usequiver: 
-                        params5 = {'label':'u quiver','quiver':('u_vec1_opt',qinds),'iters':[-1],'x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz)};
-                        params6 = {'label':'body quiver','quiver':('body_vec1_opt',qinds),'iters':[-1],'x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz)};
+                        params5 = {'skip':skip,'label':'u quiver','quiver':('u_vec1_opt',qinds),'iters':[-1],'x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz)};
+                        params6 = {'skip':skip,'label':'body quiver','quiver':('body_vec1_opt',qinds),'iters':[-1],'x':('z_opt',sindx),'y':('z_opt',sindy),'z':('z_opt',sindz)};
                         PLTS1.addPlot3D(ax,pen=PENS['u_vec'],ins=params5)
                         PLTS1.addPlot3D(ax,pen=PENS['body_vec'],ins=params6)
 
@@ -287,13 +306,14 @@ def makePlotTrajs(PLTS1,ins={}):
 
 
                 if j in [1,2,3]:
-                    if j == 1: sindx = 2; sindy = 3; qinds = (1,2)
-                    if j == 2: sindx = 2; sindy = 1; qinds = (1,0)
-                    if j == 3: sindx = 3; sindy = 1; qinds = (2,0)
+                    ### ADD CODE FOR 2D CONE...
+                    # ax.DRAWCONE 
+                    ################
+
 
                     if usequiver: 
-                        params5 = {'label':'u quiver','quiver':('u_vec2_opt',qinds),'iters':[-1],'x':('z_opt',sindx),'y':('z_opt',sindy)};
-                        params6 = {'label':'body quiver','quiver':('body_vec2_opt',qinds),'iters':[-1],'x':('z_opt',sindx),'y':('z_opt',sindy)};
+                        params5 = {'skip':skip,'label':'u quiver','quiver':('u_vec2_opt',qinds),'iters':[-1],'x':('z_opt',sindx),'y':('z_opt',sindy)};
+                        params6 = {'skip':skip,'label':'body quiver','quiver':('body_vec2_opt',qinds),'iters':[-1],'x':('z_opt',sindx),'y':('z_opt',sindy)};
                         PLTS1.addPlot2D(ax,pen=PENS['u_vec2'],ins=params5)
                         PLTS1.addPlot2D(ax,pen=PENS['body_vec2'],ins=params6)
 
@@ -424,7 +444,9 @@ def makePlotTrajs(PLTS1,ins={}):
         
         
         for j in plot_inds:
+         
             ax = axs[j];
+            ax.grid('True')
 
             params = {};
             params['title'] = {'text':titles[j],'fontsize':20,**titleinfo}
@@ -456,8 +478,9 @@ def makePlotTrajs(PLTS1,ins={}):
                 max_lim = max(abs(x_lim[1] - x_lim[0]), abs(y_lim[1] - y_lim[0]))
                 x_mid = sum(x_lim) * 0.5
                 y_mid = sum(y_lim) * 0.5
-                ax.set_xlim([x_mid - max_lim * 1.0, x_mid + max_lim * 1.0])
-                ax.set_ylim([y_mid - max_lim * 1.0, y_mid + max_lim * 1.0])
+                temp = 1.; 
+                ax.set_xlim([x_mid - max_lim * temp, x_mid + max_lim * temp])
+                ax.set_ylim([y_mid - max_lim * temp, y_mid + max_lim * temp])
 
 
         
@@ -501,16 +524,16 @@ def makePlotStates(PLTS1,ins={}):
     grid[3] = [0.51,0.05,0.35,0.35];    
 
 
-    titles = {}; ylabels = {}; xlabels = {ind:'Time [s]' for ind in range(4)};
+    titles = {}; ylabels = {}; xlabels = {ind:'Time [$U_T$]' for ind in range(4)};
     titles[2] = 'Flight Path Angle vs Time';
     titles[3] = 'Heading vs Time';
     titles[0] = 'Altitude vs Time';
     titles[1] = 'Velocity vs Time';
 
-    ylabels[2] = 'Flight Path Angle [deg]';
-    ylabels[3] = 'Heading $\psi$ [deg]';
-    ylabels[0] = 'Altitude [km]';
-    ylabels[1] = 'Velocity [$m/s$]';    
+    ylabels[0] = 'Thrust Mag. [$U_M U_L/U^2_T$]';
+    ylabels[1] = '$\omega_{B,x},\omega_{B,y},\omega_{B,z}$ [deg/U_T]';    
+    ylabels[2] = 'Tilt [deg]';
+    ylabels[3] = 'Angular Rate [deg/$U_T$]';
     uselegend = [3];
 
     ##########################################
@@ -542,25 +565,37 @@ def makePlotStates(PLTS1,ins={}):
         fig = plt.figure(figsize=figsize);
         axs = PLTS1.createGrid(fig,grid = grid);
 
-        state_inds = [0,3,4,5] # replace with appropriate state indices
+        plot_inds = [0,1,2,3] # replace with appropriate state indices
+
+        # 0: 'thrust_mag'
+        # 1: states, (12,13,14)
+
         
         lgnd = 'Fig7'; PLTS1.dumpLegend(lgnd)
 
         
-        for j,sind in enumerate(state_inds):
+        for j,sind in enumerate(plot_inds):
             ax = axs[j];
             for method in methods: 
                 PLTS1.setCurrent({'scenarios':scenarios,'methods':[method],'runs':runs})
 
-
-                ytag_init = (z_init_tag,sind)
-                ytag_nl = ('z_nl',sind)
-                ytag_opt = ('z_opt',sind)
-                if sind == 0: 
-                    # ytag_init = 'altitude_init'
-                    ytag_nl = 'altitude_nl'
-                    ytag_opt = 'altitude_opt'
-                    ytag_init = 'altitude_init'
+                if j == 0: 
+                    ytag_init = 'thrust_mag_init';
+                    ytag_nl = 'thrust_mag_nl'
+                    ytag_opt = 'thrust_mag_opt'
+                if j == 1:
+                    sinds = (11,12,13)
+                    ytag_init = (z_init_tag,sinds)
+                    ytag_nl = ('z_nl',sinds)
+                    ytag_opt = ('z_opt',sinds)
+                if j == 2:
+                    ytag_init = 'tilt_init'
+                    ytag_nl = 'tilt_nl'
+                    ytag_opt = 'tilt_opt'
+                if j == 3:
+                    ytag_init = 'ang_rate_init'
+                    ytag_nl = 'ang_rate_nl'
+                    ytag_opt ='ang_rate_opt'
 
 
                 if version in ['standalone']:

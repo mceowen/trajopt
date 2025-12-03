@@ -42,10 +42,17 @@ def calc_rt_I(t, z, nu, problem):
     dcm = DCM(z[7:11])
     return dcm.T @ rt
 
+def thrust_mag(t,z,nu,problem):
+    return np.linalg.norm(nu[:problem.model.m]);
+
+def ang_rate(t,z,nu,problem):
+    return (180/np.pi)*np.linalg.norm(z[11:14]);
+
+def compute_tilt(t,z,nu,problem):
+    return (180/np.pi)*np.arccos(1 - 2*(z[9]**2 + z[10]**2))
+
 
 scale2d = 0.2
-
-
 def calc_u_vecs_scale1(t, z, nu, problem):
     veh = problem.mission.vehicle
     rt = np.array([veh["rt1"], veh["rt2"], veh["rt3"]])

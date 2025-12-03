@@ -132,6 +132,8 @@ class SCVXPLOTS:
         use_quiver = False; qtag = None;
         if 'quiver' in ins: qtag = ins['quiver']; use_quiver = True; 
         # if dataloc == 'weights': iters = [0];
+        useskip = False; skip = 1;
+        if 'skip' in ins: skip = ins['skip']; useskip = True
         ###############################################################
         color_vars = []; use_color_vars = False;
         if 'color_vars'  in ins: color_vars = ins['color_vars']
@@ -188,7 +190,13 @@ class SCVXPLOTS:
                                             if isinstance(qtag,(tuple,list)):
                                                 qdata = DAT[i][qtag[0]][:,qtag[1]];
                                             else: qdata = DAT[i][qtag];
+                                            if useskip: qdata = qdata[::skip]
                                         ########################################
+
+                                        if useskip:
+                                            xdata = xdata[::skip]
+                                            ydata = ydata[::skip]
+
 
                                         cpenn = {**penn,**penn2}
                                         frgba = cpenn['frgba']; lrgba = cpenn['lrgba'];
@@ -257,6 +265,8 @@ class SCVXPLOTS:
         # if dataloc == 'weights': iters = [0];
         use_quiver = False; qtag = None;
         if 'quiver' in ins: qtag = ins['quiver']; use_quiver = True; 
+        useskip = False; skip = 1;
+        if 'skip' in ins: skip = ins['skip']; useskip = True
         ###############################################################
         color_vars = []; use_color_vars = False;
         if 'color_vars'  in ins: color_vars = ins['color_vars']
@@ -305,6 +315,7 @@ class SCVXPLOTS:
                                         if isinstance(qtag,(tuple,list)):
                                             qdata = data[qtag[0]][:,qtag[1]];
                                         else: qdata = data[qtag];
+                                        if useskip: qdata = qdata[::skip]
                                     ########################################
 
                                     cpenn = {**penn,**penn2}
@@ -313,6 +324,12 @@ class SCVXPLOTS:
                                     msty = cpenn['msty']; msz = cpenn['msz']
                                     if 'falpha' in cpenn: frgba[3] = cpenn['falpha']
                                     if 'lalpha' in cpenn: lrgba[3] = cpenn['lalpha']
+
+                                    if useskip:
+                                        xdata = xdata[::skip]
+                                        ydata = ydata[::skip]
+                                        zdata = zdata[::skip]
+
 
                                     if typ == 'line':
                                         if leg == None: 
