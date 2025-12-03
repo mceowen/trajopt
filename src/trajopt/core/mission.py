@@ -185,6 +185,9 @@ class Mission:
         self.zi = self.M_zi @ self.zi
         self.zf = self.M_zf @ self.zf
 
+        if self.zi_guess.size > 0:
+            self.zi_guess = method.nondim["M"]["state"]["d2nd"] @ self.zi_guess
+
         if self.zf_guess.size > 0:
             self.zf_guess = method.nondim["M"]["state"]["d2nd"] @ self.zf_guess
 
