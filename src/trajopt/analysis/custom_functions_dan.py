@@ -52,9 +52,9 @@ def max_load_nonjax(t, z, nu, problem): # normal load
 # =============================== LOCAL AERO DATA: ===============================
 # 'lookup' option for nonlinear_aero relies on local aero data not in repo
 
-# import sys
-# sys.path.append("/Users/carlosm/Documents/guidance/hypersonics/prototypes/local")
-# import marsgram_dens_lut as dens
+import sys
+import trajopt.local.modules.mission.aero.marsgram_dens_lut_jax as dens
+import trajopt.local.modules.mission.aero.cobra_aero as aero
 # ================================================================================
 
 def terminal_cost(t, z, nu, problem):
@@ -70,11 +70,11 @@ def atmosphere_model_nonjax(rs, problem):
     '''
 
     mission = problem.mission
-    model = problem.model
-    method = problem.method
+    model   = problem.model
+    method  = problem.method
 
-    rdim = rs * method.nondim["nd"]
-    hdim = rdim - mission.planet["r"]
+    rdim    = rs * method.nondim["nd"]
+    hdim    = rdim - mission.planet["r"]
 
     # TODO (carlos): add the remaining options for atmosphere model
     if mission.flags["aero_type"] == "lookup":
