@@ -56,3 +56,5 @@ n_udot: 0
 n_dyn: 0
 
 theta_max: 100
+
+convex_limits: {}
