@@ -38,6 +38,9 @@ zf_min_idx: []
 zf_max: []
 zf_max_idx: []
 
+zi_guess: "eval: np.array([mission['planet']['r'] + 80e3, 0.0, 0.0, 5612, -0.5, 90.0])"
+zf_guess: []
+
 # control min/max constraints
 u_min: [-45]
 u_max: [45]
@@ -61,6 +64,8 @@ path_limits: {}
 custom_limits: {}
 
 custom_input_dict: {}
+
+convex_limits: {}
 
 costs:
 - fcn: "trajopt.core.modules.mission.ghame.terminal_cost"
