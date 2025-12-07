@@ -2,8 +2,8 @@
 
 standard:
   flags:
-    flag_autotune: "3"
+    ctcs:   "none" 
 
 autotune:
   flags:
-    flag_autotune: "3"
+    ctcs:   "l2" 
