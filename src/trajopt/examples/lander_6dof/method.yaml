@@ -1,4 +1,4 @@
-'N': 40
+'N': 10
 
 flags:
   free_final_time: 1          # 0, 1
@@ -7,7 +7,7 @@ flags:
   flag_autotune:      "3"     # '0', '1', '2
   buff_dyn:           "l2"  # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
   buff_dyn_dual:      "none"  # 'l1', 'none'
-  ctcs:               "none" # 0, 1
+  ctcs:               "l2" # 0, 1
   ctcs_dual:          "none"  # 'l1', 'none'
   ode_fixed_dt:       0       # 0, 1
   nondim:             1       # 0, 1
@@ -26,7 +26,7 @@ flags:
   flag_vb:      1.0
 
 solver_opts:
-  solver: "QOCO"
+  solver: "ECOS"
 
 T_init: 5
 T_min: 1
@@ -35,20 +35,20 @@ dT_max: 0.5 # 5.0
 
 conv:
   #ctcs_mult_state: 1.0
-  ctcs_fac_cnst: 1.0     # 0.5, 25 THIS IS DT MAX OR MIN MAYBE NONDIM TOO
+  ctcs_fac_cnst: 0.5     # 0.5, 25 THIS IS DT MAX OR MIN MAYBE NONDIM TOO
   eps_ctcs: 1e-8
-  eps_state: [0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005]
+  eps_state: [0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005]
   eps_cost: 1
   eps_nfz: []
-  eps_path: [] 
+  eps_path: [0.000001] 
     # nodal:  [2100.0, 80.0, 0.371320] 
     # ctcs:   dt_something * eps_nodal^2 * w_ctcs^2
   eps_term: [0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.1, 0.1, 0.1]
   eps_term_min: []
   eps_term_max: []
   eps_defect: [0.0001]
-  eps_dyn: [0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005]
-  iter_max: 20
+  eps_dyn: [0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005]
+  iter_max: 30
 
 weights:
   w_cost:         1.0
@@ -63,8 +63,8 @@ weights:
   w_path_scale:   10.0
   w_custom_scale: 0.0
   w_dyn_scale:    10000.0
-  w_term_scale:   100.0
-  w_ctcs:         1.0 # 10.0, 20.0
+  w_term_scale:   1000.0
+  w_ctcs:         10000.0 # 10.0, 20.0
   
 nl_guess_u_start: [2.0, 0, 0]
 nl_guess_u_stop: [2.0, 0, 0]

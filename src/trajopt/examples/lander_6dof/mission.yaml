@@ -23,7 +23,8 @@ z_max: []
 z_max_idx: []
 
 # initial state constraints
-zi: [4, 2, 0, 0, -1, 1, 0, 0, 0]
+# zi: [4, 2, 0, 0, -1, 2, 0, 0, 0]
+zi: [4, 4, 0, 0.0 , -4.0, 4.0, 0, 0, 0]
 zi_idx: [1, 2, 3, 4, 5, 6, 11, 12, 13]
 zi_min: []
 zi_min_idx: []
@@ -39,7 +40,7 @@ zf_max: []
 zf_max_idx: []
 
 # final state guess for straight line initial guess
-zi_guess: [2.0, 4, 2, 0, 0, -1, 1, 1.0, 0, 0, 0, 0, 0, 0]
+zi_guess: [2.0, 4, 4, 0, 0, -4.0, 4.0, 1.0, 0, 0, 0, 0, 0, 0]
 zf_guess: [1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
 
 # control min/max constraints
@@ -60,10 +61,14 @@ uf_idx: []
 udot_max: []
 udot_max_idx: []
 
-path_limits: {}
-  # cos_theta_max: 0.86602540378
+path_limits:
+  cos_theta_max:   0.9396926 # 20 degrees
+  # cos_theta_max: 0.8660254 # 30 degrees
+  # cos_theta_max: 0.7071067
+  
   # w_max: 1.57079632679
-  # tan_gamma_gs: 0.1763
+  # tan_gamma_gs: 1.19175359259420995870530807186041933693070040770854385365483000690341214589
+  # tan_gamma_gs: 0.05763
 
 aux_limits: {}
 
@@ -73,10 +78,10 @@ custom_limits : {}
 
 convex_limits: 
   cos_delta_max: 0.93969262  
+  max_thrust: 5.0
   # cos_theta_max: 0.86602540378
   w_max: 1.57079632679
-  max_thrust: 4.0
-  tan_gamma_gs: 0.1763
+  tan_gamma_gs: 1
 
 custom_input_dict:
   min_thrust: 0.3

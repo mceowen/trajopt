@@ -84,13 +84,26 @@ def glideslope_jax(t, z, nu, problem):
 
     mission = problem.mission
 
-    return jnp.array([mission.path_limits["tan_gamma_gs"] * jnp.linalg.norm(z[2:4]) - z[1]])
+    return jnp.array([mission.path_limits["tan_gamma_gs"] * jnp.linalg.norm(z[2:4] + 0.000001 * jnp.ones(2)) - z[1]])
 
 def angular_velocity_jax(t, z, nu, problem):
 
     mission = problem.mission
 
     return jnp.array([jnp.linalg.norm(z[11:14]) - mission.path_limits["w_max"]])
+
+
+# STL CONSTRAINTS
+
+def height_triggered_pitch(t, z, nu, problem):
+    mission = problem.mission
+
+    # f > 0 ==> g >= 0
+
+    f = 2.0 - z[1]
+    g = 1.0 - (mission.path_limits["cos_theta_max"] + 2 * jnp.sum(z[9:11] ** 2))
+
+    return jnp.array([jnp.maximum(f, 0.0) * jnp.maximum(-g, 0.0)])
 
 # =============================================================================
 # convex constraints

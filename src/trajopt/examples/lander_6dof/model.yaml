@@ -22,6 +22,8 @@ base_unit_labels: ["m", "s", "kg"]
 flags: {}
 
 constraints:
+
+# CONTROL CONSTRAINTS. THEY DON'T NEED TO BE CTCS DUE TO FOH
 - fcn: "trajopt.core.modules.model.lander_6dof.gimbal_cone"
   analytical_affine_approximation: "None"
   type: "inequality"
@@ -41,6 +43,8 @@ constraints:
   always: 0
   dimension: 1
   category: "path"
+
+# CONVEX VERSION OF STATE CONSTRAINTS
 
 # - fcn: "trajopt.core.modules.model.lander_6dof.tilt_cone"
 #   analytical_affine_approximation: "None"
@@ -74,6 +78,7 @@ constraints:
 
 ############################################
 
+# CTCS VERSION OF STATE CONSTRAINTS
 # - fcn: "trajopt.core.modules.model.lander_6dof.tilt_cone_jax"
 #   analytical_affine_approximation: "None"
 #   type: "inequality"
@@ -103,3 +108,16 @@ constraints:
 #   always: 0
 #   dimension: 1
 #   category: "path"
+
+
+## STL CONSTRAINTS
+
+- fcn: "trajopt.core.modules.model.lander_6dof.height_triggered_pitch"
+  analytical_affine_approximation: "None"
+  type: "inequality"
+  convex: 0
+  auto_diff: 1
+  jax: 1
+  always: 0
+  dimension: 1
+  category: "path"
