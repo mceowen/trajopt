@@ -532,13 +532,13 @@ def makePlotStates(PLTS1,ins={}):
     grid[3] = [0.51,0.05,0.35,0.35];    
 
     titles = {}; ylabels = {}; xlabels = {ind:'Time [$U_T$]' for ind in range(4)};
-    titles[2] = 'Flight Path Angle vs Time';
-    titles[3] = 'Heading vs Time';
-    titles[0] = 'Altitude vs Time';
-    titles[1] = 'Velocity vs Time';
+    titles[2] = ' ';# 'Flight Path Angle vs Time';
+    titles[3] = ' ';# 'Heading vs Time';
+    titles[0] = ' ';# 'Altitude vs Time';
+    titles[1] = ' ';# 'Velocity vs Time';
 
     ylabels[0] = 'Thrust Mag. [$U_M U_L/U^2_T$]';
-    ylabels[1] = '$\omega_{B,x},\omega_{B,y},\omega_{B,z}$ [deg/U_T]';    
+    ylabels[1] = '$\omega_{B,x},\omega_{B,y},\omega_{B,z}$ [deg/$U_T$]';    
     ylabels[2] = 'Tilt [deg]';
     ylabels[3] = 'Angular Rate [deg/$U_T$]';
     uselegend = [3];
