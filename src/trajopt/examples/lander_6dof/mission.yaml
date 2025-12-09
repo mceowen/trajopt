@@ -23,7 +23,6 @@ z_max: []
 z_max_idx: []
 
 # initial state constraints
-# zi: [4, 2, 0, 0, -1, 2, 0, 0, 0]
 zi: [4, 4, 0, 0.0 , -4.0, 4.0, 0, 0, 0]
 zi_idx: [1, 2, 3, 4, 5, 6, 11, 12, 13]
 zi_min: []
@@ -61,14 +60,22 @@ uf_idx: []
 udot_max: []
 udot_max_idx: []
 
-path_limits:
-  cos_theta_max:   0.9396926 # 20 degrees
-  # cos_theta_max: 0.8660254 # 30 degrees
-  # cos_theta_max: 0.7071067
+
+########################################################
+
+# STL EXPERIMENT
+# path_limits:
+#   cos_theta_max:   0.9396926 # 20 degrees
+#   # cos_theta_max: 0.8660254 # 30 degrees
+#   # cos_theta_max: 0.7071067
   
-  # w_max: 1.57079632679
-  # tan_gamma_gs: 1.19175359259420995870530807186041933693070040770854385365483000690341214589
-  # tan_gamma_gs: 0.05763
+#   # w_max: 1.57079632679
+#   # tan_gamma_gs: 1.19175359259420995870530807186041933693070040770854385365483000690341214589
+#   # tan_gamma_gs: 0.05763
+
+# NO STL
+path_limits: {}
+########################################################
 
 aux_limits: {}
 
