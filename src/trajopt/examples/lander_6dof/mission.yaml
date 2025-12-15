@@ -119,96 +119,76 @@ planet_name: "miki"
 vehicle_name: "mikilander"
 
 flags:
-  flag_nfz: 0
-  init_ctrl: 0
-  final_ctrl: 1
   aero_type: 'none'  # 'exponential', 'jax_lookup', 'spline', 'none'
-
-# no fly zones options
-obs:
-  xc: []
-  yc: []
-  rc: []
-
-# state min/max constraints
-z_min: [1.0]
-z_min_idx: [0]
-z_max: []
-z_max_idx: []
-
-# initial state constraints
-zi: [4, 4, 0, 0.0 , -4.0, 4.0, 0, 0, 0]
-zi_idx: [1, 2, 3, 4, 5, 6, 11, 12, 13]
-zi_min: []
-zi_min_idx: []
-zi_max: []
-zi_max_idx: []
-
-# final state constraints
-zf: [0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
-zf_idx: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
-zf_min: []
-zf_min_idx: []
-zf_max: []
-zf_max_idx: []
 
 # final state guess for straight line initial guess
 zi_guess: [2.0, 4, 4, 0, 0, -4.0, 4.0, 1.0, 0, 0, 0, 0, 0, 0]
 zf_guess: [1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
 
-# control min/max constraints
-u_min: []
-u_max: []
-
-u_min_idx: []
-u_max_idx: []
-
-# control boundary conditions
-ui: []
-uf: [0, 0]
-
-ui_idx: []
-uf_idx: [1, 2]
-
-# control rate constraints
-udot_max: []
-udot_max_idx: []
-
-
-########################################################
-
-# STL EXPERIMENT
-path_limits:
-  cos_theta_max:   0.9396926 # 20 degrees
-  # cos_theta_max: 0.8660254 # 30 degrees
-  # cos_theta_max: 0.7071067
-  
-  # w_max: 1.57079632679
-  # tan_gamma_gs: 1.19175359259
-  # tan_gamma_gs: 0.05763
-
-# NO STL
-# path_limits: {}
-########################################################
-
-aux_limits: {}
-
-
-# TODO: custom_limits and custom_input_dict are confusing, need to rename soon
-custom_limits : {}
-
-convex_limits: 
-  cos_delta_max: 0.93969262  
-  max_thrust: 5.0
-  # cos_theta_max: 0.86602540378
-  w_max: 1.57079632679
-  tan_gamma_gs: 1
-
-custom_input_dict:
-  min_thrust: 0.3
-
 # custom modules
 custom_modules: {}
+
+constraints:
+- type: initial_state_equality
+  zi: [4, 4, 0, 0.0 , -4.0, 4.0, 0, 0, 0]
+  zi_idx: [1, 2, 3, 4, 5, 6, 11, 12, 13]
+
+- type: initial_state_inequality
+  zi_min: []
+  zi_min_idx: []
+  zi_max: []
+  zi_max_idx: []
+
+- type: final_state_equality
+  zf: [0, 0, 0, 0, 0, 0, 0, 0, 0]
+  zf_idx: [1, 2, 3, 4, 5, 6, 11, 12, 13]
+  eps: [0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05]
+
+- type: state_inequality
+  z_min: [1.0]
+  z_min_idx: [0]
+  z_max: []
+  z_max_idx: []
+
+- type: control_rate_limit
+  name: "bank_aoa_rate"
+
+- type: axis_angle_cone
+  axis: [1, 0, 0]
+  theta_max: 45
+  idx: [0, 1, 2]
+  name: "glide_slope"
+
+- type: axis_angle_cone   
+  name: "gimbal_limit"
+
+- type: max_norm_cone
+  name: "max_thrust"
+
+- type: quaternion_cone
+  theta_max: 20
+  axis_num: 1
+  name: "tilt_limit"
+
+- type: nonconvex_inequality
+  ct: 1
+  func: "trajopt.core.modules.model.lander_6dof.height_triggered_pitch"
+  params: {"cos_theta_max": 0.9, "trigger_height": 2.0}
+  group: path
+  units: {"none": 1.0}
+  eps: [0.005]
+  dimension: 1
+  name: height_triggered_pitch
+
+- type: nonconvex_inequality
+  ct: 0
+  func: "trajopt.core.modules.model.lander_6dof.min_thrust_norm"
+  params: {"min_thrust": 0.3}
+  group: path
+  units: {"none": 1.0}
+  eps: [0.005]
+  dimension: 1
+  name: height_triggered_pitch
 
 costs:
 - fcn: "trajopt.core.modules.mission.lander.terminal_cost"

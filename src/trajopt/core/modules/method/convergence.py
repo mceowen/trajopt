@@ -8,13 +8,9 @@ def set_convergence_tolerance(problem):
     This refactored version stacks path/NFZ/AUX tolerances into unified eps_ineq/Wconv_ineq.
     """
     mission, model, method  = problem.mission, problem.model, problem.method
-
-    eps_path_config = method.conv["eps_path"]
-    eps_nfz_config  = method.conv["eps_nfz"]
-    eps_custom_config  = method.conv["eps_custom"]
     
     # =======================
-    # STATE CONVERGENCE
+    # STATE CONVERGENCE (augmented with ct when "ct" is present)
     # =======================
     n = model.nz
     ctcs_mult_state = 1.0; #method.conv["ctcs_mult_state"]
@@ -27,18 +23,16 @@ def set_convergence_tolerance(problem):
         eps_state    = method.conv["eps_state"]
         M_state_d2nd = method.nondim["M"]["state"]["d2nd"]
 
-    if method.flags["ctcs"] != "none" and mission.n_ineq > 0:
-        eps_state = np.concatenate([
-            # (method.weights['w_ctcs']*eps_path_config)**2  
+    if "ct" in mission.constraint_ids:
+        ct_ids = mission.constraint_ids["ct"]["all"]
+        eps_list = [mission.constraints[i]["eps"] for i in ct_ids]
+        ctcs_eps_list = [ctcs_mult_cnst * (method.weights['w_ctcs'] * eps)**2 for eps in eps_list]
+        
+        eps_state = np.concatenate([ 
             ctcs_mult_state * (method.weights['w_ctcs']*eps_state)**2 ,
-            ctcs_mult_cnst  * (method.weights['w_ctcs']*eps_path_config)**2 ,
-            ctcs_mult_cnst  * (method.weights['w_ctcs']*eps_nfz_config)**2 ,
-            ctcs_mult_cnst  * (method.weights['w_ctcs']*eps_custom_config)**2 
+            ctcs_eps_list
         ])
-        M_state_d2nd = np.diag(np.concatenate([
-            np.diag(M_state_d2nd),
-            np.diag(method.nondim["M"]["cnst"]["d2nd"])**2 / method.nondim['nt']
-        ]))
+        M_state_d2nd = np.diag(np.concatenate([np.diag(M_state_d2nd), np.diag(method.nondim["M"]["cnst"]["d2nd"])[ct_ids]**2 / method.nondim['nt']]))
     
     eps_state_nd  = M_state_d2nd @ eps_state
     eps_min_state = float(np.min(eps_state_nd))
@@ -57,30 +51,18 @@ def set_convergence_tolerance(problem):
     method.conv["eps_cost"] = M_cost_d2nd * eps_cost
 
     # =======================
-    # NONLINEAR INEQUALITY (STACKED)
+    # stacked inequality
     # =======================
-    n_path = mission.n_path
-    n_nfz  = mission.n_nfz
-    n_custom  = mission.n_custom
-    n_ineq = n_path + n_nfz + n_custom
 
-    eps_path = np.array(method.conv["eps_path"], ndmin=1)
-    eps_nfz  = np.array(method.conv["eps_nfz"],  ndmin=1)
-    eps_custom  = np.array(method.conv["eps_custom"],  ndmin=1)
-
-    # Handle per-category nondim matrices (default to identity if missing)
-    M_path_d2nd = method.nondim["M"].get("path", {}).get("d2nd", np.eye(max(n_path, 1)))
-    M_nfz_d2nd  = method.nondim["M"].get("nfz", {}).get("d2nd", np.eye(max(n_nfz, 1)))
-    M_custom_d2nd  = method.nondim["M"].get("custom", {}).get("d2nd", np.eye(max(n_custom, 1)))
+    nodal_ids = mission.constraint_ids["nodal"]["nonconvex_inequality"]
+    M_ineq_d2nd = method.nondim["M"]["cnst"][np.ix_(nodal_ids, nodal_ids)]
 
     # Compute dimensional tolerances
-    eps_path_nd = M_path_d2nd @ eps_path if n_path > 0 else np.array([])
-    eps_nfz_nd  = M_nfz_d2nd  @ eps_nfz  if n_nfz  > 0 else np.array([])
-    eps_custom_nd  = M_custom_d2nd  @ eps_custom  if n_custom  > 0 else np.array([])
+    eps_ineq = np.concatenate([mission.constraints[i]["eps"] for i in nodal_ids])
 
-    eps_ineq_nd = np.concatenate([eps_path_nd, eps_nfz_nd, eps_custom_nd]) if n_ineq > 0 else np.array([])
+    eps_ineq_nd = M_ineq_d2nd @ eps_ineq
+
     eps_min_ineq = float(np.min(eps_ineq_nd)) if eps_ineq_nd.size > 0 else 0.
-
     Wconv_ineq = np.diag(eps_min_ineq / eps_ineq_nd) if eps_ineq_nd.size > 0 else np.zeros((1,1))
     
     method.conv["eps_ineq_nd"]    = eps_ineq_nd
@@ -168,7 +150,6 @@ def set_convergence_tolerance(problem):
 
 
 # ----------------------------------------------------------------------------------------------
-
 
 def check_convergence_tolerance(problem, subprob, iter_record):
     """Check convergence using unified stacked inequality (_ineq) structure."""

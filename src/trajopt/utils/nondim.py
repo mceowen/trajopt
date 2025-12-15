@@ -120,21 +120,41 @@ def set_nondim_params(problem, base_unit_labels=["m", "s", "kg"]):
     method.nondim["labels"]["ctrl"]  = [scale_labels[model.u_types[i]] for i in range(m)]
 
     # set nondim for cost and constraints
-    ncost, np_ineq = mission.get_cost_cnstr_nondim()
+    
+    # TODO(carlos): setting to one rn, need to think about how to properly specifiy this
+    # when there are multiple summed cost functions
+
+    ncost = 1.0
 
     method.nondim["ncost"] = ncost
     method.nondim["M"]["cost"]["d2nd"] = 1 / ncost
 
-    method.nondim["np_ineq"] = np_ineq
-    method.nondim["M"]["cnst"]["d2nd"] = np.diag(np_ineq ** -1).copy()
-    method.nondim["M"]["cnst"]["nd2d"] = np.diag(np_ineq).copy()
+    # nodal nonconvex inequality nondim
+    nineq = np.ones(mission.n_ineq)
+    idx = 0
+    for id in mission.constraint_ids["nodal"]["nonconvex_ineqaulity"]:
+        constraint = mission.constraints[id]
+        if "units" in constraint:
+            scale_list = [scales[key]**exponent for key, exponent in mission.constraints.units]
+            scale = np.prod(scale_list)
+            nineq[idx + constraint.dimension] = scale
+        idx += constraint.dimension
 
-    method.nondim["M"]["nfz"]["d2nd"] = np.diag(1 / np_ineq[mission.nfz_idx]).copy()
-    method.nondim["M"]["nfz"]["nd2d"] = np.diag(np_ineq[mission.nfz_idx]).copy()
+    method.nondim["nineq"] = nineq
+    method.nondim["M"]["ineq"]["d2nd"] = np.diag(1 / nineq).copy()
+    method.nondim["M"]["ineq"]["nd2d"] = np.diag(nineq).copy()
 
-    method.nondim["M"]["path"]["d2nd"] = np.diag(1 / np_ineq[mission.path_idx]).copy()
-    method.nondim["M"]["path"]["nd2d"] = np.diag(np_ineq[mission.path_idx]).copy()
+    # ct nonconvex inequality nondim
+    nctcs = np.ones(mission.n_ctcs)
+    idx = 0
+    for id in mission.constraint_ids["ct"]["nonconvex_ineqaulity"]:
+        constraint = mission.constraints[id]
+        if "units" in constraint:
+            scale_list = [scales[key]**exponent for key, exponent in mission.constraints.units]
+            scale = np.prod(scale_list)
+            nctcs[idx + constraint.dimension] = scale
+        idx += constraint.dimension
 
-    method.nondim["M"]["custom"]["d2nd"] = np.diag(1 / np_ineq[mission.custom_idx]).copy()
-    method.nondim["M"]["custom"]["nd2d"] = np.diag(np_ineq[mission.custom_idx]).copy()
-    
+    method.nondim["nineq_ct"] = nctcs
+    method.nondim["M"]["ineq_ct"]["d2nd"] = np.diag(1 / nctcs).copy()
+    method.nondim["M"]["ineq_ct"]["nd2d"] = np.diag(nctcs).copy()

@@ -140,9 +140,6 @@ class Subproblem:
         self.flag_dual      = method.flags.get("flag_dual", 1.0)
         self.flag_vb        = method.flags.get("flag_vb", 1.0)
 
-        # Bounds (only create when nonzero-length)
-        self._init_bounds(mission)
-
         # Build the DPP graph once
         self._create_variables()
         self._create_parameters()
@@ -176,41 +173,6 @@ class Subproblem:
             },
             "weights": copy.deepcopy(problem.method.weights),
         }]
-
-    # -------------------------
-    # Helper: init bounds
-    # -------------------------
-    def _init_bounds(self, mission):
-        self.z1     = mission.zi if mission.n_init > 0 else None
-        if mission.n_init_ineq > 0:
-            self.z1_min = mission.zi_min
-            self.z1_max = mission.zi_max
-        else:
-            self.z1_min = self.z1_max = None
-
-        self.zN     = mission.zf if mission.n_term > 0 else None
-        if mission.n_term_ineq > 0:
-            self.zN_min = mission.zf_min
-            self.zN_max = mission.zf_max
-        else:
-            self.zN_min = self.zN_max = None
-
-        self.u1 = mission.ui if mission.n_init_ctrl > 0 else None
-        self.uN = mission.uf if mission.n_term_ctrl > 0 else None
-
-        self.z_min = mission.z_min if hasattr(mission, "z_min") and len(mission.z_min) > 0 else None
-        self.z_max = mission.z_max if hasattr(mission, "z_max") and len(mission.z_max) > 0 else None
-
-        if mission.n_ctrl > 0:
-            self.u_min  = mission.u_min
-            self.u_max  = mission.u_max
-        else:
-            self.u_min = self.u_max = None
-
-        if mission.n_udot > 0:
-            self.udot_max = mission.udot_max
-        else:
-            self.udot_max = None
 
     # ============================================================
     # VARIABLE & PARAMETER CREATION
@@ -337,7 +299,7 @@ class Subproblem:
         self.nu_ref_sq = cp.Parameter((N,), name="nu_ref_sq")
 
         # Path/NFZ/AUX linearized constraints
-        if mission.n_ineq > 0:
+        if "nonconvex_inequality" in mission.constraint_ids["nodal"]:
             self.dgdz = cp.Parameter((N, mission.n_ineq, n), name="dgdz")
             self.dgdnu = cp.Parameter((N, mission.n_ineq, m), name="dgdnu")
             self.g0   = cp.Parameter((N, mission.n_ineq),    name="g0")
@@ -424,33 +386,46 @@ class Subproblem:
         C: List[cp.Constraint] = []
 
         # Initial control (optional)
-        if mission.flags.get("init_ctrl", False) and mission.n_init_ctrl > 0:
-            C.append(self.dnu[0,mission.ui_idx] + self.nu_ref[0, mission.ui_idx] == self.u1)
+        if "initial_control_equality" in mission.constraint_ids["nodal"]:
+            id = mission.constraint_ids["nodal"]["initial_control_equality"]
+            constraint = mission.constraints[id]
+            C.append(self.dnu[0,constraint.ui_idx] + self.nu_ref[0, constraint.ui_idx] == constraint.ui)
 
         # Terminal control (optional)
-        if mission.flags.get("final_ctrl", False) and mission.n_term_ctrl > 0:
-            C.append(self.dnu[-1,mission.uf_idx] + self.nu_ref[-1, mission.uf_idx] == self.uN)
+        if "final_control_equality" in mission.constraint_ids["nodal"]:
+            id = mission.constraint_ids["nodal"]["final_control_equality"]
+            constraint = mission.constraints[id]
+            C.append(self.dnu[-1,constraint.uf_idx] + self.nu_ref[-1, constraint.uf_idx] == constraint.uf)
 
         # Initial equalities / inequalities
-        if mission.n_init > 0 and self.z1 is not None:
-            C.append(self.dz[0, mission.zi_idx] + self.z_ref[0, mission.zi_idx] == self.z1)
+        if "intial_state_equality" in mission.constraint_ids["nodal"]:
+            id = mission.constraint_ids["nodal"]["initial_state_equality"]
+            constraint = mission.constraints[id]
+            C.append(self.dz[0, constraint.zi_idx] + self.z_ref[0, constraint.zi_idx] == constraint.zi)
 
-        if mission.n_init_ineq > 0 and self.z1_min is not None and self.z1_max is not None:
-            M_sel = tools.constraint_index_selector(mission.zi_min_idx, mission.zi_max_idx, n)
-            C.append(M_sel @ (self.dz[0, :n] + self.z_ref[0, :n]) <= cp.hstack([-self.z1_min, self.z1_max]))
+        if "intial_state_inequality" in mission.constraint_ids["nodal"]:
+            id = mission.constraint_ids["nodal"]["initial_state_inequality"]
+            constraint = mission.constraints[id]
+            M_sel = tools.constraint_index_selector(constraint.zi_min_idx, constraint.zi_max_idx, n)
+            C.append(M_sel @ (self.dz[0, :n] + self.z_ref[0, :n]) <= cp.hstack([-constraint.zi_min, constraint.zi_max]))
 
         # Terminal equalities / inequalities
         term_idx  = indices.constraints.terminal 
-        if mission.n_term>0 and self.zN is not None:
+        if "final_state_equality" in mission.constraint_ids["nodal"]:
+            id = mission.constraint_ids["nodal"]["final_state_equality"]
+            constraint = mission.constraints[id]
             vbN = self.vb_term[term_idx["eq"]] if self.vb_term is not None else 0.0
-            C.append(
-                #self.dz[-1, term_idx["eq"]] + self.z_ref[-1, term_idx["eq"]] - vbN == self.zN
-                self.dz[-1, mission.zf_idx] + self.z_ref[-1, mission.zf_idx] - vbN == self.zN
-            )
-        if mission.n_term_ineq>0 and self.zN_min is not None and self.zN_max is not None:
+
+            C.append(self.dz[-1, constraint.zf_idx] + self.z_ref[-1, constraint.zf_idx] - vbN == constraint.zf)
+        
+        if "final_state_inequality" in mission.constraint_ids["nodal"]:
+            id = mission.constraint_ids["nodal"]["final_state_inequality"]
+            constraint = mission.constraints[id]
+
             vbNiq = self.vb_term[term_idx["ineq"]] if self.vb_term is not None else 0.0
-            M_sel = tools.constraint_index_selector(mission.zf_min_idx, mission.zf_max_idx, n) # TODO(Skye): move this to indices class
-            C.append(M_sel @ (self.dz[-1, :n] + self.z_ref[-1, :n]) - vbNiq <= cp.hstack([-self.zN_min, self.zN_max]))
+            M_sel = tools.constraint_index_selector(constraint.zf_min_idx, constraint.zf_max_idx, n) # TODO(Skye): move this to indices class
+            C.append(M_sel @ (self.dz[-1, :n] + self.z_ref[-1, :n]) - vbNiq <= cp.hstack([-constraint.zf_min, self.zf_max]))
+        
         # CTCS terminal equalities
         if mission.n_term_ctcs>0:
             ctcs_state_idx = indices.z["ctcs"]  
@@ -526,35 +501,78 @@ class Subproblem:
                     )
 
             # State box constraints
-            if mission.n_state > 0 and self.z_min is not None and self.z_max is not None:
-                M_sel = tools.constraint_index_selector(mission.z_min_idx, mission.z_max_idx, n)
-                C.append(
-                    M_sel @ (self.z_ref[k, :n] + self.dz[k, :n])
-                    <= cp.hstack([-self.z_min, self.z_max])
-                )
+            if "state_inequality" in mission.constraint_ids["nodal"]:
+                id = mission.constraint_ids["nodal"]
+                constraint = mission.constraints[id]
+
+                M_sel = tools.constraint_index_selector(constraint.z_min_idx, constraint.z_max_idx, n)
+                C.append(M_sel @ (self.z_ref[k, :n] + self.dz[k, :n]) <= cp.hstack([-constraint.z_min, constraint.z_max]))
 
             # Control box constraints
-            if mission.n_ctrl > 0 and self.u_min is not None and self.u_max is not None:
-                M_sel = tools.constraint_index_selector(mission.u_min_idx, mission.u_max_idx, m)
-                C.append(
-                    M_sel @ (self.nu_ref[k] + self.dnu[k])
-                    <= cp.hstack([-self.u_min, self.u_max])
-                )
+            if "control_inequality" in mission.constraint_ids["nodal"]:
+                id = mission.constraint_ids["nodal"]["control_inequality"]
+                constraint = mission.constraints[id]
+                
+                M_sel = tools.constraint_index_selector(constraint.u_min_idx, constraint.u_max_idx, m)
+                C.append(M_sel @ (self.nu_ref[k] + self.dnu[k]) <= cp.hstack([-constraint.u_min, constraint.u_max]))
 
             # Linearized inequality constraints (path + nfz + custom)
-            if mission.n_ineq > 0 and method.flags["ctcs"] == "none" and self.dgdz is not None:
-        
+            if "nonconvex_inequality" in mission.constraint_ids["nodal"]:
                 C.append(self.dgdz[k] @ self.dz[k] + self.dgdnu[k] @ self.dnu[k] + self.g0[k] - self.vb_ineq[k] <= 0)
                 if str(self.flag_autotune) in {"1", "3", "al-scvx"} and self.vb_ineq[k]:
                     C.append(self.vb_ineq[k] >= 0)
 
-            if model.n_cvx > 0:
-                for i in range(model.n_cvx):
-                    z = self.z_ref[k] + self.dz[k]
-                    nu = self.nu_ref[k] + self.dnu[k]
+            # convex constraints
+            if "state_axis_angle_cone" in mission.constraint_ids["nodal"]:
+                ids = mission.constraint_ids["nodal"]["state_axis_angle_cone"]
+                z = self.z_ref[k] + self.dz[k]
+                
+                for constraint in mission.constraints[ids]:
+                    idx = constraint.idx
+                    axis = constraint.axis
 
-                    C.append(model.convex_constraints[i].fcn(0, z, nu, self.problem))
+                    C.append(constraint.cos_theta_max * cp.norm(z[idx]) <= axis @ z[idx])
 
+            if "control_axis_angle_cone" in mission.constraint_ids["nodal"]:
+                ids = mission.constraint_ids["nodal"]["control_axis_angle_cone"]
+                nu = self.nu_ref[k] + self.dnu[k]
+                
+                for constraint in mission.constraints[ids]:
+                    idx = constraint.idx
+                    axis = constraint.axis
+
+                    C.append(constraint.cos_theta_max * cp.norm(nu[idx]) <= axis @ nu[idx])
+
+            if "state_max_norm_cone" in mission.constraint_ids["nodal"]:
+                ids = mission.constraint_ids["nodal"]["state_max_norm_cone"]
+                z = self.z_ref[k] + self.dz[k]
+                
+                for constraint in mission.constraints[ids]:
+                    idx = constraint.idx
+                    max_val = constraint.max_val
+                    
+                    C.append(cp.norm(z[idx]) <= max_val)
+
+            if "control_max_norm_cone" in mission.constraint_ids:
+                ids = mission.constraint_ids["nodal"]["control_max_norm_cone"]
+                nu = self.nu_ref[k] + self.dnu[k]
+                
+                for constraint in mission.constraints[ids]:
+                    idx = constraint.idx
+                    max_val = constraint.max_val
+                    C.append(cp.norm(nu[idx]) <= max_val)
+
+            # TODO(carlos): think about where to put this, this is a special constraint
+            # but general enough to apply to different 6-dof models using quaternions
+            if "quaternion_cone" in mission.constraint_ids["nodal"]:
+                ids = mission.cosntraint_ids["nodal"]["quaternion_cone"]
+                z = self.z_ref[k] + self.dz[k]
+
+                for constraint in mission.constraints[ids]:
+                    idx = constraint.idx
+                    quat_start_idx = constraint.quat_start_idx
+                    C.append(cp.norm(z[quat_start_idx + 2, quat_start_idx + 4] <= constraint.rhs))
+        
         # Fixed-time tying
         if not self.free_T:
             C.append(self.dt == 0)

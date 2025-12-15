@@ -5,8 +5,8 @@ import trajopt.utils.tools as tools
 import trajopt.core.modules.method.initial_guess as guess
 import trajopt.core.modules.method.convergence as convergence
 import trajopt.core.modules.method.convexify as convexify
-import trajopt.utils.nondim as nondim
-import jax.numpy as jnp
+import trajopt.core.modules.model.constraints as constraints_module
+import trajopt.core.modules.model.costs as costs_module
 
 class Mission:
     def __init__(self, problem, config):
@@ -22,69 +22,66 @@ class Mission:
         self.flags             = mission_config['flags']
         
         # standard constraint parameters
-        self.zi                = mission_config["zi"]
-        self.zi_idx            = mission_config["zi_idx"]
         self.zi_guess          = mission_config["zi_guess"]
-        self.zf                = mission_config["zf"]
-        self.zf_idx            = mission_config["zf_idx"]
         self.zf_guess          = mission_config["zf_guess"]
-        self.ui                = mission_config["ui"]
-        self.uf                = mission_config["uf"]
-        self.ui_idx            = mission_config["ui_idx"]
-        self.uf_idx            = mission_config["uf_idx"]
-        self.z_min             = mission_config["z_min"]
-        self.z_min_idx         = mission_config["z_min_idx"]
-        self.z_max             = mission_config["z_max"]
-        self.z_max_idx         = mission_config["z_max_idx"]
-        self.udot_max          = mission_config["udot_max"]
-        self.udot_max_idx      = mission_config["udot_max_idx"]
-        self.zi_min            = mission_config["zi_min"]
-        self.zi_max            = mission_config["zi_max"]
-        self.zi_min_idx        = mission_config["zi_min_idx"]
-        self.zi_max_idx        = mission_config["zi_max_idx"]
-        self.zf_min            = mission_config["zf_min"]
-        self.zf_max            = mission_config["zf_max"]
-        self.zf_min_idx        = mission_config["zf_min_idx"]
-        self.zf_max_idx        = mission_config["zf_max_idx"]
-        self.u_min             = mission_config["u_min"]
-        self.u_max             = mission_config["u_max"]
-        self.u_min_idx         = mission_config["u_min_idx"]
-        self.u_max_idx         = mission_config["u_max_idx"]
-        
-        # dictionaries
-        self.path_limits       = mission_config["path_limits"]
-        self.custom_limits        = mission_config["custom_limits"]
-        self.custom_input_dict = mission_config["custom_input_dict"]
-        self.convex_limits     = mission_config["convex_limits"]
 
         self.planet            = mission_config["planet"]
         self.vehicle           = mission_config["vehicle"]
-        self.obs               = mission_config["obs"]
 
-        self.cost_config_list = mission_config.get("costs", None)
-
-        self.custom_modules   = mission_config.get("custom_modules", None)
+        self.custom_modules    = mission_config.get("custom_modules", None)
 
         # ------------------------------------------------------------
-        # Constraint bookkeeping
+        # Load constraints
         # ------------------------------------------------------------
-        self.n_init       = len(self.zi_idx)
-        self.n_term       = len(self.zf_idx)
-        self.n_init_ctrl  = len(self.ui_idx)
-        self.n_term_ctrl  = len(self.uf_idx)
-        self.n_init_ineq  = len(self.zi_min_idx) + len(self.zi_max_idx)
-        self.n_term_ineq  = len(self.zf_min_idx) + len(self.zf_max_idx)
-        self.n_ctrl       = len(self.u_min_idx)  + len(self.u_max_idx)
-        self.n_state      = len(self.z_min_idx)  + len(self.z_max_idx)
-        self.n_udot       = len(self.udot_max_idx)
-        self.n_path       = sum(1 if np.isscalar(v) else len(v) for v in self.path_limits.values())
-        self.n_nfz        = len(self.obs["xc"])
-        self.n_custom     = sum(1 if np.isscalar(v) else len(v) for v in self.custom_limits.values())
-        self.n_ineq       = self.n_path + self.n_nfz + self.n_custom
 
-        self.path_idx     = np.arange(self.n_path)
-        self.nfz_idx      = np.arange(self.n_path, self.n_path + self.n_nfz)
-        self.custom_idx      = np.arange(self.n_path + self.n_nfz, self.n_ineq)
+        # ------------------------------------------------------------
+        # example structure of constaint_ids
+        # (type: dict[str, dict[str, list[int]]]) 
+        # 
+        # constraints = []
+        # constraint_ids = {
+        #   "ct": {"gimbal_cone": [0, 1], "constraint_type2": [4]}
+        #   "nodal": {"constraint_type3": [2, 3]} 
+        # }
+        #
+        # ------------------------------------------------------------
+
+        self.constraints = []
+        self.constraint_ids = {}
+
+        # build constraint_ids mapping
+        for i, constraint_config in enumerate(mission_config["constraints"]):
+            constraint_type = constraint_config["type"]
+            constraintClass = getattr(constraints_module, constraint_type)
+            self.constraints.append(constraintClass(**constraint_config))
+
+            # add constraint to constraint_id map for indexing into list
+            ct_type = "ct" if constraint_config["ct"] else "nodal"
+                
+            if ct_type not in self.constraint_ids:
+                self.constraint_ids[ct_type] = {}
+
+            if constraint_type not in self.constraint_ids[ct_type]:
+                self.constraint_ids[ct_type][constraint_type] = []
+            
+            self.constraint_types[ct_type][constraint_type].append(i)
+
+        # constraint book keeping
+        if "nonconvex_inequality" in self.constraint_ids["nodal"]:
+            nodal_ncvx_ineq_ids = self.constraint_ids["nodal"]["nonconvex_inequality"]
+            self.n_ineq = sum(constraint.dimension for constraint in self.constraints[nodal_ncvx_ineq_ids])
+        else:
+            self.n_ineq = 0
+
+        if "ct" in self.constraint_ids:
+            ct_ids = self.constraint_ids["ct"]["all"]
+            self.n_ctcs = sum(constraint.dimension for constraint in self.constraints[ct_ids])
+        else:
+            self.n_ctcs
+
+        # ------------------------------------------------------------
+        # #TODO: Load costs similarly to constraints above
+        # ------------------------------------------------------------
 
         # ===============================================================
         # point to module and corresponding methods based on configs
@@ -149,6 +146,8 @@ class Mission:
         # Cost & Linearized Cost
         # ------------------------------------------------------------
 
+        # TODO (carlos): move to constructor and mirror the constraints
+        # list implementation
         self.costs = []
         for cost_config in self.cost_config_list:
             self.costs.append(Cost(yaml_config=cost_config))

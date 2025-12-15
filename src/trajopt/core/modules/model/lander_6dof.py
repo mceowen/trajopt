@@ -74,62 +74,16 @@ def dynamics_jax(t, z, nu, problem):
 # nonconvex inequality constraints
 # =============================================================================
 
-def tilt_cone_jax(t, z, nu, problem):
-
-    mission = problem.mission
-
-    return jnp.array([mission.path_limits["cos_theta_max"] + 2 * jnp.sum(z[9:11] ** 2) - 1.0])
-
-def glideslope_jax(t, z, nu, problem):
-
-    mission = problem.mission
-
-    return jnp.array([mission.path_limits["tan_gamma_gs"] * jnp.linalg.norm(z[2:4] + 0.000001 * jnp.ones(2)) - z[1]])
-
-def angular_velocity_jax(t, z, nu, problem):
-
-    mission = problem.mission
-
-    return jnp.array([jnp.linalg.norm(z[11:14]) - mission.path_limits["w_max"]])
-
-
-# STL CONSTRAINTS
-
-def height_triggered_pitch(t, z, nu, problem):
-    mission = problem.mission
+# stl
+def height_triggered_pitch(t, z, nu, params):
 
     # f > 0 ==> g >= 0
 
     f = 2.0 - z[1]
-    g = 1.0 - (mission.path_limits["cos_theta_max"] + 2 * jnp.sum(z[9:11] ** 2))
+    g = 1.0 - (params["cos_theta_max"] + 2 * jnp.sum(z[9:11] ** 2))
 
     return jnp.array([jnp.maximum(f, 0.0) * jnp.maximum(-g, 0.0)])
 
-# =============================================================================
-# convex constraints
-# =============================================================================
-
-def gimbal_cone(t, z, nu, problem):
-    mission = problem.mission
-     
-    return mission.convex_limits["cos_delta_max"] * cp.norm(nu) <= nu[0]
-
-def max_norm_thrust(t, z, nu, problem):
-    mission = problem.mission
-
-    return cp.norm(nu[:3]) <= mission.convex_limits["max_thrust"]
-
-def tilt_cone(t, z, nu, problem):
-    mission = problem.mission
-
-    return mission.convex_limits["cos_theta_max"] + 2 * cp.sum_squares(z[9:11]) <= 1.0
-
-def glideslope(t, z, nu, problem):
-    mission = problem.mission
-
-    return mission.convex_limits["tan_gamma_gs"] * cp.norm(z[2:4]) <= z[1]
-
-def angular_velocity(t, z, nu, problem):
-    mission = problem.mission
-
-    return cp.norm(z[11:14]) <= mission.convex_limits["w_max"]
+def min_thrust_norm(t, z, nu, params):
+    
+    return jnp.array(1.0 - jnp.linalg.norm(nu[:3]) / params["min_thrust"])

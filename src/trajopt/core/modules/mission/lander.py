@@ -37,6 +37,13 @@ def analytical_affine_approximation_running_cost(t, z, nu, problem):
 
     return cost, dcostdz, dcostdnu
 
+# =============================================================================
+# MISSION-SPECIFIC CONSTRAINT FUNCTIONS
+# =============================================================================
+
+# =============================================================================
+# CUSTOM COST / CONSTRAINTS
+# =============================================================================
 def custom_cost(subproblem):
 
     problem = subproblem.problem
@@ -54,25 +61,6 @@ def get_cost_cnstr_nondim(problem):
     np_ineq = np.array([1.0])
 
     return ncost, np_ineq
-
-
-# TODO (CARLOS): we should only need to use custom constraints for very specific constraints in the near future
-# leaving like this for now for the PDG problem
-# the reason this is a custom constraint rn is due to the dependency of nu_ref. wasn't sure of the cleanest way to 
-# allow for that in the general constraints list.
-
-def custom_constraints(subproblem):
-
-    problem = subproblem.problem
-    mission = problem.mission
-    method = problem.method
-
-    for k in range(method.N):
-        dnu_k = subproblem.dnu[k]
-        nu_ref_k = subproblem.nu_ref[k]
-        nu_ref_sq_k = subproblem.nu_ref_sq[k]
-
-        subproblem.constraints.append(mission.custom_input_dict["min_thrust"] * cp.norm(nu_ref_k[:3]) <= nu_ref_sq_k + nu_ref_k[:3] @ dnu_k[:3])
 
 def set_custom_params(problem):
     pass

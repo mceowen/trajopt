@@ -6,7 +6,6 @@ import numpy as np
 import importlib
 
 import trajopt.core.modules.method.convexify as convexify
-import trajopt.utils.tools as tools
 
 class Model:
 
@@ -18,6 +17,7 @@ class Model:
         # load config parameters
         # ===============================================================
 
+        self.mission_config   = config["mission"]
         model_config          = config["model"]
         self.name             = model_config["module_path"].split(".")[-1]
         self.n                = model_config["n"]
@@ -40,10 +40,6 @@ class Model:
 
         # point to selected model module
         self.model_module = importlib.import_module(model_config["module_path"])
-
-        self.constraints = []
-        for constraint_config in self.constraint_config_list:
-            self.constraints.append(Constraint(yaml_config=constraint_config))
 
     # ===============================================================
     # member functions point to selected fcns from selected module
@@ -130,69 +126,3 @@ class Model:
                 return _lin_dyn(t, z, nu, problem)
 
         self.lin_dyn = lin_dyn
-
-        # ------------------------------------------------------------
-        # get constraints from configs and convexify them
-        # ------------------------------------------------------------
-
-        convexify.convexify_constraints(problem)
-
-        # TODO (CARLOS): all nonconvex constraints assumed to be inequality and linearized for now
-        # will update to more granular classifcations soon
-        self.nonconvex_inequality_constraints = [c for c in self.constraints if not c.convex]
-        self.convex_constraints               = [c for c in self.constraints if     c.convex]
-
-        self.n_cvx = len(self.convex_constraints)
-
-        # ------------------------------------------------------------
-        # CTCS / state bookkeeping
-        # ------------------------------------------------------------
-        # TODO(Skye): possibly move this to the method class?
-        if method.flags["ctcs"] != "none":
-            # TODO(Carlos): change n_ctcs after 'always' flag is added
-            self.n_ctcs = mission.n_ineq 
-            self.nz = self.n + self.n_ctcs
-        else:
-            self.n_ctcs = 0
-            self.nz     = self.n
-        self.n_dyn = self.nz
-
-class Constraint:
-    def __init__(self, fcn=None, yaml_config=None, **kwargs):
-        
-        # constraint configs mainly pull from config files, but this class can also be used
-        # to define constraints from other places like the obstacle constraints
-        if yaml_config is not None:
-            self.convex     = yaml_config.get('convex', 0)
-            self.always     = yaml_config.get('always', 0) # "always", "now"
-            self.auto_diff  = yaml_config.get('auto_diff', 1)
-            self.type       = yaml_config.get('type', 'inequality')
-            self.dimension  = yaml_config.get('dimension', 0)
-            self.jax        = yaml_config.get('jax', 0)
-            self.sympy      = yaml_config.get('sympy', 0)
-            self.name       = yaml_config.get('fcn', None).split('.')[-1]
-            self.units      = yaml_config.get('units', None)
-
-            # import functions from config strings
-            # Handle YAML parsing where None might be parsed as string "None"
-            analytical_affine_approx_str = yaml_config.get('analytical_affine_approximation', None)
-            if analytical_affine_approx_str == "None" or analytical_affine_approx_str is None:
-                analytical_affine_approx_str = None
-            
-            self.fcn                            = tools._import_from_string(yaml_config.get('fcn', None))
-            self.analytical_affine_approximation = tools._import_from_string(analytical_affine_approx_str)
-        
-        else:
-            self.convex     = kwargs.get('convex', 1)
-            self.always     = kwargs.get('when', 'always_discrete') # "always", "now"
-            self.auto_diff  = kwargs.get('auto_diff', 0)
-            self.type       = kwargs.get('type', 'inequality')
-            self.dimension  = kwargs.get('dimension', 0)
-            self.jax        = kwargs.get('jax', 0)
-            self.sympy      = kwargs.get('sympy', 0)
-            self.name       = fcn.__name__
-            self.units      = kwargs.get('units', None)
-            
-            self.fcn       = fcn
-            self.analytical_affine_approximation = kwargs.get('analytical_affine_approximation', None)
-    

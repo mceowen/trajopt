@@ -48,15 +48,24 @@ def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, problem):
     mission = problem.mission
     model = problem.model
     method = problem.method
+
+    # TODO(carlos):
+    # relying on jax for a bit, will change this once we add general
+    # autodiffing / analytical jacobians
+    #
+    # important considerations: 
+    # - if we allow the user to use different
+    #   autodiffing for different constraints, we lose the ability to 
+    #   vectorize things. currently not vectorized even though we're 
+    #   using jax, but i think the bottleneck is discretization
+    #
+    # - should analytical jacobians be an option?
     
-    if len(model.nonconvex_inequality_constraints) > 0:
+    if len(mission.n_ineq) > 0:
         
-        # Convert to JAX arrays upfront if any constraint uses JAX (auto_diff=1)
-        has_jax = any(c.auto_diff == 1 for c in model.nonconvex_inequality_constraints)
-        if has_jax:
-            t_jax = jnp.asarray(t_ref)
-            z_jax = jnp.asarray(z_ref)
-            nu_jax = jnp.asarray(u_ref)
+        t_jax = jnp.asarray(t_ref)
+        z_jax = jnp.asarray(z_ref)
+        nu_jax = jnp.asarray(u_ref)
         
         # Preallocate stacked arrays
         g    = np.zeros((method.N, mission.n_ineq))
@@ -65,17 +74,17 @@ def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, problem):
         
         # Evaluate constraints at each timestep
         for k in range(method.N):
-            tk = t_jax[k] if has_jax else t_ref[k]
-            zk = z_jax[k] if has_jax else z_ref[k]
-            uk = nu_jax[k] if has_jax else u_ref[k]
+            tk = t_jax[k]
+            zk = z_jax[k]
+            uk = nu_jax[k]
             
             col_start = 0
-            for constraint in model.nonconvex_inequality_constraints:
-                col_end = col_start + constraint.dimension
+            for id in mission.constrain_ids["nodal"]["nonconvex_inequality"]:
+                col_end = col_start + mission.constraints[id].dimension
                 
-                f, dfcn_dz, dfcn_du = constraint.affine_approximation(tk, zk, uk)
-                g[k, col_start:col_end]       = np.asarray(f)
-                dgdz[k, col_start:col_end, :] = np.asarray(dfcn_dz)[:, :model.n]
+                f, dfcn_dz, dfcn_du            = mission.constraints[id].g_aff(tk, zk, uk)
+                g[k, col_start:col_end]        = np.asarray(f)
+                dgdz[k, col_start:col_end, :]  = np.asarray(dfcn_dz)[:, :model.n]
                 dgdnu[k, col_start:col_end, :] = np.asarray(dfcn_du)
                 
                 col_start = col_end

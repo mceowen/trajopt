@@ -4,64 +4,19 @@ import jax
 import jax.numpy as jnp
 import cvxpy as cp
 
-def convexify_constraints(problem):
-    model = problem.model
-
-    for constraint in model.constraints:
-        if constraint.convex == 0:
-            if constraint.auto_diff == 1:
-                if constraint.jax == 1:
-                    fcn_jit, dfcn_dz_jit, dfcn_du_jit = linearize_jax(constraint.fcn, problem)
-
-                    def affine_approximation(t, z, nu, f=fcn_jit, dfdz=dfcn_dz_jit, dfdnu=dfcn_du_jit):
-                        return f(z, nu), dfdz(z, nu), dfdnu(z, nu)
-                    
-                    constraint.affine_approximation = affine_approximation
-                
-                elif constraint.sympy == 1:
-                    fcn_sym, dfcn_dz_sym, dfcn_du_sym = linearize_sympy(constraint.fcn, problem)
-                    def affine_approximation(t, z, nu, f=fcn_sym, dfdz=dfcn_dz_sym, dfdnu=dfcn_du_sym):
-                        return f(z, nu), dfdz(z, nu), dfdnu(z, nu)
-                    constraint.affine_approximation = affine_approximation
-
-            elif constraint.auto_diff == 0:
-                
-                def affine_approximation(t, z, nu, cnst_obj=constraint):
-                    return cnst_obj.analytical_affine_approximation(t, z, nu, problem)
-                
-                constraint.affine_approximation = affine_approximation
-
-def convexify_costs(problem):
-    mission = problem.mission
-    
-    for cost in mission.costs:
-        if cost.convex == 0:
-            if cost.auto_diff == 1:
-                if cost.jax == 1:
-                    fcn_jit, dfcn_dz_jit, dfcn_du_jit = linearize_jax(cost.func, problem)
-
-                    def affine_approximation(t, z, nu, f=fcn_jit, dfdz=dfcn_dz_jit, dfdnu=dfcn_du_jit):
-                            return f(t, z, nu), dfdz(t, z, nu), dfdnu(t, z, nu)
-                    cost.affine_approximation = affine_approximation
-                
-                else:
-                    fcn_sym, dfcn_dz_sym, dfcn_du_sym = linearize_sympy(cost.func, problem)
-                    def affine_approximation(t, z, nu, f=fcn_sym, dfdz=dfcn_dz_sym, dfdnu=dfcn_du_sym):
-                            return f(t, z, nu), dfdz(t, z, nu), dfdnu(t, z, nu)
-                    cost.affine_approximation = affine_approximation
-        else:
-            def affine_approximation(t, z, nu, cost_obj=cost):
-                return cost_obj.analytical_affine_approximation(t, z, nu, problem)
-            
-            cost.affine_approximation = affine_approximation
-
-        # TODO: add more options here for convexification
-
 # jax autodiff for affine approximations
-def linearize_jax(fcn, problem):
+def linearize_jax(fcn, problem=None, params=None):
 
-    def wrapped_fcn(z, nu):
-        return fcn(0, z, nu, problem)
+    if problem is not None:
+        def wrapped_fcn(z, nu):
+            return fcn(0, z, nu, problem)
+    elif params is not None:
+        def wrapped_fcn(z, nu):
+            return fcn(0, z, nu, params)
+    else:
+        def wrapped_fcn(z, nu):
+            return fcn(0, z, nu)
+
 
     dfcn_dz = jax.jit(jax.jacrev(wrapped_fcn, argnums=0))
     dfcn_du = jax.jit(jax.jacrev(wrapped_fcn, argnums=1))
@@ -70,12 +25,15 @@ def linearize_jax(fcn, problem):
     return f, dfcn_dz, dfcn_du
 
 def linearize_jax_ctcs(fcn, problem):
+    model = problem.model
+    mission = problem.mission
     method = problem.method
+
+    constraints = mission.constraints
     
     def wrapped_fcn(z, nu):
-        model = problem.model
 
-        constr = jnp.concatenate([model.nonconvex_inequality_constraints[i].fcn(0, z, nu, problem) for i in range(len(model.nonconvex_inequality_constraints))])
+        constr = jnp.concatenate([mission.nonconvex_inequality_constraints[i].fcn(0, z, nu, problem) for i in range(len(model.nonconvex_inequality_constraints))])
 
         f_val = jnp.concatenate([fcn(0, z[:model.n], nu, problem), jnp.square(jnp.maximum(method.weights["w_ctcs"] * constr, 0.0))])
         
@@ -86,7 +44,6 @@ def linearize_jax_ctcs(fcn, problem):
     f = jax.jit(wrapped_fcn)
     
     return f, dfcn_dz, dfcn_du
-    
 
 # PROTOTYPE 
 def linearize_sympy(fcn, problem):
