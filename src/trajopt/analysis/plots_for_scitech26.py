@@ -600,7 +600,8 @@ def makePlotTrajs(PLTS1,ins={}):
         # axs[1].set_aspect('equal')
 
         # axs[0].view_init(elev=50,azim=-20); #, azim=45)
-        axs[0].view_init(elev=25,azim=45); #, azim=45)        
+        axs[0].view_init(elev=25,azim=45); #, azim=45)
+        axs[0].set_box_aspect(aspect=None, zoom=0.8)        
 
         
         for j in [0,1]:

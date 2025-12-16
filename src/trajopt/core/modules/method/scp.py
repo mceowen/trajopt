@@ -757,7 +757,7 @@ class Subproblem:
         # Create unified record for this iteration and append
         iter_record = self._load_outputs(input_for_iter, prop_time_ms)
         # TODO: UNCOMMENT CONVERGENCE CHECK
-        # iter_record = convergence.check_convergence_tolerance(self.problem, self, iter_record)
+        iter_record = convergence.check_convergence_tolerance(self.problem, self, iter_record)
         iter_record = baseline_autotune(self.problem, iter_record)
         self.iter_data.append(iter_record)
 
