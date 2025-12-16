@@ -78,17 +78,21 @@ z_init_tag = 'z_init'
 
 
 def preProcess(PLTS1,problem,cases={}):
-    newcases = {'scenarios':['scenario1'],'methods':['standard','autotune'],'runs':list(range(1000)),'iters':list(range(1000))[1:]}
+    itrs1 = list(range(1000))[1:]
+    # itrs0 = [0]
+    newcases = {'scenarios':['scenario1'],'methods':['standard','autotune'],'runs':list(range(1000)),'iters':itrs1}
+    # newcases0 = {'scenarios':['scenario1'],'methods':['standard','autotune'],'runs':list(range(1000)),'iters':itrs0}
     if len(cases)>0: newcases = {**newcases,**cases}
-    PLTS1.setCurrent(newcases)
     tags = ['max_q','max_Q','max_load','terminal_cost','altitude'];
     for tag in tags:
-        tag1 = tag + '_opt'; tag2 = tag + '_nl';
+        PLTS1.setCurrent(newcases)
+        tag1 = tag + '_opt'; tag2 = tag + '_nl'; #tag4 = tag + '_init'
         #func_args1 = ['t_opt','z_opt',None,problem];
-        func_args1 = ['t_opt','z_opt','nu_opt',problem];
-        
+        func_args1 = ['t_opt','z_opt','nu_opt',problem];        
         #func_args2 = ['t_nl','z_nl',None,problem];
         func_args2 = ['t_nl','z_nl','nu_nl',problem];
+        # func_args4 = ['t_init','z_init','nu_init',problem];
+        
         if tag == 'max_q': func = max_q_nonjax
         if tag == 'max_Q': func = max_Q_nonjax
         if tag == 'max_load': func = max_load_nonjax
@@ -97,11 +101,14 @@ def preProcess(PLTS1,problem,cases={}):
         
         PLTS1.calcField(tag1,func,func_args = func_args1)
         PLTS1.calcField(tag2,func,func_args = func_args2)
+        # PLTS1.calcField(tag4,func,func_args = func_args4)
 
-        if tag == 'altitude':
+        # PLTS1.setCurrent(newcases0)
+        if tag in ['altitude','max_q','max_Q','max_load']:
             func_args3 = [t_init_tag,z_init_tag,nu_init_tag,problem];
             tag3 = tag + '_init';
             PLTS1.calcField(tag3,func,func_args = func_args3)
+    
 
 
 def makePlotCtrls(PLTS1,ins={}):
@@ -420,7 +427,7 @@ def makePlotTrajs(PLTS1,ins={}):
     titles[0] = 'Position(3D) vs Time';
     ylabels[0] = 'Latitude $\phi$ [deg]';
     xlabels[0] = 'Longitude $\\theta$ [deg]';
-    zlabels[0] = 'Altitude $h$ [km]';
+    zlabels[0] = 'Altitude \n $h$ [km]';
 
     titles[1] = 'Position(2D) vs Time';
     ylabels[1] = 'Latitude $\phi$ [deg]';
@@ -438,7 +445,7 @@ def makePlotTrajs(PLTS1,ins={}):
     grid2D[1] = grid[1];
     grid3D[0] = grid[0];
 
-    titleinfo = {}; xlabelinfo = {'labelpad':10.}; ylabelinfo = {'labelpad':10}; zlabelinfo = {'y':3};
+    titleinfo = {}; xlabelinfo = {'labelpad':20.}; ylabelinfo = {'labelpad':20}; zlabelinfo = {'labelpad':20,'rotation':0};
     ticksinfo = {}; legendinfo = {};
     if 'titleinfo' in ins: titleinfo = {**titleinfo,**ins['titleinfo']}
     if 'xlabelinfo' in ins: xlabelinfo = {**xlabelinfo,**ins['xlabelinfo']}
@@ -601,7 +608,10 @@ def makePlotTrajs(PLTS1,ins={}):
 
         # axs[0].view_init(elev=50,azim=-20); #, azim=45)
         axs[0].view_init(elev=25,azim=45); #, azim=45)
-        axs[0].set_box_aspect(aspect=None, zoom=0.8)        
+        axs[0].set_box_aspect(aspect=None, zoom=0.9)
+
+        axs[0].zaxis.set_rotate_label(False) # Disable automatic rotation        
+        # axs[0].zaxis.label.set_position((-10, 100))
 
         
         for j in [0,1]:
@@ -616,6 +626,7 @@ def makePlotTrajs(PLTS1,ins={}):
             PLTS1.setParams(ax,params);
             if j in uselegend: PLTS1.addLegend(ax,lgnd,ins={'fontsize':12,'loc':'best',**legendinfo});
         
+        
         if printfigs: 
             figadd = '';
             if version in ['standalone','sa_iters']: figadd = '_sa';
@@ -624,7 +635,8 @@ def makePlotTrajs(PLTS1,ins={}):
             if version == 'montecarlo': figadd = '_mc';
             if version == 'mvmc': figadd = '_mvmc';
             figname = figpaths[kk] + 'trajectories' + figadd + '.pdf'; #'bankangle1.pdf'
-            plt.savefig(figname,bbox_inches='tight',pad_inches = 0,transparent=transparentfigs);
+            # plt.savefig(figname,bbox_inches='tight',pad_inches = 0,transparent=transparentfigs);
+            plt.savefig(figname,bbox_inches=None,transparent=transparentfigs);
         if not(displayfigs): plt.clf();            
 
 
@@ -758,6 +770,29 @@ def makePlotStates(PLTS1,ins={}):
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'] ,ins=params5); 
         
 
+
+        for j,sind in enumerate(state_inds):
+            ax = axs[j]; #state_plot_inds[j]];
+
+
+            line_tag = 'max/min - value'
+            penn = PENS['max-value'];
+            lrgba = penn['lrgba']; ls = penn['ls']; lw = penn['lw']
+            if sind in problem.mission.z_min_idx:
+                iind = np.where(problem.mission.z_min_idx == sind)[0][0]; zmin = problem.mission.z_min[iind]
+                line_handle = ax.axhline(y=zmin, xmin = 0, color=lrgba, linestyle=ls, linewidth=lw,label=line_tag); # label=line_tag)
+                PLTS1.legends[lgnd][line_tag] = line_handle;
+            if sind in problem.mission.z_max_idx:
+                iind = np.where(problem.mission.z_max_idx == sind)[0][0];
+                zmax = ((problem.mission.z_max[iind]-1)*problem.mission.planet['r'])/1000; 
+                 # - problem.mission.planet['r']
+                line_handle = ax.axhline(y=zmax, xmin = 0, color=lrgba, linestyle=ls, linewidth=lw,label=line_tag); #, label=line_tag)
+                # PLTS1.legends[lgnd][line_tag] = line_handle;
+
+
+            ## HACK 
+            # if j == 0: temp1,temp2 = ax.get_ylim(); ax.set_ylim([temp1,temp2*1.5])
+
             params = {};
             params['title'] = {'text':titles[j],'fontsize':20,**titleinfo}
             params['xlabel'] = {'label':'Time [s]','fontsize':16,**xlabelinfo}
@@ -850,7 +885,9 @@ def makePlotLoads(PLTS1,ins={}):
                 PLTS1.setCurrent({'scenarios':scenarios,'methods':[method],'runs':runs})
 
                 if version in ['standalone']:
-                    params1 = {'label':'Initial guess','x':'t_opt','y':tag + '_opt','iters':[1],'legend':lgnd,};
+                    params1 = {'label':'Initial guess','x':t_init_tag,'y':tag+'_init','iters':[1],'legend':lgnd,};
+                    # params1 = {'label':'Initial guess','x':'t_nl','y':tag + '_nl','iters':[1],'legend':lgnd,};
+
                     # params2 = {'label':'Iterations','x':'t_opt','y':tag + '_opt','iters':itrs}; #,'legend':lgnd};
                     # params2b = {'label':'Iterations','x':'t_nl','y':tag + '_nl','iters':itrs,'legend':lgnd};
                     params3 = {'label':'Propogated','x':'t_nl','y':tag + '_nl','iters':[-1],'legend':lgnd};
@@ -863,7 +900,7 @@ def makePlotLoads(PLTS1,ins={}):
                     PLTS1.addPlot2D(ax,pen=PENS['opt'] ,ins=params4);
 
                 if version in ['sa_iters']:
-                    params1 = {'label':'Initial guess','x':'t_opt','y':tag + '_opt','iters':[1],'legend':lgnd,};
+                    params1 = {'label':'Initial guess','x':t_init_tag,'y':tag + '_init','iters':[1],'legend':lgnd,};
                     params2 = {'label':'Iterations','x':'t_opt','y':tag + '_opt','iters':itrs}; #,'legend':lgnd};
                     params2b = {'label':'Iterations','x':'t_nl','y':tag + '_nl','iters':itrs,'legend':lgnd};
                     params3 = {'label':'Propogated','x':'t_nl','y':tag + '_nl','iters':[-1],'legend':lgnd};
@@ -939,22 +976,38 @@ def makePlotWghts(PLTS1,ins={}):
 
     #########################################
     ######  DEFAULTS FIG INFORMATION ########
-    figsize = (10,4);
+    figsize = (10,2.5);
     grid = {};
     
-    grid[0] = [0.05,0.60,0.3,0.33];
-    grid[1] = [0.05,0.05,0.3,0.33];
-    grid[2] = [0.55,0.60,0.3,0.33];
-    grid[3] = [0.55,0.05,0.3,0.33];
+    # grid[0] = [0.05,0.60,0.3,0.33];
+    # grid[1] = [0.05,0.05,0.3,0.33];
+    # grid[2] = [0.55,0.60,0.3,0.33];
+    # grid[3] = [0.55,0.05,0.3,0.33];
     
-    state_inds = [0,3,4,5] # replace with appropriate state indices
+    # state_inds = [0,3,4,5] # replace with appropriate state indices
+    # titles = {}; ylabels = {}; xlabels = {ind:'Time [s]' for ind in range(4)}
+    # titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
+    # ylabels[0] = 'No-fly zone \n quadratic \n penalty weights';
+    # ylabels[1] = 'Path constraint \n quadratic \n penalty weights';
+    # ylabels[2] = 'No-fly zone linear \n penalty weights';
+    # ylabels[3] = 'Path constraint \n linear \n penalty weights';
+    # uselegend = [3];
+
+    # grid[0] = [0.05,0.60,0.3,0.33];
+    grid[0] = [0.15,0.3,0.3,0.6];
+    # grid[2] = [0.55,0.60,0.3,0.33];
+    grid[1] = [0.65,0.3,0.3,0.6];
+    
+    state_inds = [3,5] # replace with appropriate state indices
     titles = {}; ylabels = {}; xlabels = {ind:'Time [s]' for ind in range(4)}
     titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
-    ylabels[0] = 'No-fly zone \n quadratic \n penalty weights';
-    ylabels[1] = 'Path constraint \n quadratic \n penalty weights';
-    ylabels[2] = 'No-fly zone linear \n penalty weights';
-    ylabels[3] = 'Path constraint \n linear \n penalty weights';
-    uselegend = [3];
+    
+    ylabels[0] = 'Path constraint \n quadratic \n penalty weights';
+    ylabels[1] = 'Path constraint \n linear \n penalty weights';
+    uselegend = [0];
+
+
+
     #'W_term','W_dyn']; #,'W_plus','W_minus']
     # 'W_ineq' -> path constraints
     # 'W_term' -> terminal condition
@@ -964,7 +1017,8 @@ def makePlotWghts(PLTS1,ins={}):
     # weight_info = weights = 
     nfz_inds = problem.indices.constraints.nonlinear_inequality['nfz'];
     pth_inds = winds = problem.indices.constraints.nonlinear_inequality['path'];
-    weight_info = [['W_ineq',nfz_inds],['dual_ineq',nfz_inds],['W_ineq',pth_inds],['dual_ineq',pth_inds]];
+    # weight_info = [['W_ineq',nfz_inds],['dual_ineq',nfz_inds],['W_ineq',pth_inds],['dual_ineq',pth_inds]];
+    weight_info = [['W_ineq',pth_inds],['dual_ineq',pth_inds]];
 
 
 
@@ -1060,7 +1114,7 @@ def makePlotWghts(PLTS1,ins={}):
             if version == 'montecarlo': figadd = '_mc';
             if version == 'mvmc': figadd = '_mvmc';
             figname = figpaths[kk] + 'weights' + figadd + '.pdf'; #'bankangle1.pdf'
-            plt.savefig(figname,bbox_inches='tight',pad_inches = 0,transparent=transparentfigs);
+            plt.savefig(figname,bbox_inches=None,transparent=transparentfigs);
         if not(displayfigs): plt.clf();            
 
 
@@ -1246,8 +1300,8 @@ def makePlotWghts3(PLTS1,ins={}):
     # grid[3] = [0.55,0.05,0.4,0.3];
     
     # grid[2] = [0.55,0.5,0.4,0.3];
-    grid[0] = [0.05,0.05,0.4,0.9];    
-    grid[1] = [0.6,0.05,0.4,0.9];
+    grid[0] = [0.15,0.25,0.3,0.6];    
+    grid[1] = [0.65,0.25,0.3,0.6];
     titles = {}; ylabels = {};
     titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
     xlabels = {ind:'Time [s]' for ind in range(4)}
@@ -1281,6 +1335,7 @@ def makePlotWghts3(PLTS1,ins={}):
     # ctcs_dual:          "none"   # 'l1', 'none'    
     ctcs_idx = problem.indices.z['ctcs']
     weight_info = [('W_dyn',ctcs_idx),('dual_dyn',ctcs_idx)];#'W_minus_ctcs','dual_plus_ctcs','dual_minus_ctcs'];
+    # weight_info = [('W_dyn',ctcs_idx),('dual_dyn',[])];#'W_minus_ctcs','dual_plus_ctcs','dual_minus_ctcs'];
 
 
 
@@ -1341,7 +1396,7 @@ def makePlotWghts3(PLTS1,ins={}):
                     params2 = {'label':'Iterations','x':ttag,'y':(weight,ctcs_inds),'iters':itrs,'legend':lgnd,'dataloc':'weights'};
                     params4 = {'label':'Optimal Solution','x':ttag,'y':(weight,ctcs_inds),'iters':[-1],'legend':lgnd,'dataloc':'weights'};
 
-                    PLTS1.addPlot2D(ax,pen=PENS['init'],ins=params1);
+                    # PLTS1.addPlot2D(ax,pen=PENS['init'],ins=params1);
                     # PLTS1.addPlot2D(ax,pen=PENS['itr_opt'] ,ins=params2);
                     PLTS1.addPlot2D(ax,pen=PENS['opt2'] ,ins=params4);
                 if version in ['sa_iters']: 
@@ -1352,7 +1407,7 @@ def makePlotWghts3(PLTS1,ins={}):
                     params2 = {'label':'Iterations','x':ttag,'y':(weight,ctcs_inds),'iters':itrs,'legend':lgnd,'dataloc':'weights'};
                     params4 = {'label':'Optimal Solution','x':ttag,'y':(weight,ctcs_inds),'iters':[-1],'legend':lgnd,'dataloc':'weights'};
 
-                    PLTS1.addPlot2D(ax,pen=PENS['init'],ins=params1);
+                    # PLTS1.addPlot2D(ax,pen=PENS['init'],ins=params1);
                     PLTS1.addPlot2D(ax,pen=PENS['itr_opt'] ,ins=params2);
                     PLTS1.addPlot2D(ax,pen=PENS['fitr_opt2'] ,ins=params4);
 
@@ -1386,7 +1441,7 @@ def makePlotWghts3(PLTS1,ins={}):
             if version == 'montecarlo': figadd = '_mc';
             if version == 'mvmc': figadd = '_mvmc';
             figname = figpaths[kk] + 'weights2' + figadd + '.pdf'; #'bankangle1.pdf'
-            plt.savefig(figname,bbox_inches='tight',pad_inches = 0,transparent=transparentfigs);
+            plt.savefig(figname,transparent=transparentfigs);
         if not(displayfigs): plt.clf();            
 
 
@@ -1407,10 +1462,10 @@ def makePlotConvs(PLTS1,ins={}):
 
     #########################################
     ######  DEFAULTS FIG INFORMATION ########
-    figsize = (10,2);
+    figsize = (10,3);
     grid = {};
-    grid[0] = [0.05,0.05,0.4,0.9];
-    grid[1] = [0.55,0.05,0.4,0.9];
+    grid[0] = [0.15,0.25,0.3,0.6];
+    grid[1] = [0.65,0.25,0.3,0.6];
     tags = ['chk_feas_term','chk_feas_dyn'];
     titles = {}; ylabels = {};
     titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
@@ -1504,7 +1559,7 @@ def makePlotConvs(PLTS1,ins={}):
             if version == 'montecarlo': figadd = '_mc';
             if version == 'mvmc': figadd = '_mvmc';
             figname = figpaths[kk] + 'convergence' + figadd + '.pdf'; #'bankangle1.pdf'
-            plt.savefig(figname,bbox_inches='tight',pad_inches = 0,transparent=transparentfigs);
+            plt.savefig(figname,transparent=transparentfigs);
         if not(displayfigs): plt.clf();            
 
 
