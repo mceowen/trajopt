@@ -473,36 +473,41 @@ def autotune1(problem, iter_record):
     eps_dyn  = conv["eps_dyn"]
     eps_quad = conv.get("eps_quad", eps_dyn)   # for vb_plus/vb_minus
 
-    # inequality saturation
-    mask_ineq = vb_ineq <= eps_ineq
-    dual_ineq_plus[mask_ineq] = dual_ineq[mask_ineq]
+    # W_ineq   = method.conv["Wconv_ineq"]
+    # W_term   = method.conv["Wconv_term"]
+    # W_dyn    = method.conv["Wconv_dyn"]
+    # W_defect = method.conv["Wconv_defect"]
 
-    # dynamics
-    mask_dyn = np.abs(vb_dyn) <= eps_dyn
-    dual_dyn_plus[mask_dyn] = dual_dyn[mask_dyn]
+    # # inequality saturation
+    # mask_ineq = (W_ineq @ vb_ineq <= eps_ineq)
+    # dual_ineq_plus[mask_ineq] = dual_ineq[mask_ineq]
 
-    # terminal
-    mask_term = np.abs(vb_term) <= eps_term
-    dual_term_plus[mask_term] = dual_term[mask_term]
+    # # dynamics
+    # mask_dyn = W_dyn @ np.abs(vb_dyn) <= eps_dyn
+    # dual_dyn_plus[mask_dyn] = dual_dyn[mask_dyn]
+
+    # # terminal
+    # mask_term = W_term @ np.abs(vb_term) <= eps_term
+    # dual_term_plus[mask_term] = dual_term[mask_term]
 
 
     # real plus/minus
     # plus
-    mask_plus_real = np.abs(vb_plus_real) <= eps_quad
-    dual_plus_plus_real[mask_plus_real] = dual_plus_real[mask_plus_real]
+    # mask_plus_real = np.abs(vb_plus_real) <= eps_quad
+    # dual_plus_plus_real[mask_plus_real] = dual_plus_real[mask_plus_real]
 
-    # minus
-    mask_minus_real = np.abs(vb_minus_real) <= eps_quad
-    dual_minus_plus_real[mask_minus_real] = dual_minus_real[mask_minus_real]
+    # # minus
+    # mask_minus_real = np.abs(vb_minus_real) <= eps_quad
+    # dual_minus_plus_real[mask_minus_real] = dual_minus_real[mask_minus_real]
 
-    # ctcs plus/minus
-    # plus
-    mask_plus_ctcs = np.abs(vb_plus_ctcs) <= eps_quad
-    dual_plus_plus_ctcs[mask_plus_ctcs] = dual_plus_ctcs[mask_plus_ctcs]
+    # # ctcs plus/minus
+    # # plus
+    # mask_plus_ctcs = np.abs(vb_plus_ctcs) <= eps_quad
+    # dual_plus_plus_ctcs[mask_plus_ctcs] = dual_plus_ctcs[mask_plus_ctcs]
 
-    # minus
-    mask_minus_ctcs = np.abs(vb_minus_ctcs) <= eps_quad
-    dual_minus_plus_ctcs[mask_minus_ctcs] = dual_minus_ctcs[mask_minus_ctcs]
+    # # minus
+    # mask_minus_ctcs = np.abs(vb_minus_ctcs) <= eps_quad
+    # dual_minus_plus_ctcs[mask_minus_ctcs] = dual_minus_ctcs[mask_minus_ctcs]
 
     # ==========================================
     # Update weights
@@ -557,8 +562,8 @@ def autotune2(problem, iter_record):
 
     # Extract parameters for autotuning
     eps_feas_ineq = method.conv.get("eps_ineq", 1e-6)
-    eps_feas_term = method.conv["eps_term"]
-    eps_feas_dyn  = method.conv["eps_dyn"]
+    eps_feas_term = method.conv["eps_term_nd"]
+    eps_feas_dyn  = method.conv["eps_dyn_nd"]
 
     eps_nonzero2 = method.weights["eps_nonzero2"]
 
@@ -574,28 +579,31 @@ def autotune2(problem, iter_record):
     Wh_plus_ctcs  = np.zeros((method.Npm_ctcs, method.n_plus_ctcs))
     Wh_minus_ctcs = np.zeros((method.Npm_ctcs, method.n_minus_ctcs))
 
+    z_state_idx = problem.indices.z["state"]
+    z_ctcs_idx = problem.indices.z["ctcs"]
+
     # ==========================================
     # COMPUTE AUTOTUNE UPDATES
     # ==========================================
 
     if buff_dyn == "quad-1":
-        Wh_plus_real = np.abs(W_plus_real @ vb_plus_real) / eps_feas_dyn
-        Wh_minus_real = np.abs(W_minus_real @ vb_minus_real) / eps_feas_dyn
+        Wh_plus_real = np.abs(W_plus_real @ vb_plus_real) / eps_feas_dyn[z_state_idx]
+        Wh_minus_real = np.abs(W_minus_real @ vb_minus_real) / eps_feas_dyn[z_state_idx]
 
     if ctcs == "quad-1":
-        Wh_plus_ctcs = np.abs(W_plus_ctcs @ vb_plus_ctcs) / eps_feas_dyn
-        Wh_minus_ctcs = np.abs(W_minus_ctcs @ vb_minus_ctcs) / eps_feas_dyn
+        Wh_plus_ctcs = np.abs(W_plus_ctcs @ vb_plus_ctcs) / eps_feas_dyn[z_ctcs_idx]
+        Wh_minus_ctcs = np.abs(W_minus_ctcs @ vb_minus_ctcs) / eps_feas_dyn[z_ctcs_idx]
 
     # TODO: add quad-3 case
 
     if buff_dyn == "quad-3":
         for j in range(model.n):
-            Wh_plus_real[:, j] = np.sum(np.abs(np.diag(W_plus_real[:, j]) @ vb_plus_real[:, j] / eps_feas_dyn))
-            Wh_minus_real[:, j] = np.sum(np.abs(np.diag(W_minus_real[:, j]) @ vb_minus_real[:, j] / eps_feas_dyn))
+            Wh_plus_real[:, j] = np.sum(np.abs(np.diag(W_plus_real[:, j]) @ vb_plus_real[:, j] / np.min(eps_feas_dyn)))
+            Wh_minus_real[:, j] = np.sum(np.abs(np.diag(W_minus_real[:, j]) @ vb_minus_real[:, j] / np.min(eps_feas_dyn)))
     if ctcs == "quad-3":
         for j in range(model.n_ctcs):
-            Wh_plus_ctcs[:, j] = np.sum(np.abs(np.diag(W_plus_ctcs[:, j]) @ vb_plus_ctcs[:, j] / eps_feas_dyn))
-            Wh_minus_ctcs[:, j] = np.sum(np.abs(np.diag(W_minus_ctcs[:, j]) @ vb_minus_ctcs[:, j] / eps_feas_dyn))
+            Wh_plus_ctcs[:, j] = np.sum(np.abs(np.diag(W_plus_ctcs[:, j]) @ vb_plus_ctcs[:, j] / np.min(eps_feas_dyn)))
+            Wh_minus_ctcs[:, j] = np.sum(np.abs(np.diag(W_minus_ctcs[:, j]) @ vb_minus_ctcs[:, j] / np.min(eps_feas_dyn)))
 
     for k in range(N):
         dual_ineq_buff = np.diag(W_ineq[k, :]) @ vb_ineq[k, :].flatten()
@@ -608,18 +616,24 @@ def autotune2(problem, iter_record):
         if k < N - 1:
             dual_dyn_buff = np.diag(W_dyn[k, :]) @ vb_dyn[k, :]
             
-            if buff_dyn:
-                Wh_dyn[k, :] = np.sum(np.abs(dual_dyn_buff) / eps_feas_dyn)
-            else:
-                Wh_dyn[k, :] = np.sum(np.abs(dual_dyn_buff))
+            if buff_dyn == "l1":
+                Wh_dyn[k, z_state_idx] = np.sum(np.abs(dual_dyn_buff[z_state_idx]) / eps_feas_dyn[z_state_idx])
+            elif buff_dyn != "none":
+                Wh_dyn[k, z_state_idx] = np.abs(dual_dyn_buff[z_state_idx] / eps_feas_dyn[z_state_idx])
 
+            if ctcs == "l1":
+                Wh_dyn[k, z_ctcs_idx] = np.sum(np.abs(dual_dyn_buff[z_ctcs_idx]) / eps_feas_dyn[z_ctcs_idx])
+            elif ctcs != "none":
+                Wh_dyn[k, z_ctcs_idx] = np.abs(dual_dyn_buff[z_ctcs_idx] / eps_feas_dyn[z_ctcs_idx])
+
+            # TODO: THINK ABOUT THIS (MAYBE ONE IF ELSE) COME BACK TO THIS, SINGLE EPSILON ETC
             if buff_dyn == "quad-2":
-                Wh_plus_real[k]  = np.sum(np.abs(np.diag(W_plus_real[k, :]) @ vb_plus_real[k, :] / eps_feas_dyn))
-                Wh_minus_real[k] = np.sum(np.abs(np.diag(W_minus_real[k, :]) @ vb_minus_real[k, :] / eps_feas_dyn))
+                Wh_plus_real[k]  = np.sum(np.abs(np.diag(W_plus_real[k, :]) @ vb_plus_real[k, :] / np.min(eps_feas_dyn)))
+                Wh_minus_real[k] = np.sum(np.abs(np.diag(W_minus_real[k, :]) @ vb_minus_real[k, :] / np.min(eps_feas_dyn)))
             
             if ctcs == "quad-2":
-                Wh_plus_ctcs[k]  = np.sum(np.abs(np.diag(W_plus_ctcs[k, :]) @ vb_plus_ctcs[k, :] / eps_feas_dyn))
-                Wh_minus_ctcs[k] = np.sum(np.abs(np.diag(W_minus_ctcs[k, :]) @ vb_minus_ctcs[k, :] / eps_feas_dyn))
+                Wh_plus_ctcs[k]  = np.sum(np.abs(np.diag(W_plus_ctcs[k, :]) @ vb_plus_ctcs[k, :] / np.min(eps_feas_dyn)))
+                Wh_minus_ctcs[k] = np.sum(np.abs(np.diag(W_minus_ctcs[k, :]) @ vb_minus_ctcs[k, :] / np.min(eps_feas_dyn)))
 
     if (mission.n_term + mission.n_term_ineq + mission.n_term_ctcs) > 0:
         dual_term_buff = np.diag(W_term) @ vb_term

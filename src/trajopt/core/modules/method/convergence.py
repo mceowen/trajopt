@@ -44,6 +44,7 @@ def set_convergence_tolerance(problem):
     eps_min_state = float(np.min(eps_state_nd))
     Wconv_state   = np.diag(eps_min_state / eps_state_nd)
     
+    method.conv["eps_state_nd"]    = eps_state_nd
     method.conv["eps_state"]       = eps_min_state 
     method.conv["Wconv_state"]     = Wconv_state
     method.conv["Wconv_state_vec"] = np.diag(Wconv_state).copy()
@@ -82,6 +83,7 @@ def set_convergence_tolerance(problem):
 
     Wconv_ineq = np.diag(eps_min_ineq / eps_ineq_nd) if eps_ineq_nd.size > 0 else np.zeros((1,1))
     
+    method.conv["eps_ineq_nd"]    = eps_ineq_nd
     method.conv["eps_ineq"]       = eps_min_ineq 
     method.conv["Wconv_ineq"]     = Wconv_ineq
     method.conv["Wconv_ineq_vec"] = np.diag(Wconv_ineq).copy()
@@ -104,6 +106,7 @@ def set_convergence_tolerance(problem):
         eps_min_term = 0.
 
     Wconv_term = np.diag(eps_min_term / eps_term_nd) if np.any(eps_term_nd) else np.zeros((1,1))
+    method.conv["eps_term_nd"]    = eps_term_nd
     method.conv["eps_term"]       = eps_min_term 
     method.conv["Wconv_term"]     = Wconv_term
     method.conv["Wconv_term_vec"] = np.diag(Wconv_term).copy()
@@ -122,6 +125,7 @@ def set_convergence_tolerance(problem):
     eps_min_defect = float(np.min(eps_defect_nd))
     Wconv_defect   = np.diag(eps_min_defect / eps_defect_nd)
     
+    method.conv["eps_defect_nd"]    = eps_defect_nd
     method.conv["eps_defect"]       = eps_min_defect 
     method.conv["Wconv_defect"]     = Wconv_defect
     method.conv["Wconv_defect_vec"] = np.diag(Wconv_defect).copy()
@@ -157,6 +161,7 @@ def set_convergence_tolerance(problem):
     else:
         Wconv_dyn = np.diag(eps_min_dyn / eps_dyn_nd)
 
+    method.conv["eps_dyn_nd"]    = eps_dyn_nd
     method.conv["eps_dyn"]       = eps_min_dyn 
     method.conv["Wconv_dyn"]     = Wconv_dyn
     method.conv["Wconv_dyn_vec"] = np.diag(Wconv_dyn).copy()
