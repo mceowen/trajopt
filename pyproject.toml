@@ -25,6 +25,7 @@ dependencies = [
     "pyyaml>=6.0",
     "matplotlib>=3.8",
     "setuptools>=61.0",
+    "sympy>=1.10, <= 2.0"
 ]
 
 # Optional dependency groups (install via pip install .[dev])

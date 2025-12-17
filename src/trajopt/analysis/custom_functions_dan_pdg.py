@@ -4,7 +4,7 @@ import jax.numpy as jnp
 import trajopt.utils.tools as tools
 jax.config.update("jax_enable_x64", True)
 import trajopt.core.modules.model.obstacles     as obstacles
-import trajopt.local.modules.mission.aero.cobra_aero_nonjax as aero_nonjax
+# import trajopt.local.modules.mission.aero.cobra_aero_nonjax as aero_nonjax
 
 
 
