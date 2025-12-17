@@ -24,7 +24,7 @@ flags:
   flag_vb:      1.0
 
 solver_opts:
-  solver: "QOCO"
+  solver: "ECOS"
 
 T_init: 1700
 T_min: 550.0
@@ -38,8 +38,8 @@ conv:
   eps_ctcs: 1e-16
   eps_state: [500, 1, 1, 50, 1, 1]
   eps_cost: 1
-  eps_nfz: [0.001, 0.001]
-  eps_path: [0.000001, 0.000001, 0.000001]
+  eps_nfz: [1, 1]
+  eps_path: [180, 333, 0.24525]
   eps_term: [333.0, 0.1, 0.1, 100, 0.1, 0.1]
   eps_term_min: [10.0, 1.0, 1.0, 10.0, 1.0, 1.0]
   eps_term_max: [10.0, 1.0, 1.0, 10.0, 1.0, 1.0]
@@ -50,9 +50,9 @@ conv:
 weights:
   w_cost:         1.0
   alpha_z:        0.5
-  alpha_u:        10.0
+  alpha_u:        0.5
   beta:           0.1
-  gamma:          1.0
+  gamma:          0.1
   eps_nonzero1:   0.0000000001
   eps_nonzero2:   0.001
   wbuff:          100.0

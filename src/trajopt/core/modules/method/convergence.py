@@ -215,9 +215,9 @@ def check_convergence_tolerance(problem, subprob, iter_record):
 
     # === Feasibility: Virtual Buffer violations ===
     chk_vb_ineq = (np.max([np.max(W_ineq @ vb_ineq[k].reshape(-1, 1)) for k in range(N)]) if vb_ineq.size else 0.0)
-    chk_vb_term = np.max(W_term * vb_term)
-    chk_vb_dyn  = (np.max([np.max(W_dyn @ vb_dyn[k].reshape(-1, 1)) for k in range(N - 1)]) if vb_dyn.size else 0.0)
-    chk_defect = (np.max([np.max(W_defect @ defect[k].reshape(-1, 1)) for k in range(N)]) if defect.size else 0.0)
+    chk_vb_term = np.max(W_term @ np.abs(vb_term))
+    chk_vb_dyn  = (np.max([np.max(W_dyn @ np.abs(vb_dyn[k]).reshape(-1, 1)) for k in range(N - 1)]) if vb_dyn.size else 0.0)
+    chk_defect = (np.max([np.max(W_defect @ np.abs(defect[k]).reshape(-1, 1)) for k in range(N)]) if defect.size else 0.0)
 
     # === Feasibility: Linearized constraint residuals ===
     chk_ineq_2 = (np.max([np.max(W_ineq @ conv_ineq_nl[k].reshape(-1, 1)) for k in range(N)]) if conv_ineq_nl.size else 0.0)

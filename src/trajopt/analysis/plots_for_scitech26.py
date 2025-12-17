@@ -384,7 +384,7 @@ def makePlotCtrls2(PLTS1,ins={}):
             params['ylabel'] = {'label':ylabels[j],'fontsize':16,**ylabelinfo}
             params['ticks'] = {'labelsize':20,'width':2,**ticksinfo};
             PLTS1.setParams(ax,params);
-            if j in uselegend: PLTS1.addLegend(ax,lgnd,ins={'fontsize':14,'loc':'best'},**legendinfo);
+            if j in uselegend: PLTS1.addLegend(ax,lgnd,ins={'fontsize':12,'loc':'best'},**legendinfo);
 
         if printfigs: 
             figadd = '';
@@ -775,7 +775,7 @@ def makePlotStates(PLTS1,ins={}):
             ax = axs[j]; #state_plot_inds[j]];
 
 
-            line_tag = 'max/min - value'
+            line_tag = 'Max/Min Value'
             penn = PENS['max-value'];
             lrgba = penn['lrgba']; ls = penn['ls']; lw = penn['lw']
             if sind in problem.mission.z_min_idx:
@@ -929,7 +929,7 @@ def makePlotLoads(PLTS1,ins={}):
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'] ,ins=params4); 
 
             #### hack for adding max value line... not that hacky anyway
-            line_tag = 'Max-Value'
+            line_tag = 'Max Value'
             maxval = problem.mission.path_limits[tag];
 
             penn = PENS['max-value'];
@@ -1472,7 +1472,7 @@ def makePlotConvs(PLTS1,ins={}):
     ylabels[0] = 'Peak Constraint \n Violation';
     ylabels[1] = 'Peak trajectory \n  residual [km]';    
     xlabels = {ind:'Iterations' for ind in range(2)}
-    uselegend = [1];
+    uselegend = [];
 
     ##########################################
     if 'figsize' in ins: figsize = ins['figsize'];

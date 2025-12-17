@@ -36,7 +36,7 @@ def max_load_nonjax(t, z, nu, problem): # normal load
     aero = nonlinear_aero_nonjax(t, z[stateidx] @ Mstate, nu @ Mctrl,problem)
     # aero = nonlinear_aero_nonjax(t, z, nu,problem)
     L = aero["L"]; D = aero["D"]
-    load_dim = np.sqrt(L ** 2 + D ** 2) * method.nondim["na"] / mission.planet['g']; # (CARLOS): IM DIVIDING BY G TO GET LOAD IN G'S FOR THE PLOTS
+    load_dim = np.sqrt(L ** 2 + D ** 2) * method.nondim["na"] / 9.81; # (CARLOS): IM DIVIDING BY G TO GET LOAD IN G'S FOR THE PLOTS
     return load_dim #np.array([load_dim / mission.path_limits["max_load"] - 1.0])
 
 

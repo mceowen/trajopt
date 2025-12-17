@@ -97,7 +97,7 @@ def set_nondim_params(problem, base_unit_labels=["m", "s", "kg"]):
     method.nondim["M"]["ctrl"]["d2nd"] = np.diag(1 / nd_ctrl).copy()
     method.nondim["M"]["ctrl"]["nd2d"] = np.diag(nd_ctrl).copy()
 
-    nd_dyn = nd_state / scales["t"]
+    nd_dyn = nd_state
     method.nondim["M"]["dyn"]["d2nd"] = np.diag(1 / nd_dyn).copy()
     method.nondim["M"]["dyn"]["nd2d"] = np.diag(nd_dyn).copy()
     method.nondim["M"]["term"]["d2nd"] = np.diag(1 / nd_state).copy()
