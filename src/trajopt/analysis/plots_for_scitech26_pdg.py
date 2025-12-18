@@ -23,15 +23,15 @@ DPENS = {};
 # standalone 
 DPENS['init'] = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,.0,1.],'lw':1,'ls':'--','msty':'' ,'msz':3};
 DPENS['nl'] = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,.0,.0,1.],'lw':2,'ls':'-' ,'msty':'' ,'msz':3};
-DPENS['opt']  = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,1.,1.],'lw':1,'ls':''  ,'msty':'o','msz':5};
+DPENS['opt']  = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,1.,1.],'lw':1,'ls':''  ,'msty':'o','msz':3};
 
 
 # iteration values
 DPENS['itr_opt']  = {'frgba':[.0,.0,.0,.1],'lrgba':[0.7,.0,0.3,.2],'lw':1,'ls':'','msty':'o' ,'msz':3};
 DPENS['itr_nl']   = {'frgba':[.0,.0,.0,.1],'lrgba':[0.7,.0,0.3,.4],'lw':1,'ls':'-','msty':'' ,'msz':3};
 # final iteration values
-DPENS['fitr_opt']  = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,1.,1.],'lw':2,'ls':'','msty':'o' ,'msz':5};
-DPENS['fitr_nl']   = {'frgba':[.0,.0,.0,.1],'lrgba':[0.,.0,1.,1.],'lw':2,'ls':'-','msty':'' ,'msz':5};
+DPENS['fitr_opt']  = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,1.,1.],'lw':2,'ls':'','msty':'o' ,'msz':3};
+DPENS['fitr_nl']   = {'frgba':[.0,.0,.0,.1],'lrgba':[0.,.0,1.,1.],'lw':2,'ls':'-','msty':'' ,'msz':3};
 
 # # iteration values
 # DPENS['itr_opt']  = {'frgba':[.0,.0,.0,.1],'lrgba':[0.,.0,0.3,.2],'lw':1,'ls':'','msty':'o' ,'msz':3};
@@ -466,29 +466,42 @@ def makePlotTrajs(PLTS1,ins={}):
             if j in uselegend: PLTS1.addLegend(ax,lgnd,ins={'fontsize':12,'loc':'best',**legendinfo});
 
 
-            if j == 0: 
-                # # PLOT ASPECT RATIO FIXING (NEEDS TO BE DONE MANUALLY FOR 3D PLOTS :( )
-                x_lim = ax.get_xlim3d()
-                y_lim = ax.get_ylim3d()
-                z_lim = ax.get_zlim3d()
-                max_lim = max(abs(x_lim[1] - x_lim[0]), abs(y_lim[1] - y_lim[0]), abs(z_lim[1] - z_lim[0]))
-                x_mid = sum(x_lim) * 0.5
-                y_mid = sum(y_lim) * 0.5
-                ax.set_xlim3d([x_mid - max_lim * 0.5, x_mid + max_lim * 0.5])
-                ax.set_ylim3d([y_mid - max_lim * 0.5, y_mid + max_lim * 0.5])
-                ax.set_zlim3d([0, max_lim])
-                ax.view_init(elev=20, azim=160)
-                # axs[0].view_init(elev=25,azim=30); #, azim=45)        
-            else: 
 
-                x_lim = ax.get_xlim()
-                y_lim = ax.get_ylim()
-                max_lim = max(abs(x_lim[1] - x_lim[0]), abs(y_lim[1] - y_lim[0]))
-                x_mid = sum(x_lim) * 0.5
-                y_mid = sum(y_lim) * 0.5
-                temp = 1.; 
-                ax.set_xlim([x_mid - max_lim * temp, x_mid + max_lim * temp])
-                ax.set_ylim([y_mid - max_lim * temp, y_mid + max_lim * temp])
+            if version == 'sa_iters':
+                if j == 0: 
+                    # # PLOT ASPECT RATIO FIXING (NEEDS TO BE DONE MANUALLY FOR 3D PLOTS :( )
+                    ax.set_xlim3d([-2,4])
+                    ax.set_ylim3d([-2,4])
+                    ax.set_zlim3d([0,5])
+                    ax.view_init(elev=20, azim=160)
+                    # axs[0].view_init(elev=25,azim=30); #, azim=45)        
+                else: 
+                    ax.set_xlim([-2.5,5])
+                    ax.set_ylim([-2.5,5])
+
+            else: 
+                if j == 0: 
+                    # # PLOT ASPECT RATIO FIXING (NEEDS TO BE DONE MANUALLY FOR 3D PLOTS :( )
+                    x_lim = ax.get_xlim3d()
+                    y_lim = ax.get_ylim3d()
+                    z_lim = ax.get_zlim3d()
+                    max_lim = max(abs(x_lim[1] - x_lim[0]), abs(y_lim[1] - y_lim[0]), abs(z_lim[1] - z_lim[0]))
+                    x_mid = sum(x_lim) * 0.5
+                    y_mid = sum(y_lim) * 0.5
+                    ax.set_xlim3d([x_mid - max_lim * 0.5, x_mid + max_lim * 0.5])
+                    ax.set_ylim3d([y_mid - max_lim * 0.5, y_mid + max_lim * 0.5])
+                    ax.set_zlim3d([0, max_lim])
+                    ax.view_init(elev=20, azim=160)
+                    # axs[0].view_init(elev=25,azim=30); #, azim=45)        
+                else: 
+                    x_lim = ax.get_xlim()
+                    y_lim = ax.get_ylim()
+                    max_lim = max(abs(x_lim[1] - x_lim[0]), abs(y_lim[1] - y_lim[0]))
+                    x_mid = sum(x_lim) * 0.5
+                    y_mid = sum(y_lim) * 0.5
+                    temp = 1.; 
+                    ax.set_xlim([x_mid - max_lim * temp, x_mid + max_lim * temp])
+                    ax.set_ylim([y_mid - max_lim * temp, y_mid + max_lim * temp])
 
 
         
@@ -681,9 +694,45 @@ def makePlotStates(PLTS1,ins={}):
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'] ,ins=params4); 
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'] ,ins=params5); 
 
-        
+
+        #### PLOTTING LIMITS>...
+        ## HAND CODED HACK
+        for j,sind in enumerate(plot_inds):
+            ax = axs[j]; #state_plot_inds[j]];
+            line_tag = 'Max/Min Value';
+            penn = PENS['max-value']; lrgba = penn['lrgba']; ls = penn['ls']; lw = penn['lw']
+            if j == 0:  # thrust_mag 
+                mmin = 0.3; mmax = 5.0;
+                line_handle = ax.axhline(y=mmin, xmin = 0, color=lrgba, linestyle=ls, linewidth=lw,label=line_tag); # label=line_tag)
+                PLTS1.legends[lgnd][line_tag] = line_handle;
+                line_handle = ax.axhline(y=mmax, xmin = 0, color=lrgba, linestyle=ls, linewidth=lw,label=line_tag); #, label=line_tag)
+            # if j == 2: # tilt mag
+            #     line_handle = ax.axhline(y=mmin, xmin = 0, color=lrgba, linestyle=ls, linewidth=lw,label=line_tag); # label=line_tag)
+            #     PLTS1.legends[lgnd][line_tag] = line_handle;
+            #     line_handle = ax.axhline(y=mmax, xmin = 0, color=lrgba, linestyle=ls, linewidth=lw,label=line_tag); #, label=line_tag)            
+            if j == 3: # angular rate
+                mmax = 1.5707*180/np.pi
+                line_handle = ax.axhline(y=mmax, xmin = 0, color=lrgba, linestyle=ls, linewidth=lw,label=line_tag); # label=line_tag)
+                PLTS1.legends[lgnd][line_tag] = line_handle;
+                # line_handle = ax.axhline(y=mmax, xmin = 0, color=lrgba, linestyle=ls, linewidth=lw,label=line_tag); #, label=line_tag)
 
 
+            if False: 
+                if sind in problem.mission.z_min_idx:
+                    iind = np.where(problem.mission.z_min_idx == sind)[0][0]; zmin = problem.mission.z_min[iind]
+                    line_handle = ax.axhline(y=zmin, xmin = 0, color=lrgba, linestyle=ls, linewidth=lw,label=line_tag); # label=line_tag)
+                    PLTS1.legends[lgnd][line_tag] = line_handle;
+
+                if sind in problem.mission.z_max_idx:
+                    iind = np.where(problem.mission.z_max_idx == sind)[0][0];
+                    zmax = ((problem.mission.z_max[iind]-1)*problem.mission.planet['r'])/1000; 
+                     # - problem.mission.planet['r']
+                    line_handle = ax.axhline(y=zmax, xmin = 0, color=lrgba, linestyle=ls, linewidth=lw,label=line_tag); #, label=line_tag)
+                    # PLTS1.legends[lgnd][line_tag] = line_handle;
+
+
+        for j,sind in enumerate(plot_inds):
+            ax = axs[j]; #state_plot_inds[j]];
             params = {};
             params['title'] = {'text':titles[j],'fontsize':20,**titleinfo}
             params['xlabel'] = {'label':xlabels[j],'fontsize':16,**xlabelinfo}
@@ -1253,9 +1302,6 @@ def makePlotWghts(PLTS1,ins={}):
                     params4 = {'label':method_labels[method],'x':'t_opt','y':(weight,winds),'iters':[-1],'legend':lgnd,'color_vars':COLORVARS[method],'dataloc':'weights'};
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt2'] ,ins=params4);
 
-            
-
-
 
             params = {};
             params['title'] = {'text':titles[j],'fontsize':20,**titleinfo}
@@ -1714,7 +1760,7 @@ def makePlotWghtsFlex(PLTS1,ins={}):
                     params1 = {'label':'Initial guess','x':ttag,'y':info,'iters':[1],'legend':lgnd,'dataloc':'weights'};
                     params2 = {'label':'Iterations','x':ttag,'y':info,'iters':itrs,'legend':lgnd,'dataloc':'weights'};
                     params4 = {'label':'Optimal Solution','x':ttag,'y':info,'iters':[-1],'legend':lgnd,'dataloc':'weights'};
-                    PLTS1.addPlot2D(ax,pen=PENS['init'],ins=params1);
+                    # PLTS1.addPlot2D(ax,pen=PENS['init'],ins=params1);
                     PLTS1.addPlot2D(ax,pen=PENS['opt2'] ,ins=params4);
                 if version in ['sa_iters']: 
                     ttag = ['t_opt',list(range(t_opt_len))];
@@ -1722,7 +1768,7 @@ def makePlotWghtsFlex(PLTS1,ins={}):
                     params2 = {'label':'Iterations','x':ttag,'y':info,'iters':itrs,'legend':lgnd,'dataloc':'weights'};
                     params4 = {'label':'Optimal Solution','x':ttag,'y':info,'iters':[-1],'legend':lgnd,'dataloc':'weights'};
 
-                    PLTS1.addPlot2D(ax,pen=PENS['init'],ins=params1);
+                    # PLTS1.addPlot2D(ax,pen=PENS['init'],ins=params1);
                     PLTS1.addPlot2D(ax,pen=PENS['itr_opt'] ,ins=params2);
                     PLTS1.addPlot2D(ax,pen=PENS['fitr_opt2'] ,ins=params4);
 

@@ -613,6 +613,10 @@ def makePlotTrajs(PLTS1,ins={}):
         axs[0].zaxis.set_rotate_label(False) # Disable automatic rotation        
         # axs[0].zaxis.label.set_position((-10, 100))
 
+
+
+
+
         
         for j in [0,1]:
             ax = axs[j];
@@ -770,11 +774,8 @@ def makePlotStates(PLTS1,ins={}):
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'] ,ins=params5); 
         
 
-
         for j,sind in enumerate(state_inds):
             ax = axs[j]; #state_plot_inds[j]];
-
-
             line_tag = 'Max/Min Value'
             penn = PENS['max-value'];
             lrgba = penn['lrgba']; ls = penn['ls']; lw = penn['lw']
@@ -789,8 +790,7 @@ def makePlotStates(PLTS1,ins={}):
                 line_handle = ax.axhline(y=zmax, xmin = 0, color=lrgba, linestyle=ls, linewidth=lw,label=line_tag); #, label=line_tag)
                 # PLTS1.legends[lgnd][line_tag] = line_handle;
 
-
-            ## HACK 
+            
             # if j == 0: temp1,temp2 = ax.get_ylim(); ax.set_ylim([temp1,temp2*1.5])
 
             params = {};
