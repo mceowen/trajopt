@@ -266,7 +266,7 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
     mode_ctcs = method.flags["ctcs"]       # {"none","term","l1","l2","quad-1","quad-2"}
 
     if subprob.vb_dyn_p is not None and n_ctcs > 0:
-        diff_ctcs = subprob.vb_dyn_p[:, n:] - subprob.vb_dyn_m[:, n:]
+        diff_ctcs = subprob.vb_dyn_p[:, n:n+n_ctcs] - subprob.vb_dyn_m[:, n:n+n_ctcs]
 
         # --------------------------------------------------------
         # L1 penalty

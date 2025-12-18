@@ -111,7 +111,7 @@ constraints:
 
 ########################################################
 
-# STL EXPERIMENT
+# # STL EXPERIMENT
 # - fcn: "trajopt.core.modules.model.lander_6dof.height_triggered_pitch"
 #   analytical_affine_approximation: "None"
 #   type: "inequality"

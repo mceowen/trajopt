@@ -110,3 +110,115 @@ costs:
   category: "running"
 
 
+############################### STL EXPERIMENT ###############################
+
+# # Dimensional mission configuration (no nondim)
+# module_path: "trajopt.core.modules.mission.lander"
+
+# planet_name: "miki"
+# vehicle_name: "mikilander"
+
+# flags:
+#   flag_nfz: 0
+#   init_ctrl: 0
+#   final_ctrl: 0
+#   aero_type: 'none'  # 'exponential', 'jax_lookup', 'spline', 'none'
+
+# # no fly zones options
+# obs:
+#   xc: []
+#   yc: []
+#   rc: []
+
+# # state min/max constraints
+# z_min: [1.0]
+# z_min_idx: [0]
+# z_max: []
+# z_max_idx: []
+
+# # initial state constraints
+# zi: [4, 4, 0, 0.0 , -4.0, 4.0, 0, 0, 0]
+# zi_idx: [1, 2, 3, 4, 5, 6, 11, 12, 13]
+# zi_min: []
+# zi_min_idx: []
+# zi_max: []
+# zi_max_idx: []
+
+# # final state constraints
+# zf: [0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
+# zf_idx: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+# zf_min: []
+# zf_min_idx: []
+# zf_max: []
+# zf_max_idx: []
+
+# # final state guess for straight line initial guess
+# zi_guess: [2.0, 4, 4, 0, 0, -4.0, 4.0, 1.0, 0, 0, 0, 0, 0, 0]
+# zf_guess: [1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
+
+# # control min/max constraints
+# u_min: []
+# u_max: []
+
+# u_min_idx: []
+# u_max_idx: []
+
+# # control boundary conditions
+# ui: []
+# uf: []
+
+# ui_idx: []
+# uf_idx: []
+
+# # control rate constraints
+# udot_max: []
+# udot_max_idx: []
+
+
+# ########################################################
+
+# # STL EXPERIMENT
+# path_limits:
+#   cos_theta_max:   0.9396926 # 20 degrees
+#   # cos_theta_max: 0.8660254 # 30 degrees
+#   # cos_theta_max: 0.7071067
+  
+#   # w_max: 1.57079632679
+#   # tan_gamma_gs: 1.19175359259420995870530807186041933693070040770854385365483000690341214589
+#   # tan_gamma_gs: 0.05763
+
+# # NO STL
+# # path_limits: {}
+# ########################################################
+
+# aux_limits: {}
+
+
+# # TODO: custom_limits and custom_input_dict are confusing, need to rename soon
+# custom_limits : {}
+
+# convex_limits: 
+#   cos_delta_max: 0.93969262  
+#   max_thrust: 5.0
+#   # cos_theta_max: 0.86602540378
+#   w_max: 1.57079632679
+#   tan_gamma_gs: 1
+
+# custom_input_dict:
+#   min_thrust: 0.3
+
+# # custom modules
+# custom_modules: {}
+
+# costs:
+# - fcn: "trajopt.core.modules.mission.lander.terminal_cost"
+#   analytical_affine_approximation: "trajopt.core.modules.mission.lander.analytical_affine_approximation_terminal_cost"
+#   convex: 1
+#   auto_diff: 0
+#   category: "terminal"
+
+# - fcn: "trajopt.core.modules.mission.lander.running_cost"
+#   analytical_affine_approximation: "trajopt.core.modules.mission.lander.analytical_affine_approximation_running_cost"
+#   convex: 1
+#   auto_diff: 0
+#   category: "running"
