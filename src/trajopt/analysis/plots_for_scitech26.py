@@ -934,7 +934,7 @@ def makePlotLoads(PLTS1,ins={}):
 
             penn = PENS['max-value'];
             lrgba = penn['lrgba']; ls = penn['ls']; lw = penn['lw']
-            if tag == 'max_load': maxval = maxval/problem.mission.planet['g']
+            if tag == 'max_load': maxval = maxval/9.81; #problem.mission.planet['g']
             line_handle = ax.axhline(y=maxval, color=lrgba, linestyle=ls, linewidth=lw, label=line_tag)
             PLTS1.legends[lgnd][line_tag] = line_handle;
 

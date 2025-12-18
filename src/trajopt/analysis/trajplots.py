@@ -444,7 +444,7 @@ class SCVXPLOTS:
                                 if typ == 'line':
                                     if leg == None: ax.plot(xdata,ydata,color=lrgba[:3],alpha=lrgba[3],linewidth=lw,linestyle = ls,marker=msty,markersize=msz)
                                     else: self.legends[leg][label] = ax.plot(xdata,ydata,
-                                                        label=label,color=lrgba[:3],alpha=lrgba[3],
+                                                         label=label,color=lrgba[:3],alpha=lrgba[3],
                                                         linewidth=lw,linestyle = ls,marker=msty,markersize=msz)[0]
 
 
