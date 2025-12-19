@@ -5,11 +5,11 @@ import jax.numpy as jnp
 import cvxpy as cp
 
 # jax autodiff for affine approximations
-def linearize_jax(fcn, problem=None, params=None):
+def linearize_jax(fcn,trajopt_obj =None, params=None):
 
-    if problem is not None:
+    if trajopt_obj is not None:
         def wrapped_fcn(z, nu):
-            return fcn(0, z, nu, problem)
+            return fcn(0, z, nu, trajopt_obj)
     elif params is not None:
         def wrapped_fcn(z, nu):
             return fcn(0, z, nu, params)
@@ -24,18 +24,18 @@ def linearize_jax(fcn, problem=None, params=None):
 
     return f, dfcn_dz, dfcn_du
 
-def linearize_jax_ctcs(fcn, problem):
-    model = problem.model
-    mission = problem.mission
-    method = problem.method
+def linearize_jax_ctcs(fcn, trajopt_obj):
+    model = trajopt_obj.model
+    mission = trajopt_obj.mission
+    method = trajopt_obj.method
 
     constraints = mission.constraints
     
     def wrapped_fcn(z, nu):
 
-        constr = jnp.concatenate([mission.nonconvex_inequality_constraints[i].fcn(0, z, nu, problem) for i in range(len(model.nonconvex_inequality_constraints))])
+        constr = jnp.concatenate([mission.nonconvex_inequality_constraints[i].fcn(0, z, nu, trajopt_obj) for i in range(len(model.nonconvex_inequality_constraints))])
 
-        f_val = jnp.concatenate([fcn(0, z[:model.n], nu, problem), jnp.square(jnp.maximum(method.weights["w_ctcs"] * constr, 0.0))])
+        f_val = jnp.concatenate([fcn(0, z[:model.n], nu, trajopt_obj), jnp.square(jnp.maximum(method.weights["w_ctcs"] * constr, 0.0))])
         
         return f_val
 
@@ -46,22 +46,22 @@ def linearize_jax_ctcs(fcn, problem):
     return f, dfcn_dz, dfcn_du
 
 # PROTOTYPE 
-def linearize_sympy(fcn, problem):
-    z, nu = problem.method.z_init, problem.method.nu_init
-    n = problem.model.n
-    m = problem.model.m
+def linearize_sympy(fcn, trajopt_obj):
+    z, nu = trajopt_obj.method.z_init, trajopt_obj.method.nu_init
+    n = trajopt_obj.model.n
+    m = trajopt_obj.model.m
 
     z_sym = sp.symbols(f"z0:{n}")
     nu_sym = sp.symbols(f"u0:{m}")
-    fcn_sym = fcn(0, z_sym, nu_sym, problem)
+    fcn_sym = fcn(0, z_sym, nu_sym, trajopt_obj)
     dfcn_dz_sym = sp.diff(fcn_sym, z_sym)
     dfcn_du_sym = sp.diff(fcn_sym, nu_sym)
     return fcn_sym, dfcn_dz_sym, dfcn_du_sym
 
-def compute_ctcs_jacobians(t, z, nu, problem):
-    mission = problem.mission
-    model = problem.model
-    method = problem.method
+def compute_ctcs_jacobians(t, z, nu, trajopt_obj):
+    mission = trajopt_obj.mission
+    model = trajopt_obj.model
+    method = trajopt_obj.method
 
     n = model.n
     n_ineq = mission.n_ineq

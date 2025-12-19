@@ -2,10 +2,10 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-def jit_rk4_jax_dense(problem):
+def jit_rk4_jax_dense(trajopt_obj):
 
-    model = problem.model
-    method = problem.method
+    model = trajopt_obj.model
+    method = trajopt_obj.method
 
     dynamics = model._dynamics
 
@@ -33,7 +33,7 @@ def jit_rk4_jax_dense(problem):
         b = (t - t_ref_k) / (t_ref_kp - t_ref_k)
         nu = a * nu_ref_k + b * nu_ref_kp
 
-        return dynamics(t, z, nu, problem)
+        return dynamics(t, z, nu, trajopt_obj)
 
     rk4_step_jit = jax.jit(rk4_step)
 
@@ -53,9 +53,9 @@ def jit_rk4_jax_dense(problem):
 
     method.propagate_rk4_dense_jit = jax.jit(propagate)
 
-def propagate_rk4_dense(z0, nu_ref, t_ref, t_dense, problem):
+def propagate_rk4_dense(z0, nu_ref, t_ref, t_dense, trajopt_obj):
 
-    method = problem.method
+    method = trajopt_obj.method
 
     z0_jax = jnp.array(z0)
     nu_ref_jax = jnp.array(nu_ref)

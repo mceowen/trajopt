@@ -55,17 +55,17 @@ COLORVARS['standard']['lrgba'] = {'by':'runs','typ':'mod','values':[np.array([ii
 
 
 
-def preProcess(PLTS1,problem):
+def preProcess(PLTS1,trajopt_obj):
     PLTS1.setCurrent({'scenarios':['scenario1'],'methods':['standard','autotune'],
                       'runs':list(range(1000)),'iters':list(range(1000))[1:]})
     tags = ['max_q','max_Q','max_load','terminal_cost'];
     for tag in tags:
         tag1 = tag + '_sub'; tag2 = tag + '_nl';
-        #func_args1 = ['t_opt','z_opt',None,problem];
-        func_args1 = ['t_opt','z_opt','nu_opt',problem];
+        #func_args1 = ['t_opt','z_opt',None,trajopt_obj];
+        func_args1 = ['t_opt','z_opt','nu_opt',trajopt_obj];
         
-        #func_args2 = ['t_nl','z_nl',None,problem];
-        func_args2 = ['t_nl','z_nl','nu_nl',problem];
+        #func_args2 = ['t_nl','z_nl',None,trajopt_obj];
+        func_args2 = ['t_nl','z_nl','nu_nl',trajopt_obj];
         if tag == 'max_q': func = max_q_nonjax
         if tag == 'max_Q': func = max_Q_nonjax
         if tag == 'max_load': func = max_load_nonjax
@@ -77,7 +77,7 @@ def preProcess(PLTS1,problem):
 def makePlotCtrls(PLTS1,ins={}):
 
     ### LOADING DATA
-    problem = ins['problem'];
+    trajopt_obj = ins['trajopt_obj'];
     data = ins['data'];
     versions = ins['versions'];
     NEWPENS = ins['PENS'];
@@ -175,11 +175,11 @@ def makePlotCtrls(PLTS1,ins={}):
                     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'] ,ins=params4); 
 
             # #### hack for adding max value line... not that hacky anyway
-            umin = problem.mission.u_min[0]*(180/np.pi)
-            umax = problem.mission.u_max[0]*(180/np.pi)   
+            umin = trajopt_obj.mission.u_min[0]*(180/np.pi)
+            umax = trajopt_obj.mission.u_max[0]*(180/np.pi)   
             # line_tag = 'Max-Value'
-            # maxval = problem.mission.path_limits[tag];
-            # if tag == 'max_load': maxval = maxval/problem.mission.planet['g']
+            # maxval = trajopt_obj.mission.path_limits[tag];
+            # if tag == 'max_load': maxval = maxval/trajopt_obj.mission.planet['g']
             line_handle = ax.axhline(y=umin, color=[0,0,0,0.7], linestyle='-', linewidth=1); # label=line_tag)
             line_handle = ax.axhline(y=umax, color=[0,0,0,0.7], linestyle='-', linewidth=1); #, label=line_tag)
             # PLTS1.legends[lgnd][line_tag] = line_handle;
@@ -212,7 +212,7 @@ def makePlotCtrls(PLTS1,ins={}):
 
 
 def makePlotCtrls2(PLTS1,ins={}):
-    problem = ins['problem'];
+    trajopt_obj = ins['trajopt_obj'];
     data = ins['data'];
     versions = ins['versions'];
     NEWPENS = ins['PENS'];
@@ -331,8 +331,8 @@ def makePlotCtrls2(PLTS1,ins={}):
             ax = axs[j]; #state_plot_inds[j]];
 
             # #### hack for adding max value line... not that hacky anyway
-            umin = problem.mission.u_min[j]*(180/np.pi)
-            umax = problem.mission.u_max[j]*(180/np.pi)   
+            umin = trajopt_obj.mission.u_min[j]*(180/np.pi)
+            umax = trajopt_obj.mission.u_max[j]*(180/np.pi)   
             line_handle = ax.axhline(y=umin, xmin = 0, color=[0,0,0,0.7], linestyle='-', linewidth=1); # label=line_tag)
             line_handle = ax.axhline(y=umax, xmin = 0, color=[0,0,0,0.7], linestyle='-', linewidth=1); #, label=line_tag)
             # PLTS1.legends[lgnd][line_tag] = line_handle;
@@ -360,7 +360,7 @@ def makePlotCtrls2(PLTS1,ins={}):
 
 
 def makePlotTrajs(PLTS1,ins={}):
-    problem = ins['problem'];
+    trajopt_obj = ins['trajopt_obj'];
     data = ins['data'];
     versions = ins['versions'];
     NEWPENS = ins['PENS'];
@@ -529,9 +529,9 @@ def makePlotTrajs(PLTS1,ins={}):
         # ============================================================
         if show_nfzs:
             ax = axs[0]
-            mission = problem.mission; method = problem.method
+            mission = trajopt_obj.mission; method = trajopt_obj.method
             n_nfz = mission.n_nfz;
-            temp = problem.mission.zi[0];# - mission.planet['r']
+            temp = trajopt_obj.mission.zi[0];# - mission.planet['r']
             height = temp; #/ method.nondim['nd']
             # z_traj_max = np.max(z_opt[:, 2])
             # z_traj_min = np.min(z_opt[:, 2])
@@ -591,7 +591,7 @@ def makePlotTrajs(PLTS1,ins={}):
 
 # makePlot3(PLTS1,ins=plotparams);
 def makePlotStates(PLTS1,ins={}):
-    problem = ins['problem'];
+    trajopt_obj = ins['trajopt_obj'];
     data = ins['data'];
     versions = ins['versions'];
     NEWPENS = ins['PENS'];
@@ -730,7 +730,7 @@ def makePlotStates(PLTS1,ins={}):
 
 
 def makePlotLoads(PLTS1,ins={}):
-    problem = ins['problem'];
+    trajopt_obj = ins['trajopt_obj'];
     data = ins['data'];
     versions = ins['versions'];
     NEWPENS = ins['PENS'];
@@ -842,8 +842,8 @@ def makePlotLoads(PLTS1,ins={}):
 
             #### hack for adding max value line... not that hacky anyway
             line_tag = 'Max-Value'
-            maxval = problem.mission.path_limits[tag];
-            if tag == 'max_load': maxval = maxval/problem.mission.planet['g']
+            maxval = trajopt_obj.mission.path_limits[tag];
+            if tag == 'max_load': maxval = maxval/trajopt_obj.mission.planet['g']
             line_handle = ax.axhline(y=maxval, color=[0,0,0,0.7], linestyle='-', linewidth=1.5, label=line_tag)
             PLTS1.legends[lgnd][line_tag] = line_handle;
 
@@ -869,7 +869,7 @@ def makePlotLoads(PLTS1,ins={}):
 
 
 def makePlotWghts(PLTS1,ins={}):
-    problem = ins['problem'];
+    trajopt_obj = ins['trajopt_obj'];
     data = ins['data'];
     versions = ins['versions'];
     NEWPENS = ins['PENS'];
@@ -906,8 +906,8 @@ def makePlotWghts(PLTS1,ins={}):
     # 'W_plus', 'W_minus', -> the weird quadratic 1-norm 
     # 'dual_ineq', 'dual_term', 'dual_dyn', 'dual_plus', 'dual_minus', <- dual versions
     # weight_info = weights = 
-    nfz_inds = problem.indices.constraints.nonlinear_inequality['nfz'];
-    pth_inds = winds = problem.indices.constraints.nonlinear_inequality['path'];
+    nfz_inds = trajopt_obj.indices.constraints.nonlinear_inequality['nfz'];
+    pth_inds = winds = trajopt_obj.indices.constraints.nonlinear_inequality['path'];
     weight_info = [['W_ineq',nfz_inds],['dual_ineq',nfz_inds],['W_ineq',pth_inds],['dual_ineq',pth_inds]];
 
 
@@ -1010,7 +1010,7 @@ def makePlotWghts(PLTS1,ins={}):
 
 # makePlot6(PLTS1,ins=plotparams);
 def makePlotWghts2(PLTS1,ins={}):
-    problem = ins['problem'];
+    trajopt_obj = ins['trajopt_obj'];
     data = ins['data'];
     versions = ins['versions'];
     NEWPENS = ins['PENS'];
@@ -1048,8 +1048,8 @@ def makePlotWghts2(PLTS1,ins={}):
     # 'dual_ineq', 'dual_term', 'dual_dyn', 'dual_plus', 'dual_minus', <- dual versions
 
     # weight_info = weights = 
-    nfz_inds = problem.indices.constraints.nonlinear_inequality['nfz'];
-    pth_inds = problem.indices.constraints.nonlinear_inequality['path'];
+    nfz_inds = trajopt_obj.indices.constraints.nonlinear_inequality['nfz'];
+    pth_inds = trajopt_obj.indices.constraints.nonlinear_inequality['path'];
 
     # weight_info = [['W_ineq',nfz_inds],
     #             ['dual_ineq',nfz_inds],
@@ -1116,8 +1116,8 @@ def makePlotWghts2(PLTS1,ins={}):
                 
                 PLTS1.setCurrent({'scenarios':scenarios,'methods':[method],'runs':runs})
 
-                t_opt_len = problem.method.N; t_nl_len = int(t_opt_len * 20);
-                # t_nl_len = problem.method.Ndense
+                t_opt_len = trajopt_obj.method.N; t_nl_len = int(t_opt_len * 20);
+                # t_nl_len = trajopt_obj.method.Ndense
                 ttag = ['t_opt',list(range(t_opt_len))]; #[:-1]];
                 if version in ['standalone']: 
                     # params1 = {'label':'Initial guess','x':'t_opt','y':(weight,winds),'iters':[1],'legend':lgnd,'dataloc':'weights'};
@@ -1170,7 +1170,7 @@ def makePlotWghts2(PLTS1,ins={}):
 
 # makePlot6(PLTS1,ins=plotparams);
 def makePlotWghts3(PLTS1,ins={}):
-    problem = ins['problem'];
+    trajopt_obj = ins['trajopt_obj'];
     data = ins['data'];
     versions = ins['versions'];
     NEWPENS = ins['PENS'];
@@ -1209,8 +1209,8 @@ def makePlotWghts3(PLTS1,ins={}):
     # 'dual_ineq', 'dual_term', 'dual_dyn', 'dual_plus', 'dual_minus', <- dual versions
 
     # weight_info = weights = 
-    nfz_inds = problem.indices.constraints.nonlinear_inequality['nfz'];
-    pth_inds = problem.indices.constraints.nonlinear_inequality['path'];
+    nfz_inds = trajopt_obj.indices.constraints.nonlinear_inequality['nfz'];
+    pth_inds = trajopt_obj.indices.constraints.nonlinear_inequality['path'];
 
     # weight_info = [['W_ineq',nfz_inds],
     #             ['dual_ineq',nfz_inds],
@@ -1223,7 +1223,7 @@ def makePlotWghts3(PLTS1,ins={}):
     # buff_dyn_dual:      "none"    # 'l1', 'none'
     # ctcs:               'l2'  # 0, 1
     # ctcs_dual:          "none"   # 'l1', 'none'    
-    ctcs_idx = problem.indices.z['ctcs']
+    ctcs_idx = trajopt_obj.indices.z['ctcs']
     weight_info = [('W_dyn',ctcs_idx),('dual_dyn',ctcs_idx)];#'W_minus_ctcs','dual_plus_ctcs','dual_minus_ctcs'];
 
 
@@ -1275,8 +1275,8 @@ def makePlotWghts3(PLTS1,ins={}):
                 
                 PLTS1.setCurrent({'scenarios':scenarios,'methods':[method],'runs':runs})
 
-                t_opt_len = problem.method.N; t_nl_len = int(t_opt_len * 20);
-                # t_nl_len = problem.method.Ndense
+                t_opt_len = trajopt_obj.method.N; t_nl_len = int(t_opt_len * 20);
+                # t_nl_len = trajopt_obj.method.Ndense
                 if version in ['standalone']: 
                     ttag = ['t_opt',list(range(t_opt_len))]; #[:-1]];
                     # if j == 1: ttag = ['t_opt',list(range(t_opt_len))[:-1]]; #[:-1]];
@@ -1337,7 +1337,7 @@ def makePlotWghts3(PLTS1,ins={}):
 
 # makePlot6(PLTS1,ins=plotparams);
 def makePlotConvs(PLTS1,ins={}):
-    problem = ins['problem'];
+    trajopt_obj = ins['trajopt_obj'];
     data = ins['data'];
     versions = ins['versions'];
     NEWPENS = ins['PENS'];
@@ -1424,8 +1424,8 @@ def makePlotConvs(PLTS1,ins={}):
                         temp = data['scenario1']['autotune']['mc_data'][0]['iters'][2]['conv_data'];#['chk_feas_ineq'];#params']['method']['weights']['W_dyn'];
                         # ['w_cost', 'alpha_z', 'alpha_u', 'beta', 'gamma', 'eps_nonzero1',
                         #  'eps_nonzero2', 'wbuff', 'w_path_scale', 'w_custom_scale', 'w_nfz_scale',
-                        lenval = len(problem.method.subprob.iter_data)
-                        ydat = [problem.method.subprob.iter_data[ii]['conv_data'][tag] for ii in range(lenval)[1:]]; 
+                        lenval = len(trajopt_obj.method.subprob.iter_data)
+                        ydat = [trajopt_obj.method.subprob.iter_data[ii]['conv_data'][tag] for ii in range(lenval)[1:]]; 
                     #     params1 = {'label':method,'tinds':[-1],'y':(tag,sind),'iters':[1],'legend':lgnd,'dataloc':'convergence'};
                 #     PLTS1.addPlot2DIter(ax,pen=PENS['opt'] ,ins=params1); 
                 # if version == 'methods': pass
@@ -1454,7 +1454,7 @@ def makePlotConvs(PLTS1,ins={}):
 
 # makePlot6(PLTS1,ins=plotparams);
 def makePlotConvs2(PLTS1,ins={}):
-    problem = ins['problem'];
+    trajopt_obj = ins['trajopt_obj'];
     data = ins['data'];
     versions = ins['versions'];
     NEWPENS = ins['PENS'];

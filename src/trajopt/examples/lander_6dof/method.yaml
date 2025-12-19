@@ -13,7 +13,7 @@ flags:
   nondim:             1       # 0, 1
   jax_dyn:            1       # 0, 1
   flag_conv:          1       # 0, 1, 2
-  ignore_dpp:         1       # number of parameters is too large for this problem, need to look into this
+  ignore_dpp:         1       # number of parameters is too large for this trajopt_obj, need to look into this
 
   flag_path:    1.0
   flag_nfz:     1.0

@@ -3,15 +3,15 @@ import numpy as np
 import trajopt.utils.tools                      as tools
 import trajopt.core.modules.models.obstacles    as obstacles
 
-def system_dynamics(t, z, nu, problem, t_vec=None):
+def system_dynamics(t, z, nu, trajopt_obj, t_vec=None):
     """
     x1, x2: r (position)
     u1, u2: v (velocity)
     """
-    # extracts params if "problem" parent struct is passed in
-    mission = problem.mission
-    model = problem.model
-    method = problem.method
+    # extracts params if 'trajopt_obj' parent struct is passed in
+    mission = trajopt_obj.mission
+    model = trajopt_obj.model
+    method = trajopt_obj.method
 
     # extract constant param values
     m       = model.m
@@ -45,11 +45,11 @@ def system_dynamics(t, z, nu, problem, t_vec=None):
         
     return xDot
 
-def analytical_linsys(t, z, nu, problem):
+def analytical_linsys(t, z, nu, trajopt_obj):
 
-    mission = problem.mission
-    model = problem.model
-    method = problem.method
+    mission = trajopt_obj.mission
+    model = trajopt_obj.model
+    method = trajopt_obj.method
     
     # Extract parameters
 
@@ -78,7 +78,7 @@ def analytical_linsys(t, z, nu, problem):
     ]) * (1.0 / mass)
 
     # Evaluate nonlinear dynamics
-    fc = system_dynamics(t, z, nu, problem)
+    fc = system_dynamics(t, z, nu, trajopt_obj)
 
     # Return in dictionary format
     linsys = {
@@ -89,7 +89,7 @@ def analytical_linsys(t, z, nu, problem):
 
     return linsys
 
-def nonlinear_inequality_constraints(t, z, nu, problem):
+def nonlinear_inequality_constraints(t, z, nu, trajopt_obj):
     N = tools.num_timesteps(z)
     P_blocks = []
 
@@ -98,21 +98,21 @@ def nonlinear_inequality_constraints(t, z, nu, problem):
     P_blocks.append(P_path)
 
     # add NFZ block
-    P_blocks.append(obstacles.nfz_nonlinear(t, z, nu, problem))
+    P_blocks.append(obstacles.nfz_nonlinear(t, z, nu, trajopt_obj))
 
     # stack all constraint blocks horizontally
     P = np.hstack([P for P in P_blocks if P.size > 0])
 
     return P
 
-def analytical_inequality_constraints(t, z, nu, problem):
+def analytical_inequality_constraints(t, z, nu, trajopt_obj):
     N = tools.num_timesteps(z)
-    model = problem.model
+    model = trajopt_obj.model
     n = model.n
     m = model.m
 
     # NFZ block
-    nfz = obstacles.nfz_analytical(t, z, nu, problem)
+    nfz = obstacles.nfz_analytical(t, z, nu, trajopt_obj)
 
     # preallocate total constraint arrays
     fcn_all   = nfz["fcn"]

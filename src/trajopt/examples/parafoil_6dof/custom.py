@@ -5,22 +5,22 @@ import trajopt.utils.tools                      as tools
 # MISSION
 # ===============================================================
 
-def cost2(t, z, nu, problem):
+def cost2(t, z, nu, trajopt_obj):
     return np.dot(np.transpose(nu), nu)
 
 # ===============================================================
 # MODEL
 # ===============================================================
 
-def dynamics(t, z, nu, problem, t_vec=None):
+def dynamics(t, z, nu, trajopt_obj, t_vec=None):
     """
     x1, x2: r (position)
     u1, u2: v (velocity)
     """
-    # extracts params if "problem" parent struct is passed in
-    mission = problem.mission
-    model = problem.model
-    method = problem.method
+    # extracts params if 'trajopt_obj' parent struct is passed in
+    mission = trajopt_obj.mission
+    model = trajopt_obj.model
+    method = trajopt_obj.method
 
     # extract constant param values
     m       = model.m

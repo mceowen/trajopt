@@ -1,14 +1,14 @@
 import numpy as np
 import cvxpy as cp
 
-def configure_penalty_weights(problem):
+def configure_penalty_weights(trajopt_obj):
     """
     Configure all scalar and matrix weights for the optimization method,
     using YAML-defined parameters under method.weights.
     """
 
-    mission, model, method  = problem.mission, problem.model, problem.method
-    indices = problem.indices
+    mission, model, method  = trajopt_obj.mission, trajopt_obj.model, trajopt_obj.method
+    indices = trajopt_obj.indices
 
     # --- Default weights ---
     n_ineq = mission.n_path + mission.n_nfz + mission.n_custom
@@ -183,9 +183,9 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
         • real dynamics  (buff_dyn flag)
         • CTCS dynamics  (ctcs flag)
     """
-    problem = subprob.problem
-    method  = problem.method
-    model   = problem.model
+    trajopt_obj = subprob.trajopt_obj
+    method  = trajopt_obj.method
+    model   = trajopt_obj.model
 
     N      = subprob.N
     n      = model.n
@@ -322,7 +322,7 @@ def build_dual_buffer_cost(subprob) -> cp.Expression:
     Dual penalty term DUAL for inequality constraints, dynamic buffers,
     and aggregate quadratic-buffer (quad-1, quad-2) modes.
     """
-    method = subprob.problem.method
+    method = subprob.trajopt_obj.method
     mode_real     = method.flags["buff_dyn"]        # {'none','term','l1','l2','quad-1','quad-2','quad-3'}
     mode_real_dual = method.flags["buff_dyn_dual"]  # MATLAB: buff_dyn_dual
     mode_ctcs     = method.flags["ctcs"]            # {'none','term','l1','l2','quad-1','quad-2','quad-3'}
@@ -405,12 +405,12 @@ def build_dual_buffer_cost(subprob) -> cp.Expression:
 
 # -------------- AUTOTUNING SCHEMES ----------------------------------------------------------------------------------------
 
-def autotune1(problem, iter_record):
+def autotune1(trajopt_obj, iter_record):
     """
     Unified version of autotune1 including dual_plus and dual_minus.
     Works with stacked inequality and dynamic buffer system.
     """
-    mission, model, method  = problem.mission, problem.model, problem.method
+    mission, model, method  = trajopt_obj.mission, trajopt_obj.model, trajopt_obj.method
 
     # Iteration number
     iter_num = iter_record["iter_num"]
@@ -534,11 +534,11 @@ def autotune1(problem, iter_record):
     return iter_record
 
 
-def autotune2(problem, iter_record):
+def autotune2(trajopt_obj, iter_record):
     """
     Unified stacked-inequality version of autotune2.
     """
-    mission, model, method  = problem.mission, problem.model, problem.method
+    mission, model, method  = trajopt_obj.mission, trajopt_obj.model, trajopt_obj.method
     
     # Extract variables from local_vars
     N = method.N
@@ -579,8 +579,8 @@ def autotune2(problem, iter_record):
     Wh_plus_ctcs  = np.zeros((method.Npm_ctcs, method.n_plus_ctcs))
     Wh_minus_ctcs = np.zeros((method.Npm_ctcs, method.n_minus_ctcs))
 
-    z_state_idx = problem.indices.z["state"]
-    z_ctcs_idx = problem.indices.z["ctcs"]
+    z_state_idx = trajopt_obj.indices.z["state"]
+    z_ctcs_idx = trajopt_obj.indices.z["ctcs"]
 
     # ==========================================
     # COMPUTE AUTOTUNE UPDATES
@@ -688,8 +688,8 @@ def autotune2(problem, iter_record):
     return iter_record
 
 
-def autotune3(problem, iter_record):
-    iter_record = autotune1(problem, iter_record)
-    iter_record = autotune2(problem, iter_record)
+def autotune3(trajopt_obj, iter_record):
+    iter_record = autotune1(trajopt_obj, iter_record)
+    iter_record = autotune2(trajopt_obj, iter_record)
 
     return iter_record

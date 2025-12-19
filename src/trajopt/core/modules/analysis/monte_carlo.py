@@ -1,7 +1,7 @@
 import trajopt.utils.config_loader as cfg
 import numpy as np
 import copy
-import trajopt.core.problem as prob
+import trajopt.core.trajopt_obj as traj
 import trajopt.core.modules.method.scp as scp
 import trajopt.analysis.default_analysis as default_analysis
 import trajopt.utils.tools as tools
@@ -52,22 +52,22 @@ def run_mc_analysis(example_name, nominal_config, gen_mc_variations=1, save_mc_v
             # set monte carlo mission variations
             add_monte_carlo_dispersions(run_config["mission"], realization)
 
-            # create problem instance
-            problem = prob.Problem(run_config, cached_subprob)
+            # create trajopt_obj instance
+            trajopt_obj = traj.Problem(run_config, cached_subprob)
             
             # run SCP
-            problem = scp.run_scp(problem)
+            trajopt_obj = scp.run_scp(trajopt_obj)
 
             # perform default analysis on this mc run and store related params
-            scenario_data[name]["mc_data"][run_idx] = default_analysis.perform_default_analysis(problem)
+            scenario_data[name]["mc_data"][run_idx] = default_analysis.perform_default_analysis(trajopt_obj)
 
             # store total time for scp (used to calculate time to converge)
-            scenario_data[name]['mc_data'][run_idx]['t_full'] = problem.solution['t_full']
+            scenario_data[name]['mc_data'][run_idx]['t_full'] = trajopt_obj.solution['t_full']
             
             # cache subproblem graph to speed up solves
-            cached_subprob = None # problem.method.subprob
+            cached_subprob = None # trajopt_obj.method.subprob
 
     if save_scenario_data:
         np.save(f"data/scenario_data/{example_name}_{mc_name}", scenario_data)
 
-    return scenario_data, problem
+    return scenario_data, trajopt_obj

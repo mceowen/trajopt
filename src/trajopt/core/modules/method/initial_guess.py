@@ -6,7 +6,7 @@ import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 import time
 
-def rk4_propagate_jax(dynamics, z0, nu_ref, t_ref, problem):
+def rk4_propagate_jax(dynamics, z0, nu_ref, t_ref, trajopt_obj):
 
     time0 = time.perf_counter()
 
@@ -54,7 +54,7 @@ def rk4_propagate_jax(dynamics, z0, nu_ref, t_ref, problem):
 
     return z_numpy
 
-def straight_line_initial_guess(problem):
+def straight_line_initial_guess(trajopt_obj):
     """
     Generate a straight line initial guess for trajectory and control.
 
@@ -64,9 +64,9 @@ def straight_line_initial_guess(problem):
     Returns:
     dict: Updated params with initial guesses for trajectory and control.
     """
-    mission = problem.mission
-    model = problem.model
-    method = problem.method
+    mission = trajopt_obj.mission
+    model = trajopt_obj.model
+    method = trajopt_obj.method
 
 
     # Initialization trajectory
@@ -86,7 +86,7 @@ def straight_line_initial_guess(problem):
     method.z_init   = z_init
     method.nu_init   = nu_init
 
-def waypoint_initial_guess(problem):
+def waypoint_initial_guess(trajopt_obj):
     """
     Generate an initial guess for trajectory and control using waypoints.
 
@@ -97,9 +97,9 @@ def waypoint_initial_guess(problem):
     dict: Updated params with initial guesses for trajectory and control.
     """
 
-    mission = problem.mission
-    model = problem.model
-    method = problem.method
+    mission = trajopt_obj.mission
+    model = trajopt_obj.model
+    method = trajopt_obj.method
 
     # Initialization trajectory
     method.dt_init   = (method.T_init / (method.N - 1)) * np.ones(method.N - 1)
@@ -150,7 +150,7 @@ def waypoint_initial_guess(problem):
     method.nu_init   = nu_init
 
 
-def nonlinear_initial_guess(nu_range, problem):
+def nonlinear_initial_guess(nu_range, trajopt_obj):
     """
     Generate a nonlinear initial guess for trajectory and control.
 
@@ -162,9 +162,9 @@ def nonlinear_initial_guess(nu_range, problem):
         dict: Updated params with initial guesses (z_init: N×n, nu_init: N×m)
     """
 
-    mission = problem.mission
-    model = problem.model
-    method = problem.method
+    mission = trajopt_obj.mission
+    model = trajopt_obj.model
+    method = trajopt_obj.method
 
     # ---- Time grid initialization ----
     method.dt_init = (method.T_init / (method.N - 1)) * np.ones(method.N - 1)
@@ -193,7 +193,7 @@ def nonlinear_initial_guess(nu_range, problem):
             mission.zi_guess,
             nu_init,
             t_init,
-            problem
+            trajopt_obj
         )
     else:
         # Wrapper that does FOH interpolation before calling dynamics
@@ -219,7 +219,7 @@ def nonlinear_initial_guess(nu_range, problem):
     method.nu_init = nu_init
 
 
-def ctcs_initial_guess(problem):
+def ctcs_initial_guess(trajopt_obj):
     """
     Initialize the guess for the constrained trajectory control system (CTCS).
 
@@ -230,8 +230,8 @@ def ctcs_initial_guess(problem):
     dict: Updated params with initial guesses for the state vector.
     """
     
-    mission = problem.mission
-    method = problem.method
+    mission = trajopt_obj.mission
+    method = trajopt_obj.method
     # Extend z_init with zeros for the inequality constraints
 
     ctcs_init = np.zeros((method.z_init.shape[0], mission.n_ineq))

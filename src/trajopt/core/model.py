@@ -9,9 +9,9 @@ import trajopt.core.modules.method.convexify as convexify
 
 class Model:
 
-    def __init__(self, problem, config):
+    def __init__(self, trajopt_obj, config):
 
-        self.problem = problem
+        self.trajopt_obj = trajopt_obj
 
         # ===============================================================
         # load config parameters
@@ -97,19 +97,19 @@ class Model:
     # updated nondim will look like this, i commented it out to keep compatibility with old code
     # def dynamics(self, t, z, nu):
 
-    #     method = self.problem.method
+    #     method = self.trajopt_obj.method
 
     #     t_dim = method.nondim["nt"] * t
     #     z_dim = method.nondim["M"]["state"]["nd2d"] @ z
     #     nu_dim = method.nondim["M"]["ctrl"]["nd2d"] @ nu
 
-    #     x_dot_dim = self._dynamics(t_dim, z_dim, nu_dim, self.problem)
+    #     x_dot_dim = self._dynamics(t_dim, z_dim, nu_dim, self.trajopt_obj)
 
     #     return method.nondim["M"]["dyn"]["d2nd"] @ x_dot_dim
 
     def dynamics(self, t, z, nu):
 
-        return self._dynamics(t, z, nu, self.problem)
+        return self._dynamics(t, z, nu, self.trajopt_obj)
     
     def update_model_params(self):
         """
@@ -117,9 +117,9 @@ class Model:
         Uses custom_modules from YAML config if specified, otherwise uses base model.
         """
 
-        problem = self.problem
-        method = problem.method
-        mission = problem.mission
+        trajopt_obj = self.trajopt_obj
+        method = trajopt_obj.method
+        mission = trajopt_obj.mission
         base_mod = self.model_module
 
         # Load YAML custom module mappings if present
@@ -155,13 +155,13 @@ class Model:
         # ------------------------------------------------------------
         if method.flags.get("jax_dyn", 0):
 
-            f, dfcn_dz, dfcn_du = convexify.linearize_jax(self._dynamics, problem)
+            f, dfcn_dz, dfcn_du = convexify.linearize_jax(self._dynamics, trajopt_obj)
 
             def lin_dyn(t, z, nu):
                 return f(z, nu), dfcn_dz(z, nu), dfcn_du(z, nu)
 
             if method.flags["ctcs"] != "none":
-                f_ctcs, dfcn_dz_ctcs, dfcn_du_ctcs = convexify.linearize_jax_ctcs(self._dynamics, problem)
+                f_ctcs, dfcn_dz_ctcs, dfcn_du_ctcs = convexify.linearize_jax_ctcs(self._dynamics, trajopt_obj)
 
                 def lin_dyn_ctcs(t, z, nu):
                     return f_ctcs(z, nu), dfcn_dz_ctcs(z, nu), dfcn_du_ctcs(z, nu)
@@ -172,6 +172,6 @@ class Model:
             _lin_dyn = _resolve_function("analytical_linsys")
 
             def lin_dyn(t, z, nu):
-                return _lin_dyn(t, z, nu, problem)
+                return _lin_dyn(t, z, nu, trajopt_obj)
 
         self.lin_dyn = lin_dyn

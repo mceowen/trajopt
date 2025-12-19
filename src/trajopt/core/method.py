@@ -8,9 +8,9 @@ from trajopt.core.modules.method    import integrators
 
 class Method:
 
-    def __init__(self, problem, config):
+    def __init__(self, trajopt_obj, config):
 
-        self.problem = problem
+        self.trajopt_obj = trajopt_obj
 
         # ===============================================================
         # load config params
@@ -44,9 +44,9 @@ class Method:
         # will probably point to discretize, convergence, subprob functions etc
 
     def get_initial_guess(self):
-        problem = self.problem
-        mission = problem.mission
-        model   = problem.model
+        trajopt_obj = self.trajopt_obj
+        mission = trajopt_obj.mission
+        model   = trajopt_obj.model
 
         self.nl_guess_u_start = self.nondim["M"]["ctrl"]["d2nd"] @ self.nl_guess_u_start
         self.nl_guess_u_stop  = self.nondim["M"]["ctrl"]["d2nd"] @ self.nl_guess_u_stop
@@ -55,27 +55,27 @@ class Method:
 
         if self.flags["dynamics_nonconvex"] and (self.flags.get("buff_dyn")=="term"):
             nu_range = np.vstack([self.nl_guess_u_start, self.nl_guess_u_stop])
-            guess.nonlinear_initial_guess(nu_range, problem)
+            guess.nonlinear_initial_guess(nu_range, trajopt_obj)
         else:
-            guess.straight_line_initial_guess(problem)
+            guess.straight_line_initial_guess(trajopt_obj)
             self.nu_init = self.line_guess_u_init
 
         if self.flags["ctcs"] != "none":
-            guess.ctcs_initial_guess(problem)
+            guess.ctcs_initial_guess(trajopt_obj)
 
-        self.cost_init = discretize.compute_linearized_costs(self.t_init, self.z_init, self.nu_init, problem)[0].sum().item()
+        self.cost_init = discretize.compute_linearized_costs(self.t_init, self.z_init, self.nu_init, trajopt_obj)[0].sum().item()
 
         print(f"Cost initial: {self.cost_init}")
 
     def update_method_params(self):
-        problem = self.problem
-        mission = problem.mission
-        model   = problem.model
+        trajopt_obj = self.trajopt_obj
+        mission = trajopt_obj.mission
+        model   = trajopt_obj.model
 
         # precompile discretize functions for jax
         if self.flags['jax_dyn'] == 1:
-            discretize.jit_jax_discretize(problem)
-            integrators.jit_rk4_jax_dense(problem)
+            discretize.jit_jax_discretize(trajopt_obj)
+            integrators.jit_rk4_jax_dense(trajopt_obj)
 
         buff_dyn = str(self.flags.get("buff_dyn", "term"))
 
@@ -137,9 +137,9 @@ class Method:
         self.nondim["M"]["term"]["d2nd"] = np.diag(M_term_diag)
 
         # --- LTV indexing ---
-        discretize.set_ltv_indices(problem)
+        discretize.set_ltv_indices(trajopt_obj)
 
-        hyperparameters.configure_penalty_weights(problem)
+        hyperparameters.configure_penalty_weights(trajopt_obj)
 
         # ### NFZ convergence values ###
         if mission.n_nfz > 0:
@@ -156,4 +156,4 @@ class Method:
         self.conv_data["vb_term"] = np.zeros(model.nz)
 
         ### Configure generic convergence criterion and max iterations ###
-        convergence.set_convergence_tolerance(problem)
+        convergence.set_convergence_tolerance(trajopt_obj)

@@ -47,10 +47,10 @@ def cr(v):
 # dynamics
 # =============================================================================
 
-def dynamics_jax(t, z, nu, problem):
+def dynamics_jax(t, z, nu, trajopt_obj):
         
-        mission = problem.mission
-        model = problem.model
+        mission = trajopt_obj.mission
+        model = trajopt_obj.model
 
         veh = mission.vehicle
 

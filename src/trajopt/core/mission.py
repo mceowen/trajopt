@@ -9,9 +9,9 @@ import trajopt.core.modules.model.constraints as constraints_module
 import trajopt.core.modules.model.costs as costs_module
 
 class Mission:
-    def __init__(self, problem, config):
+    def __init__(self, trajopt_obj, config):
 
-        self.problem = problem
+        self.trajopt_obj = trajopt_obj
 
         # ===============================================================
         # load dimensional config parameters
@@ -47,19 +47,19 @@ class Mission:
     # ===============================================================
     
     def nonlinear_aero(self, t, z, nu):
-        return self._nonlinear_aero(t, z, nu, self.problem)
+        return self._nonlinear_aero(t, z, nu, self.trajopt_obj)
 
-    def custom_constraints(self, subproblem):
-        return self._custom_constraints(subproblem)
+    def custom_constraints(self, subtrajopt_obj):
+        return self._custom_constraints(subtrajopt_obj)
 
-    def custom_cost(self, subproblem):
-        return self._custom_cost(subproblem)
+    def custom_cost(self, subtrajopt_obj):
+        return self._custom_cost(subtrajopt_obj)
     
     def get_cost_cnstr_nondim(self):
-        return self._get_cost_cnstr_nondim(self.problem)
+        return self._get_cost_cnstr_nondim(self.trajopt_obj)
         
     def set_custom_params(self):
-        return self._set_custom_params(self.problem)
+        return self._set_custom_params(self.trajopt_obj)
 
     # ===============================================================
     # UPDATE PARAMETERS
@@ -69,9 +69,9 @@ class Mission:
         Attach mission functions for costs and constraints.
         Uses custom_modules from YAML config if specified, otherwise uses base mission.
         """
-        model = self.problem.model
-        method = self.problem.method
-        problem = self.problem
+        model = self.trajopt_obj.model
+        method = self.trajopt_obj.method
+        trajopt_obj = self.trajopt_obj
 
         # Load YAML custom module mappings if present
         if self.custom_modules:
@@ -103,7 +103,7 @@ class Mission:
         for cost_config in self.cost_config_list:
             self.costs.append(Cost(yaml_config=cost_config))
 
-        convexify.convexify_costs(problem)
+        convexify.convexify_costs(trajopt_obj)
 
         # ------------------------------------------------------------
         # Aerodynamics

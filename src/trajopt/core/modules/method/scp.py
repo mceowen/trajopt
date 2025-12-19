@@ -23,9 +23,9 @@ from trajopt.utils import tools
 # =====================================================================================
 # Public API: full Sequential Convex Programming (SCP) loop with DPP reuse
 # =====================================================================================
-def run_scp(problem):
+def run_scp(trajopt_obj):
     """
-    Run the full Sequential Convex Programming (SCP) loop for a given problem.
+    Run the full Sequential Convex Programming (SCP) loop for a given trajopt_obj.
 
     Subproblem maintains iteration history internally:
       - subprob.iter_data[0]: initialization inputs only
@@ -36,26 +36,26 @@ def run_scp(problem):
     time_start = time.perf_counter()
 
     # Get or create the compiled Subproblem (DPP)
-    subprob: Optional[Subproblem] = getattr(problem.method, "subprob", None)
+    subprob: Optional[Subtrajopt_obj] = getattr(trajopt_obj.method, "subprob", None)
     if subprob is None:
-        subprob = Subproblem(problem)
-        problem.method.subprob = subprob
+        subprob = Subproblem(trajopt_obj)
+        trajopt_obj.method.subprob = subprob
 
     # START SUBPROBLEM CONSTRUCTION / HEADER
     print("-" * 152)
-    print(f"                                              ..:: {problem.mission.name}: PTR with Virtual Buffer ::..")
+    print(f"                                              ..:: {trajopt_obj.mission.name}: PTR with Virtual Buffer ::..")
     print("-" * 152)
     print("  Iteration |  Propagation |   Solve   |    Parse   |  log(dz)  |      log(VB)    |   log(VB)   |  log(VB)    | Solve status |  Time of    |   Cost    ")
     print("            |   time [ms]  | time [ms] |  time [ms] |           |  (path + NFZ)   |  (terminal) |  (dynamics) |              |  Flight [s] |           ")
     print("-" * 152)
 
-    max_iter = int(problem.method.conv["iter_max"])
+    max_iter = int(trajopt_obj.method.conv["iter_max"])
 
     for _ in range(max_iter + 1):
         subprob.solve_iteration()  # appends a new unified record for this iteration
 
         latest = subprob.iter_data[-1]
-        display_subprob_status(problem, latest)
+        display_subprob_status(trajopt_obj, latest)
 
         if latest.get("converged", False):
             print("Terminated from convergence criteria!")
@@ -64,12 +64,12 @@ def run_scp(problem):
     if not subprob.iter_data[-1].get("converged", False):
         print("Terminated from hitting maximum iterations!")
 
-    problem.solution = problem.method.subprob.iter_data[-1]
+    trajopt_obj.solution = trajopt_obj.method.subprob.iter_data[-1]
 
     # Save off convergence time (full time - parse time)
-    problem.solution['t_full'] = time.perf_counter() - time_start
+    trajopt_obj.solution['t_full'] = time.perf_counter() - time_start
 
-    return problem
+    return trajopt_obj
 
 
 # ===================================
@@ -95,11 +95,11 @@ class Subproblem:
     """Reusable convex SCP with full baseline functionality & DPP updates.
     """
 
-    def __init__(self, problem) -> None:
-        self.problem = problem
-        mission = self.problem.mission
-        model   = self.problem.model
-        method  = self.problem.method
+    def __init__(self, trajopt_obj) -> None:
+        self.trajopt_obj = trajopt_obj
+        mission = self.trajopt_obj.mission
+        model   = self.trajopt_obj.model
+        method  = self.trajopt_obj.method
 
         # derive canonical sizes for quick reuse
         self.N                  = int(method.N)
@@ -152,9 +152,9 @@ class Subproblem:
         mission.custom_cost(self)
 
         # Compile CVXPY problem once
-        self.subproblem = cp.Problem(cp.Minimize(self.cost_expr), self.constraints)
+        self.subtrajopt_obj = cp.Problem(cp.Minimize(self.cost_expr), self.constraints)
 
-        total_param_scalars = sum(p.size for p in self.subproblem.parameters())
+        total_param_scalars = sum(p.size for p in self.subtrajopt_obj.parameters())
         print(f"total number of parameters: {total_param_scalars}")
 
         # --------------------------
@@ -162,23 +162,23 @@ class Subproblem:
         # --------------------------
         self.iter_data: List[Dict[str, Any]] = [{
             "iter_num": 0,  # init only (no outputs yet)
-            "z_ref": problem.method.z_init,
-            "nu_ref": problem.method.nu_init,
-            "dt_ref": problem.method.dt_init,
-            "t_ref": problem.method.t_init,
+            "z_ref": trajopt_obj.method.z_init,
+            "nu_ref": trajopt_obj.method.nu_init,
+            "dt_ref": trajopt_obj.method.dt_init,
+            "t_ref": trajopt_obj.method.t_init,
             "conv_data": {
                 "vb_ineq": np.zeros((self.N, mission.n_ineq)),
                 "vb_dyn":  np.zeros((self.N - 1, self.n_dyn)),
                 "vb_term": np.zeros((mission.n_term+mission.n_term_ineq+mission.n_term_ctcs, 1)),
             },
-            "weights": copy.deepcopy(problem.method.weights),
+            "weights": copy.deepcopy(trajopt_obj.method.weights),
         }]
 
     # ============================================================
     # VARIABLE & PARAMETER CREATION
     # ============================================================
     def _create_variables(self) -> None:
-        mission, model, method = self.problem.mission, self.problem.model, self.problem.method
+        mission, model, method = self.trajopt_obj.mission, self.trajopt_obj.model, self.trajopt_obj.method
         N, n, m, nz, n_ctcs = self.N, self.n, self.m, self.nz, self.n_ctcs
 
         # Core optimization variables
@@ -278,7 +278,7 @@ class Subproblem:
         self.vb_minus_ctcs = cp.Variable((self.Npm_ctcs, self.n_minus_ctcs), name="vb_minus_ctcs") if self.n_minus_ctcs > 0 else None
 
     def _create_parameters(self) -> None:
-        mission, model, method = self.problem.mission, self.problem.model, self.problem.method
+        mission, model, method = self.trajopt_obj.mission, self.trajopt_obj.model, self.trajopt_obj.method
         N, n, m, nz = self.N, self.n, self.m, self.nz
 
         # Linearized dynamics & trajectory references
@@ -379,8 +379,8 @@ class Subproblem:
     # CONSTRAINTS (build-once)
     # ============================================================
     def _build_constraints_once(self) -> None:
-        mission, model, method  = self.problem.mission, self.problem.model, self.problem.method
-        indices = self.problem.indices
+        mission, model, method  = self.trajopt_obj.mission, self.trajopt_obj.model, self.trajopt_obj.method
+        indices = self.trajopt_obj.indices
         N, n, m, nz, n_ctcs     = self.N, self.n, self.m, self.nz, self.n_ctcs
 
         C: List[cp.Constraint] = []
@@ -588,7 +588,7 @@ class Subproblem:
     # COST FUNCTION (DCP-safe)
     # ============================================================
     def _build_cost_once(self) -> cp.Expression:
-        mission, model, method = self.problem.mission, self.problem.model, self.problem.method
+        mission, model, method = self.trajopt_obj.mission, self.trajopt_obj.model, self.trajopt_obj.method
         """Full baseline cost: TRUE + TR + 0.5*VIRTUAL + DUAL; gated via flags & autotune."""
 
         # === TRUE cost (linearized objective) ===
@@ -637,7 +637,7 @@ class Subproblem:
                 "dt_ref": last_rec["dt_opt"],
                 "t_ref": last_rec["t_opt"],
             }
-            weights = copy.deepcopy(last_rec.get("weights", self.problem.method.weights))
+            weights = copy.deepcopy(last_rec.get("weights", self.trajopt_obj.method.weights))
             conv_data = last_rec.get("conv_data", {})
         else:
             refs = {
@@ -646,7 +646,7 @@ class Subproblem:
                 "dt_ref": last_rec["dt_ref"],
                 "t_ref": last_rec["t_ref"],
             }
-            weights = last_rec.get("weights", self.problem.method.weights)
+            weights = last_rec.get("weights", self.trajopt_obj.method.weights)
             conv_data = last_rec.get("conv_data", {})
 
         next_inputs = {
@@ -658,18 +658,18 @@ class Subproblem:
         return next_inputs
 
     def _load_parameters(self, inputs: Dict[str, Any]) -> float:
-        mission, model, method = self.problem.mission, self.problem.model, self.problem.method
+        mission, model, method = self.trajopt_obj.mission, self.trajopt_obj.model, self.trajopt_obj.method
 
         start = time.time()
         Ak, Bk, Bkp, Sk, z_minus = discretize.compute_linsys_discrete(
-            inputs["z_ref"], inputs["nu_ref"], inputs["dt_ref"], self.problem
+            inputs["z_ref"], inputs["nu_ref"], inputs["dt_ref"], self.trajopt_obj
         )
         prop_time_ms = (time.time() - start) * 1000.0
 
         # compute linearized terminal and running costs
-        cost, dcostdz, dcostdnu = discretize.compute_linearized_costs(inputs["t_ref"], inputs["z_ref"], inputs["nu_ref"], self.problem)
+        cost, dcostdz, dcostdnu = discretize.compute_linearized_costs(inputs["t_ref"], inputs["z_ref"], inputs["nu_ref"], self.trajopt_obj)
 
-        g, dgdz, dgdnu = discretize.compute_nodal_inequality_constraints(inputs["t_ref"], inputs["z_ref"], inputs["nu_ref"], self.problem)
+        g, dgdz, dgdnu = discretize.compute_nodal_inequality_constraints(inputs["t_ref"], inputs["z_ref"], inputs["nu_ref"], self.trajopt_obj)
 
         # Dynamics & references
         self._set_param(self.Ak,   Ak)
@@ -747,7 +747,7 @@ class Subproblem:
 
 
         # ctcs eps
-        self.eps_ctcs.value = float(self.problem.method.conv["eps_ctcs"])
+        self.eps_ctcs.value = float(self.trajopt_obj.method.conv["eps_ctcs"])
 
         # cache for optional debug
         inputs["_linsys_cache"] = (Ak, Bk, Bkp, Sk, z_minus)
@@ -768,22 +768,22 @@ class Subproblem:
         prop_time_ms = self._load_parameters(input_for_iter)
 
         # Solve subproblem
-        solver_name = self.problem.method.solver_opts.get("solver", "ECOS")
-        ignore_dpp = self.problem.method.flags.get("ignore_dpp", False)
-        self.subproblem.solve(solver=solver_name, warm_start=True, ignore_dpp=ignore_dpp)  # ignore_dpp=True if desired
+        solver_name = self.trajopt_obj.method.solver_opts.get("solver", "ECOS")
+        ignore_dpp = self.trajopt_obj.method.flags.get("ignore_dpp", False)
+        self.subtrajopt_obj.solve(solver=solver_name, warm_start=True, ignore_dpp=ignore_dpp)  # ignore_dpp=True if desired
 
         # Create unified record for this iteration and append
         iter_record = self._load_outputs(input_for_iter, prop_time_ms)
         # TODO: UNCOMMENT CONVERGENCE CHECK
-        iter_record = convergence.check_convergence_tolerance(self.problem, self, iter_record)
-        iter_record = baseline_autotune(self.problem, iter_record)
+        iter_record = convergence.check_convergence_tolerance(self.trajopt_obj, self, iter_record)
+        iter_record = baseline_autotune(self.trajopt_obj, iter_record)
         self.iter_data.append(iter_record)
 
     # ============================================================
     # OUTPUT PACKING (UNIFIED RECORD)
     # ============================================================
     def _load_outputs(self, input_for_iter: Dict[str, Any], prop_time_ms: float) -> Dict[str, Any]:
-        mission, model, method = self.problem.mission, self.problem.model, self.problem.method
+        mission, model, method = self.trajopt_obj.mission, self.trajopt_obj.model, self.trajopt_obj.method
         N, n, m = self.N, self.n, self.m
 
         dz_val, dnu_val = self.dz.value, self.dnu.value
@@ -793,14 +793,14 @@ class Subproblem:
         rec["subprob"] = self.subproblem
 
         if self.subproblem is not None:
-            compilation_time = getattr(self.subproblem, "compilation_time", None)
+            compilation_time = getattr(self.subtrajopt_obj, "compilation_time", None)
             rec["parse_time"] = float(compilation_time or 0.0) * 1000.0
         else:
             rec["parse_time"] = None
         
 
-        if self.subproblem.solver_stats is not None:
-            solve_time = getattr(self.subproblem.solver_stats, "solve_time", None)
+        if self.subtrajopt_obj.solver_stats is not None:
+            solve_time = getattr(self.subtrajopt_obj.solver_stats, "solve_time", None)
             rec["solve_time"] = float(solve_time or 0.0) * 1000.0
         else:
             rec["solve_time"] = None
@@ -826,10 +826,10 @@ class Subproblem:
         rec["Sk"]  = self.Sk.value if Sk is None else Sk
 
         # Path residuals and reference cost
-        g, _, _ = discretize.compute_nodal_inequality_constraints(rec["t_opt"], rec["z_opt"], rec["nu_opt"], self.problem)
+        g, _, _ = discretize.compute_nodal_inequality_constraints(rec["t_opt"], rec["z_opt"], rec["nu_opt"], self.trajopt_obj)
 
         rec["cnst_path"] = g
-        rec["cost"]      = discretize.compute_linearized_costs(rec["t_opt"], rec["z_opt"], rec["nu_opt"], self.problem)[0].sum().item()
+        rec["cost"]      = discretize.compute_linearized_costs(rec["t_opt"], rec["z_opt"], rec["nu_opt"], self.trajopt_obj)[0].sum().item()
  
         # Convergence data (buffers, defects, TR cost, ref cost)
         conv = {}
@@ -844,7 +844,7 @@ class Subproblem:
         conv["defect"]  = tools.safe_val(self.dz, rows=N, cols=n) + input_for_iter["z_ref"] - self.z_m.value
         conv["Jtr"]     = ( float(self.wtr_z.value) * np.sum(tools.safe_val(self.dz, rows=N, cols=n)**2)
                           + float(self.wtr_u.value) * np.sum(tools.safe_val(self.dnu, rows=N, cols=m)**2) )
-        ref_cost = discretize.compute_linearized_costs(input_for_iter["t_ref"], input_for_iter["z_ref"], input_for_iter["nu_ref"], self.problem)[0].sum().item()
+        ref_cost = discretize.compute_linearized_costs(input_for_iter["t_ref"], input_for_iter["z_ref"], input_for_iter["nu_ref"], self.trajopt_obj)[0].sum().item()
         conv["cost_ref"] = ref_cost
 
         rec["conv_data"]  = conv
@@ -856,21 +856,21 @@ class Subproblem:
 # ===========================
 # Baseline autotune wrapper
 # ===========================
-def baseline_autotune(problem, rec: Dict[str, Any]) -> Dict[str, Any]:
-    flag = problem.method.flags["flag_autotune"]
+def baseline_autotune(trajopt_obj, rec: Dict[str, Any]) -> Dict[str, Any]:
+    flag = trajopt_obj.method.flags["flag_autotune"]
     if flag == "1":
-        rec = hp.autotune1(problem, rec)
+        rec = hp.autotune1(trajopt_obj, rec)
     elif flag == "2":
-        rec = hp.autotune2(problem, rec)
+        rec = hp.autotune2(trajopt_obj, rec)
     elif flag == "3":
-        rec = hp.autotune3(problem, rec)
+        rec = hp.autotune3(trajopt_obj, rec)
     return rec
 
 
 # ==========================================
 # Iteration status printout (unified record)
 # ==========================================
-def display_subprob_status(problem, rec: Dict[str, Any]) -> None:
+def display_subprob_status(trajopt_obj, rec: Dict[str, Any]) -> None:
     conv = rec.get("conv_data", {})
 
     chk_feas_path = conv.get("chk_feas_path", 0.0)
@@ -889,8 +889,8 @@ def display_subprob_status(problem, rec: Dict[str, Any]) -> None:
     solve_stat  = conv.get("status", "UNKNOWN")
     iter_num    = int(rec.get("iter_num", -1))
 
-    nt    = float(problem.method.nondim.get("nt", 1.0))
-    ncost = float(problem.method.nondim.get("ncost", 1.0))
+    nt    = float(trajopt_obj.method.nondim.get("nt", 1.0))
+    ncost = float(trajopt_obj.method.nondim.get("ncost", 1.0))
 
     Ts   = float(rec.get("T_opt", 0.0))
     cost = float(rec.get("cost", 0.0))

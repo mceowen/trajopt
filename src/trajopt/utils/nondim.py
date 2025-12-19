@@ -2,14 +2,14 @@ import numpy as np
 
 # example usage: set_nondim_params(["d", "d", "d", "v", "v", "v"], ["f", "f"], [("d", 10), ("v", 10), ("m", 1)], params)
 
-def set_nondim_params(problem, base_unit_labels=["m", "s", "kg"]):
+def set_nondim_params(trajopt_obj, base_unit_labels=["m", "s", "kg"]):
     """
     Initializes all nondimensional parameters
     """
 
-    mission = problem.mission
-    model = problem.model
-    method = problem.method
+    mission = trajopt_obj.mission
+    model = trajopt_obj.model
+    method = trajopt_obj.method
 
     n = model.n
     m = model.m

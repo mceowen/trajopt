@@ -2,12 +2,12 @@ import numpy as np
 
 import trajopt.utils.tools as tools
 
-def set_convergence_tolerance(problem):
+def set_convergence_tolerance(trajopt_obj):
     """
-    Compute convergence tolerances for all problem components.
+    Compute convergence tolerances for all trajopt_obj components.
     This refactored version stacks path/NFZ/AUX tolerances into unified eps_ineq/Wconv_ineq.
     """
-    mission, model, method  = problem.mission, problem.model, problem.method
+    mission, model, method  = trajopt_obj.mission, trajopt_obj.model, trajopt_obj.method
     
     # =======================
     # STATE CONVERGENCE (augmented with ct when "ct" is present)
@@ -151,9 +151,9 @@ def set_convergence_tolerance(problem):
 
 # ----------------------------------------------------------------------------------------------
 
-def check_convergence_tolerance(problem, subprob, iter_record):
+def check_convergence_tolerance(trajopt_obj, subprob, iter_record):
     """Check convergence using unified stacked inequality (_ineq) structure."""
-    mission, model, method  = problem.mission, problem.model, problem.method
+    mission, model, method  = trajopt_obj.mission, trajopt_obj.model, trajopt_obj.method
 
     # --- Load convergence data
     conv_data = iter_record["conv_data"]

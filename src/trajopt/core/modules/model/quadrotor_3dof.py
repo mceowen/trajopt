@@ -4,15 +4,15 @@ import jax.numpy as jnp
 import trajopt.utils.tools                      as tools
 import trajopt.core.modules.model.obstacles    as obstacles
 
-def dynamics(t, z, nu, problem):
+def dynamics(t, z, nu, trajopt_obj):
     """
     x1, x2: r (position)
     u1, u2: v (velocity)
     """
-    # extracts params if "problem" parent struct is passed in
-    mission = problem.mission
-    model = problem.model
-    method = problem.method
+    # extracts params if 'trajopt_obj' parent struct is passed in
+    mission = trajopt_obj.mission
+    model = trajopt_obj.model
+    method = trajopt_obj.method
 
     # extract constant param values
     m       = model.m
@@ -39,11 +39,11 @@ def dynamics(t, z, nu, problem):
         
     return xDot
 
-def analytical_linsys(t, z, nu, problem):
+def analytical_linsys(t, z, nu, trajopt_obj):
 
-    mission = problem.mission
-    model = problem.model
-    method = problem.method
+    mission = trajopt_obj.mission
+    model = trajopt_obj.model
+    method = trajopt_obj.method
     
     # Extract parameters
 
@@ -72,14 +72,14 @@ def analytical_linsys(t, z, nu, problem):
     ]) * (1.0 / mass)
 
     # Evaluate nonlinear dynamics
-    fc = dynamics(t, z, nu, problem)
+    fc = dynamics(t, z, nu, trajopt_obj)
 
     return fc, Ac, Bc
 
-def dynamics_jax(t, z, nu, problem):
-    mission = problem.mission
-    model = problem.model
-    method = problem.method
+def dynamics_jax(t, z, nu, trajopt_obj):
+    mission = trajopt_obj.mission
+    model = trajopt_obj.model
+    method = trajopt_obj.method
 
     mass    = mission.vehicle["mass"] / method.nondim["nm"]
     g_vec   = np.array([0,0, -mission.planet["g"]]) / method.nondim["na"]

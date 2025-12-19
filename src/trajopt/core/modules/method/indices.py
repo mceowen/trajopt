@@ -7,13 +7,13 @@ class Indices:
     dynamics, and constraints inside a Problem.
     """
 
-    def __init__(self, problem):
-        self.problem = problem
+    def __init__(self, trajopt_obj):
+        self.trajopt_obj = trajopt_obj
         self._build_indices()
 
     def _build_indices(self):
-        model   = self.problem.model
-        mission = self.problem.mission
+        model   = self.trajopt_obj.model
+        mission = self.trajopt_obj.mission
 
         # -------------------------------------------------
         # STATE / CONTROL / CTCS INDICES

@@ -66,11 +66,11 @@ def dim_vars(t, xs, nu, params):
     
     return t, x, u
 
-def subprob_variable_scaling(problem, local_vars):
+def subprob_variable_scaling(trajopt_obj, local_vars):
 
-    mission = problem.mission
-    model = problem.model
-    method = problem.method
+    mission = trajopt_obj.mission
+    model = trajopt_obj.model
+    method = trajopt_obj.method
 
     # Extract input struct
     I               = local_vars["I"]
@@ -233,8 +233,8 @@ if __name__ == "__main__":
     print(f"x: {x}")
     print(f"u: {u}")
 
-    # Define a dummy problem for testing
-    problem = {
+    # Define a dummy trajopt_obj for testing
+    trajopt_obj = {
         "I": [{"z_ref": np.random.rand(3, 4), "nu_ref": np.random.rand(2, 4)}],
         "params": {
             "nz": 3,
@@ -247,6 +247,6 @@ if __name__ == "__main__":
             "u_min": np.array([0, 0])
         }
     }
-    dz, du = scp_variable_scaling(problem)
+    dz, du = scp_variable_scaling(trajopt_obj)
     print(f"dz: {dz}")
     print(f"du: {du}")

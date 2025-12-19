@@ -1,15 +1,15 @@
 import numpy as np
 import cvxpy as cp
 
-def cost(t, z, nu, problem):
+def cost(t, z, nu, trajopt_obj):
     
     return np.dot(np.transpose(nu), nu)
 
-def analytical_cost(t, z, nu, problem):
+def analytical_cost(t, z, nu, trajopt_obj):
 
-    mission = problem.mission
-    model = problem.model
-    method = problem.method
+    mission = trajopt_obj.mission
+    model = trajopt_obj.model
+    method = trajopt_obj.method
 
     n               = model.n
     m               = model.m
@@ -52,11 +52,11 @@ def analytical_cost(t, z, nu, problem):
 
     return lincost
 
-def custom_inputs(problem,local_vars):
+def custom_inputs(trajopt_obj,local_vars):
 
-    mission = problem.mission
-    model = problem.model
-    method = problem.method
+    mission = trajopt_obj.mission
+    model = trajopt_obj.model
+    method = trajopt_obj.method
 
     u_norm_min  = mission.u_norm_min
     u_norm_max  = mission.u_norm_max
@@ -73,8 +73,8 @@ def custom_inputs(problem,local_vars):
 
     return local_vars 
 
-def custom_variables(problem,local_vars):
-    method = problem.method
+def custom_variables(trajopt_obj,local_vars):
+    method = trajopt_obj.method
     
     N           = method.N
 
@@ -137,18 +137,18 @@ def custom_cost(PTR_COST,local_vars):
 
     return PTR_COST
 
-def get_cost_cnstr_nondim(problem):
-    mission = problem.mission
-    method = problem.method
+def get_cost_cnstr_nondim(trajopt_obj):
+    mission = trajopt_obj.mission
+    method = trajopt_obj.method
 
     ncost = method.nondim["nf"] ** 2 * method.nondim["nt"]
     np_ineq = np.ones(mission.n_nfz) * method.nondim["nd"] ** 2
 
     return ncost, np_ineq
 
-def set_custom_params(problem):
-    mission = problem.mission
-    method  = problem.method
+def set_custom_params(trajopt_obj):
+    mission = trajopt_obj.mission
+    method  = trajopt_obj.method
 
     mission.u_norm_min = mission.custom_input_dict["u_norm_min"] / method.nondim["nf"]
     mission.u_norm_max = mission.custom_input_dict["u_norm_max"] / method.nondim["nf"]

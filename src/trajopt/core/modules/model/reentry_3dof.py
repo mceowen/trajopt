@@ -5,11 +5,11 @@ import trajopt.utils.tools as tools
 jax.config.update("jax_enable_x64", True)
 import trajopt.core.modules.model.obstacles     as obstacles
 
-def dynamics_jax(t, z, nu, problem, t_vec=None):
+def dynamics_jax(t, z, nu, trajopt_obj, t_vec=None):
 
-    mission = problem.mission
-    model = problem.model
-    method = problem.method
+    mission = trajopt_obj.mission
+    model = trajopt_obj.model
+    method = trajopt_obj.method
 
     ctrl_type = model.flags['ctrl_type']
 
@@ -55,37 +55,37 @@ def dynamics_jax(t, z, nu, problem, t_vec=None):
 
     return xDot
 
-def max_q(t, z, nu, problem):  #dynamic pressure
-    mission = problem.mission
-    method = problem.method
+def max_q(t, z, nu, trajopt_obj):  #dynamic pressure
+    mission = trajopt_obj.mission
+    method = trajopt_obj.method
     
     rs = z[0]
     vs = z[3]
 
-    rho = mission.mission_module.atmosphere_model_jax(rs, problem)
+    rho = mission.mission_module.atmosphere_model_jax(rs, trajopt_obj)
     nv = method.nondim["nv"]
 
     q_dim = 0.5 * rho * (vs * nv) ** 2 
 
     return jnp.array([q_dim / mission.path_limits['max_q'] - 1.0])
 
-def max_Q(t, z, nu, problem): # heat rate
-    mission = problem.mission
-    method = problem.method
+def max_Q(t, z, nu, trajopt_obj): # heat rate
+    mission = trajopt_obj.mission
+    method = trajopt_obj.method
 
     rs = z[0]
     vs = z[3]
 
-    rho = mission.mission_module.atmosphere_model_jax(rs, problem)
+    rho = mission.mission_module.atmosphere_model_jax(rs, trajopt_obj)
     nv = method.nondim["nv"]
 
     Q_dim = mission.vehicle["kQ"] * rho ** 0.5 * (vs * nv) ** 3
 
     return jnp.array([Q_dim / mission.path_limits["max_Q"] - 1.0])
 
-def max_load(t, z, nu, problem): # normal load
-    mission = problem.mission
-    method = problem.method
+def max_load(t, z, nu, trajopt_obj): # normal load
+    mission = trajopt_obj.mission
+    method = trajopt_obj.method
 
     rs = z[0]
     vs = z[3]
@@ -101,24 +101,24 @@ def max_load(t, z, nu, problem): # normal load
 
 
 
-def max_q_nonjax(t, z, nu, problem):  #dynamic pressure
-    mission = problem.mission; method = problem.method
+def max_q_nonjax(t, z, nu, trajopt_obj):  #dynamic pressure
+    mission = trajopt_obj.mission; method = trajopt_obj.method
     rs = z[0]; vs = z[3]
-    rho = mission.mission_module.atmosphere_model_nonjax(rs, problem)
+    rho = mission.mission_module.atmosphere_model_nonjax(rs, trajopt_obj)
     nv = method.nondim["nv"]
     q_dim = 0.5 * rho * (vs * nv) ** 2 
     return q_dim #np.array([q_dim / mission.path_limits['max_q'] - 1.0])
 
-def max_Q_nonjax(t, z, nu, problem): # heat rate
-    mission = problem.mission; method = problem.method
+def max_Q_nonjax(t, z, nu, trajopt_obj): # heat rate
+    mission = trajopt_obj.mission; method = trajopt_obj.method
     rs = z[0]; vs = z[3]
-    rho = mission.mission_module.atmosphere_model_nonjax(rs, problem)
+    rho = mission.mission_module.atmosphere_model_nonjax(rs, trajopt_obj)
     nv = method.nondim["nv"]
     Q_dim = mission.vehicle["kQ"] * rho ** 0.5 * (vs * nv) ** 3
     return Q_dim #np.array([Q_dim / mission.path_limits["max_Q"] - 1.0])
 
-def max_load_nonjax(t, z, nu, problem): # normal load
-    mission = problem.mission; method = problem.method
+def max_load_nonjax(t, z, nu, trajopt_obj): # normal load
+    mission = trajopt_obj.mission; method = trajopt_obj.method
     rs = z[0]; vs = z[3]
     aero = mission.nonlinear_aero_nonjax(t, z, nu)
     L = aero["L"]; D = aero["D"]

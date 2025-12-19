@@ -19,13 +19,13 @@ jax.config.update("jax_enable_x64", True)
 # terminal cost
 # =============================================================================
 
-def terminal_cost(t, z, nu, problem):
+def terminal_cost(t, z, nu, trajopt_obj):
     return z[3]
 
-def analytical_affine_approximation_terminal_cost(t, z, nu, problem):
-    model = problem.model
+def analytical_affine_approximation_terminal_cost(t, z, nu, trajopt_obj):
+    model = trajopt_obj.model
     
-    cost = terminal_cost(t, z, nu, problem)
+    cost = terminal_cost(t, z, nu, trajopt_obj)
 
     dcostdz = np.array([0, 0, 0, 1, 0, 0]).reshape(1, -1)
     dcostdnu = np.zeros((1, model.m))
@@ -36,25 +36,25 @@ def analytical_affine_approximation_terminal_cost(t, z, nu, problem):
 # running cost
 # =============================================================================
 
-def running_cost(t, z, nu, problem):
+def running_cost(t, z, nu, trajopt_obj):
     return 0.0
 
-def analytical_affine_approximation_running_cost(t, z, nu, problem):
-    model = problem.model
+def analytical_affine_approximation_running_cost(t, z, nu, trajopt_obj):
+    model = trajopt_obj.model
     
-    cost = running_cost(t, z, nu, problem)
+    cost = running_cost(t, z, nu, trajopt_obj)
 
     dcostdz = np.zeros((1, model.n))
     dcostdnu = np.zeros((1, model.m))
 
     return cost, dcostdz, dcostdnu
 
-def get_cost_cnstr_nondim(problem):
+def get_cost_cnstr_nondim(trajopt_obj):
     '''
     Returns the dimensional units of cost and constraint functions
     '''
-    mission = problem.mission
-    method = problem.method
+    mission = trajopt_obj.mission
+    method = trajopt_obj.method
 
     nd = method.nondim["nd"]
     nt = method.nondim["nt"]
@@ -65,7 +65,7 @@ def get_cost_cnstr_nondim(problem):
 
     return ncost, np_ineq
 
-def atmosphere_model_jax(rs, problem):
+def atmosphere_model_jax(rs, trajopt_obj):
     '''
     Returns density as a function of orbital radius
 
@@ -74,9 +74,9 @@ def atmosphere_model_jax(rs, problem):
     remember LUT grow exponenetiall in size!
     '''
 
-    mission = problem.mission
-    model = problem.model
-    method = problem.method
+    mission = trajopt_obj.mission
+    model = trajopt_obj.model
+    method = trajopt_obj.method
 
     # Compute altitude
     rdim = rs * method.nondim["nd"]
@@ -91,12 +91,12 @@ def atmosphere_model_jax(rs, problem):
 
     return rho
 
-def atmosphere_model_nonjax(rs, problem):
+def atmosphere_model_nonjax(rs, trajopt_obj):
     '''
     Returns density as a function of orbital radius
     ...rewritten from above for plain numpy
     '''
-    mission = problem.mission; model = problem.model; method = problem.method
+    mission = trajopt_obj.mission; model = trajopt_obj.model; method = trajopt_obj.method
     # Compute altitude
     rdim = rs * method.nondim["nd"]
     hdim = rdim - mission.planet["r"]
@@ -109,7 +109,7 @@ def atmosphere_model_nonjax(rs, problem):
 
 
 
-def nonlinear_aero_jax(t, z, nu, problem):
+def nonlinear_aero_jax(t, z, nu, trajopt_obj):
     '''
     returns all aero data as a function of full state
     
@@ -118,9 +118,9 @@ def nonlinear_aero_jax(t, z, nu, problem):
     handle the general case? or make seperate function?ƒ
     '''
 
-    mission = problem.mission
-    model = problem.model
-    method = problem.method
+    mission = trajopt_obj.mission
+    model = trajopt_obj.model
+    method = trajopt_obj.method
 
 
     ctrl_type = model.flags['ctrl_type']
@@ -174,7 +174,7 @@ def nonlinear_aero_jax(t, z, nu, problem):
     Cd = Kd1 + Kd2 * Cl + Kd3 * Cl**2
     alpha = jnp.deg2rad(alphlim_deg - kalph * (jnp.minimum(v * nv, vlim) - vlim)**2)
 
-    rho = atmosphere_model_jax(r, problem)
+    rho = atmosphere_model_jax(r, trajopt_obj)
     rho_s = rho / (method.nondim["nm"] / method.nondim["nd"] ** 3)
     sref_s = mission.vehicle["sref"] / method.nondim["nd"] ** 2
 
@@ -183,13 +183,13 @@ def nonlinear_aero_jax(t, z, nu, problem):
 
     return {'L': L, 'D': D, 'Cl': Cl, 'Cd': Cd, 'alpha': alpha, 'rho': rho}
 
-def nonlinear_aero_nonjax(t, z, nu, problem):
+def nonlinear_aero_nonjax(t, z, nu, trajopt_obj):
     '''
     returns all aero data as a function of full state
     ... rewritten from above without jax
     '''
 
-    mission = problem.mission; model = problem.model; method = problem.method
+    mission = trajopt_obj.mission; model = trajopt_obj.model; method = trajopt_obj.method
     ctrl_type = model.flags['ctrl_type']
     # Extract key params
     nv = method.nondim['nv']
@@ -238,18 +238,18 @@ def nonlinear_aero_nonjax(t, z, nu, problem):
     Cl = Kl1 + Kl2 * (v_sat - vlim)**2 + Kl3 * (v_sat - vlim)**4
     Cd = Kd1 + Kd2 * Cl + Kd3 * Cl**2
     alpha = np.deg2rad(alphlim_deg - kalph * (np.minimum(v * nv, vlim) - vlim)**2)
-    rho = atmosphere_model_nonjax(r, problem)
+    rho = atmosphere_model_nonjax(r, trajopt_obj)
     rho_s = rho / (method.nondim["nm"] / method.nondim["nd"] ** 3)
     sref_s = mission.vehicle["sref"] / method.nondim["nd"] ** 2
     L = (0.5 / mass_nd) * rho_s * sref_s * Cl * v**2
     D = (0.5 / mass_nd) * rho_s * sref_s * Cd * v**2
     return {'L': L, 'D': D, 'Cl': Cl, 'Cd': Cd, 'alpha': alpha, 'rho': rho}    
 
-def custom_constraints(subproblem):
+def custom_constraints(subtrajopt_obj):
     pass
 
-def custom_cost(subproblem):
+def custom_cost(subtrajopt_obj):
     pass
 
-def set_custom_params(problem):
+def set_custom_params(trajopt_obj):
     pass
