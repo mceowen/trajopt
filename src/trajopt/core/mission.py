@@ -159,27 +159,3 @@ class Mission:
         self.udot_max = M_udot_max @ self.udot_max * method.nondim["nt"]
 
         self.set_custom_params()
-
-class Cost:
-    def __init__(self, func=None, yaml_config=None, **kwargs):
-        
-        # constraint configs mainly pull from config files, but this class can also be used
-        # to define constraints from other places like the obstacle constraints
-        if yaml_config is not None:
-            self.convex     = yaml_config.get('convex', 0)
-            self.auto_diff  = yaml_config.get('auto_diff', 1)
-            self.name       = yaml_config.get('analytical_affine_approximation', None).split('.')[-1]
-            self.category   = yaml_config.get('category', "running")
-
-            # import functions from config strings
-            self.func = tools._import_from_string(yaml_config.get('function', None))
-            self.analytical_affine_approximation = tools._import_from_string(yaml_config.get('analytical_affine_approximation', None))
-        
-        else:
-            self.convex     = kwargs.get('convex', 1)
-            self.auto_diff  = kwargs.get('auto_diff', 0)
-            self.name       = func.__name__
-            self.category   = kwargs.get('category', "running")
-            
-            self.func       = func
-            self.analytical_affine_approximation = kwargs.get('analytical_affine_approximation', None)
