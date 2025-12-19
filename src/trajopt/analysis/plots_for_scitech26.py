@@ -1470,7 +1470,7 @@ def makePlotConvs(PLTS1,ins={}):
     titles = {}; ylabels = {};
     titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
     ylabels[0] = 'Peak Constraint \n Violation';
-    ylabels[1] = 'Peak trajectory \n  residual [km]';    
+    ylabels[1] = 'Peak trajectory \n residual';    
     xlabels = {ind:'Iterations' for ind in range(2)}
     uselegend = [];
 

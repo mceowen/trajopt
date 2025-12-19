@@ -7,7 +7,7 @@
 # flags:
 #   flag_nfz: 0
 #   init_ctrl: 0
-#   final_ctrl: 0
+#   final_ctrl: 1
 #   aero_type: 'none'  # 'exponential', 'jax_lookup', 'spline', 'none'
 
 # # no fly zones options
@@ -51,10 +51,10 @@
 
 # # control boundary conditions
 # ui: []
-# uf: []
+# uf: [0, 0]
 
 # ui_idx: []
-# uf_idx: []
+# uf_idx: [1, 2]
 
 # # control rate constraints
 # udot_max: []
@@ -121,7 +121,7 @@ vehicle_name: "mikilander"
 flags:
   flag_nfz: 0
   init_ctrl: 0
-  final_ctrl: 0
+  final_ctrl: 1
   aero_type: 'none'  # 'exponential', 'jax_lookup', 'spline', 'none'
 
 # no fly zones options
@@ -165,10 +165,10 @@ u_max_idx: []
 
 # control boundary conditions
 ui: []
-uf: []
+uf: [0, 0]
 
 ui_idx: []
-uf_idx: []
+uf_idx: [1, 2]
 
 # control rate constraints
 udot_max: []
@@ -184,7 +184,7 @@ path_limits:
   # cos_theta_max: 0.7071067
   
   # w_max: 1.57079632679
-  # tan_gamma_gs: 1.19175359259420995870530807186041933693070040770854385365483000690341214589
+  # tan_gamma_gs: 1.19175359259
   # tan_gamma_gs: 0.05763
 
 # NO STL

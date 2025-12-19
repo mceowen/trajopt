@@ -1677,7 +1677,8 @@ def makePlotWghtsFlex(PLTS1,ins={}):
         titles = {}; ylabels = {};
         titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
         xlabels = {ind:'Time [s]' for ind in range(1)}
-        ylabels[0] = 'Quadratic weights: \n CTCS dynamics';
+        # ylabels[0] = 'Quadratic Weights: \n CTCS dynamics';
+        ylabels[0] = 'Quadratic Weights: \n Dynamics';
         uselegend = [0]
 
     if len(weights_info)==2:
@@ -1686,8 +1687,10 @@ def makePlotWghtsFlex(PLTS1,ins={}):
         titles = {}; ylabels = {};
         titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
         xlabels = {ind:'Time [s]' for ind in range(2)}
-        ylabels[0] = 'Quadratic weights: \n CTCS dynamics';
-        ylabels[1] = 'Dual weights: \n CTCS dynamics';
+        # ylabels[0] = 'Quadratic Weights: \n CTCS Dynamics';
+        # ylabels[1] = 'Dual Weights: \n CTCS Dynamics';
+        ylabels[0] = 'Quadratic Weights: \n Dynamics';
+        ylabels[1] = 'Dual Weights: \n Dynamics';
         uselegend = [1]
 
     if len(weights_info)==3:
@@ -1698,9 +1701,13 @@ def makePlotWghtsFlex(PLTS1,ins={}):
         titles = {}; ylabels = {};
         titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
         xlabels = {ind:'Time [s]' for ind in range(3)}
-        ylabels[0] = 'Quadratic weights: \n CTCS dynamics';
-        ylabels[1] = 'Dual weights: \n CTCS dynamics';
-        ylabels[2] = 'Dual weights: \n CTCS dynamics';
+        # ylabels[0] = 'Quadratic Weights: \n CTCS Dynamics';
+        # ylabels[1] = 'Dual Weights: \n CTCS Dynamics';
+        # ylabels[2] = 'Dual Weights: \n CTCS Dynamics';
+
+        ylabels[0] = 'Quadratic Weights: \n Dynamics';
+        ylabels[1] = 'Dual Weights: \n Dynamics';
+        ylabels[2] = 'Dual Weights: \n Dynamics';
         uselegend = [0]
 
     if len(weights_info)==4:
@@ -1826,7 +1833,7 @@ def makePlotConvs(PLTS1,ins={}):
     titles = {}; ylabels = {};
     titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
     ylabels[0] = 'Peak Constraint \n Violation';
-    ylabels[1] = 'Peak trajectory \n  residual [km]';    
+    ylabels[1] = 'Peak trajectory \n  residual';    
     xlabels = {ind:'Iterations' for ind in range(2)}
     uselegend = [1];
 
@@ -2163,7 +2170,7 @@ def makePlotConvsFlex(PLTS1,ins={}):
         titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
         xlabels = {ind:'Iterations' for ind in range(2)}
         ylabels[0] = 'Peak Constraint \n Violation';
-        ylabels[1] = 'Peak trajectory \n  residual [km]';    
+        ylabels[1] = 'Peak trajectory \n  residual';    
         uselegend = [1]
 
     if len(converge_info)==3:
@@ -2175,7 +2182,7 @@ def makePlotConvsFlex(PLTS1,ins={}):
         titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
         xlabels = {ind:'Iterations' for ind in range(3)}
         ylabels[0] = 'Peak Constraint \n Violation';
-        ylabels[1] = 'Peak trajectory \n  residual [km]';    
+        ylabels[1] = 'Peak trajectory \n  residual';    
         ylabels[2] = 'Dual weights: \n CTCS dynamics';
         uselegend = [0]
 
@@ -2189,7 +2196,7 @@ def makePlotConvsFlex(PLTS1,ins={}):
         xlabels = {ind:'Iterations' for ind in range(4)}
         titles[0] = ''; titles[1] = ''; titles[2] = ''; titles[3] = '';
         ylabels[0] = 'Peak Constraint \n Violation';
-        ylabels[1] = 'Peak trajectory \n  residual [km]';    
+        ylabels[1] = 'Peak trajectory \n  residual';    
         ylabels[2] = 'No-fly zone linear \n penalty weights';
         ylabels[3] = 'Path constraint \n linear \n penalty weights';
         uselegend = [3];            
