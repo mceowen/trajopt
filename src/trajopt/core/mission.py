@@ -31,55 +31,6 @@ class Mission:
         self.custom_modules    = mission_config.get("custom_modules", None)
 
         # ------------------------------------------------------------
-        # Load constraints
-        # ------------------------------------------------------------
-
-        # ------------------------------------------------------------
-        # example structure of constaint_ids
-        # (type: dict[str, dict[str, list[int]]]) 
-        # 
-        # constraints = []
-        # constraint_ids = {
-        #   "ct": {"gimbal_cone": [0, 1], "constraint_type2": [4]}
-        #   "nodal": {"constraint_type3": [2, 3]} 
-        # }
-        #
-        # ------------------------------------------------------------
-
-        self.constraints = []
-        self.constraint_ids = {}
-
-        # build constraint_ids mapping
-        for i, constraint_config in enumerate(mission_config["constraints"]):
-            constraint_type = constraint_config["type"]
-            constraintClass = getattr(constraints_module, constraint_type)
-            self.constraints.append(constraintClass(**constraint_config))
-
-            # add constraint to constraint_id map for indexing into list
-            ct_type = "ct" if constraint_config["ct"] else "nodal"
-                
-            if ct_type not in self.constraint_ids:
-                self.constraint_ids[ct_type] = {}
-
-            if constraint_type not in self.constraint_ids[ct_type]:
-                self.constraint_ids[ct_type][constraint_type] = []
-            
-            self.constraint_types[ct_type][constraint_type].append(i)
-
-        # constraint book keeping
-        if "nonconvex_inequality" in self.constraint_ids["nodal"]:
-            nodal_ncvx_ineq_ids = self.constraint_ids["nodal"]["nonconvex_inequality"]
-            self.n_ineq = sum(constraint.dimension for constraint in self.constraints[nodal_ncvx_ineq_ids])
-        else:
-            self.n_ineq = 0
-
-        if "ct" in self.constraint_ids:
-            ct_ids = self.constraint_ids["ct"]["all"]
-            self.n_ctcs = sum(constraint.dimension for constraint in self.constraints[ct_ids])
-        else:
-            self.n_ctcs
-
-        # ------------------------------------------------------------
         # #TODO: Load costs similarly to constraints above
         # ------------------------------------------------------------
 

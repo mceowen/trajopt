@@ -117,7 +117,7 @@ class state_max_norm_cone:
         self.idx = idx
 
 class control_max_norm_cone:
-    def __init__(self, max_val, idx):
+    def __init__(self, max_val, idx, ct):
         self.max_val = max_val
         self.idx = idx
 

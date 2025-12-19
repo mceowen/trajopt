@@ -9,7 +9,7 @@ from trajopt.core.method    import Method
 from trajopt.core.modules.method.indices import Indices  
 
 
-class Problem:
+class Trajopt:
     def __init__(self, config, subprob=None):
 
         # example
