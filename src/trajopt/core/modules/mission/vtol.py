@@ -49,22 +49,6 @@ def analytical_affine_approximation_running_cost(t, z, nu, trajopt_obj):
 
     return cost, dcostdz, dcostdnu
 
-def get_cost_cnstr_nondim(trajopt_obj):
-    '''
-    Returns the dimensional units of cost and constraint functions
-    '''
-    mission = trajopt_obj.mission
-    method = trajopt_obj.method
-
-    nd = method.nondim["nd"]
-    nt = method.nondim["nt"]
-    nm = method.nondim["nm"]
-
-    ncost = method.nondim["nv"]
-    np_ineq = np.array([1.0, 1.0, 1.0, 1.0, 1.0])
-
-    return ncost, np_ineq
-
 def atmosphere_model_jax(rs, trajopt_obj):
     '''
     Returns density as a function of orbital radius
@@ -109,7 +93,7 @@ def atmosphere_model_nonjax(rs, trajopt_obj):
 
 
 
-def nonlinear_aero_jax(t, z, nu, trajopt_obj):
+def nonlinear_aero_jax(t, z, nu, params):
     '''
     returns all aero data as a function of full state
     
@@ -118,18 +102,8 @@ def nonlinear_aero_jax(t, z, nu, trajopt_obj):
     handle the general case? or make seperate function?ƒ
     '''
 
-    mission = trajopt_obj.mission
-    model = trajopt_obj.model
-    method = trajopt_obj.method
-
 
     ctrl_type = model.flags['ctrl_type']
-
-    # Extract key params
-    nv = method.nondim['nv']
-    mass_nd = mission.vehicle['mass'] / method.nondim['nm']
-
-    B = (method.nondim['nd'] / method.nondim['nm']) * (mission.vehicle['sref'] / 2)
 
     # Setup coefficient values
     kl1         = -0.041065

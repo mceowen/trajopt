@@ -3,64 +3,24 @@ import cvxpy as cp
 import jax 
 import jax.numpy as jnp
 
-# =============================================================================
-# terminal cost
-# =============================================================================
+class Mission:
+    def __init__(self):
+        pass
 
-def terminal_cost(t, z, nu, trajopt_obj):
-    return 0.0
+    # =============================================================================
+    # nonconvex inequality constraint functions
+    # (used with type: nonconvex_inequality constraints)
+    # =============================================================================
 
-def analytical_affine_approximation_terminal_cost(t, z, nu, trajopt_obj):
-    model = trajopt_obj.model
-    
-    cost = terminal_cost(t, z, nu, trajopt_obj)
+    def height_triggered_pitch(self, t, z, nu, params):
 
-    dcostdz = np.zeros((1, model.n))
-    dcostdnu = 2 * 0.0 * nu.reshape(1, -1)
+        # f > 0 ==> g >= 0
 
-    return cost, dcostdz, dcostdnu
+        f = 2.0 - z[1]
+        g = 1.0 - (params["cos_theta_max"] + 2 * jnp.sum(z[9:11] ** 2))
 
-# =============================================================================
-# running cost
-# =============================================================================
+        return jnp.array([jnp.maximum(f, 0.0) * jnp.maximum(-g, 0.0)])
 
-def running_cost(t, z, nu, trajopt_obj):
-    return 0.0
-
-def analytical_affine_approximation_running_cost(t, z, nu, trajopt_obj):
-    model = trajopt_obj.model
-    
-    cost = running_cost(t, z, nu, trajopt_obj)
-
-    dcostdz = np.zeros((1, model.n))
-    dcostdnu = 2 * 0.0 * nu.reshape(1, -1)
-
-    return cost, dcostdz, dcostdnu
-
-# =============================================================================
-# MISSION-SPECIFIC CONSTRAINT FUNCTIONS
-# =============================================================================
-
-# =============================================================================
-# CUSTOM COST / CONSTRAINTS
-# =============================================================================
-def custom_cost(subtrajopt_obj):
-
-    trajopt_obj = subtrajopt_obj.trajopt_obj
-    method = trajopt_obj.method
-
-    dt = subtrajopt_obj.dt_ref + subtrajopt_obj.dt
-
-    subtrajopt_obj.cost_expr +=  cp.sum(dt) / (method.N - 1)
-
-def get_cost_cnstr_nondim(trajopt_obj):
-    mission = trajopt_obj.mission
-    method = trajopt_obj.method
-
-    ncost = method.nondim["nt"]
-    np_ineq = np.array([1.0])
-
-    return ncost, np_ineq
-
-def set_custom_params(trajopt_obj):
-    pass
+    def min_thrust_norm(self, t, z, nu, params):
+        
+        return jnp.array(1.0 - jnp.linalg.norm(nu[:3]) / params["min_thrust"])

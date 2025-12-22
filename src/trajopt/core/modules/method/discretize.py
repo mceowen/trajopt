@@ -6,7 +6,7 @@ from scipy.integrate import solve_ivp
 import trajopt.core.modules.method.convexify as convexify
 import time
 
-def set_ltv_indices(trajopt_obj):
+def set_ltv_indices(method, nz, m):
     """
     Function to set Linear Time Varying (LTV) indices and initialize arrays.
 
@@ -16,24 +16,22 @@ def set_ltv_indices(trajopt_obj):
     Returns:
     dict: Updated params with LTV indices and initialized arrays.
     """
-    model = trajopt_obj.model
-    method = trajopt_obj.method
 
-    method.z_ind     = np.arange(0, model.nz)
-    method.Ak_ind    = np.arange(method.z_ind[-1] + 1, method.z_ind[-1] + 1 + model.nz**2 )
-    method.Bk_ind    = np.arange(method.Ak_ind[-1] + 1, method.Ak_ind[-1] + 1 + model.nz * model.m )
-    method.Bkp_ind   = np.arange(method.Bk_ind[-1] + 1, method.Bk_ind[-1] + 1 + model.nz * model.m )
-    method.Sk_ind    = np.arange(method.Bkp_ind[-1] + 1, method.Bkp_ind[-1] + 1 + model.nz )
+    method.z_ind     = np.arange(0, nz)
+    method.Ak_ind    = np.arange(method.z_ind[-1] + 1, method.z_ind[-1] + 1 + nz**2 )
+    method.Bk_ind    = np.arange(method.Ak_ind[-1] + 1, method.Ak_ind[-1] + 1 + nz * m )
+    method.Bkp_ind   = np.arange(method.Bk_ind[-1] + 1, method.Bk_ind[-1] + 1 + nz * m )
+    method.Sk_ind    = np.arange(method.Bkp_ind[-1] + 1, method.Bkp_ind[-1] + 1 + nz )
 
-    method.Ak        = np.zeros((method.N - 1,model.nz, model.nz))
-    method.Bk        = np.zeros((method.N - 1, model.nz, model.m))
-    method.Bkp       = np.zeros((method.N - 1, model.nz, model.m))
-    method.Sk        = np.zeros((method.N - 1, model.nz, 1))
+    method.Ak        = np.zeros((method.N - 1, nz, nz))
+    method.Bk        = np.zeros((method.N - 1, nz, m))
+    method.Bkp       = np.zeros((method.N - 1, nz, m))
+    method.Sk        = np.zeros((method.N - 1, nz, 1))
 
     method.lds0_size = method.Sk_ind[-1] + 1
     method.lds0      = np.zeros( method.lds0_size )
 
-    method.lds0[method.Ak_ind] = np.reshape(np.eye(model.nz), -1)
+    method.lds0[method.Ak_ind] = np.reshape(np.eye(nz), -1)
     method.N_dens    = 20
 
     # convert indeces to jax arrays for jax discretize option
@@ -45,8 +43,7 @@ def set_ltv_indices(trajopt_obj):
     method.Sk_ind_jax    = jnp.asarray(method.Sk_ind)
 
 def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, trajopt_obj):
-    mission = trajopt_obj.mission
-    model = trajopt_obj.model
+    problem = trajopt_obj.problem
     method = trajopt_obj.method
 
     # TODO(carlos):
@@ -60,81 +57,80 @@ def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, trajopt_obj):
     #   using jax, but i think the bottleneck is discretization
     #
     # - should analytical jacobians be an option?
+
+    n_ineq = problem.n_ineq
+    n = problem.n
+    m = problem.m
+    N = method.N
+        
+    t_jax = jnp.asarray(t_ref)
+    z_jax = jnp.asarray(z_ref)
+    nu_jax = jnp.asarray(u_ref)
     
-    if len(mission.n_ineq) > 0:
+    # Preallocate stacked arrays
+    g    = np.zeros((N, n_ineq))
+    dgdz = np.zeros((N, n_ineq, n))
+    dgdnu = np.zeros((N, n_ineq, m))
+    
+    # Evaluate constraints at each timestep
+    for k in range(N):
+        tk = t_jax[k]
+        zk = z_jax[k]
+        uk = nu_jax[k]
         
-        t_jax = jnp.asarray(t_ref)
-        z_jax = jnp.asarray(z_ref)
-        nu_jax = jnp.asarray(u_ref)
-        
-        # Preallocate stacked arrays
-        g    = np.zeros((method.N, mission.n_ineq))
-        dgdz = np.zeros((method.N, mission.n_ineq, model.n))
-        dgdnu = np.zeros((method.N, mission.n_ineq, model.m))
-        
-        # Evaluate constraints at each timestep
-        for k in range(method.N):
-            tk = t_jax[k]
-            zk = z_jax[k]
-            uk = nu_jax[k]
+        col_start = 0
+        for id in problem.constraint_ids["nodal"]["nonconvex_inequality"]:
+            col_end = col_start + problem.constraints[id].dimension
             
-            col_start = 0
-            for id in mission.constrain_ids["nodal"]["nonconvex_inequality"]:
-                col_end = col_start + mission.constraints[id].dimension
-                
-                f, dfcn_dz, dfcn_du            = mission.constraints[id].g_aff(tk, zk, uk)
-                g[k, col_start:col_end]        = np.asarray(f)
-                dgdz[k, col_start:col_end, :]  = np.asarray(dfcn_dz)[:, :model.n]
-                dgdnu[k, col_start:col_end, :] = np.asarray(dfcn_du)
-                
-                col_start = col_end
-    else:
-        dgdz = dgdnu = g = None
+            f, dfcn_dz, dfcn_du            = problem.constraints[id].g_aff(tk, zk, uk)
+            g[k, col_start:col_end]        = np.asarray(f)
+            dgdz[k, col_start:col_end, :]  = np.asarray(dfcn_dz)[:, :n]
+            dgdnu[k, col_start:col_end, :] = np.asarray(dfcn_du)
+            
+            col_start = col_end
     
     return g, dgdz, dgdnu
 
 def compute_linearized_costs(t_ref, z_ref, u_ref, trajopt_obj):
 
-    mission = trajopt_obj.mission
-    model = trajopt_obj.model
+    problem = trajopt_obj.problem
     method = trajopt_obj.method
-    
-    if len(mission.costs) > 0:
-        has_jax = any(c.auto_diff == 1 for c in mission.costs)
-        if has_jax:
-            t_jax = jnp.asarray(t_ref)
-            z_jax = jnp.asarray(z_ref)
-            nu_jax = jnp.asarray(u_ref)
-        
-        # preallocate stacked arrays (cost per timestep)
-        cost = np.zeros((method.N, 1, 1))
-        dcostdz = np.zeros((method.N, 1, model.n))
-        dcostdnu = np.zeros((method.N, 1, model.m))
 
-        # evaluate costs at each timestep
-        for cost_fn in mission.costs:
-            if cost_fn.category == "running":
-                for k in range(method.N-1):
-                    tk = t_jax[k] if has_jax else t_ref[k]
-                    zk = z_jax[k] if has_jax else z_ref[k]
-                    uk = nu_jax[k] if has_jax else u_ref[k]
-                    
-                    f, dfcn_dz, dfcn_du = cost_fn.affine_approximation(tk, zk, uk)
-                    cost[k, 0, 0] += np.asarray(f)
-                    dcostdz[k, 0, :] += np.asarray(dfcn_dz).flatten()
-                    dcostdnu[k, 0, :] += np.asarray(dfcn_du).flatten()
-                
-            elif cost_fn.category == "terminal":
-                tk = t_jax[-1] if has_jax else t_ref[-1]
-                zk = z_jax[-1] if has_jax else z_ref[-1]
-                uk = nu_jax[-1] if has_jax else u_ref[-1]
+    n = problem.n
+    m = problem.m
+    N = method.N
+    
+    t_jax = jnp.asarray(t_ref)
+    z_jax = jnp.asarray(z_ref)
+    nu_jax = jnp.asarray(u_ref)
+    
+    # preallocate stacked arrays (cost per timestep)
+    cost = np.zeros((N, 1, 1))
+    dcostdz = np.zeros((N, 1, n))
+    dcostdnu = np.zeros((N, 1, m))
+
+    # evaluate costs at each timestep
+    for cost_fn in problem.costs:
+        if cost_fn.category == "running":
+            for k in range(N-1):
+                tk = t_jax[k]
+                zk = z_jax[k]
+                uk = nu_jax[k]
                 
                 f, dfcn_dz, dfcn_du = cost_fn.affine_approximation(tk, zk, uk)
-                cost[-1, 0, 0] += np.asarray(f)
-                dcostdz[-1, 0, :] += np.asarray(dfcn_dz).flatten()
-                dcostdnu[-1, 0, :] += np.asarray(dfcn_du).flatten()
-    else:
-        cost = dcostdz = dcostdnu = None
+                cost[k, 0, 0] += np.asarray(f)
+                dcostdz[k, 0, :] += np.asarray(dfcn_dz).flatten()
+                dcostdnu[k, 0, :] += np.asarray(dfcn_du).flatten()
+            
+        elif cost_fn.category == "terminal":
+            tk = t_jax[-1]
+            zk = z_jax[-1]
+            uk = nu_jax[-1]
+            
+            f, dfcn_dz, dfcn_du = cost_fn.affine_approximation(tk, zk, uk)
+            cost[-1, 0, 0] += np.asarray(f)
+            dcostdz[-1, 0, :] += np.asarray(dfcn_dz).flatten()
+            dcostdnu[-1, 0, :] += np.asarray(dfcn_du).flatten()
     
     return cost, dcostdz, dcostdnu
 

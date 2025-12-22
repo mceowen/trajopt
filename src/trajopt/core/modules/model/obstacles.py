@@ -11,10 +11,7 @@ import jax.numpy as jnp
 # NFZ Nonlinear Constraint Block
 # =============================================================================
 
-def nfz_nonlinear(t, z, nu, trajopt_obj):
-    mission = trajopt_obj.mission
-    model = trajopt_obj.model
-    method = trajopt_obj.method
+def nfz_nonlinear(t, z, nu, mission):
     
     x_idx = model.obs["x_idx"]
     y_idx = model.obs["y_idx"]

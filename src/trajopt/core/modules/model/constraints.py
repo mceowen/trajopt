@@ -15,118 +15,74 @@ import trajopt.core.modules.method.convexify as convexify
 # boundary conditions
 # ---------------------------------------------------------------
 
-class initial_state_equality:
-    def __init__(self, zi_idx, zi):
+class equality_bc:
+    def __init__(self, set, x_idx, x, boundary, name):
 
         # parameters
-        self.zi_idx = zi_idx
-        self.zi = zi
+        self.set = set
+        self.x_idx = x_idx
+        self.x = x
+        self.idx = 0 if boundary == 'init' else -1 if boundary == 'final' else None
+        self.name = name
 
-class initial_state_inequality:
-    def __init__(self, zi_min_idx, zi_max_idx, zi_min, zi_max):
-
-        # parameters
-        self.zi_min_idx = zi_min_idx
-        self.zi_max_idx = zi_max_idx
-        self.zi_min = zi_min
-        self.zi_max = zi_max
-
-class final_state_equality:
-    def __init__(self, zf_idx, zf):
+class inequality_bc:
+    def __init__(self, set, x_min_idx, x_max_idx, x_min, x_max, boundary, name):
 
         # parameters
-        self.zf_idx = zf_idx
-        self.zf = zf
-
-class final_state_inequality:
-    def __init__(self, zf_min_idx, zf_max_idx, zf_min, zf_max):
-
-        # parameters
-        self.zf_min_idx = zf_min_idx
-        self.zf_max_idx = zf_max_idx
-        self.zf_min = zf_min
-        self.zf_max = zf_max
-
-class initial_control_equality:
-    def __init__(self, ui_idx, ui):
-
-        # parameters
-        self.ui_idx = ui_idx
-        self.ui = ui
-
-class final_control_equality:
-    def __init__(self, uf_idx, uf):
-
-        # parameters
-        self.uf_idx = uf_idx
-        self.uf = uf
-
-class final_control_inequality:
-    def __init__(self, uf_min_idx, uf_max_idx, uf_min, uf_max):
-
-        # parameters
-        self.uf_min_idx = uf_min_idx
-        self.uf_max_idx = uf_max_idx
-        self.uf_min = uf_min
-        self.uf_max = uf_max
+        self.x_min_idx = x_min_idx
+        self.x_max_idx = x_max_idx
+        self.x_min = x_min
+        self.x_max = x_max
+        self.set = set
+        self.idx = 0 if boundary == 'init' else -1 if boundary == 'final' else None
+        self.name = name
 
 # ---------------------------------------------------------------
 # path inequality constraints
 # ---------------------------------------------------------------
-class state_inequality:
-    def __init__(self, z_min_idx, z_max_idx, z_min, z_max):
-        self.z_min_idx = z_min_idx
-        self.z_max_idx = z_max_idx
-        self.z_min = z_min
-        self.z_max = z_max
-
-class control_inequality:
-    def __init__(self, u_min_idx, u_max_idx, u_min, u_max):
-        self.u_min_idx = u_min_idx
-        self.u_max_idx = u_max_idx
-        self.u_min = u_min
-        self.u_max = u_max
+class box:
+    def __init__(self, set, x_min_idx, x_max_idx, x_min, x_max, name):
+        self.x_min_idx = x_min_idx
+        self.x_max_idx = x_max_idx
+        self.x_min = x_min
+        self.x_max = x_max
+        self.set = set
+        self.name = name
 
 # ---------------------------------------------------------------
 # rate constraints
 # ---------------------------------------------------------------
-class control_rate_limit:
-    def __init__(self, udot_max, idx):
-        self.udot_max = udot_max
+class rate_limit:
+    def __init__(self, xdot_max, idx):
+        self.xdot_max = xdot_max
         self.idx = idx
 
 # ---------------------------------------------------------------
 # Second-order cone cosntraints
 # ---------------------------------------------------------------
 
-class state_axis_angle_cone:
-    def __init__(self, axis, theta_max, idx):
+class axis_angle_cone:
+    def __init__(self, set, axis, theta_max, idx, name):
         self.cos_theta_max = np.cos(np.deg2rad(theta_max))
         self.axis = axis / np.linalg.norm(axis)
         self.idx = idx
+        self.set = set
+        self.name = name
 
-class control_axis_angle_cone:
-    def __init__(self, axis, theta_max, idx):
-        self.cos_theta_max = np.cos(np.deg2rad(theta_max))
-        self.axis = axis / np.linalg.norm(axis)
-        self.idx = idx
-
-class state_max_norm_cone:
-    def __init__(self, max_val, idx):
+class max_norm_cone:
+    def __init__(self, set, max_val, idx, name):
         self.max_val = max_val
         self.idx = idx
-
-class control_max_norm_cone:
-    def __init__(self, max_val, idx, ct):
-        self.max_val = max_val
-        self.idx = idx
+        self.set = set
+        self.name = name
 
 class quaternion_cone:
-    def __init__(self, quat_start_idx, theta_max, axis_num):
+    def __init__(self, quat_start_idx, theta_max, axis_num, name):
         self.quat_start_idx = quat_start_idx
         self.cos_theta_max = np.cos(np.deg2rad(theta_max))
         self.axis_num = axis_num
         self.rhs = np.sqrt((1.0 - self.cos_theta_max) * 0.5)
+        self.name = name
 
 # ===============================================================
 # NONCONVEX CONSTRAINTS

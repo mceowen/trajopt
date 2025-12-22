@@ -5,18 +5,14 @@ import jax.numpy as jnp
 import cvxpy as cp
 
 # jax autodiff for affine approximations
-def linearize_jax(fcn,trajopt_obj =None, params=None):
+def linearize_jax(fcn,params=None):
 
-    if trajopt_obj is not None:
-        def wrapped_fcn(z, nu):
-            return fcn(0, z, nu, trajopt_obj)
-    elif params is not None:
+    if params is not None:
         def wrapped_fcn(z, nu):
             return fcn(0, z, nu, params)
     else:
         def wrapped_fcn(z, nu):
             return fcn(0, z, nu)
-
 
     dfcn_dz = jax.jit(jax.jacrev(wrapped_fcn, argnums=0))
     dfcn_du = jax.jit(jax.jacrev(wrapped_fcn, argnums=1))
@@ -25,17 +21,18 @@ def linearize_jax(fcn,trajopt_obj =None, params=None):
     return f, dfcn_dz, dfcn_du
 
 def linearize_jax_ctcs(fcn, trajopt_obj):
-    model = trajopt_obj.model
-    mission = trajopt_obj.mission
+    problem = trajopt_obj.problem
     method = trajopt_obj.method
-
-    constraints = mission.constraints
+    
+    n = problem.n
+    m = problem.m
+    constraints = problem.constraints
     
     def wrapped_fcn(z, nu):
 
-        constr = jnp.concatenate([mission.nonconvex_inequality_constraints[i].fcn(0, z, nu, trajopt_obj) for i in range(len(model.nonconvex_inequality_constraints))])
+        constr = jnp.concatenate([constraints[i].fcn(0, z, nu, trajopt_obj) for i in problem.constraint_ids['ct']['all']])
 
-        f_val = jnp.concatenate([fcn(0, z[:model.n], nu, trajopt_obj), jnp.square(jnp.maximum(method.weights["w_ctcs"] * constr, 0.0))])
+        f_val = jnp.concatenate([fcn(0, z[:n], nu, trajopt_obj), jnp.square(jnp.maximum(method.weights["w_ctcs"] * constr, 0.0))])
         
         return f_val
 

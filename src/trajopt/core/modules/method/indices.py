@@ -7,20 +7,20 @@ class Indices:
     dynamics, and constraints inside a Problem.
     """
 
-    def __init__(self, trajopt_obj):
-        self.trajopt_obj = trajopt_obj
+    def __init__(self, problem):
+        self.problem = problem
         self._build_indices()
 
     def _build_indices(self):
-        model   = self.trajopt_obj.model
-        mission = self.trajopt_obj.mission
+
+        problem = self.problem
 
         # -------------------------------------------------
         # STATE / CONTROL / CTCS INDICES
         # -------------------------------------------------
-        n      = model.n
-        nz     = model.nz
-        n_ctcs = model.n_ctcs
+        n      = problem.n
+        nz     = problem.nz
+        n_ctcs = problem.n_ctcs
 
         z_idx_all   = np.arange(0, nz)
         z_idx_state = np.arange(0, n)
@@ -36,7 +36,7 @@ class Indices:
         # -------------------------------------------------
         # CONTROL INDICES
         # -------------------------------------------------
-        u_idx_all = np.arange(0, model.m)
+        u_idx_all = np.arange(0, problem.m)
         self.nu = {
             "all": u_idx_all,
             "control": u_idx_all,
@@ -46,10 +46,10 @@ class Indices:
         # -------------------------------------------------
         # NONLINEAR INEQUALITY INDICES
         # -------------------------------------------------
-        n_path   = mission.n_path
-        n_nfz    = mission.n_nfz
-        n_custom = mission.n_custom
-        n_ineq   = mission.n_ineq
+        n_path   = problem.n_path
+        n_nfz    = problem.n_nfz
+        n_custom = problem.n_custom
+        n_ineq   = problem.n_ineq
 
         i0 = 0
         path_idx   = np.arange(i0, i0 + n_path);   i0 += n_path
@@ -66,9 +66,9 @@ class Indices:
         # -------------------------------------------------
         # TERMINAL CONDITION INDICES (EQ + INEQ + CTCS)
         # -------------------------------------------------
-        n_term_eq   = mission.n_term            # terminal eq constraints
-        n_term_ineq = mission.n_term_ineq       # terminal inequalities
-        n_term_ctcs = mission.n_term_ctcs       # CTCS terminal constraints
+        n_term_eq   = problem.n_term            # terminal eq constraints
+        n_term_ineq = problem.n_term_ineq       # terminal inequalities
+        n_term_ctcs = problem.n_term_ctcs       # CTCS terminal constraints
 
         eq_idx   = np.arange(0, n_term_eq)
         ineq_idx = np.arange(n_term_eq,
@@ -87,8 +87,8 @@ class Indices:
         # LTV SYSTEM INDICES
         # -------------------------------------------------
         Ak_ind  = np.arange(0, nz * nz)
-        Bk_ind  = np.arange(Ak_ind[-1] + 1, Ak_ind[-1] + 1 + nz * model.m)
-        Bkp_ind = np.arange(Bk_ind[-1] + 1, Bk_ind[-1] + 1 + nz * model.m)
+        Bk_ind  = np.arange(Ak_ind[-1] + 1, Ak_ind[-1] + 1 + nz * problem.m)
+        Bkp_ind = np.arange(Bk_ind[-1] + 1, Bk_ind[-1] + 1 + nz * problem.m)
         Sk_ind  = np.arange(Bkp_ind[-1] + 1, Bkp_ind[-1] + 1 + nz)
 
         linear_system = {

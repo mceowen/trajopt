@@ -385,46 +385,44 @@ class Subproblem:
 
         C: List[cp.Constraint] = []
 
-        # Initial control (optional)
-        if "initial_control_equality" in mission.constraint_ids["nodal"]:
-            id = mission.constraint_ids["nodal"]["initial_control_equality"]
-            constraint = mission.constraints[id]
-            C.append(self.dnu[0,constraint.ui_idx] + self.nu_ref[0, constraint.ui_idx] == constraint.ui)
-
-        # Terminal control (optional)
-        if "final_control_equality" in mission.constraint_ids["nodal"]:
-            id = mission.constraint_ids["nodal"]["final_control_equality"]
-            constraint = mission.constraints[id]
-            C.append(self.dnu[-1,constraint.uf_idx] + self.nu_ref[-1, constraint.uf_idx] == constraint.uf)
-
-        # Initial equalities / inequalities
-        if "intial_state_equality" in mission.constraint_ids["nodal"]:
-            id = mission.constraint_ids["nodal"]["initial_state_equality"]
-            constraint = mission.constraints[id]
-            C.append(self.dz[0, constraint.zi_idx] + self.z_ref[0, constraint.zi_idx] == constraint.zi)
-
-        if "intial_state_inequality" in mission.constraint_ids["nodal"]:
-            id = mission.constraint_ids["nodal"]["initial_state_inequality"]
-            constraint = mission.constraints[id]
-            M_sel = tools.constraint_index_selector(constraint.zi_min_idx, constraint.zi_max_idx, n)
-            C.append(M_sel @ (self.dz[0, :n] + self.z_ref[0, :n]) <= cp.hstack([-constraint.zi_min, constraint.zi_max]))
-
         # Terminal equalities / inequalities
-        term_idx  = indices.constraints.terminal 
-        if "final_state_equality" in mission.constraint_ids["nodal"]:
-            id = mission.constraint_ids["nodal"]["final_state_equality"]
-            constraint = mission.constraints[id]
-            vbN = self.vb_term[term_idx["eq"]] if self.vb_term is not None else 0.0
+        term_idx  = indices.constraints.terminal  
 
-            C.append(self.dz[-1, constraint.zf_idx] + self.z_ref[-1, constraint.zf_idx] - vbN == constraint.zf)
-        
-        if "final_state_inequality" in mission.constraint_ids["nodal"]:
-            id = mission.constraint_ids["nodal"]["final_state_inequality"]
+        if "equality_bc" in mission.constraint_ids["nodal"]:
+            id = mission.constraint_ids["nodal"]["equality_bc"][0]
             constraint = mission.constraints[id]
 
-            vbNiq = self.vb_term[term_idx["ineq"]] if self.vb_term is not None else 0.0
-            M_sel = tools.constraint_index_selector(constraint.zf_min_idx, constraint.zf_max_idx, n) # TODO(Skye): move this to indices class
-            C.append(M_sel @ (self.dz[-1, :n] + self.z_ref[-1, :n]) - vbNiq <= cp.hstack([-constraint.zf_min, self.zf_max]))
+            x_idx = constraint.x_idx
+            idx   = constraint.idx
+            x     = constraint.x
+
+            if constraint.set == "state":
+                vbN = self.vb_term[term_idx["eq"]] if self.vb_term is not None else 0.0
+                C.append(self.dz[idx,x_idx] + self.z_ref[idx, x_idx] - vbN == x)
+            elif constraint.set == "control":
+                C.append(self.dnu[idx,x_idx] + self.nu_ref[idx, x_idx] == x)
+
+        if "inequality_bc" in mission.constraint_ids["nodal"]:
+            id = mission.constraint_ids["nodal"]["inequality_bc"][0]
+            constraint = mission.constraints[id]
+
+            x_idx = constraint.x_idx
+            idx   = constraint.idx
+            x     = constraint.x
+
+            x_min_idx = constraint.x_min_idx
+            x_max_idx = constraint.x_max_idx
+            x_min = constraint.x_min
+            x_max = constraint.x_max
+
+            if constraint.set == "state":
+                vbNiq = self.vb_term[term_idx["ineq"]] if self.vb_term is not None else 0.0
+                M_sel = tools.constraint_index_selector(x_min_idx, x_max_idx, n)
+                C.append(M_sel @ (self.dz[idx, :n] + self.z_ref[idx, :n]) - vbNiq <= cp.hstack([-x_min, x_max]))
+            
+            elif constraint.set == "control":
+                M_sel = tools.constraint_index_selector(x_min_idx, x_max_idx, m)
+                C.append(M_sel @ (self.dnu[idx, :m] + self.nu_ref[idx, :m]) <= cp.hstack([-x_min, x_max]))
         
         # CTCS terminal equalities
         if mission.n_term_ctcs>0:
@@ -501,75 +499,66 @@ class Subproblem:
                     )
 
             # State box constraints
-            if "state_inequality" in mission.constraint_ids["nodal"]:
-                id = mission.constraint_ids["nodal"]
+            if "box" in mission.constraint_ids["nodal"]:
+                id = mission.constraint_ids["nodal"]["box"][0]
                 constraint = mission.constraints[id]
 
-                M_sel = tools.constraint_index_selector(constraint.z_min_idx, constraint.z_max_idx, n)
-                C.append(M_sel @ (self.z_ref[k, :n] + self.dz[k, :n]) <= cp.hstack([-constraint.z_min, constraint.z_max]))
+                x_min_idx = constraint.x_min_idx
+                x_max_idx = constraint.x_max_idx
+                x_min = constraint.x_min
+                x_max = constraint.x_max
 
-            # Control box constraints
-            if "control_inequality" in mission.constraint_ids["nodal"]:
-                id = mission.constraint_ids["nodal"]["control_inequality"]
-                constraint = mission.constraints[id]
-                
-                M_sel = tools.constraint_index_selector(constraint.u_min_idx, constraint.u_max_idx, m)
-                C.append(M_sel @ (self.nu_ref[k] + self.dnu[k]) <= cp.hstack([-constraint.u_min, constraint.u_max]))
+                if constraint.set == "state":
+                    M_sel = tools.constraint_index_selector(x_min_idx, x_max_idx, n)
+                    C.append(M_sel @ (self.z_ref[k, :n] + self.dz[k, :n]) <= cp.hstack([-x_min, x_max]))
+                elif constraint.set == "control":
+                    M_sel = tools.constraint_index_selector(x_min_idx, x_max_idx, m)
+                    C.append(M_sel @ (self.nu_ref[k] + self.dnu[k]) <= cp.hstack([-x_min, x_max]))
 
             # Linearized inequality constraints (path + nfz + custom)
-            if "nonconvex_inequality" in mission.constraint_ids["nodal"]:
+            if "nonconvex_inequality" in mission.constraint_ids["nodal"]["nonconvex_inequality"]:
                 C.append(self.dgdz[k] @ self.dz[k] + self.dgdnu[k] @ self.dnu[k] + self.g0[k] - self.vb_ineq[k] <= 0)
                 if str(self.flag_autotune) in {"1", "3", "al-scvx"} and self.vb_ineq[k]:
                     C.append(self.vb_ineq[k] >= 0)
 
             # convex constraints
-            if "state_axis_angle_cone" in mission.constraint_ids["nodal"]:
-                ids = mission.constraint_ids["nodal"]["state_axis_angle_cone"]
+            if "axis_angle_cone" in mission.constraint_ids["nodal"]:
+                ids = mission.constraint_ids["nodal"]["axis_angle_cone"]
                 z = self.z_ref[k] + self.dz[k]
                 
-                for constraint in mission.constraints[ids]:
+                for id in ids:
+                    constraint = mission.constraints[id]
                     idx = constraint.idx
                     axis = constraint.axis
 
-                    C.append(constraint.cos_theta_max * cp.norm(z[idx]) <= axis @ z[idx])
+                    if constraint.set == "state":
+                        C.append(constraint.cos_theta_max * cp.norm(z[idx]) <= axis @ z[idx])
+                    elif constraint.set == "control":
+                        C.append(constraint.cos_theta_max * cp.norm(nu[idx]) <= axis @ nu[idx])
 
-            if "control_axis_angle_cone" in mission.constraint_ids["nodal"]:
-                ids = mission.constraint_ids["nodal"]["control_axis_angle_cone"]
+            if "max_norm_cone" in mission.constraint_ids["nodal"]:
+                ids = mission.constraint_ids["nodal"]["max_norm_cone"]
+                z = self.z_ref[k] + self.dz[k]
                 nu = self.nu_ref[k] + self.dnu[k]
-                
-                for constraint in mission.constraints[ids]:
-                    idx = constraint.idx
-                    axis = constraint.axis
 
-                    C.append(constraint.cos_theta_max * cp.norm(nu[idx]) <= axis @ nu[idx])
-
-            if "state_max_norm_cone" in mission.constraint_ids["nodal"]:
-                ids = mission.constraint_ids["nodal"]["state_max_norm_cone"]
-                z = self.z_ref[k] + self.dz[k]
-                
-                for constraint in mission.constraints[ids]:
-                    idx = constraint.idx
+                for id in ids:
+                    constraint = mission.constraints[id]
+                    x_idx = constraint.x_idx
                     max_val = constraint.max_val
                     
-                    C.append(cp.norm(z[idx]) <= max_val)
-
-            if "control_max_norm_cone" in mission.constraint_ids:
-                ids = mission.constraint_ids["nodal"]["control_max_norm_cone"]
-                nu = self.nu_ref[k] + self.dnu[k]
-                
-                for constraint in mission.constraints[ids]:
-                    idx = constraint.idx
-                    max_val = constraint.max_val
-                    C.append(cp.norm(nu[idx]) <= max_val)
+                    if constraint.set == "state":
+                        C.append(cp.norm(z[x_idx]) <= max_val)
+                    elif constraint.set == "control":
+                        C.append(cp.norm(nu[x_idx]) <= max_val)
 
             # TODO(carlos): think about where to put this, this is a special constraint
             # but general enough to apply to different 6-dof models using quaternions
             if "quaternion_cone" in mission.constraint_ids["nodal"]:
-                ids = mission.cosntraint_ids["nodal"]["quaternion_cone"]
+                ids = mission.constraint_ids["nodal"]["quaternion_cone"]
                 z = self.z_ref[k] + self.dz[k]
 
-                for constraint in mission.constraints[ids]:
-                    idx = constraint.idx
+                for id in ids:
+                    constraint = mission.constraints[id]
                     quat_start_idx = constraint.quat_start_idx
                     C.append(cp.norm(z[quat_start_idx + 2, quat_start_idx + 4] <= constraint.rhs))
         
