@@ -54,7 +54,7 @@ def rk4_propagate_jax(dynamics, z0, nu_ref, t_ref, trajopt_obj):
 
     return z_numpy
 
-def straight_line_initial_guess(trajopt_obj):
+def straight_line_initial_guess(problem, method):
     """
     Generate a straight line initial guess for trajectory and control.
 
@@ -64,9 +64,6 @@ def straight_line_initial_guess(trajopt_obj):
     Returns:
     dict: Updated params with initial guesses for trajectory and control.
     """
-    mission = trajopt_obj.mission
-    model = trajopt_obj.model
-    method = trajopt_obj.method
 
 
     # Initialization trajectory

@@ -4,6 +4,7 @@ from trajopt.core.modules.method    import convergence
 from trajopt.core.modules.method    import hyperparameters
 from trajopt.core.modules.method    import discretize
 from trajopt.core.modules.method    import integrators
+from trajopt.core.modules.method    import nondim
 
 
 class Method:
@@ -31,14 +32,12 @@ class Method:
 
         self.line_guess_u_init = method_config["line_guess_u_init"]
 
-        self.nondim      = {}
         self.conv_data   = {}
 
+        nondim.set_nondim_params(problem, self)
 
-        # precompile discretize functions for jax
-        if self.flags['jax_dyn'] == 1:
-            discretize.jit_jax_discretize(trajopt_obj)
-            integrators.jit_rk4_jax_dense(trajopt_obj)
+        discretize.jit_jax_discretize(problem, self)
+        integrators.jit_rk4_jax_dense(problem, self)
 
         buff_dyn = str(self.flags.get("buff_dyn", "term"))
 
@@ -91,40 +90,25 @@ class Method:
         self.dt_min  = Ts_min / (self.N - 1)
         self.dt_max  = Ts_max / (self.N - 1)
 
-        # --- Terminal nondimensionalization matrix ---
-        M_state_vec = np.diag(self.nondim["M"]["state"]["d2nd"])
-        zf_idx      = mission.zf_idx
-        zf_min_idx  = mission.zf_min_idx
-        zf_max_idx  = mission.zf_max_idx
-        M_term_diag = np.concatenate([M_state_vec[zf_idx], M_state_vec[zf_min_idx], M_state_vec[zf_max_idx]])
-        self.nondim["M"]["term"]["d2nd"] = np.diag(M_term_diag)
-
         # --- LTV indexing ---
-        discretize.set_ltv_indices(method, problem.nz, problem.m)
+        discretize.set_ltv_indices(problem, self)
 
-        hyperparameters.configure_penalty_weights(trajopt_obj)
-
-        # ### NFZ convergence values ###
-        if mission.n_nfz > 0:
-            self.conv["eps_nfz"] = 2 * self.conv["eps_nfz"] / mission.obs["rc"] - self.conv["eps_nfz"]**2 / mission.obs["rc"]**2
+        hyperparameters.configure_penalty_weights(problem, self)
 
         # Extract only those terminal constraints used
         self.conv["eps_term"] = np.concatenate((self.conv["eps_term"][mission.zf_idx], self.conv["eps_term_min"][mission.zf_min_idx], self.conv["eps_term_max"][mission.zf_max_idx]))
 
         # --- Initialize virtual buffers ---
-        self.conv_data["vb_path"] = np.zeros((self.N,   mission.n_path))
-        self.conv_data["vb_nfz"]  = np.zeros((self.N,   mission.n_nfz))
-        self.conv_data["vb_custom"]  = np.zeros((self.N,   mission.n_custom))
-        self.conv_data["vb_dyn"]  = np.zeros((self.N-1, model.nz))
-        self.conv_data["vb_term"] = np.zeros(model.nz)
+        self.conv_data["vb_path"] = np.zeros((self.N,   problem.n_path))
+        self.conv_data["vb_nfz"]  = np.zeros((self.N,   problem.n_nfz))
+        self.conv_data["vb_custom"]  = np.zeros((self.N,   problem.n_custom))
+        self.conv_data["vb_dyn"]  = np.zeros((self.N-1, problem.nz))
+        self.conv_data["vb_term"] = np.zeros(problem.nz)
 
         ### Configure generic convergence criterion and max iterations ###
-        convergence.set_convergence_tolerance(trajopt_obj)
+        convergence.set_convergence_tolerance(problem, self)
 
-    def get_initial_guess(self):
-        trajopt_obj = self.trajopt_obj
-        mission = trajopt_obj.mission
-        model   = trajopt_obj.model
+    def get_initial_guess(self, problem):
 
         self.nl_guess_u_start = self.nondim["M"]["ctrl"]["d2nd"] @ self.nl_guess_u_start
         self.nl_guess_u_stop  = self.nondim["M"]["ctrl"]["d2nd"] @ self.nl_guess_u_stop
@@ -135,12 +119,12 @@ class Method:
             nu_range = np.vstack([self.nl_guess_u_start, self.nl_guess_u_stop])
             guess.nonlinear_initial_guess(nu_range, trajopt_obj)
         else:
-            guess.straight_line_initial_guess(trajopt_obj)
+            guess.straight_line_initial_guess(problem, self)
             self.nu_init = self.line_guess_u_init
 
-        if self.flags["ctcs"] != "none":
-            guess.ctcs_initial_guess(trajopt_obj)
+        if problem.constraints.has('ct'):
+            guess.ctcs_initial_guess(self)
 
-        self.cost_init = discretize.compute_linearized_costs(self.t_init, self.z_init, self.nu_init, trajopt_obj)[0].sum().item()
+        self.cost_init = discretize.compute_linearized_costs(self.t_init, self.z_init, self.nu_init, self, problem)[0].sum().item()
 
         print(f"Cost initial: {self.cost_init}")

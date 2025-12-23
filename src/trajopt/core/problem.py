@@ -5,12 +5,15 @@ from typing import Dict, Any, Optional, List
 import numpy as np
 import importlib
 
-import trajopt.utils.tools as tools
+import trajopt.core.modules.utils.tools as tools
 import trajopt.core.modules.method.initial_guess as guess
 import trajopt.core.modules.method.convergence as convergence
 import trajopt.core.modules.method.convexify as convexify
-import trajopt.core.modules.model.constraints as constraints_module
-import trajopt.core.modules.model.costs as costs_module
+import trajopt.core.modules.model.constraints_library as constraints_module
+from trajopt.core.Constraints import Constraints
+import trajopt.core.modules.model.costs_library as costs_module
+
+from pprint import pprint
 
 class Problem:
 
@@ -18,29 +21,30 @@ class Problem:
 
         # ████████████████████████████████████████████████████████████████████████████
         # █                                                                          █
-        # █                    M O D E L    C O N F I G S                            █
-        # █                                                                          █
-        # ████████████████████████████████████████████████████████████████████████████
-
-        self.model_name = config['model']
-        self.model_module = importlib.import_module(f"trajopt.core.modules.model.{self.model_name}")
-        self.model_config = config['model_config']
-
-        self.model = self.model_module.Model(self.model_config)
-
-        # ████████████████████████████████████████████████████████████████████████████
-        # █                                                                          █
         # █                    M I S S I O N    C O N F I G S                        █
         # █                                                                          █
         # ████████████████████████████████████████████████████████████████████████████
 
-        
-        self.mission_name = config['mission']
+        self.mission_config = config['problem']['mission']
+        self.mission_name = config['problem']['mission']['name']
         self.mission_module = importlib.import_module(f"trajopt.core.modules.mission.{self.mission_name}")
-        self.mission_config = config['mission_config']
 
         self.mission = self.mission_module.Mission(self.mission_config)
 
+        # ████████████████████████████████████████████████████████████████████████████
+        # █                                                                          █
+        # █                    M O D E L    C O N F I G S                            █
+        # █                                                                          █
+        # ████████████████████████████████████████████████████████████████████████████
+
+        self.model_config = config['problem']['model']
+        self.model_name = config['problem']['model']['name']
+        self.model_module = importlib.import_module(f"trajopt.core.modules.model.{self.model_name}")
+
+        self.model = self.model_module.Model(self.model_config, self.mission)
+
+        self.n = self.model.n
+        self.m = self.model.m
 
         # ████████████████████████████████████████████████████████████████████████████
         # █                                                                          █
@@ -59,13 +63,6 @@ class Problem:
 
         f, dfcn_dz, dfcn_du = convexify.linearize_jax(self.dynamics)
         lin_dyn = lambda t, z, nu: (f(z, nu), dfcn_dz(z, nu), dfcn_du(z, nu))
-
-        if "ct" in self.constraint_ids:
-            f_ctcs, dfcn_dz_ctcs, dfcn_du_ctcs = convexify.linearize_jax_ctcs(self.dynamics)
-
-            lin_dyn_ctcs = lambda t, z, nu: (f_ctcs(z, nu), dfcn_dz_ctcs(z, nu), dfcn_du_ctcs(z, nu))
-            
-            self.lin_dyn_ctcs = lin_dyn_ctcs
 
         self.lin_dyn = lin_dyn
 
@@ -86,43 +83,42 @@ class Problem:
         #
         # ------------------------------------------------------------
 
-        self.constraints = []
-        self.constraint_ids = {}
-
-        # build constraint_ids mapping
-        for i, constraint_config in enumerate(config["constraints"]):
-            constraint_type = constraint_config["type"]
-            constraint_params = {k:v for k, v in constraint_config.items() if k != "type"}
-            constraintClass = getattr(constraints_module, constraint_type)
-            self.constraints.append(constraintClass(**constraint_params))
-
-            # add constraint to constraint_id map for indexing into list
-            ct_type = "ct" if constraint_config["ct"] else "nodal"
-                
-            if ct_type not in self.constraint_ids:
-                self.constraint_ids[ct_type] = {}
-                self.constraint_ids[ct_type]['all'] = []
-
-            if constraint_type not in self.constraint_ids[ct_type]:
-                self.constraint_ids[ct_type][constraint_type] = []
-            
-            self.constraint_ids[ct_type][constraint_type].append(i)
-            self.constraint_ids[ct_type]['all'].append(i)
+        constraint_config_list = config["problem"]["constraints"]
+        self.constraints = Constraints(constraint_config_list)
 
         # constraint book keeping
-        if "nonconvex_inequality" in self.constraint_ids["nodal"]:
-            nodal_ncvx_ineq_ids = self.constraint_ids["nodal"]["nonconvex_inequality"]
-            self.n_ineq = sum(constraint.dimension for constraint in self.constraints[nodal_ncvx_ineq_ids])
-        else:
-            self.n_ineq = 0
+        self.n_ineq = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality'))
 
-        if "ct" in self.constraint_ids:
-            ct_ids = self.constraint_ids["ct"]["all"]
-            self.n_ctcs = sum(constraint.dimension for constraint in self.constraints[ct_ids])
+        # TODO: temp?
+        self.n_path = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "path")
+        self.n_nfz = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "nfz")
+        self.n_custom = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "custom")
+
+        if self.constraints.has('ct'):
+            self.n_ctcs = sum(constraint.dimension for constraint in self.constraints.get('ct', 'all'))
         else:
             self.n_ctcs = 0
 
         self.nz = self.n + self.n_ctcs
+
+        self.n_term = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'equality_bc') if constraint.boundary == "final")
+        self.n_term_ineq = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'inequality_bc') if constraint.boundary == "final" and constraint.set == "state")
+        self.n_term_ctcs = self.n_ctcs
+        
+        print(f"\nconstraints loaded successfully!")
+        print("constraint_ids: \n")
+        pprint(self.constraints.constraint_ids)
+
+        # ------------------------------------------------------------
+        # Augmented CTCS dynamics
+        # ------------------------------------------------------------
+
+        if self.constraints.has('ct'):
+            f_ctcs, dfcn_dz_ctcs, dfcn_du_ctcs = convexify.linearize_jax_ctcs(self.dynamics, self.constraints, self.n)
+
+            lin_dyn_ctcs = lambda t, z, nu: (f_ctcs(z, nu), dfcn_dz_ctcs(z, nu), dfcn_du_ctcs(z, nu))
+            
+            self.lin_dyn = lin_dyn_ctcs
 
         # ------------------------------------------------------------
         # Cost
@@ -144,16 +140,25 @@ class Problem:
         self.costs = []
         self.cost_ids = {}
 
+        print(f"\nloading costs:")
+
         # build constraint_ids mapping
-        for i, cost_config in enumerate(config["costs"]):
+        for i, cost_config in enumerate(config["problem"]["costs"]):
             cost_type = cost_config["type"]
+            print(f"  {i}: {cost_type}")
+            cost_params = {k:v for k, v in cost_config.items() if k != "type"}
             costClass = getattr(costs_module, cost_type)
-            self.costs.append(costClass(**cost_config))
+            self.costs.append(costClass(**cost_params))
 
             if cost_type not in self.cost_ids:
                 self.cost_ids[cost_type] = []
             
             self.cost_ids[cost_type].append(i)
+
+        print("\ncosts loaded successfully!")
+        print("cost_ids: \n")
+
+        pprint(self.cost_ids)
 
         # # ------------------------------------------------------------
         # # Custom Input/Variable/Constraint/Cost

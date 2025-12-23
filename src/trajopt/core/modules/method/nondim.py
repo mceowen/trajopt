@@ -2,17 +2,13 @@ import numpy as np
 
 # example usage: set_nondim_params(["d", "d", "d", "v", "v", "v"], ["f", "f"], [("d", 10), ("v", 10), ("m", 1)], params)
 
-def set_nondim_params(trajopt_obj, base_unit_labels=["m", "s", "kg"]):
+def set_nondim_params(problem, method, base_unit_labels=["m", "s", "kg"]):
     """
     Initializes all nondimensional parameters
     """
 
-    mission = trajopt_obj.mission
-    model = trajopt_obj.model
-    method = trajopt_obj.method
-
-    n = model.n
-    m = model.m
+    n = problem.n
+    m = problem.m
 
     # this solves the following linear system to backout base scales for
     # distance, time, and mass:
@@ -28,8 +24,8 @@ def set_nondim_params(trajopt_obj, base_unit_labels=["m", "s", "kg"]):
         "f": np.array([1, -2,  1]),
     }
 
-    A = np.vstack([exponents[key] for key in model.anchor_types])
-    b = np.log(np.array([val for val in model.anchor_scales]))
+    A = np.vstack([exponents[key] for key in method.anchor_types])
+    b = np.log(np.array([val for val in method.anchor_scales]))
 
     log_base_scales = np.linalg.solve(A, b)
     base_scales = np.exp(log_base_scales)
@@ -75,8 +71,8 @@ def set_nondim_params(trajopt_obj, base_unit_labels=["m", "s", "kg"]):
     print("scales: ")
     print(", ".join(f"{k}: {v:.4f}" for k, v in scales.items()))
 
-    nd_state = np.array([scales[model.z_types[i]] for i in range(n)])
-    nd_ctrl  = np.array([scales[model.u_types[i]] for i in range(m)])
+    nd_state = np.array([scales[method.z_types[i]] for i in range(n)])
+    nd_ctrl  = np.array([scales[method.u_types[i]] for i in range(m)])
 
     method.nondim               = {}
     method.nondim["M"]          = {}
@@ -116,8 +112,8 @@ def set_nondim_params(trajopt_obj, base_unit_labels=["m", "s", "kg"]):
     method.nondim["nf"] = scales["f"]
     method.nondim["nang"] = scales["ang"]
     method.nondim["nangv"] = scales["ang"] / scales["t"]
-    method.nondim["labels"]["state"] = [scale_labels[model.z_types[i]] for i in range(n)]
-    method.nondim["labels"]["ctrl"]  = [scale_labels[model.u_types[i]] for i in range(m)]
+    method.nondim["labels"]["state"] = [scale_labels[method.z_types[i]] for i in range(n)]
+    method.nondim["labels"]["ctrl"]  = [scale_labels[method.u_types[i]] for i in range(m)]
 
     # set nondim for cost and constraints
     
@@ -130,12 +126,12 @@ def set_nondim_params(trajopt_obj, base_unit_labels=["m", "s", "kg"]):
     method.nondim["M"]["cost"]["d2nd"] = 1 / ncost
 
     # nodal nonconvex inequality nondim
-    nineq = np.ones(mission.n_ineq)
+    nineq = np.ones(problem.n_ineq)
+    
     idx = 0
-    for id in mission.constraint_ids["nodal"]["nonconvex_ineqaulity"]:
-        constraint = mission.constraints[id]
-        if "units" in constraint:
-            scale_list = [scales[key]**exponent for key, exponent in mission.constraints.units]
+    for constraint in problem.constraints.get('nodal', 'nonconvex_inequality'):
+        if getattr(constraint, 'units', None) is not None:
+            scale_list = [scales[key]**exponent for key, exponent in constraint.units]
             scale = np.prod(scale_list)
             nineq[idx + constraint.dimension] = scale
         idx += constraint.dimension
@@ -145,12 +141,11 @@ def set_nondim_params(trajopt_obj, base_unit_labels=["m", "s", "kg"]):
     method.nondim["M"]["ineq"]["nd2d"] = np.diag(nineq).copy()
 
     # ct nonconvex inequality nondim
-    nctcs = np.ones(mission.n_ctcs)
+    nctcs = np.ones(problem.n_ctcs)
     idx = 0
-    for id in mission.constraint_ids["ct"]["nonconvex_ineqaulity"]:
-        constraint = mission.constraints[id]
-        if "units" in constraint:
-            scale_list = [scales[key]**exponent for key, exponent in mission.constraints.units]
+    for constraint in problem.constraints.get('ct', 'nonconvex_inequality'):
+        if getattr(constraint, 'units', None) is not None:
+            scale_list = [scales[key]**exponent for key, exponent in constraint.units]
             scale = np.prod(scale_list)
             nctcs[idx + constraint.dimension] = scale
         idx += constraint.dimension

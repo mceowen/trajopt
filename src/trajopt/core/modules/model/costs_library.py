@@ -13,7 +13,8 @@ class running_state:
     def __init__(self, fcn):
         pass
 
-    def fcn(self, t, z, nu)
+    def fcn(self, t, z, nu):
+        pass
 
 class time:
     def __init__(self):

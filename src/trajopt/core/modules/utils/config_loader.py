@@ -1,4 +1,4 @@
-import trajopt.utils.tools as tools
+import trajopt.core.modules.utils.tools as tools
 import numpy as np
 
 def load_configs(example_name, local=False):
@@ -6,36 +6,54 @@ def load_configs(example_name, local=False):
     # Define paths based on local flag
     if local:
         example_pkg = f"trajopt.local.examples.{example_name}"
-        config_base = "trajopt.local.configs"
     else:
         example_pkg = f"trajopt.examples.{example_name}"
-        config_base = "trajopt.core.configs"
+
+    problem_dict = tools.load_yaml(example_pkg, "problem.yaml")
+
+    config_dicts = {"mission": {}, "model": {}}
     
-    config = {"example_name": example_name}
-    
-    # Load configs for mission, model, method
-    for config_type in ["mission", "model", "method"]:
+    # Load mission and model configs specified in problem.yaml
+    for config_type in ["mission", "model"]:
         # Load default and example configs
-        default_cfg = tools.load_yaml(f"{config_base}.{config_type}", "default.yaml")
-        example_cfg = tools.load_yaml(example_pkg, f"{config_type}.yaml")
+        name = problem_dict[f"{config_type}_name"]
+        default_config = tools.load_yaml(f"trajopt.core.modules.{config_type}.configs", "default.yaml")
+        base_config    = tools.load_yaml(f"trajopt.core.modules.{config_type}.configs", f"{name}.yaml")
+        # example_config = problem_config[config_type]
         
         # Merge default -> example
-        config[config_type] = tools.deep_update({}, default_cfg)
-        config[config_type] = tools.deep_update(config[config_type], example_cfg)
+        config_dicts[config_type] = tools.deep_update(config_dicts[config_type], default_config)
+        config_dicts[config_type] = tools.deep_update(config_dicts[config_type], base_config)
+        # config_dicts[config_type] = tools.deep_update(config_dicts[config_type], example_config)
+
+        config_dicts[config_type]['name'] = name
         
         # Load planet and vehicle for mission
         if config_type == "mission":
-            config["mission"]["planet"] = tools.load_yaml(
-                f"{config_base}.mission.planet", 
-                f"{config['mission']['planet_name']}.yaml"
+            config_dicts["mission"]["planet"] = tools.load_yaml(
+                f"trajopt.core.modules.mission.configs.planet", 
+                f"{config_dicts['mission']['planet']}.yaml"
             )
-            config["mission"]["vehicle"] = tools.load_yaml(
-                f"{config_base}.mission.vehicle",
-                f"{config['mission']['vehicle_name']}.yaml"
+            config_dicts["mission"]["vehicle"] = tools.load_yaml(
+                f"trajopt.core.modules.mission.configs.vehicle",
+                f"{config_dicts['mission']['vehicle']}.yaml"
             )
         
         # Evaluate expressions
-        tools.eval_expressions(config_type, config)
+        tools.eval_expressions(config_type, config_dicts)
+
+    # Load method config specified in method.yaml
+    example_method_config = tools.load_yaml(example_pkg, "method.yaml")
+    default_method_config = tools.load_yaml(f"trajopt.core.modules.method.configs", "default.yaml")
+    base_method_config    = tools.load_yaml(f"trajopt.core.modules.method.configs", f"{example_method_config['base_method']}.yaml")
+
+    method_dict = tools.deep_update(default_method_config, base_method_config)
+    method_dict = tools.deep_update(method_dict, example_method_config)
+
+    problem_dict["mission"] = config_dicts["mission"]
+    problem_dict["model"] = config_dicts["model"]
+
+    config = {"problem": problem_dict, "method": method_dict}
     
     return config
 

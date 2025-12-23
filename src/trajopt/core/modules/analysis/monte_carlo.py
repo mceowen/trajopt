@@ -1,10 +1,10 @@
-import trajopt.utils.config_loader as cfg
+import trajopt.core.modules.utils.config_loader as cfg
 import numpy as np
 import copy
-import trajopt.core.trajopt_obj as traj
+import trajopt.core.Trajopt as traj
 import trajopt.core.modules.method.scp as scp
 import trajopt.analysis.default_analysis as default_analysis
-import trajopt.utils.tools as tools
+import trajopt.core.modules.utils.tools as tools
 
 def add_monte_carlo_dispersions(mission_dict, realization):
         for mc_var, mc_disp in realization.items():

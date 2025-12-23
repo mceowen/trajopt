@@ -20,19 +20,13 @@ def linearize_jax(fcn,params=None):
 
     return f, dfcn_dz, dfcn_du
 
-def linearize_jax_ctcs(fcn, trajopt_obj):
-    problem = trajopt_obj.problem
-    method = trajopt_obj.method
-    
-    n = problem.n
-    m = problem.m
-    constraints = problem.constraints
+def linearize_jax_ctcs(fcn, constraints, n):
     
     def wrapped_fcn(z, nu):
 
-        constr = jnp.concatenate([constraints[i].fcn(0, z, nu, trajopt_obj) for i in problem.constraint_ids['ct']['all']])
+        constr = jnp.concatenate([constraint.fcn(0, z, nu) for constraint in constraints.get("ct")])
 
-        f_val = jnp.concatenate([fcn(0, z[:n], nu, trajopt_obj), jnp.square(jnp.maximum(method.weights["w_ctcs"] * constr, 0.0))])
+        f_val = jnp.concatenate([fcn(0, z[:n], nu), jnp.square(jnp.maximum(constr, 0.0))])
         
         return f_val
 

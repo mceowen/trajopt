@@ -1,5 +1,5 @@
 import numpy as np
-import trajopt.utils.tools                      as tools
+import trajopt.core.modules.utils.tools                      as tools
 
 # ===============================================================
 # MISSION

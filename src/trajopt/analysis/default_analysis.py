@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.integrate import solve_ivp
-import trajopt.utils.tools as tools
+import trajopt.core.modules.utils.tools as tools
 import jax
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)

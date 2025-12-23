@@ -1,7 +1,6 @@
 import numpy as np
 
 import trajopt; import importlib; importlib.reload(trajopt)
-import trajopt.utils.nondim as nondim
 
 from trajopt.core.Problem   import Problem
 from trajopt.core.Method    import Method

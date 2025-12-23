@@ -17,7 +17,7 @@ from trajopt.core.modules.method import discretize
 from trajopt.core.modules.method import convexify 
 from trajopt.core.modules.method import hyperparameters as hp
 from trajopt.core.modules.method import convergence
-from trajopt.utils import tools
+from trajopt.core.modules.utils import tools
 
 
 # =====================================================================================

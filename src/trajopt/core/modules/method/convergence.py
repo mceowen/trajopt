@@ -1,6 +1,6 @@
 import numpy as np
 
-import trajopt.utils.tools as tools
+import trajopt.core.modules.utils.tools as tools
 
 def set_convergence_tolerance(trajopt_obj):
     """

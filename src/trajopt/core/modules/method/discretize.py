@@ -248,15 +248,12 @@ def RHS_ltv(tau, lds, nu_ref, dt_ref, trajopt_obj):
 
     return lds_dot
 
-def jit_jax_discretize(trajopt_obj):
-
-    model = trajopt_obj.model
-    method = trajopt_obj.method
+def jit_jax_discretize(problem, method):
     
-    n = int(model.n)
-    nz = int(model.nz)
-    m = int(model.m)
-    N = int(method.N)
+    n = problem.n
+    nz = problem.nz
+    m = problem.m
+    N = method.N
 
     # define static indices for stacked RHS vector 
     Ak_ind0   = nz
@@ -265,10 +262,7 @@ def jit_jax_discretize(trajopt_obj):
     Sk_ind0   = Bkp_ind0 + nz*m
 
     # pull ltv dynamics
-    if method.flags["ctcs"] != "none":
-        lin_dyn = model.lin_dyn_ctcs
-    else:
-        lin_dyn = model.lin_dyn
+    lin_dyn = problem.lin_dyn
 
     # nsub defines the number of sub *nodes* between knot points
     nsub_nodes = 15

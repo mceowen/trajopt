@@ -1,15 +1,17 @@
-model: lander_6dof
-mission: lander
+model_name: lander_6dof
+mission_name: lander
 
 constraints:
 - type: equality_bc
-  set: state
   name: initial_state
+  set: state
   x: [4, 4, 0, 0.0 , -4.0, 4.0, 0, 0, 0]
   x_idx: [1, 2, 3, 4, 5, 6, 11, 12, 13]
   boundary: init
 
 - type: equality_bc
+  name: final_state
+  set: state
   x: [0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
   x_idx: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
   boundary: final
@@ -23,63 +25,57 @@ constraints:
   boundary: final
 
 - type: box
-  set: state
   name: state_box
+  set: state
   x_min: [1.0]
   x_min_idx: [0]
   x_max: []
   x_max_idx: []
 
 - type: axis_angle_cone
-  set: control
   name: gimbal_limit
-  theta_max: 45
+  set: control
   axis: [1, 0, 0]
+  theta_max: 20
+  idx: [0, 1, 2]
 
 - type: axis_angle_cone
+  name: glide_slope
+  set: state
   axis: [1, 0, 0]
   theta_max: 45
   idx: [0, 1, 2]
-  name: glide_slope
 
 - type: max_norm_cone
-  name: "max_thrust"
+  name: max_thrust
+  set: control
+  max_val: 5
+  idx: [0, 1, 2]
 
 - type: quaternion_cone
-  theta_max: 20
+  name: tilt_limit
+  theta_max: 90
   axis_num: 1
-  name: "tilt_limit"
+  quat_start_idx: 7
 
 - type: nonconvex_inequality
-  ct: 1
-  fcn: model.height_triggered_pitch
-  fcn_params: {"cos_theta_max": 0.9, "trigger_height": 2.0}
+  name: height_triggered_pitch
   group: path
+  fcn: mission.height_triggered_pitch
+  fcn_params: {"cos_theta_max": 0.9, "trigger_height": 2.0}
   units: {"none": 1.0}
   eps: [0.005]
   dimension: 1
-  name: height_triggered_pitch
+  ct: 1
 
 - type: nonconvex_inequality
-  set: path
   name: min_thrust_norm
-  fcn: {name: min_thrust_norm, from: model}
-  fcn_params: {"min_thrust": 0.3}
+  group: path
+  fcn: mission.min_thrust_norm
   units: {"d": 1.0, "t": -1.0}
   eps: [0.005]
+  dimension: 1
   ct: 0
 
 costs:
 - type: time
-
-# UNITS AND NONDIMENSIONALIZATION
-z_types: ["m", "d", "d", "d", "v", "v", "v", "none", "none", "none", "none", "none", "none", "none"]
-u_types: ["f", "f", "f"]
-
-anchor_types : ["t", "v", "m"]
-anchor_scales: [1.0, 1.0, 1.0]
-base_unit_labels: ["m", "s", "kg"]
-
-# final state guess for straight line initial guess
-zi_guess: [2.0, 4, 4, 0, 0, -4.0, 4.0, 1.0, 0, 0, 0, 0, 0, 0]
-zf_guess: [1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]

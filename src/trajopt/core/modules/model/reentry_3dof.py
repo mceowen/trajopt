@@ -1,7 +1,7 @@
 import numpy as np
 import jax 
 import jax.numpy as jnp
-import trajopt.utils.tools as tools
+import trajopt.core.modules.utils.tools as tools
 jax.config.update("jax_enable_x64", True)
 import trajopt.core.modules.model.obstacles     as obstacles
 
@@ -24,8 +24,6 @@ class Model:
         alpha = nu[1]
         
         # Determine lift and drag coefficients from velocity
-
-
         aero = self.mission.nonlinear_aero_jax(rho, v)
         L    = aero["L"]
         D    = aero["D"]

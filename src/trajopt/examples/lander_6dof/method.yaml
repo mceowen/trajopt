@@ -1,5 +1,7 @@
 'N': 40
 
+base_method: autoscvx
+
 flags:
   free_final_time: 1          # 0, 1
   dynamics_nonconvex: 1       # 0, 1
@@ -25,13 +27,23 @@ flags:
   flag_dual:    1.0
   flag_vb:      1.0
 
-solver_opts:
-  solver: "QOCO"
+guess:
+  # time initialization
+  T_init: 5
+  T_min: 1
+  T_max: 10
+  dT_max: 0.5 # 5.0
 
-T_init: 5
-T_min: 1
-T_max: 10
-dT_max: 0.5 # 5.0
+  # control initialization for nonlinear initial guess
+  nl_guess_u_start: [2.0, 0, 0]
+  nl_guess_u_stop: [2.0, 0, 0]
+
+  # final state guess for straight line initial guess
+  zi_guess: [2.0, 4, 4, 0, 0, -4.0, 4.0, 1.0, 0, 0, 0, 0, 0, 0]
+  zf_guess: [1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
+
+  # control initialization for straight line initial guess
+  line_guess_u_init: "eval: np.tile([2.0, 0.5, 0], (method['N'], 1))"
 
 conv:
   #ctcs_mult_state: 1.0
@@ -42,6 +54,14 @@ conv:
   eps_defect: [0.0001]
   eps_dyn: [0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001]
   iter_max: 30
+
+scaling:
+  z_types: ["m", "d", "d", "d", "v", "v", "v", "none", "none", "none", "none", "none", "none", "none"]
+  u_types: ["f", "f", "f"]
+
+  anchor_types : ["t", "v", "m"]
+  anchor_scales: [1.0, 1.0, 1.0]
+  base_unit_labels: ["m", "s", "kg"]
 
 weights:
   w_cost:         1.0
@@ -58,8 +78,6 @@ weights:
   w_dyn_scale:    10000.0
   w_term_scale:   1000.0
   w_ctcs:         100.0 # 10.0, 20.0
-  
-nl_guess_u_start: [2.0, 0, 0]
-nl_guess_u_stop: [2.0, 0, 0]
 
-line_guess_u_init: "eval: np.tile([2.0, 0.5, 0], (method['N'], 1))"
+solver_opts:
+  solver: "QOCO"

@@ -7,11 +7,10 @@ import cvxpy as cp
 # =============================================================================
 
 class Model:
-    def __init__(self, model_config):
+    def __init__(self, model_config, mission):
         self.n = 14
         self.m = 3
         self.model_config = model_config
-        self.mission = super().mission
 
     # Direction Cosine Matrix Function
     def DCM(self, q): 
