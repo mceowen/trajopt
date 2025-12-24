@@ -11,6 +11,7 @@ class Model:
         self.n = 14
         self.m = 3
         self.model_config = model_config
+        self.mission = mission
 
     # Direction Cosine Matrix Function
     def DCM(self, q): 
@@ -89,4 +90,4 @@ class Model:
 
     def min_thrust_norm(self, t, z, nu, params):
         
-        return jnp.array(1.0 - jnp.linalg.norm(nu[:3]) / params["min_thrust"])
+        return jnp.array([1.0 - jnp.linalg.norm(nu[:3]) / params["min_thrust"]])

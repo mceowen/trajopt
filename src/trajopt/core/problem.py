@@ -5,15 +5,16 @@ from typing import Dict, Any, Optional, List
 import numpy as np
 import importlib
 
-import trajopt.core.modules.utils.tools as tools
-import trajopt.core.modules.method.initial_guess as guess
-import trajopt.core.modules.method.convergence as convergence
 import trajopt.core.modules.method.convexify as convexify
-import trajopt.core.modules.model.constraints_library as constraints_module
 from trajopt.core.Constraints import Constraints
-import trajopt.core.modules.model.costs_library as costs_module
+from trajopt.core.Costs import Costs
 
-from pprint import pprint
+# ████████████████████████████████████████████████████████████████████████████
+
+# TODO: STILL UNDER CONSTRUCTION, RUNS AND "CONVERGES" for:
+# examples/lander_6dof/standalone_prototype.ipynb
+
+# ████████████████████████████████████████████████████████████████████████████
 
 class Problem:
 
@@ -70,12 +71,25 @@ class Problem:
         # Constraints
         # ------------------------------------------------------------
 
+        # TODO (carlos): update this documentation and add more features
+        # to the costs class so less for loops are needed outside the class
+
         # ------------------------------------------------------------
+        # constraints class contains a list of constraint objects with 
+        # a mapping of constraint type to a list of constraint ids for
+        # fast lookup
+        #
+        # example usage of constraints class:
+        # nonconvex_inequality_constraints = self.constraints.get('nodal', 'nonconvex_inequality')
+        # ctcs_constraints = self.constraints.get('ct', 'all')
+        #
+        # each constraint object is an instantiation from the constraints_library module
+        #
         # example structure of constaint_ids
         # (type: dict[str, dict[str, list[int]]]) 
         # 
         #
-        # constraints = [control_axis_angle_cone, control_axis_angle_cone,  quaternion_cone, quaternion_cone, state_max_norm_cone]
+        # constraints = [axis_angle_cone, axis_angle_cone,  quaternion_cone, quaternion_cone, max_norm_cone]
         # constraint_ids = {
         #   "ct": {"control_axis_angle_cone": [0, 1], "state_max_norm_cone": [4]},
         #   "nodal": {"quaternion_cone": [2, 3]} 
@@ -89,7 +103,8 @@ class Problem:
         # constraint book keeping
         self.n_ineq = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality'))
 
-        # TODO: temp?
+        # TODO: should the algorithm need to distinguish between path, nfz, and custom, can we collapse into n_ineq?
+        # TODO: ADD this to constraints class lol, ideally, shouldn't need any loops
         self.n_path = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "path")
         self.n_nfz = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "nfz")
         self.n_custom = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "custom")
@@ -101,13 +116,11 @@ class Problem:
 
         self.nz = self.n + self.n_ctcs
 
-        self.n_term = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'equality_bc') if constraint.boundary == "final")
+        # TODO: same here
+        self.n_term = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'equality_bc') if constraint.boundary == "final" and constraint.set == "state")
         self.n_term_ineq = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'inequality_bc') if constraint.boundary == "final" and constraint.set == "state")
         self.n_term_ctcs = self.n_ctcs
-        
-        print(f"\nconstraints loaded successfully!")
-        print("constraint_ids: \n")
-        pprint(self.constraints.constraint_ids)
+        self.n_term_total = self.n_term + self.n_term_ineq + self.n_ctcs
 
         # ------------------------------------------------------------
         # Augmented CTCS dynamics
@@ -124,41 +137,32 @@ class Problem:
         # Cost
         # ------------------------------------------------------------
 
-        # ------------------------------------------------------------
-        # example structure of cost_ids
-        # (type: dict[str, list[int]]) 
-        # 
-        #
-        # costs = [cost_type_1, cost_type_2]
-        # cost_ids = {
-        #   "cost_type_1": [0],
-        #   "cost_type_2": [1]
-        # }
-        #
-        # ------------------------------------------------------------
+        # TODO (carlos): update this documentation and add more features
+        # to the costs class for more granular constraint lookups
 
-        self.costs = []
-        self.cost_ids = {}
+        # similar structure to the constraints class without the outer
+        # "ct" / "nodal" distinction, usage is the same
 
-        print(f"\nloading costs:")
+        cost_config_list = config["problem"]["costs"]
+        self.costs = Costs(cost_config_list)
 
-        # build constraint_ids mapping
-        for i, cost_config in enumerate(config["problem"]["costs"]):
-            cost_type = cost_config["type"]
-            print(f"  {i}: {cost_type}")
-            cost_params = {k:v for k, v in cost_config.items() if k != "type"}
-            costClass = getattr(costs_module, cost_type)
-            self.costs.append(costClass(**cost_params))
+        # resolve functions
+        for constraint in self.constraints.constraints_list:
+            if getattr(constraint, 'fcn_name', None) is not None:
+                obj_name, func_name = constraint.fcn_name   .split(".")
 
-            if cost_type not in self.cost_ids:
-                self.cost_ids[cost_type] = []
-            
-            self.cost_ids[cost_type].append(i)
+                if obj_name == "model":
+                    obj = self.model
+                
+                elif obj_name == "mission":
+                    obj = self.mission
 
-        print("\ncosts loaded successfully!")
-        print("cost_ids: \n")
+                if constraint.fcn_params == {}:
+                    constraint.fcn = getattr(obj, func_name)
+                else:
+                    constraint.fcn = lambda t, z, nu: getattr(obj, func_name)(t, z, nu, constraint.fcn_params)
 
-        pprint(self.cost_ids)
+                constraint.fcn_jit, constraint.dfcn_dz_jit, constraint.dfcn_du_jit = convexify.linearize_jax(constraint.fcn)
 
         # # ------------------------------------------------------------
         # # Custom Input/Variable/Constraint/Cost
@@ -170,14 +174,7 @@ class Problem:
         # self.set_custom_params()
 
 
-
-
-
-
-
-
-
-# TODO: add this back
+# TODO (carlos): add this back
 
 # """
 # Attach mission functions for costs and constraints.

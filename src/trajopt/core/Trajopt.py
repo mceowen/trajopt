@@ -14,5 +14,4 @@ class Trajopt:
         self.name       = 'name'
 
         self.problem    = Problem(config)
-        self.indices    = Indices(self.problem)
         self.method     = Method(self.problem, config)

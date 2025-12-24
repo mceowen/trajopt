@@ -53,7 +53,7 @@ conv:
   eps_cost: 1
   eps_defect: [0.0001]
   eps_dyn: [0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001]
-  iter_max: 30
+  iter_max: 20
 
 scaling:
   z_types: ["m", "d", "d", "d", "v", "v", "v", "none", "none", "none", "none", "none", "none", "none"]

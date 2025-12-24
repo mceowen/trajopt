@@ -15,7 +15,7 @@ constraints:
   x: [0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
   x_idx: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
   boundary: final
-  eps: [0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05]
+  eps: [0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05]
 
 - type: equality_bc
   set: control
@@ -37,20 +37,20 @@ constraints:
   set: control
   axis: [1, 0, 0]
   theta_max: 20
-  idx: [0, 1, 2]
+  x_idx: [0, 1, 2]
 
 - type: axis_angle_cone
   name: glide_slope
   set: state
   axis: [1, 0, 0]
   theta_max: 45
-  idx: [0, 1, 2]
+  x_idx: [1, 2, 3]
 
 - type: max_norm_cone
   name: max_thrust
   set: control
   max_val: 5
-  idx: [0, 1, 2]
+  x_idx: [0, 1, 2]
 
 - type: quaternion_cone
   name: tilt_limit
@@ -58,21 +58,22 @@ constraints:
   axis_num: 1
   quat_start_idx: 7
 
-- type: nonconvex_inequality
-  name: height_triggered_pitch
-  group: path
-  fcn: mission.height_triggered_pitch
-  fcn_params: {"cos_theta_max": 0.9, "trigger_height": 2.0}
-  units: {"none": 1.0}
-  eps: [0.005]
-  dimension: 1
-  ct: 1
+# - type: nonconvex_inequality
+#   name: height_triggered_pitch
+#   group: path
+#   fcn: model.height_triggered_pitch
+#   fcn_params: {"cos_theta_max": 0.9, "trigger_height": 2.0}
+#   units: {"none": 1.0}
+#   eps: [0.005]
+#   dimension: 1
+#   ct: 0
 
 - type: nonconvex_inequality
   name: min_thrust_norm
   group: path
-  fcn: mission.min_thrust_norm
-  units: {"d": 1.0, "t": -1.0}
+  fcn: model.min_thrust_norm
+  fcn_params: {"min_thrust": 0.3}
+  units: {"none": 1.0}
   eps: [0.005]
   dimension: 1
   ct: 0

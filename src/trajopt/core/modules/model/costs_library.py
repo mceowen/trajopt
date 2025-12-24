@@ -18,4 +18,5 @@ class running_state:
 
 class time:
     def __init__(self):
+        self.group = None
         pass

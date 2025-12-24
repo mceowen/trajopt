@@ -165,13 +165,18 @@ def eval_expressions(param_type, config):
 
     # config = {"mission": {}, "model": {}, "method": {}}
     dictionary = config[param_type]
+    _eval_dict_recursive(dictionary, config)
 
+def _eval_dict_recursive(dictionary, config):
+    """recursively evaluate 'eval:' prefixed strings in a dictionary."""
     for key, value in dictionary.items():
         
         if isinstance(value, str):
             if value.startswith("eval:"):
                 eval_str = value.split(":", 1)[1].strip()
                 dictionary[key] = eval(eval_str, {"np": np}, config)
+        elif isinstance(value, dict):
+            _eval_dict_recursive(value, config)
 
 def extract_attributes(obj, names):
     return {k: getattr(obj, k) for k in names if hasattr(obj, k)}

@@ -56,32 +56,31 @@ class box:
 # ---------------------------------------------------------------
 # rate constraints
 # ---------------------------------------------------------------
-class rate_limit:
-    def __init__(self, name, set, xdot_max, x_idx):
+class control_rate_limit:
+    def __init__(self, name, udot_max, udot_max_idx):
         self.name = name
-        self.set = set
-        self.xdot_max = xdot_max
-        self.x_idx = x_idx
-        self.dimension = len(x_idx)
+        self.udot_max = udot_max
+        self.udot_max_idx = udot_max_idx
+        self.dimension = len(udot_max_idx)
 # ---------------------------------------------------------------
 # Second-order cone cosntraints
 # ---------------------------------------------------------------
 
 class axis_angle_cone:
-    def __init__(self, name, set, axis, theta_max, idx):
+    def __init__(self, name, set, axis, theta_max, x_idx):
         self.name = name
         self.set = set
         self.axis = axis / np.linalg.norm(axis)
         self.cos_theta_max = np.cos(np.deg2rad(theta_max))
-        self.idx = idx
+        self.x_idx = x_idx
         self.dimension = 1
 
 class max_norm_cone:
-    def __init__(self, name, set, max_val, idx):
+    def __init__(self, name, set, max_val, x_idx):
         self.name = name
         self.set = set
         self.max_val = max_val
-        self.idx = idx
+        self.x_idx = x_idx
         self.dimension = 1
 
 class quaternion_cone:
@@ -102,25 +101,26 @@ class nonconvex_inequality:
     def __init__(self, name, group, fcn, units, eps, dimension, ct, fcn_params={}, max_val=None):
         self.name = name
         self.group = group
+        self.fcn_name = fcn
+        self.fcn_params = fcn_params
         self.units = units
         self.eps = eps
         self.dimension = dimension
         self.ct = ct
 
-        if fcn_params == {}:
-            self.fcn = fcn
-        else:
-            self.fcn = lambda t, z, nu: fcn(t, z, nu, fcn_params)
+        # the actual functions are resolved once mission and model are initialized
+        self.fcn = None
+        self.fcn_jit = None
+        self.dfcn_dz_jit = None
+        self.dfcn_du_jit = None
 
         if max_val is None:
             self.max_val = jnp.zeros(dimension)
         else:
             self.max_val = max_val
 
-        self.fcn_jit, self.dfcn_dz_jit, self.dfcn_du_jit = convexify.linearize_jax(self.g)
-
     def g(self, t, z, nu):
         return self.func(t, z, nu) - self.max_val
     
     def g_aff(self, t, z, nu):
-        return self.fcn_jit(t, z, nu), self.dfcn_dz_jit, self.dfcn_du_jit
+        return self.fcn_jit(z, nu), self.dfcn_dz_jit(z, nu), self.dfcn_du_jit(z, nu)

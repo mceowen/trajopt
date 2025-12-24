@@ -6,7 +6,7 @@ from scipy.integrate import solve_ivp
 import trajopt.core.modules.method.convexify as convexify
 import time
 
-def set_ltv_indices(method, nz, m):
+def set_ltv_indices(problem, method):
     """
     Function to set Linear Time Varying (LTV) indices and initialize arrays.
 
@@ -16,6 +16,10 @@ def set_ltv_indices(method, nz, m):
     Returns:
     dict: Updated params with LTV indices and initialized arrays.
     """
+
+    nz = problem.nz
+    m = problem.m
+    N = method.N
 
     method.z_ind     = np.arange(0, nz)
     method.Ak_ind    = np.arange(method.z_ind[-1] + 1, method.z_ind[-1] + 1 + nz**2 )
@@ -42,10 +46,7 @@ def set_ltv_indices(method, nz, m):
     method.Bkp_ind_jax   = jnp.asarray(method.Bkp_ind)
     method.Sk_ind_jax    = jnp.asarray(method.Sk_ind)
 
-def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, trajopt_obj):
-    problem = trajopt_obj.problem
-    method = trajopt_obj.method
-
+def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, problem, method):
     # TODO(carlos):
     # relying on jax for a bit, will change this once we add general
     # autodiffing / analytical jacobians
@@ -79,10 +80,10 @@ def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, trajopt_obj):
         uk = nu_jax[k]
         
         col_start = 0
-        for id in problem.constraint_ids["nodal"]["nonconvex_inequality"]:
-            col_end = col_start + problem.constraints[id].dimension
+        for constraint in problem.constraints.get("nodal", "nonconvex_inequality"):
+            col_end = col_start + constraint.dimension
             
-            f, dfcn_dz, dfcn_du            = problem.constraints[id].g_aff(tk, zk, uk)
+            f, dfcn_dz, dfcn_du            = constraint.g_aff(tk, zk, uk)
             g[k, col_start:col_end]        = np.asarray(f)
             dgdz[k, col_start:col_end, :]  = np.asarray(dfcn_dz)[:, :n]
             dgdnu[k, col_start:col_end, :] = np.asarray(dfcn_du)
@@ -91,10 +92,7 @@ def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, trajopt_obj):
     
     return g, dgdz, dgdnu
 
-def compute_linearized_costs(t_ref, z_ref, u_ref, trajopt_obj):
-
-    problem = trajopt_obj.problem
-    method = trajopt_obj.method
+def compute_linearized_costs(t_ref, z_ref, u_ref, problem, method):
 
     n = problem.n
     m = problem.m
@@ -110,8 +108,8 @@ def compute_linearized_costs(t_ref, z_ref, u_ref, trajopt_obj):
     dcostdnu = np.zeros((N, 1, m))
 
     # evaluate costs at each timestep
-    for cost_fn in problem.costs:
-        if cost_fn.category == "running":
+    for cost_fn in problem.costs.get("all"):
+        if cost_fn.group == "running":
             for k in range(N-1):
                 tk = t_jax[k]
                 zk = z_jax[k]
@@ -122,7 +120,7 @@ def compute_linearized_costs(t_ref, z_ref, u_ref, trajopt_obj):
                 dcostdz[k, 0, :] += np.asarray(dfcn_dz).flatten()
                 dcostdnu[k, 0, :] += np.asarray(dfcn_du).flatten()
             
-        elif cost_fn.category == "terminal":
+        elif cost_fn.group == "terminal":
             tk = t_jax[-1]
             zk = z_jax[-1]
             uk = nu_jax[-1]
@@ -135,16 +133,13 @@ def compute_linearized_costs(t_ref, z_ref, u_ref, trajopt_obj):
     return cost, dcostdz, dcostdnu
 
 # Compute exact discretize for linear dynamic system
-def discretize_inv_foh(z_ref, nu_ref, dt_ref, trajopt_obj):
-    model = trajopt_obj.model
-    method = trajopt_obj.method
-
+def discretize_inv_foh(z_ref, nu_ref, dt_ref, problem, method):
     N = method.N
 
     traj_minus_data = {"z_minus": [z_ref[0]]}
 
     # Precompute
-    eye_flat = np.eye(model.n).ravel()
+    eye_flat = np.eye(problem.n).ravel()
 
     # Stack dynamics
     lds0_stack = []
@@ -156,7 +151,7 @@ def discretize_inv_foh(z_ref, nu_ref, dt_ref, trajopt_obj):
     lds0_stack = np.concatenate(lds0_stack)
 
     def derivs_step(tau, lds):
-        return RHS_ltv(tau, lds, nu_ref, dt_ref, trajopt_obj)
+        return RHS_ltv(tau, lds, nu_ref, dt_ref, problem, method)
 
     sol = solve_ivp(derivs_step, [0, 1], lds0_stack, method="RK45", atol=1e-6, rtol=1e-6)
 
@@ -164,19 +159,19 @@ def discretize_inv_foh(z_ref, nu_ref, dt_ref, trajopt_obj):
 
     assert lds_end.shape[0] == (N - 1) * method.lds0_size
 
-    Ak  = np.zeros((N - 1, model.n, model.n))
-    Bk  = np.zeros((N - 1, model.n, model.m))
-    Bkp = np.zeros((N - 1, model.n, model.m))
-    Sk  = np.zeros((N - 1, model.n))
+    Ak  = np.zeros((N - 1, problem.n, problem.n))
+    Bk  = np.zeros((N - 1, problem.n, problem.m))
+    Bkp = np.zeros((N - 1, problem.n, problem.m))
+    Sk  = np.zeros((N - 1, problem.n))
 
     for k in range(N - 1):
         base    = k * method.lds0_size
         traj_minus_data["z_minus"].append(lds_end[base + method.z_ind])
 
-        Ak_bar  = lds_end[base + method.Ak_ind].reshape(model.n, model.n)
-        Bk_bar  = lds_end[base + method.Bk_ind].reshape(model.n, model.m)
-        Bkp_bar = lds_end[base + method.Bkp_ind].reshape(model.n, model.m)
-        Sk_bar  = lds_end[base + method.Sk_ind].reshape(model.n)
+        Ak_bar  = lds_end[base + method.Ak_ind].reshape(problem.n, problem.n)
+        Bk_bar  = lds_end[base + method.Bk_ind].reshape(problem.n, problem.m)
+        Bkp_bar = lds_end[base + method.Bkp_ind].reshape(problem.n, problem.m)
+        Sk_bar  = lds_end[base + method.Sk_ind].reshape(problem.n)
 
         Ak[k]   = Ak_bar
         Bk[k]   = Ak_bar @ Bk_bar
@@ -189,10 +184,7 @@ def discretize_inv_foh(z_ref, nu_ref, dt_ref, trajopt_obj):
 
 
 # Integrate linear system
-def RHS_ltv(tau, lds, nu_ref, dt_ref, trajopt_obj):
-
-    model = trajopt_obj.model
-    method = trajopt_obj.method
+def RHS_ltv(tau, lds, nu_ref, dt_ref, problem, method):
 
     # Initialize
     lds_dot         = np.zeros_like(lds)
@@ -218,7 +210,7 @@ def RHS_ltv(tau, lds, nu_ref, dt_ref, trajopt_obj):
         x           = lds[ k * method.lds0_size + method.z_ind ]
 
         # Extract continuous time Jacobians
-        fc, Ac, Bc = model.lin_dyn(tau, x, u[k])
+        fc, Ac, Bc = problem.lin_dyn(tau, x, u[k])
 
         # Extract STM
         Phi_tau     = lds[ k * method.lds0_size + method.Ak_ind ].reshape(model.n, model.n)
@@ -349,9 +341,7 @@ def jit_jax_discretize(problem, method):
     method.propagate_discretization_jax = propagate
 
 # inverse free discretize with jax
-def discretize_inv_free_jax(z_ref_np, nu_ref_np, dt_ref_np, trajopt_obj):
-
-    method = trajopt_obj.method
+def discretize_inv_free_jax(z_ref_np, nu_ref_np, dt_ref_np, problem, method):
 
     # convert numpy arrays to jax
     z_ref = jnp.asarray(z_ref_np)
@@ -366,7 +356,7 @@ def discretize_inv_free_jax(z_ref_np, nu_ref_np, dt_ref_np, trajopt_obj):
     
     return np.asarray(A_jax), np.asarray(B_jax), np.asarray(Bp_jax), np.asarray(S_jax), np.asarray(jnp.vstack([z_ref_0, z_minus]))
 
-def compute_linsys_discrete(z_ref, nu_ref, dt_ref, trajopt_obj):
+def compute_linsys_discrete(z_ref, nu_ref, dt_ref, problem, method):
     """
     Compute the linear system in discrete form.
 
@@ -379,21 +369,19 @@ def compute_linsys_discrete(z_ref, nu_ref, dt_ref, trajopt_obj):
     Returns:
     tuple: Ak, Bk, Bkp, Sk, z_minus
     """
-    method = trajopt_obj.method
-
 
     if method.flags.get("jax_dyn", 0):
-        Ak, Bk, Bkp, Sk, z_minus = discretize_inv_free_jax(z_ref, nu_ref, dt_ref, trajopt_obj)
+        Ak, Bk, Bkp, Sk, z_minus = discretize_inv_free_jax(z_ref, nu_ref, dt_ref, problem, method)
     else:
         if method.flags["ctcs"] != "none":
-            Ak, Bk, Bkp, Sk, z_minus = discretize_ctcs(z_ref, nu_ref, dt_ref, trajopt_obj)
+            Ak, Bk, Bkp, Sk, z_minus = discretize_ctcs(z_ref, nu_ref, dt_ref, problem, method)
         else:
-            Ak, Bk, Bkp, Sk, z_minus = discretize_inv_foh(z_ref, nu_ref, dt_ref, trajopt_obj)
+            Ak, Bk, Bkp, Sk, z_minus = discretize_inv_foh(z_ref, nu_ref, dt_ref, problem, method)
     
     return Ak, Bk, Bkp, Sk, z_minus
 
 
-def discretize_ctcs(z_ref, nu_ref, dt_ref, trajopt_obj):
+def discretize_ctcs(z_ref, nu_ref, dt_ref, problem, method):
     """
     Compute exact discretize for linear dynamic system.
 
@@ -406,8 +394,6 @@ def discretize_ctcs(z_ref, nu_ref, dt_ref, trajopt_obj):
     Returns:
     tuple: Ak, Bk, Bkp, Sk, z_minus
     """
-    model  = trajopt_obj.model
-    method = trajopt_obj.method
 
     N = method.N
 
@@ -417,21 +403,21 @@ def discretize_ctcs(z_ref, nu_ref, dt_ref, trajopt_obj):
     lds0_stack = []
     for k in range(N - 1):
         method.lds0[method.z_ind] = z_ref[k]
-        method.lds0[method.Ak_ind] = np.reshape(np.eye(model.nz), -1)
+        method.lds0[method.Ak_ind] = np.reshape(np.eye(problem.nz), -1)
         lds0_stack.append(method.lds0.copy())
 
     lds0_stack = np.hstack(lds0_stack)
 
     def derivs_step(tau, lds):
-        return RHS_ltv_ctcs(tau, lds, nu_ref, dt_ref, trajopt_obj)
+        return RHS_ltv_ctcs(tau, lds, nu_ref, dt_ref, problem, method)
 
     sol = solve_ivp(derivs_step, [0, 1], lds0_stack, atol=1E-12, rtol=1E-12)
     lds_out_stack = sol.y
 
-    Ak = np.zeros((N-1, model.nz, model.nz))
-    Bk = np.zeros((N-1, model.nz, model.m))
-    Bkp = np.zeros((N-1,model.nz, model.m))
-    Sk = np.zeros((N-1, model.nz))
+    Ak = np.zeros((N-1, problem.nz, problem.nz))
+    Bk = np.zeros((N-1, problem.nz, problem.m))
+    Bkp = np.zeros((N-1,problem.nz, problem.m))
+    Sk = np.zeros((N-1, problem.nz))
 
     # Extract dense values
     for k in range(N - 1):
@@ -441,11 +427,11 @@ def discretize_ctcs(z_ref, nu_ref, dt_ref, trajopt_obj):
 
         # Reshape matrices
         Ak_bar = np.reshape(lds_end[k * method.lds0_size + method.Ak_ind],
-                            (model.nz, model.nz))
+                            (problem.nz, problem.nz))
         Bk_bar = np.reshape(lds_end[k * method.lds0_size + method.Bk_ind],
-                            (model.nz, model.m))
+                            (problem.nz, problem.m))
         Bkp_bar = np.reshape(lds_end[k * method.lds0_size + method.Bkp_ind],
-                             (model.nz, model.m))
+                             (problem.nz, problem.m))
         Sk_bar = lds_end[k * method.lds0_size + method.Sk_ind]
 
         # Fill in the next STM
@@ -460,7 +446,7 @@ def discretize_ctcs(z_ref, nu_ref, dt_ref, trajopt_obj):
     return Ak, Bk, Bkp, Sk, z_minus
 
 
-def RHS_ltv_ctcs(tau, lds, nu_ref, dt_ref, trajopt_obj):
+def RHS_ltv_ctcs(tau, lds, nu_ref, dt_ref, problem, method):
     """
     Integrate linear system.
 
@@ -474,9 +460,6 @@ def RHS_ltv_ctcs(tau, lds, nu_ref, dt_ref, trajopt_obj):
     Returns:
     numpy.ndarray: Derivative of the linear dynamic system state.
     """
-
-    model = trajopt_obj.model
-    method = trajopt_obj.method
 
     lds_dot = np.zeros_like(lds)
     N = method.N
@@ -492,10 +475,10 @@ def RHS_ltv_ctcs(tau, lds, nu_ref, dt_ref, trajopt_obj):
         dt_k = dt_ref[k]
         x = lds[k * method.lds0_size + method.z_ind]
 
-        Ac, Bc, fc = convexify.compute_ctcs_jacobians(tau, x, u[k, :], trajopt_obj)
+        Ac, Bc, fc = convexify.compute_ctcs_jacobians(tau, x, u[k, :], problem, method)
 
         Phi_tau = np.reshape(lds[k * method.lds0_size + method.Ak_ind],
-                             (model.nz, model.nz))
+                             (problem.nz, problem.nz))
 
         f_tau = dt_k * fc
         A_tau = dt_k * Ac

@@ -20,13 +20,13 @@ scenario_data = {
 '''
 
 
-def perform_default_analysis(trajopt_obj):
+def perform_default_analysis(problem, method):
 
-    iter_data = trajopt_obj.method.subprob.iter_data
-    n = trajopt_obj.model.n
-    m = trajopt_obj.model.m
-    N = trajopt_obj.method.N
-    nondim = trajopt_obj.method.nondim
+    iter_data = method.subprob.iter_data
+    n = problem.model.n
+    m = problem.model.m
+    N = method.N
+    nondim = method.nondim
 
     mission_params_exclude_list = ['_nonlinear_aero', 'costs', 'custom_modules', 'mission_module', '_get_cost_cnstr_nondim', '_set_custom_params', '_custom_constraints', '_custom_cost', 'trajopt_obj'] 
     model_params_list = ['constraint_config_list', 'flags', 'm', 'n', 'name', 'nz', 'obs', 'u_types', 'z_types']
@@ -35,9 +35,9 @@ def perform_default_analysis(trajopt_obj):
                           'name', 'n_minus', 'n_plus', 'nl_guess_u_start', 'nl_guess_u_stop', 'solver_opts',
                           'nondim', 't_init', 'nu_init', 'weights', 'z_ind', 'z_init']
 
-    mission_params = tools.extract_attributes_exclude(trajopt_obj.mission, exclude=mission_params_exclude_list)
-    model_params   = tools.extract_attributes(trajopt_obj.model, model_params_list)
-    method_params  = tools.extract_attributes(trajopt_obj.method, method_params_list)
+    mission_params = tools.extract_attributes_exclude(problem.mission, exclude=mission_params_exclude_list)
+    model_params   = tools.extract_attributes(problem.model, model_params_list)
+    method_params  = tools.extract_attributes(method, method_params_list)
 
     model_params['n'] = n
     model_params['m'] = m
@@ -70,13 +70,13 @@ def perform_default_analysis(trajopt_obj):
         
         # TODO: need to move this to an integrator module
         # choose integrator based on jax_dyn flag
-        use_jax = trajopt_obj.method.flags.get("jax_dyn", 0)
+        use_jax = method.flags.get("jax_dyn", 0)
         
         z_opt_np = np.asarray(z_opt)
         
         if use_jax:
             # use JAX-based RK4 propagation
-            z_nl = integrators.propagate_rk4_dense(z_opt_np[0, :n], nu_opt, t_opt, t_dense, trajopt_obj)
+            z_nl = integrators.propagate_rk4_dense(z_opt_np[0, :n], nu_opt, t_opt, t_dense, method)
             
             data['t_nl'] = t_dense * nondim['nt']
             data['z_nl'] = z_nl @ nondim['M']['state']['nd2d']
@@ -88,7 +88,7 @@ def perform_default_analysis(trajopt_obj):
                 # Interpolate control at time t (each control dimension separately)
                 u_t = np.array([np.interp(t, t_opt, nu_opt[:, i]) for i in range(m)])
                 # Call model dynamics
-                return trajopt_obj.model.dynamics(t, z, u_t)
+                return  problem.dynamics(t, z, u_t)
             
             sol = solve_ivp(
                 FOH_dynamics,
@@ -108,9 +108,9 @@ def perform_default_analysis(trajopt_obj):
         # data['z_opt'] = data['z_opt'][:, :n] @ nondim['M']['state']['nd2d']
         # data['u_ref'] = data["nu_opt"] @ nondim['M']['ctrl']['nd2d']
 
-        data['t_init'] = trajopt_obj.method.t_init * nondim['nt']
-        data['z_init'] = trajopt_obj.method.z_init[:, :n] @ nondim['M']['state']['nd2d']
-        data['nu_init'] = trajopt_obj.method.nu_init @ nondim['M']['ctrl']['nd2d']
+        data['t_init'] = method.t_init * nondim['nt']
+        data['z_init'] = method.z_init[:, :n] @ nondim['M']['state']['nd2d']
+        data['nu_init'] = method.nu_init @ nondim['M']['ctrl']['nd2d']
 
         data['t_opt'] = data["t_opt"] * nondim['nt']
         data['z_opt'] = data["z_opt"][:, :n] @ nondim['M']['state']['nd2d']

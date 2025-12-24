@@ -50,6 +50,10 @@ def load_configs(example_name, local=False):
     method_dict = tools.deep_update(default_method_config, base_method_config)
     method_dict = tools.deep_update(method_dict, example_method_config)
 
+    # Evaluate expressions in method config
+    config_dicts["method"] = method_dict
+    tools.eval_expressions("method", config_dicts)
+
     problem_dict["mission"] = config_dicts["mission"]
     problem_dict["model"] = config_dicts["model"]
 

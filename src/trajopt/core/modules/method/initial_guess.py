@@ -6,7 +6,7 @@ import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 import time
 
-def rk4_propagate_jax(dynamics, z0, nu_ref, t_ref, trajopt_obj):
+def rk4_propagate_jax(dynamics, z0, nu_ref, t_ref, problem, method):
 
     time0 = time.perf_counter()
 
@@ -67,23 +67,23 @@ def straight_line_initial_guess(problem, method):
 
 
     # Initialization trajectory
-    method.dt_init   = (method.T_init / (method.N - 1)) * np.ones(method.N - 1)
-    method.Ts_init   = method.T_init / method.nondim["nt"]
+    method.dt_init   = (method.guess["T_init"] / (method.N - 1)) * np.ones(method.N - 1)
+    method.Ts_init   = method.guess["T_init"] / method.nondim["nt"]
     method.dt_init  = method.dt_init / method.nondim["nt"]
     t_init             = np.cumsum(np.concatenate(([0], method.dt_init)))
 
     # Initial state
-    z_init             = np.array([np.linspace(mission.zi_guess[i], mission.zf_guess[i], method.N) for i in range(model.n)]).T
+    z_init             = np.array([np.linspace(method.guess["zi_guess"][i], method.guess["zf_guess"][i], method.N) for i in range(problem.n)]).T
 
     # Initial control
-    nu_init             = np.zeros((method.N,model.m))
+    nu_init             = np.zeros((method.N,problem.m))
 
     # Create initial state and control vector
     method.t_init   = t_init
     method.z_init   = z_init
     method.nu_init   = nu_init
 
-def waypoint_initial_guess(trajopt_obj):
+def waypoint_initial_guess(problem, method):
     """
     Generate an initial guess for trajectory and control using waypoints.
 
@@ -94,10 +94,6 @@ def waypoint_initial_guess(trajopt_obj):
     dict: Updated params with initial guesses for trajectory and control.
     """
 
-    mission = trajopt_obj.mission
-    model = trajopt_obj.model
-    method = trajopt_obj.method
-
     # Initialization trajectory
     method.dt_init   = (method.T_init / (method.N - 1)) * np.ones(method.N - 1)
     method.Ts_init   = method.T_init / method.nondim["nt"]
@@ -106,19 +102,19 @@ def waypoint_initial_guess(trajopt_obj):
 
     # Waypoint
     if "z_waypt" not in params:
-        method.z_waypt = np.zeros(model.n)
+        method.z_waypt = np.zeros(problem.n)
         
         # Loop through initial conditions
-        for i_zi in range(mission.n_init):
-            i_state = mission.zi_idx[i_zi]
+        for i_zi in range(problem.n_init):
+            i_state = problem.zi_idx[i_zi]
 
             # Loop through terminal conditions
-            for i_zf in range(mission.n_term):
-                if mission.zi_idx[i_zi] == mission.zf_idx[i_zf]:
-                    if mission.zi[i_zi] != mission.zf[i_zf]:
-                        method.z_waypt[i_state] = (mission.zf[i_zf] - mission.zi[i_zi]) / 2
+            for i_zf in range(problem.n_term):
+                if problem.zi_idx[i_zi] == problem.zf_idx[i_zf]:
+                    if problem.zi[i_zi] != problem.zf[i_zf]:
+                        method.z_waypt[i_state] = (problem.zf[i_zf] - problem.zi[i_zi]) / 2
                     else:
-                        method.z_waypt[i_state] = mission.zi[i_zi]
+                        method.z_waypt[i_state] = problem.zi[i_zi]
 
     N1 = method.N // 2
     idx1 = np.arange(1, N1 + 1)
@@ -127,16 +123,16 @@ def waypoint_initial_guess(trajopt_obj):
     idx2 = np.arange(N1, method.N)
 
     # Initialize
-    z_init = np.zeros((method.N,model.n))
+    z_init = np.zeros((method.N,problem.n))
 
     # Initial state
-    for i_state in range(min(model.n, len(method.z_waypt))):
-        if i_state in mission.zi_idx and i_state in mission.zf_idx:
-            i_init = np.where(mission.zi_idx == i_state)[0][0]
-            i_term = np.where(mission.zf_idx == i_state)[0][0]
+    for i_state in range(min(problem.n, len(method.z_waypt))):
+        if i_state in problem.zi_idx and i_state in problem.zf_idx:
+            i_init = np.where(problem.zi_idx == i_state)[0][0]
+            i_term = np.where(problem.zf_idx == i_state)[0][0]
 
-            z_init[idx1-1, i_state]    = np.linspace(mission.zi[i_init], method.z_waypt[i_state], N1)
-            z_init[idx2, i_state]      = np.linspace(method.z_waypt[i_state], mission.zf[i_term], N2)
+            z_init[idx1-1, i_state]    = np.linspace(problem.zi[i_init], method.z_waypt[i_state], N1)
+            z_init[idx2, i_state]      = np.linspace(method.z_waypt[i_state], problem.zf[i_term], N2)
 
     # Initial control
     nu_init             = method.line_guess_u_init
@@ -147,7 +143,7 @@ def waypoint_initial_guess(trajopt_obj):
     method.nu_init   = nu_init
 
 
-def nonlinear_initial_guess(nu_range, trajopt_obj):
+def nonlinear_initial_guess(nu_range, problem, method):
     """
     Generate a nonlinear initial guess for trajectory and control.
 
@@ -158,10 +154,6 @@ def nonlinear_initial_guess(nu_range, trajopt_obj):
     Returns:
         dict: Updated params with initial guesses (z_init: N×n, nu_init: N×m)
     """
-
-    mission = trajopt_obj.mission
-    model = trajopt_obj.model
-    method = trajopt_obj.method
 
     # ---- Time grid initialization ----
     method.dt_init = (method.T_init / (method.N - 1)) * np.ones(method.N - 1)
@@ -186,24 +178,25 @@ def nonlinear_initial_guess(nu_range, trajopt_obj):
     
     if use_jax:
         z_init = rk4_propagate_jax(
-            model.dynamics,
-            mission.zi_guess,
+            problem.dynamics,
+            problem.zi_guess,
             nu_init,
             t_init,
-            trajopt_obj
+            problem,
+            method
         )
     else:
         # Wrapper that does FOH interpolation before calling dynamics
         def dynamics_wrapper_scipy(t, z):
             # FOH interpolation to get control at time t
             u = np.array([np.interp(t, t_init, nu_init[:, i]) for i in range(m)])
-            return model.dynamics(t, z, u)
+            return problem.dynamics(t, z, u)
         
         odesettings = {"atol": 1e-12, "rtol": 1e-12}
         sol = solve_ivp(
             dynamics_wrapper_scipy,
             [t_init[0], t_init[-1]],
-            mission.zi,
+            problem.zi,
             t_eval=t_init,
             **odesettings
         )
@@ -216,7 +209,7 @@ def nonlinear_initial_guess(nu_range, trajopt_obj):
     method.nu_init = nu_init
 
 
-def ctcs_initial_guess(trajopt_obj):
+def ctcs_initial_guess(problem, method):
     """
     Initialize the guess for the constrained trajectory control system (CTCS).
 
@@ -227,11 +220,9 @@ def ctcs_initial_guess(trajopt_obj):
     dict: Updated params with initial guesses for the state vector.
     """
     
-    mission = trajopt_obj.mission
-    method = trajopt_obj.method
     # Extend z_init with zeros for the inequality constraints
 
-    ctcs_init = np.zeros((method.z_init.shape[0], mission.n_ineq))
+    ctcs_init = np.zeros((method.z_init.shape[0], problem.n_ctcs))
 
     method.z_init = np.hstack([method.z_init, ctcs_init])
 

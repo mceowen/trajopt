@@ -1,11 +1,12 @@
 import trajopt.core.modules.model.constraints_library as constraints_library
+from pprint import pprint
 
 class Constraints:
     def __init__(self, constraint_config_list):
 
         self.constraints_list = []
         self.constraint_ids = {}
-        print(f"loading constraints:")
+        print(f"constraints:")
 
         # build constraint_ids mapping
         for i, constraint_config in enumerate(constraint_config_list):
@@ -27,6 +28,9 @@ class Constraints:
             
             self.constraint_ids[ct_type][constraint_type].append(i)
             self.constraint_ids[ct_type]['all'].append(i)
+
+        print("constraint_ids: \n")
+        pprint(self.constraint_ids)
         
     def get(self, ct_type, constraint_type=None):
         

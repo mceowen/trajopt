@@ -5,6 +5,7 @@ from trajopt.core.modules.method    import hyperparameters
 from trajopt.core.modules.method    import discretize
 from trajopt.core.modules.method    import integrators
 from trajopt.core.modules.method    import nondim
+from trajopt.core.modules.method.indices import Indices
 
 
 class Method:
@@ -18,24 +19,16 @@ class Method:
         method_config    = config["method"]
         self.N           = method_config["N"]
         self.flags       = method_config['flags']
-        self.solver_opts = method_config["solver_opts"]
-        self.T_init      = method_config["T_init"]
-        self.T_min       = method_config["T_min"]
-        self.T_max       = method_config["T_max"]
-        self.dT_max      = method_config["dT_max"]
-
+        self.guess       = method_config["guess"]
+        self.scaling     = method_config["scaling"]
         self.conv        = method_config["conv"]
         self.weights     = method_config["weights"]
-
-        self.nl_guess_u_start = method_config["nl_guess_u_start"]
-        self.nl_guess_u_stop  = method_config["nl_guess_u_stop"]
-
-        self.line_guess_u_init = method_config["line_guess_u_init"]
-
+        self.solver_opts = method_config["solver_opts"]
         self.conv_data   = {}
 
-        nondim.set_nondim_params(problem, self)
+        self.indices    = Indices(problem)
 
+        nondim.set_nondim_params(problem, self)
         discretize.jit_jax_discretize(problem, self)
         integrators.jit_rk4_jax_dense(problem, self)
 
@@ -84,19 +77,24 @@ class Method:
             raise ValueError("Invalid ctcs flag.")
 
         ### Time of flight constraints ###
-        Ts_min        = self.T_min / self.nondim["nt"]
-        Ts_max        = self.T_max / self.nondim["nt"]
-        self.ddt_max = self.dT_max / ((self.N - 1) * self.nondim["nt"])
+        Ts_min        = self.guess["T_min"] / self.nondim["nt"]
+        Ts_max        = self.guess["T_max"] / self.nondim["nt"]
+        self.ddt_max = self.guess["dT_max"] / ((self.N - 1) * self.nondim["nt"])
         self.dt_min  = Ts_min / (self.N - 1)
         self.dt_max  = Ts_max / (self.N - 1)
 
         # --- LTV indexing ---
         discretize.set_ltv_indices(problem, self)
-
         hyperparameters.configure_penalty_weights(problem, self)
 
         # Extract only those terminal constraints used
-        self.conv["eps_term"] = np.concatenate((self.conv["eps_term"][mission.zf_idx], self.conv["eps_term_min"][mission.zf_min_idx], self.conv["eps_term_max"][mission.zf_max_idx]))
+        term_eq_constraints   = [constraint for constraint in problem.constraints.get('nodal', 'equality_bc')   if constraint.boundary == "final" and constraint.set == "state"]
+        term_ineq_constraints = [constraint for constraint in problem.constraints.get('nodal', 'inequality_bc') if constraint.boundary == "final" and constraint.set == "state"]
+        term_ctcs_constraints = [constraint for constraint in problem.constraints.get('ct', 'all')]
+
+        term_constraints = term_eq_constraints + term_ineq_constraints + term_ctcs_constraints
+
+        self.conv["eps_term"] = np.concatenate([constraint.eps for constraint in term_constraints])
 
         # --- Initialize virtual buffers ---
         self.conv_data["vb_path"] = np.zeros((self.N,   problem.n_path))
@@ -108,23 +106,25 @@ class Method:
         ### Configure generic convergence criterion and max iterations ###
         convergence.set_convergence_tolerance(problem, self)
 
+        self.get_initial_guess(problem)
+
     def get_initial_guess(self, problem):
 
-        self.nl_guess_u_start = self.nondim["M"]["ctrl"]["d2nd"] @ self.nl_guess_u_start
-        self.nl_guess_u_stop  = self.nondim["M"]["ctrl"]["d2nd"] @ self.nl_guess_u_stop
+        self.nl_guess_u_start = self.nondim["M"]["ctrl"]["d2nd"] @ self.guess["nl_guess_u_start"]
+        self.nl_guess_u_stop  = self.nondim["M"]["ctrl"]["d2nd"] @ self.guess["nl_guess_u_stop"]
 
-        self.line_guess_u_init = self.line_guess_u_init @ self.nondim["M"]["ctrl"]["d2nd"]
+        self.line_guess_u_init = self.guess["line_guess_u_init"] @ self.nondim["M"]["ctrl"]["d2nd"]
 
         if self.flags["dynamics_nonconvex"] and (self.flags.get("buff_dyn")=="term"):
             nu_range = np.vstack([self.nl_guess_u_start, self.nl_guess_u_stop])
-            guess.nonlinear_initial_guess(nu_range, trajopt_obj)
+            guess.nonlinear_initial_guess(nu_range, problem, self)
         else:
             guess.straight_line_initial_guess(problem, self)
-            self.nu_init = self.line_guess_u_init
+            self.nu_init = self.guess["line_guess_u_init"]
 
         if problem.constraints.has('ct'):
-            guess.ctcs_initial_guess(self)
+            guess.ctcs_initial_guess(problem, self)
 
-        self.cost_init = discretize.compute_linearized_costs(self.t_init, self.z_init, self.nu_init, self, problem)[0].sum().item()
+        self.cost_init = discretize.compute_linearized_costs(self.t_init, self.z_init, self.nu_init, problem, self)[0].sum().item()
 
         print(f"Cost initial: {self.cost_init}")

@@ -2,19 +2,18 @@ import numpy as np
 
 import trajopt.core.modules.utils.tools as tools
 
-def set_convergence_tolerance(trajopt_obj):
+def set_convergence_tolerance(problem, method):
     """
     Compute convergence tolerances for all trajopt_obj components.
     This refactored version stacks path/NFZ/AUX tolerances into unified eps_ineq/Wconv_ineq.
     """
-    mission, model, method  = trajopt_obj.mission, trajopt_obj.model, trajopt_obj.method
     
     # =======================
     # STATE CONVERGENCE (augmented with ct when "ct" is present)
     # =======================
-    n = model.nz
+    n = problem.nz
     ctcs_mult_state = 1.0; #method.conv["ctcs_mult_state"]
-    ctcs_mult_cnst  =  method.conv["ctcs_fac_cnst"] * method.T_init / (method.N-1)
+    ctcs_mult_cnst  =  method.conv["ctcs_fac_cnst"] * method.guess["T_init"] / (method.N-1)
 
     if len(method.conv["eps_state"]) == 1:
         eps_state    = method.conv["eps_state"] * np.ones(n)
@@ -23,16 +22,12 @@ def set_convergence_tolerance(trajopt_obj):
         eps_state    = method.conv["eps_state"]
         M_state_d2nd = method.nondim["M"]["state"]["d2nd"]
 
-    if "ct" in mission.constraint_ids:
-        ct_ids = mission.constraint_ids["ct"]["all"]
-        eps_list = [mission.constraints[i]["eps"] for i in ct_ids]
-        ctcs_eps_list = [ctcs_mult_cnst * (method.weights['w_ctcs'] * eps)**2 for eps in eps_list]
+    if problem.constraints.has('ct'):
+        eps_list = np.concatenate([constraint.eps for constraint in problem.constraints.get('ct', 'all')])
+        ctcs_eps_list = ctcs_mult_cnst * (method.weights['w_ctcs'] * eps_list)**2
         
-        eps_state = np.concatenate([ 
-            ctcs_mult_state * (method.weights['w_ctcs']*eps_state)**2 ,
-            ctcs_eps_list
-        ])
-        M_state_d2nd = np.diag(np.concatenate([np.diag(M_state_d2nd), np.diag(method.nondim["M"]["cnst"]["d2nd"])[ct_ids]**2 / method.nondim['nt']]))
+        eps_state = np.concatenate([eps_state, ctcs_eps_list])
+        M_state_d2nd = np.diag(np.concatenate([np.diag(M_state_d2nd), np.diag(method.nondim["M"]["ineq_ct"]["d2nd"])**2 / method.nondim['nt']]))
     
     eps_state_nd  = M_state_d2nd @ eps_state
     eps_min_state = float(np.min(eps_state_nd))
@@ -47,18 +42,18 @@ def set_convergence_tolerance(trajopt_obj):
     # COST CONVERGENCE
     # =======================
     eps_cost    = method.conv["eps_cost"]
-    M_cost_d2nd = method.nondim["M"]["cost"]["d2nd"]
-    method.conv["eps_cost"] = M_cost_d2nd * eps_cost
+    nd_cost = method.nondim["nd_cost"]
+    method.conv["eps_cost"] = eps_cost / nd_cost
 
     # =======================
     # stacked inequality
     # =======================
 
-    nodal_ids = mission.constraint_ids["nodal"]["nonconvex_inequality"]
-    M_ineq_d2nd = method.nondim["M"]["cnst"][np.ix_(nodal_ids, nodal_ids)]
+    nodal_ncvx_constraints = problem.constraints.get('nodal', 'nonconvex_inequality')
+    M_ineq_d2nd = method.nondim["M"]["ineq_nodal"]["d2nd"]
 
     # Compute dimensional tolerances
-    eps_ineq = np.concatenate([mission.constraints[i]["eps"] for i in nodal_ids])
+    eps_ineq = np.concatenate([constraint.eps for constraint in nodal_ncvx_constraints])
 
     eps_ineq_nd = M_ineq_d2nd @ eps_ineq
 
@@ -73,14 +68,14 @@ def set_convergence_tolerance(trajopt_obj):
     # =======================
     # TERMINAL CONSTRAINTS
     # =======================
-    n_term = mission.n_term + mission.n_term_ineq
+    n_term = problem.n_term_total
     if n_term > 0:
         if len(method.conv["eps_term"]) == 1 and n_term != 1:
             eps_term    = method.conv["eps_term"] * np.ones(n_term)
             M_term_d2nd = np.eye(n_term)
         else:
             eps_term    = method.conv["eps_term"]
-            M_term_d2nd = method.nondim["M"]["term"]["d2nd"]
+            M_term_d2nd = method.nondim["M"]["term_total"]["d2nd"]
         eps_term_nd  = M_term_d2nd @ eps_term
         eps_min_term = float(np.min(eps_term_nd))
     else:
@@ -115,20 +110,24 @@ def set_convergence_tolerance(trajopt_obj):
     # =======================
     # DYNAMICS CONVERGENCE
     # =======================
-    n_dyn = model.n_dyn
+    n_dyn = problem.nz
     if n_dyn > 0:
         eps_dyn    = method.conv["eps_dyn"]
-        M_dyn_d2nd = method.nondim["M"]["dyn"]["d2nd"]
+        M_dyn_d2nd = method.nondim["M"]["state"]["d2nd"]
     else:
-        eps_dyn    = np.zeros((model.nz,))
-        M_dyn_d2nd = np.zeros((1, model.nz))
+        eps_dyn    = np.zeros((problem.nz,))
+        M_dyn_d2nd = np.zeros((1, problem.nz))
 
-    if method.flags["ctcs"] != "none" and mission.n_ineq > 0:
+    eps_path_list = np.concatenate([constraint.eps for constraint in problem.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "path"]) if problem.n_path > 0 else np.array([])
+    eps_nfz_list = np.concatenate([constraint.eps for constraint in problem.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "nfz"]) if problem.n_nfz > 0 else np.array([])
+    eps_custom_list = np.concatenate([constraint.eps for constraint in problem.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "custom"]) if problem.n_custom > 0 else np.array([])
+
+    if method.flags["ctcs"] != "none" and problem.n_ineq > 0:
         eps_dyn = np.concatenate([
             ctcs_mult_state * eps_dyn,
-            ctcs_mult_cnst  * (method.weights['w_ctcs']*eps_path_config)**2  ,
-            ctcs_mult_cnst  * (method.weights['w_ctcs']*eps_nfz_config)**2    ,
-            ctcs_mult_cnst  * (method.weights['w_ctcs']*eps_custom_config)**2
+            ctcs_mult_cnst  * (method.weights['w_ctcs']*eps_path_list)**2  ,
+            ctcs_mult_cnst  * (method.weights['w_ctcs']*eps_nfz_list)**2    ,
+            ctcs_mult_cnst  * (method.weights['w_ctcs']*eps_custom_list)**2
         ])
         M_dyn_d2nd = np.diag(np.concatenate([
             np.diag(M_dyn_d2nd),
@@ -151,16 +150,15 @@ def set_convergence_tolerance(trajopt_obj):
 
 # ----------------------------------------------------------------------------------------------
 
-def check_convergence_tolerance(trajopt_obj, subprob, iter_record):
+def check_convergence_tolerance(problem, method, iter_record):
     """Check convergence using unified stacked inequality (_ineq) structure."""
-    mission, model, method  = trajopt_obj.mission, trajopt_obj.model, trajopt_obj.method
 
     # --- Load convergence data
     conv_data = iter_record["conv_data"]
 
     # --- Extract dimensions from Subproblem
-    n = subprob.n
-    N = subprob.N
+    n = problem.nz
+    N = method.N
 
     # --- Extract optimization variables
     dz      = iter_record["dz_s"]

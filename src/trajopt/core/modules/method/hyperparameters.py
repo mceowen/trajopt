@@ -1,29 +1,28 @@
 import numpy as np
 import cvxpy as cp
 
-def configure_penalty_weights(trajopt_obj):
+def configure_penalty_weights(problem, method):
     """
     Configure all scalar and matrix weights for the optimization method,
     using YAML-defined parameters under method.weights.
     """
 
-    mission, model, method  = trajopt_obj.mission, trajopt_obj.model, trajopt_obj.method
-    indices = trajopt_obj.indices
+    indices = method.indices
 
     # --- Default weights ---
-    n_ineq = mission.n_path + mission.n_nfz + mission.n_custom
+    n_ineq = problem.n_path + problem.n_nfz + problem.n_custom
     method.weights["W_ineq"] = np.zeros((method.N, n_ineq))
 
-    method.weights["W_term"]            = np.zeros(mission.n_term + mission.n_term_ineq + mission.n_term_ctcs)
-    method.weights["W_dyn"]             = np.zeros((method.N - 1, model.n_dyn))
+    method.weights["W_term"]            = np.zeros(problem.n_term + problem.n_term_ineq + problem.n_term_ctcs)
+    method.weights["W_dyn"]             = np.zeros((method.N - 1, problem.nz))
     method.weights["W_plus_real"]       = np.zeros((method.Npm_real, method.n_plus_real))
     method.weights["W_minus_real"]      = np.zeros((method.Npm_real, method.n_minus_real))
     method.weights["W_plus_ctcs"]       = np.zeros((method.Npm_ctcs, method.n_plus_ctcs))
     method.weights["W_minus_ctcs"]      = np.zeros((method.Npm_ctcs, method.n_minus_ctcs))
 
     method.weights["dual_ineq"]         = np.zeros((method.N, n_ineq))
-    method.weights["dual_term"]         = np.zeros(mission.n_term + mission.n_term_ineq + mission.n_term_ctcs)
-    method.weights["dual_dyn"]          = np.zeros((method.N - 1, model.n_dyn))
+    method.weights["dual_term"]         = np.zeros(problem.n_term + problem.n_term_ineq + problem.n_term_ctcs)
+    method.weights["dual_dyn"]          = np.zeros((method.N - 1, problem.nz))
 
     method.weights["dual_plus_real"]    = np.zeros((method.Npm_real, method.n_plus_real))
     method.weights["dual_minus_real"]   = np.zeros((method.Npm_real, method.n_minus_real))
@@ -31,12 +30,12 @@ def configure_penalty_weights(trajopt_obj):
     method.weights["dual_minus_ctcs"]   = np.zeros((method.Npm_ctcs, method.n_minus_ctcs))
 
     # local block arrays
-    W_path                              = np.zeros((method.N, mission.n_path))
-    W_nfz                               = np.zeros((method.N, mission.n_nfz))
-    W_custom                            = np.zeros((method.N, mission.n_custom))
-    dual_path                           = np.zeros((method.N, mission.n_path))
-    dual_nfz                            = np.zeros((method.N, mission.n_nfz))
-    dual_custom                         = np.zeros((method.N, mission.n_custom))
+    W_path                              = np.zeros((method.N, problem.n_path))
+    W_nfz                               = np.zeros((method.N, problem.n_nfz))
+    W_custom                            = np.zeros((method.N, problem.n_custom))
+    dual_path                           = np.zeros((method.N, problem.n_path))
+    dual_nfz                            = np.zeros((method.N, problem.n_nfz))
+    dual_custom                         = np.zeros((method.N, problem.n_custom))
 
     # PTR penalty weights
         # Wtr: weight for trust region cost                        
@@ -183,13 +182,12 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
         • real dynamics  (buff_dyn flag)
         • CTCS dynamics  (ctcs flag)
     """
-    trajopt_obj = subprob.trajopt_obj
-    method  = trajopt_obj.method
-    model   = trajopt_obj.model
+    method  = subprob.method
+    problem = subprob.problem
 
     N      = subprob.N
-    n      = model.n
-    n_ctcs = model.n_ctcs
+    n      = problem.n
+    n_ctcs = problem.n_ctcs
 
     VB = 0.0
 
@@ -322,7 +320,7 @@ def build_dual_buffer_cost(subprob) -> cp.Expression:
     Dual penalty term DUAL for inequality constraints, dynamic buffers,
     and aggregate quadratic-buffer (quad-1, quad-2) modes.
     """
-    method = subprob.trajopt_obj.method
+    method = subprob.method
     mode_real     = method.flags["buff_dyn"]        # {'none','term','l1','l2','quad-1','quad-2','quad-3'}
     mode_real_dual = method.flags["buff_dyn_dual"]  # MATLAB: buff_dyn_dual
     mode_ctcs     = method.flags["ctcs"]            # {'none','term','l1','l2','quad-1','quad-2','quad-3'}
@@ -405,12 +403,11 @@ def build_dual_buffer_cost(subprob) -> cp.Expression:
 
 # -------------- AUTOTUNING SCHEMES ----------------------------------------------------------------------------------------
 
-def autotune1(trajopt_obj, iter_record):
+def autotune1(problem, method, iter_record):
     """
     Unified version of autotune1 including dual_plus and dual_minus.
     Works with stacked inequality and dynamic buffer system.
     """
-    mission, model, method  = trajopt_obj.mission, trajopt_obj.model, trajopt_obj.method
 
     # Iteration number
     iter_num = iter_record["iter_num"]
@@ -534,11 +531,10 @@ def autotune1(trajopt_obj, iter_record):
     return iter_record
 
 
-def autotune2(trajopt_obj, iter_record):
+def autotune2(problem, method, iter_record):
     """
     Unified stacked-inequality version of autotune2.
     """
-    mission, model, method  = trajopt_obj.mission, trajopt_obj.model, trajopt_obj.method
     
     # Extract variables from local_vars
     N = method.N
@@ -570,17 +566,17 @@ def autotune2(trajopt_obj, iter_record):
     buff_dyn = method.flags["buff_dyn"]
     ctcs = method.flags["ctcs"]
 
-    Wh_ineq = np.zeros((N, mission.n_ineq))
-    Wh_dyn  = np.zeros((N, model.n_dyn))
-    Wh_term = np.zeros(mission.n_term + mission.n_term_ineq + mission.n_term_ctcs)
+    Wh_ineq = np.zeros((N, problem.n_ineq))
+    Wh_dyn  = np.zeros((N, problem.nz))
+    Wh_term = np.zeros(problem.n_term_total)
 
     Wh_plus_real  = np.zeros((method.Npm_real, method.n_plus_real))
     Wh_minus_real = np.zeros((method.Npm_real, method.n_minus_real))
     Wh_plus_ctcs  = np.zeros((method.Npm_ctcs, method.n_plus_ctcs))
     Wh_minus_ctcs = np.zeros((method.Npm_ctcs, method.n_minus_ctcs))
 
-    z_state_idx = trajopt_obj.indices.z["state"]
-    z_ctcs_idx = trajopt_obj.indices.z["ctcs"]
+    z_state_idx = method.indices.z["state"]
+    z_ctcs_idx = method.indices.z["ctcs"]
 
     # ==========================================
     # COMPUTE AUTOTUNE UPDATES
@@ -597,18 +593,18 @@ def autotune2(trajopt_obj, iter_record):
     # TODO: add quad-3 case
 
     if buff_dyn == "quad-3":
-        for j in range(model.n):
+        for j in range(problem.n):
             Wh_plus_real[:, j] = np.sum(np.abs(np.diag(W_plus_real[:, j]) @ vb_plus_real[:, j] / np.min(eps_feas_dyn)))
             Wh_minus_real[:, j] = np.sum(np.abs(np.diag(W_minus_real[:, j]) @ vb_minus_real[:, j] / np.min(eps_feas_dyn)))
     if ctcs == "quad-3":
-        for j in range(model.n_ctcs):
+        for j in range(problem.n_ctcs):
             Wh_plus_ctcs[:, j] = np.sum(np.abs(np.diag(W_plus_ctcs[:, j]) @ vb_plus_ctcs[:, j] / np.min(eps_feas_dyn)))
             Wh_minus_ctcs[:, j] = np.sum(np.abs(np.diag(W_minus_ctcs[:, j]) @ vb_minus_ctcs[:, j] / np.min(eps_feas_dyn)))
 
     for k in range(N):
         dual_ineq_buff = np.diag(W_ineq[k, :]) @ vb_ineq[k, :].flatten()
 
-        if mission.n_ineq > 0:
+        if problem.n_ineq > 0:
             Wh_ineq[k, :] = np.abs(dual_ineq_buff / eps_feas_ineq)
         else:
             Wh_ineq[k, :] = np.abs(dual_ineq_buff)
@@ -635,7 +631,7 @@ def autotune2(trajopt_obj, iter_record):
                 Wh_plus_ctcs[k]  = np.sum(np.abs(np.diag(W_plus_ctcs[k, :]) @ vb_plus_ctcs[k, :] / np.min(eps_feas_dyn)))
                 Wh_minus_ctcs[k] = np.sum(np.abs(np.diag(W_minus_ctcs[k, :]) @ vb_minus_ctcs[k, :] / np.min(eps_feas_dyn)))
 
-    if (mission.n_term + mission.n_term_ineq + mission.n_term_ctcs) > 0:
+    if problem.n_term_total > 0:
         dual_term_buff = np.diag(W_term) @ vb_term
         Wh_term = np.abs(dual_term_buff / eps_feas_term).flatten()
 
@@ -688,8 +684,8 @@ def autotune2(trajopt_obj, iter_record):
     return iter_record
 
 
-def autotune3(trajopt_obj, iter_record):
-    iter_record = autotune1(trajopt_obj, iter_record)
-    iter_record = autotune2(trajopt_obj, iter_record)
+def autotune3(problem, method, iter_record):
+    iter_record = autotune1(problem, method, iter_record)
+    iter_record = autotune2(problem, method, iter_record)
 
     return iter_record
