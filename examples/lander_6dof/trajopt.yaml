@@ -1,0 +1,5 @@
+base_config: core.trajopt_configs.scitech26_lander_6dof
+
+method: 
+  flags: 
+   ignore_dpp: 1

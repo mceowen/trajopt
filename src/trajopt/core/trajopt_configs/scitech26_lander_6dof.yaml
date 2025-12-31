@@ -1,0 +1,48 @@
+problem:
+  mission:
+    base_config: core.missions.configs.lander
+
+  model:
+    base_config: core.models.configs.lander_6dof
+
+  constraints:
+    - name: dynamics
+    - name: initial_state
+    - name: final_state
+    - name: gimbal_limit
+    - name: max_thrust
+    - name: min_thrust_norm
+
+  costs:
+    - name: min_time
+
+method:
+  base_config: core.methods.configs.autoscvx
+
+  guess:
+    # time initialization
+    T_init: 5
+    T_min: 1
+    T_max: 10
+    dT_max: 0.5 # 5.0
+
+    # control initialization for nonlinear initial guess
+    nl_guess_u_start: [2.0, 0, 0]
+    nl_guess_u_stop: [2.0, 0, 0]
+
+    # final state guess for straight line initial guess
+    zi_guess: [2.0, 4, 4, 0, 0, -4.0, 4.0, 1.0, 0, 0, 0, 0, 0, 0]
+    zf_guess: [1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
+
+    # control initialization for straight line initial guess
+    line_guess_u_init: "eval: np.tile([2.0, 0.5, 0], (method['N'], 1))"
+
+  conv:
+    #ctcs_mult_state: 1.0
+    ctcs_fac_cnst: 0.5
+    eps_ctcs: 1e-8
+    eps_state: [0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001]
+    eps_cost: 1
+    eps_defect: [0.0001]
+    eps_dyn: [0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001]
+    iter_max: 20

@@ -1,5 +1,8 @@
-import trajopt.core.modules.model.costs_library as costs_library
+import trajopt.core.models.costs_library as costs_library
 from pprint import pprint
+import inspect
+from functools import partial
+import trajopt.core.methods.convexify as convexify
 
 class Costs:
     def __init__(self, cost_config_list):
@@ -24,8 +27,8 @@ class Costs:
             self.cost_ids[cost_type].append(i)
             self.cost_ids['all'].append(i)
 
-        print("cost_ids: \n")
-        pprint(self.cost_ids)
+        # print("cost_ids: \n")
+        # pprint(self.cost_ids)
 
     def get(self, cost_type):
         
@@ -37,3 +40,19 @@ class Costs:
     def has(self, cost_type):
 
         return cost_type in self.cost_ids.keys()
+
+    def resolve_functions(self, params, fcns):
+        for cost in self.costs_list:
+            if getattr(cost, 'fcn', None) is not None:
+                sig = inspect.signature(cost.fcn)
+                param_names = sig.parameters.keys()
+
+                kwargs_to_bind = {}
+                if 'params' in param_names:
+                    kwargs_to_bind['params'] = params
+                if 'fcns' in param_names:
+                    kwargs_to_bind['fcns'] = fcns
+
+                cost.fcn = partial(cost.fcn, **kwargs_to_bind)
+
+                cost.fcn_jit, cost.dfcn_dz_jit, cost.dfcn_du_jit = convexify.linearize_jax(cost.fcn)
