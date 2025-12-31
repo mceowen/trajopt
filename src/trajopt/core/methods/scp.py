@@ -578,7 +578,7 @@ class Subproblem:
           + cp.sum(self.w_cost_times_cost0)
         )
 
-        if problem.costs.has("time"):
+        if problem.costs.has("min_time"):
             dt = self.dt_ref + self.dt
             time_cost = cp.sum(dt) / (self.N - 1)
             
