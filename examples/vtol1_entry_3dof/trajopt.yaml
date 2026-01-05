@@ -1,6 +1,6 @@
 problem:
   model:
-    inherit: model.yaml
+    inherit: trajopt/library/models/reentry_3dof/model.yaml
 
   mission:
     inherit: mission.yaml
