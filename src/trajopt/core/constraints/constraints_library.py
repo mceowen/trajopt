@@ -422,7 +422,6 @@ class POLYTOPE:
         #############################################
         if version == 'in':  self.type = 'POLYTOPE_IN';  self.subtype = 'POLYTOPE_IN';  self.convex = True;
         if version == 'out': self.type = 'POLYTOPE_OUT'; self.subtype = 'POLYTOPE_OUT'; self.convex = False;
-
         self.name = 'name1' ## unique identifier
         self.set = 'state' ; ## from ['state','control']
         self.idx = list(range(self.n)); ## index 
@@ -430,7 +429,11 @@ class POLYTOPE:
         if 'set' in ins: self.set = ins['set'];
         if 'idx' in ins: self.idx = ins['idx'];
         if 'alpha' in ins: self.alpha = ins['alpha'];
-        #############################################
+        ################################################
+        self.time_steps = 'all';
+        if 'tsteps' in ins: self.time_steps = ins['tsteps'];
+        if 'time_steps' in ins: self.time_steps = ins['time_steps'];
+        ################################################
     def g(self,x):
         if self.version == 'in': return self.A@x - self.b;
         if self.version == 'out': 
@@ -457,6 +460,36 @@ class POLYTOPE:
     def affineApprox_jax(self,x,version='standard'): pass # [[TO ADD]]
     def cvxApprox(self,x,version='standard'): return self.d,self.C
     def cvxApprox_jax(self,x,version='standard'): pass # [[TO ADD]]
+
+
+class SOC:
+    def __init__(self,A,b,C,d,version='in',ins={}):
+        self.A = A;
+        self.b = b;
+        self.C = C;
+        self.d = d;
+        self.n = self.A.shape[1];
+        self.m = self.A.shape[0];
+        self.version = version;
+        #############################################
+        if version == 'in':  self.type = 'SOC_IN';  self.subtype = 'SOC_IN';  self.convex = True;
+        if version == 'out': self.type = 'SOC_OUT'; self.subtype = 'SOC_OUT'; self.convex = False;
+        self.name = 'name1' ## unique identifier
+        self.set = 'state' ; ## from ['state','control']
+        self.idx = list(range(self.n)); ## index 
+        if 'name' in ins: self.name = ins['name'];
+        if 'set' in ins: self.set = ins['set'];
+        if 'idx' in ins: self.idx = ins['idx'];
+        ################################################
+        self.time_steps = 'all';
+        if 'tsteps' in ins: self.time_steps = ins['tsteps'];
+        if 'time_steps' in ins: self.time_steps = ins['time_steps'];
+        ################################################
+        self.epsilon_grad = 0.0000001;
+    def g(self,x): return np.linalg.norm(self.A@x + self.b) - (self.C@x + self.d);
+    def dgdx(self,x): return (1./(np.linalg.norm(self.A@x + self.b)+self.epsilon_grad))*(self.A@x+self.b).T@self.A - self.C;
+    def g_jax(self,x): pass # [[TO ADD]]
+    def dgdx_jax(self,x): pass # [[TO ADD]]    
 
 # =========================================================
 # =========================================================
@@ -511,32 +544,6 @@ class ZONOTOPE:  ### NOT FINISHED
 # =============================================================
 # =============================================================
 
-class SOC:
-    def __init__(self,A,b,C,d,version='in',ins={}):
-        self.A = A;
-        self.b = b;
-        self.C = C;
-        self.d = d;
-        self.n = self.A.shape[1];
-        self.m = self.A.shape[0];
-        # self.alpha = 10;
-        self.version = version;
-        #############################################
-        if version == 'in':  self.type = 'SOC_IN';  self.subtype = 'SOC_IN';  self.convex = True;
-        if version == 'out': self.type = 'SOC_OUT'; self.subtype = 'SOC_OUT'; self.convex = False;
-        self.name = 'name1' ## unique identifier
-        self.set = 'state' ; ## from ['state','control']
-        self.idx = list(range(self.n)); ## index 
-        if 'name' in ins: self.name = ins['name'];
-        if 'set' in ins: self.set = ins['set'];
-        if 'idx' in ins: self.idx = ins['idx'];
-        # if 'alpha' in ins: self.alpha = ins['alpha'];
-        #############################################
-        self.epsilon_grad = 0.0000001;
-    def g(self,x): return np.linalg.norm(self.A@x + self.b) - (self.C@x + self.d);
-    def dgdx(self,x): return (1./(np.linalg.norm(self.A@x + self.b)+self.epsilon_grad))*(self.A@x+self.b).T@self.A - self.C;
-    def g_jax(self,x): pass # [[TO ADD]]
-    def dgdx_jax(self,x): pass # [[TO ADD]]
 # =========================================================
 # =========================================================# ----------- SPECIFIC SOC CONSTRAINTS
 # =========================================================

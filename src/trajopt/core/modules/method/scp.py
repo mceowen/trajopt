@@ -13,51 +13,49 @@ import jax.numpy as jnp
 import copy
 
 # trajopt imports
-from trajopt.core.scp import discretize
-from trajopt.core.scp import hyperparameters as hp
-from trajopt.core.scp import convergence
+from trajopt.core.modules.method import discretize
+from trajopt.core.modules.method import convexify 
+from trajopt.core.modules.method import hyperparameters as hp
+from trajopt.core.modules.method import convergence
 from trajopt.utils import tools
 
 
 # =====================================================================================
 # Public API: full Sequential Convex Programming (SCP) loop with DPP reuse
 # =====================================================================================
-def run_scp(trajopt_obj):
+def run_scp(problem):
     """
-    Run the full Sequential Convex Programming (SCP) loop for a given trajopt_obj.
+    Run the full Sequential Convex Programming (SCP) loop for a given problem.
 
     Subproblem maintains iteration history internally:
       - subprob.iter_data[0]: initialization inputs only
       - subprob.iter_data[it>=1]: inputs used at iter it + outputs from that iter
     """
 
-    problem = trajopt_obj.problem
-    method = trajopt_obj.method
-
     # Start full problem convergence timer
     time_start = time.perf_counter()
 
     # Get or create the compiled Subproblem (DPP)
-    subprob: Optional[Subproblem] = getattr(method, "subprob", None)
+    subprob: Optional[Subproblem] = getattr(problem.method, "subprob", None)
     if subprob is None:
-        subprob = Subproblem(problem, method)
-        method.subprob = subprob
+        subprob = Subproblem(problem)
+        problem.method.subprob = subprob
 
     # START SUBPROBLEM CONSTRUCTION / HEADER
     print("-" * 152)
-    # print(f"                                              ..:: {problem.mission.name}: PTR with Virtual Buffer ::..")
+    print(f"                                              ..:: {problem.mission.name}: PTR with Virtual Buffer ::..")
     print("-" * 152)
     print("  Iteration |  Propagation |   Solve   |    Parse   |  log(dz)  |      log(VB)    |   log(VB)   |  log(VB)    | Solve status |  Time of    |   Cost    ")
     print("            |   time [ms]  | time [ms] |  time [ms] |           |  (path + NFZ)   |  (terminal) |  (dynamics) |              |  Flight [s] |           ")
     print("-" * 152)
 
-    max_iter = int(method.conv["iter_max"])
+    max_iter = int(problem.method.conv["iter_max"])
 
     for _ in range(max_iter + 1):
         subprob.solve_iteration()  # appends a new unified record for this iteration
 
         latest = subprob.iter_data[-1]
-        display_subprob_status(method, latest)
+        display_subprob_status(problem, latest)
 
         if latest.get("converged", False):
             print("Terminated from convergence criteria!")
@@ -66,10 +64,12 @@ def run_scp(trajopt_obj):
     if not subprob.iter_data[-1].get("converged", False):
         print("Terminated from hitting maximum iterations!")
 
-    trajopt_obj.solution = trajopt_obj.method.subprob.iter_data[-1]
+    problem.solution = problem.method.subprob.iter_data[-1]
 
     # Save off convergence time (full time - parse time)
-    trajopt_obj.solution['t_full'] = time.perf_counter() - time_start
+    problem.solution['t_full'] = time.perf_counter() - time_start
+
+    return problem
 
 
 # ===================================
@@ -94,25 +94,28 @@ class ModuleFlags:
 class Subproblem:
     """Reusable convex SCP with full baseline functionality & DPP updates.
     """
-    def __init__(self, problem, method) -> None:
+
+    def __init__(self, problem) -> None:
         self.problem = problem
-        self.method  = method
+        mission = self.problem.mission
+        model   = self.problem.model
+        method  = self.problem.method
 
         # derive canonical sizes for quick reuse
         self.N                  = int(method.N)
-        self.n                  = int(problem.n)
-        self.m                  = int(problem.m)
-        self.nz                 = int(problem.nz)
-        self.n_ctcs             = int(problem.n_ctcs)
-        self.n_path             = int(problem.n_path)
-        self.n_nfz              = int(problem.n_nfz)
-        self.n_custom           = int(problem.n_custom)
-        self.n_ineq             = int(problem.n_ineq)
-        self.n_term             = int(problem.n_term)
-        self.n_term_ineq        = int(problem.n_term_ineq)
-        self.n_term_ctcs        = int(problem.n_term_ctcs)
-        self.n_term_total       = int(problem.n_term_total)
-        self.n_dyn              = int(problem.nz)
+        self.n                  = int(model.n)
+        self.m                  = int(model.m)
+        self.nz                 = int(model.nz)
+        self.n_ctcs             = int(model.n_ctcs)
+        self.n_path             = int(mission.n_path)
+        self.n_nfz              = int(mission.n_nfz)
+        self.n_custom           = int(getattr(mission, "n_custom", 0))
+        self.n_ineq             = int(mission.n_ineq)
+        self.n_term             = int(mission.n_term)
+        self.n_term_ineq        = int(mission.n_term_ineq)
+        self.n_term_ctcs        = int(mission.n_term_ctcs)
+        self.n_term_total       = int(self.n_term + self.n_term_ineq + self.n_term_ctcs)
+        self.n_dyn              = int(getattr(model, "n_dyn", model.nz))
         self.Npm_real           = int(getattr(method, "Npm_real", 0))
         self.n_plus_real        = int(getattr(method, "n_plus_real", 0))
         self.n_minus_real       = int(getattr(method, "n_minus_real", 0))
@@ -137,6 +140,9 @@ class Subproblem:
         self.flag_dual      = method.flags.get("flag_dual", 1.0)
         self.flag_vb        = method.flags.get("flag_vb", 1.0)
 
+        # Bounds (only create when nonzero-length)
+        self._init_bounds(mission)
+
         # Build the DPP graph once
         self._create_variables()
         self._create_parameters()
@@ -145,8 +151,8 @@ class Subproblem:
         self.cost_expr = self._build_cost_once()
 
         # apply custom constraints and cost
-        # mission.custom_constraints(self)
-        # mission.custom_cost(self)
+        mission.custom_constraints(self)
+        mission.custom_cost(self)
 
         # Compile CVXPY problem once
         self.subproblem = cp.Problem(cp.Minimize(self.cost_expr), self.constraints)
@@ -159,23 +165,58 @@ class Subproblem:
         # --------------------------
         self.iter_data: List[Dict[str, Any]] = [{
             "iter_num": 0,  # init only (no outputs yet)
-            "z_ref": method.z_init,
-            "nu_ref": method.nu_init,
-            "dt_ref": method.dt_init,
-            "t_ref": method.t_init,
+            "t_ref": problem.method.t_init,
+            "z_ref": problem.method.z_init,
+            "nu_ref": problem.method.nu_init,
+            "dt_ref": problem.method.dt_init,
             "conv_data": {
-                "vb_ineq": np.zeros((self.N, problem.n_ineq)),
+                "vb_ineq": np.zeros((self.N, mission.n_ineq)),
                 "vb_dyn":  np.zeros((self.N - 1, self.n_dyn)),
-                "vb_term": np.zeros((problem.n_term_total, 1)),
+                "vb_term": np.zeros((mission.n_term+mission.n_term_ineq+mission.n_term_ctcs, 1)),
             },
-            "weights": copy.deepcopy(method.weights),
+            "weights": copy.deepcopy(problem.method.weights),
         }]
+
+    # -------------------------
+    # Helper: init bounds
+    # -------------------------
+    def _init_bounds(self, mission):
+        self.z1     = mission.zi if mission.n_init > 0 else None
+        if mission.n_init_ineq > 0:
+            self.z1_min = mission.zi_min
+            self.z1_max = mission.zi_max
+        else:
+            self.z1_min = self.z1_max = None
+
+        self.zN     = mission.zf if mission.n_term > 0 else None
+        if mission.n_term_ineq > 0:
+            self.zN_min = mission.zf_min
+            self.zN_max = mission.zf_max
+        else:
+            self.zN_min = self.zN_max = None
+
+        self.u1 = mission.ui if mission.n_init_ctrl > 0 else None
+        self.uN = mission.uf if mission.n_term_ctrl > 0 else None
+
+        self.z_min = mission.z_min if hasattr(mission, "z_min") and len(mission.z_min) > 0 else None
+        self.z_max = mission.z_max if hasattr(mission, "z_max") and len(mission.z_max) > 0 else None
+
+        if mission.n_ctrl > 0:
+            self.u_min  = mission.u_min
+            self.u_max  = mission.u_max
+        else:
+            self.u_min = self.u_max = None
+
+        if mission.n_udot > 0:
+            self.udot_max = mission.udot_max
+        else:
+            self.udot_max = None
 
     # ============================================================
     # VARIABLE & PARAMETER CREATION
     # ============================================================
     def _create_variables(self) -> None:
-        problem, method = self.problem, self.method
+        mission, model, method = self.problem.mission, self.problem.model, self.problem.method
         N, n, m, nz, n_ctcs = self.N, self.n, self.m, self.nz, self.n_ctcs
 
         # Core optimization variables
@@ -196,7 +237,7 @@ class Subproblem:
 
 
         # Virtual buffers (None if zero-sized)
-        self.vb_ineq    = cp.Variable((N, problem.n_ineq), name="vb_ineq")   if problem.n_ineq  > 0 else None 
+        self.vb_ineq    = cp.Variable((N, mission.n_ineq), name="vb_ineq")   if mission.n_ineq  > 0 else None 
         
         # ---------------------------------------------
         # TERMINAL CONDITION BUFFERS (REAL + CTCS)
@@ -227,6 +268,7 @@ class Subproblem:
             if self.vb_term_real is None
             else None # when both are None
         )
+
 
         # ---------------------------------------------
         # DYNAMICS VIRTUAL BUFFERS (REAL + CTCS)
@@ -274,7 +316,7 @@ class Subproblem:
         self.vb_minus_ctcs = cp.Variable((self.Npm_ctcs, self.n_minus_ctcs), name="vb_minus_ctcs") if self.n_minus_ctcs > 0 else None
 
     def _create_parameters(self) -> None:
-        problem, method = self.problem, self.method
+        mission, model, method = self.problem.mission, self.problem.model, self.problem.method
         N, n, m, nz = self.N, self.n, self.m, self.nz
 
         # Linearized dynamics & trajectory references
@@ -295,10 +337,10 @@ class Subproblem:
         self.nu_ref_sq = cp.Parameter((N,), name="nu_ref_sq")
 
         # Path/NFZ/AUX linearized constraints
-        if problem.constraints.get("nodal", "nonconvex_inequality"):
-            self.dgdz = cp.Parameter((N, problem.n_ineq, n), name="dgdz")
-            self.dgdnu = cp.Parameter((N, problem.n_ineq, m), name="dgdnu")
-            self.g0   = cp.Parameter((N, problem.n_ineq),    name="g0")
+        if mission.n_ineq > 0:
+            self.dgdz = cp.Parameter((N, mission.n_ineq, n), name="dgdz")
+            self.dgdnu = cp.Parameter((N, mission.n_ineq, m), name="dgdnu")
+            self.g0   = cp.Parameter((N, mission.n_ineq),    name="g0")
         else:
             self.dgdz = self.dgdnu = self.g0 = None
 
@@ -375,54 +417,43 @@ class Subproblem:
     # CONSTRAINTS (build-once)
     # ============================================================
     def _build_constraints_once(self) -> None:
-        problem = self.problem
-        method = self.method
-        index_map = method.index_map
-
+        mission, model, method  = self.problem.mission, self.problem.model, self.problem.method
+        indices = self.problem.indices
         N, n, m, nz, n_ctcs     = self.N, self.n, self.m, self.nz, self.n_ctcs
 
         C: List[cp.Constraint] = []
 
+        # Initial control (optional)
+        if mission.flags.get("init_ctrl", False) and mission.n_init_ctrl > 0:
+            C.append(self.dnu[0,mission.ui_idx] + self.nu_ref[0, mission.ui_idx] == self.u1)
+
+        # Terminal control (optional)
+        if mission.flags.get("final_ctrl", False) and mission.n_term_ctrl > 0:
+            C.append(self.dnu[-1,mission.uf_idx] + self.nu_ref[-1, mission.uf_idx] == self.uN)
+
+        # Initial equalities / inequalities
+        if mission.n_init > 0 and self.z1 is not None:
+            C.append(self.dz[0, mission.zi_idx] + self.z_ref[0, mission.zi_idx] == self.z1)
+
+        if mission.n_init_ineq > 0 and self.z1_min is not None and self.z1_max is not None:
+            M_sel = tools.constraint_index_selector(mission.zi_min_idx, mission.zi_max_idx, n)
+            C.append(M_sel @ (self.dz[0, :n] + self.z_ref[0, :n]) <= cp.hstack([-self.z1_min, self.z1_max]))
+
         # Terminal equalities / inequalities
-        term_idx  = index_map.constraints.terminal  
-
-        for constraint in problem.constraints.get("nodal", "equality_bc"):
-            x_idx = constraint.x_idx
-            idx   = constraint.idx
-            x     = constraint.x
-
-            if constraint.set == "state":
-                if constraint.boundary == "final":
-                    vb = self.vb_term[term_idx["eq"]] if self.vb_term is not None else 0.0
-                else:
-                    vb = 0
-                C.append(self.dz[idx,x_idx] + self.z_ref[idx, x_idx] - vb == x)
-            elif constraint.set == "control":
-                C.append(self.dnu[idx,x_idx] + self.nu_ref[idx, x_idx] == x)
-
-        for constraint in problem.constraints.get("nodal", "inequality_bc"):
-
-            x_min_idx = constraint.x_min_idx
-            x_max_idx = constraint.x_max_idx
-            x_min = constraint.x_min
-            x_max = constraint.x_max
-            idx   = constraint.idx
-            M_select = constraint.M_select
-
-            if constraint.set == "state":
-                if constraint.boundary == "final":
-                    vb = self.vb_term[term_idx["ineq"]] if self.vb_term is not None else 0.0
-                else:
-                    vb = 0
-                
-                C.append(M_select @ (self.dz[idx, :n] + self.z_ref[idx, :n]) - vb <= cp.hstack([-x_min, x_max]))
-            
-            elif constraint.set == "control":
-                C.append(M_select @ (self.dnu[idx, :m] + self.nu_ref[idx, :m]) <= cp.hstack([-x_min, x_max]))
-        
+        term_idx  = indices.constraints.terminal 
+        if mission.n_term>0 and self.zN is not None:
+            vbN = self.vb_term[term_idx["eq"]] if self.vb_term is not None else 0.0
+            C.append(
+                #self.dz[-1, term_idx["eq"]] + self.z_ref[-1, term_idx["eq"]] - vbN == self.zN
+                self.dz[-1, mission.zf_idx] + self.z_ref[-1, mission.zf_idx] - vbN == self.zN
+            )
+        if mission.n_term_ineq>0 and self.zN_min is not None and self.zN_max is not None:
+            vbNiq = self.vb_term[term_idx["ineq"]] if self.vb_term is not None else 0.0
+            M_sel = tools.constraint_index_selector(mission.zf_min_idx, mission.zf_max_idx, n) # TODO(Skye): move this to indices class
+            C.append(M_sel @ (self.dz[-1, :n] + self.z_ref[-1, :n]) - vbNiq <= cp.hstack([-self.zN_min, self.zN_max]))
         # CTCS terminal equalities
-        if problem.n_term_ctcs>0:
-            ctcs_state_idx = index_map.z["ctcs"]  
+        if mission.n_term_ctcs>0:
+            ctcs_state_idx = indices.z["ctcs"]  
             vbN_ctcs = self.vb_term[term_idx["ctcs"]] if self.vb_term is not None else 0.0
             C.append(
                 self.dz[-1, ctcs_state_idx] + self.z_ref[-1, ctcs_state_idx] - vbN_ctcs == 0.0
@@ -437,20 +468,20 @@ class Subproblem:
             C.append(cp.sum(self.vb_dyn_m) == self.vb_minus_ctcs)
 
         if self.buff_dyn == "quad-2":
-            C.append(cp.sum(self.vb_dyn_p[:, index_map.z["state"]], axis=1) == self.vb_plus_real[:, 0])
-            C.append(cp.sum(self.vb_dyn_m[:, index_map.z["state"]], axis=1) == self.vb_minus_real[:, 0])
+            C.append(cp.sum(self.vb_dyn_p[:, indices.z["state"]], axis=1) == self.vb_plus_real[:, 0])
+            C.append(cp.sum(self.vb_dyn_m[:, indices.z["state"]], axis=1) == self.vb_minus_real[:, 0])
 
         if self.ctcs == "quad-2":
-            C.append(cp.sum(self.vb_dyn_p[:, index_map.z["ctcs"]], axis=1) == self.vb_plus_ctcs[:, 0])
-            C.append(cp.sum(self.vb_dyn_m[:, index_map.z["ctcs"]], axis=1) == self.vb_minus_ctcs[:, 0])
+            C.append(cp.sum(self.vb_dyn_p[:, indices.z["ctcs"]], axis=1) == self.vb_plus_ctcs[:, 0])
+            C.append(cp.sum(self.vb_dyn_m[:, indices.z["ctcs"]], axis=1) == self.vb_minus_ctcs[:, 0])
 
         if self.buff_dyn == "quad-3":
-            C.append(cp.sum(self.vb_dyn_p[:, index_map.z["state"]], axis=0) == self.vb_plus_real[0, :])
-            C.append(cp.sum(self.vb_dyn_m[:, index_map.z["state"]], axis=0) == self.vb_minus_real[0, :])
+            C.append(cp.sum(self.vb_dyn_p[:, indices.z["state"]], axis=0) == self.vb_plus_real[0, :])
+            C.append(cp.sum(self.vb_dyn_m[:, indices.z["state"]], axis=0) == self.vb_minus_real[0, :])
         
         if self.ctcs == "quad-3":
-            C.append(cp.sum(self.vb_dyn_p[:, index_map.z["ctcs"]], axis=0) == self.vb_plus_ctcs[0, :])
-            C.append(cp.sum(self.vb_dyn_m[:, index_map.z["ctcs"]], axis=0) == self.vb_minus_ctcs[0, :])
+            C.append(cp.sum(self.vb_dyn_p[:, indices.z["ctcs"]], axis=0) == self.vb_plus_ctcs[0, :])
+            C.append(cp.sum(self.vb_dyn_m[:, indices.z["ctcs"]], axis=0) == self.vb_minus_ctcs[0, :])
 
         # Per-stage constraints
         for k in range(N):
@@ -466,12 +497,12 @@ class Subproblem:
                 C.append(self.dz[k + 1] + self.z_ref[k + 1] - self.z_m[k + 1] == rhs)
 
                 if self.buff_dyn != "term":
-                    C.append(self.vb_dyn_p[k, index_map.z["state"]] >= 0)
-                    C.append(self.vb_dyn_m[k, index_map.z["state"]] >= 0)
+                    C.append(self.vb_dyn_p[k, indices.z["state"]] >= 0)
+                    C.append(self.vb_dyn_m[k, indices.z["state"]] >= 0)
 
                 if self.ctcs != "term" and n_ctcs > 0:
-                    C.append(self.vb_dyn_p[k, index_map.z["ctcs"]] >= 0)
-                    C.append(self.vb_dyn_m[k, index_map.z["ctcs"]] >= 0)
+                    C.append(self.vb_dyn_p[k, indices.z["ctcs"]] >= 0)
+                    C.append(self.vb_dyn_m[k, indices.z["ctcs"]] >= 0)
                 
                 # CTCS coupling on extra components
                 if method.flags["ctcs"] != "none" and n_ctcs>0:
@@ -487,114 +518,43 @@ class Subproblem:
                     C.append(cp.abs(self.dt[k]) <= self.ddt_max)
 
                 # Control slew (udot)
-                for constraint in problem.constraints.get("nodal", "control_rate_limit"):
-                    udot_max = constraint.udot_max
-                    M_sel = constraint.M_select
+                if mission.n_udot > 0 and self.udot_max is not None and k < N - 2:
+                    M_sel = tools.constraint_index_selector(mission.udot_max_idx, mission.udot_max_idx, m)
                     C.append(
                         M_sel @ (self.nu_ref[k + 1] + self.dnu[k + 1] - (self.nu_ref[k] + self.dnu[k]))
-                        <= (self.dt_ref[k] + self.dt[k]) * np.concatenate([udot_max, udot_max])
+                        <= (self.dt_ref[k] + self.dt[k]) * cp.hstack([self.udot_max, self.udot_max])
                     )
 
             # State box constraints
-            for constraint in problem.constraints.get("nodal", "box"):
-<<<<<<< Updated upstream:src/trajopt/core/scp/scp.py
+            if mission.n_state > 0 and self.z_min is not None and self.z_max is not None:
+                M_sel = tools.constraint_index_selector(mission.z_min_idx, mission.z_max_idx, n)
+                C.append(
+                    M_sel @ (self.z_ref[k, :n] + self.dz[k, :n])
+                    <= cp.hstack([-self.z_min, self.z_max])
+                )
 
-=======
-                x_min_idx = constraint.x_min_idx
-                x_max_idx = constraint.x_max_idx
->>>>>>> Stashed changes:src/trajopt/core/methods/scp.py
-                x_min = constraint.x_min
-                x_max = constraint.x_max
-
-                M_select = constraint.M_select
-
-                if constraint.set == "state":
-
-                    C.append(M_select @ (self.z_ref[k, :n] + self.dz[k, :n]) <= np.concatenate([-x_min, x_max]))
-                elif constraint.set == "control":
-                    C.append(M_select @ (self.nu_ref[k] + self.dnu[k]) <= np.concatenate([-x_min, x_max]))
+            # Control box constraints
+            if mission.n_ctrl > 0 and self.u_min is not None and self.u_max is not None:
+                M_sel = tools.constraint_index_selector(mission.u_min_idx, mission.u_max_idx, m)
+                C.append(
+                    M_sel @ (self.nu_ref[k] + self.dnu[k])
+                    <= cp.hstack([-self.u_min, self.u_max])
+                )
 
             # Linearized inequality constraints (path + nfz + custom)
-            # if problem.constraints.has("nodal", "nonconvex_inequality","POLYTOPE_OUT","SOC_OUT"):  ### DAN: UPDATE BELOW LINE TO
-            if problem.constraints.has("nodal", "nonconvex_inequality"):
-                C.append(self.dgdz[k] @ self.dz[k, :n] + self.dgdnu[k] @ self.dnu[k, :m] + self.g0[k] - self.vb_ineq[k] <= 0)
+            if mission.n_ineq > 0 and method.flags["ctcs"] == "none" and self.dgdz is not None:
+        
+                C.append(self.dgdz[k] @ self.dz[k] + self.dgdnu[k] @ self.dnu[k] + self.g0[k] - self.vb_ineq[k] <= 0)
                 if str(self.flag_autotune) in {"1", "3", "al-scvx"} and self.vb_ineq[k]:
                     C.append(self.vb_ineq[k] >= 0)
 
-            # convex constraints
-            for constraint in problem.constraints.get("nodal", "axis_angle_cone"):
-                z = self.z_ref[k] + self.dz[k]
-                nu = self.nu_ref[k] + self.dnu[k]
-                
-                x_idx = constraint.x_idx
-                axis = constraint.axis
+            if model.n_cvx > 0:
+                for i in range(model.n_cvx):
+                    z = self.z_ref[k] + self.dz[k]
+                    nu = self.nu_ref[k] + self.dnu[k]
 
-                if constraint.set == "state":
-                    C.append(constraint.cos_theta_max * cp.norm(z[x_idx]) <= axis @ z[x_idx])
-                elif constraint.set == "control":
-                    C.append(constraint.cos_theta_max * cp.norm(nu[x_idx]) <= axis @ nu[x_idx])
+                    C.append(model.convex_constraints[i].fcn(0, z, nu, self.problem))
 
-            for constraint in problem.constraints.get("nodal", "max_norm_cone"):
-                z = self.z_ref[k] + self.dz[k]
-                nu = self.nu_ref[k] + self.dnu[k]
-
-                x_idx = constraint.x_idx
-                max_val = constraint.max_val
-                
-                if constraint.set == "state":
-                    C.append(cp.norm(z[x_idx]) <= max_val)
-                elif constraint.set == "control":
-                    C.append(cp.norm(nu[x_idx]) <= max_val)
-
-            #############################################################################################
-            #### ----------------------------------------------------------------------------------- ####
-            #### ----------------------------------- FROM DAN -------------------------------------- ####
-            #### -------------------------- GENERALIZED CONSTRAINTS -------------------------------- ####
-
-
-            #### ----------------- DECIDE TO USE A CONSTRAINT BASED ON TIME STEP ------------------- ####
-            def use_constraint_query(time_steps)
-                use_constraint = False;
-                if time_steps == 'all': use_constraint = True; ## use if applied to all time steps
-                elif k in time_steps: use_constraint = True; ## use if positive index is in time_steps
-                elif k-N in use_constraint = True; ## use if negative index is in time_steps
-                return use_constraint
-
-            
-            ############# ----------------------- CONVEX CONSTRAINTS ------------------- ################
-            for constraint in problem.constraints.get('POLYTOPE_IN'):
-                if use_constraint_query(constraint.time_steps):
-                    z = self.z_ref[k] + self.dz[k]; nu = self.nu_ref[k] + self.dnu[k]
-                    idxx = constraint.idx;
-                    AA = constraint.A; bb = constraint.b; 
-                    if constraint.set == 'state': C.append(AA @ z[idxx] <= bb)
-                    elif constraint.set == "control": C.append(AA @ nu[idxx] <= bb)
-            for constraint in problem.constraints.get('SOC_IN'):
-                if use_constraint_query(constraint.time_steps):
-                    z = self.z_ref[k] + self.dz[k]; nu = self.nu_ref[k] + self.dnu[k]
-                    idxx = constraint.idx;
-                    AA = constraint.A; bb = constraint.b;
-                    CC = constraint.C; dd = constraint.d;
-                    if constraint.set == 'state': C.append(cp.norm(AA@z[idxx] + bb) <= CC @ z[idxx] + dd)
-                    if constraint.set == 'control': C.append(cp.norm(AA@nu[idxx] + bb) <= CC @ nu[idxx] + dd)
-
-            ############# -------------------- NONCONVEX CONSTRAINTS ------------------- ################
-            # for constraint in problem.constraints.get('POLYTOPE_OUT','SOC_OUT'):
-            #     if use_constraint_query(constraint.time_steps):
-            #         if constraint.set == 'state': pass 
-            #         if constraint.set == 'control': pass 
-            
-            #### ----------------------------------------------------------------------------------- ####
-            #### ----------------------------------------------------------------------------------- ####
-            ############################################################################################# 
-
-            # TODO(carlos): think about where to put this, this is a special constraint
-            # but general enough to apply to different 6-dof models using quaternions
-            for constraint in problem.constraints.get("nodal", "quaternion_cone"):
-                z = self.z_ref[k] + self.dz[k]
-                quat_start_idx = constraint.quat_start_idx
-                C.append(cp.norm(z[quat_start_idx + 2: quat_start_idx + 4]) <= constraint.rhs)
-        
         # Fixed-time tying
         if not self.free_T:
             C.append(self.dt == 0)
@@ -610,32 +570,18 @@ class Subproblem:
     # COST FUNCTION (DCP-safe)
     # ============================================================
     def _build_cost_once(self) -> cp.Expression:
-        problem, method = self.problem, self.method
+        mission, model, method = self.problem.mission, self.problem.model, self.problem.method
         """Full baseline cost: TRUE + TR + 0.5*VIRTUAL + DUAL; gated via flags & autotune."""
 
         # === TRUE cost (linearized objective) ===
         TRUE = self.flag_true * (
-            cp.sum(cp.multiply(self.w_cost_times_dcostdz, self.dz[:,:self.n]))
+            cp.sum(cp.multiply(self.w_cost_times_dcostdz, self.dz[:,:model.n]))
           + cp.sum(cp.multiply(self.w_cost_times_dcostdnu, self.dnu))
           + cp.sum(self.w_cost_times_cost0)
         )
 
-        if problem.costs.has("min_time"):
-            dt = self.dt_ref + self.dt
-            time_cost = cp.sum(dt) / (self.N - 1)
-            
-            TRUE += time_cost
-
-        if problem.costs.has("terminal_state"):
-            cost_obj = problem.costs.get("terminal_state")[0]
-
-            zf = self.z_ref[-1] + self.dz[-1]
-
-            x_idx = cost_obj.x_idx
-            TRUE += zf[x_idx]
-
         # === Trust-region penalties ===
-        TR = self.flag_tr * (self.wtr_z * cp.sum_squares(self.dz[:, :self.n]) + self.wtr_u * cp.sum_squares(self.dnu))
+        TR = self.flag_tr * (self.wtr_z * cp.sum_squares(self.dz[:, :model.n]) + self.wtr_u * cp.sum_squares(self.dnu))
 
         # === Virtual buffer penalties ===
         VB = 0.0
@@ -673,7 +619,7 @@ class Subproblem:
                 "dt_ref": last_rec["dt_opt"],
                 "t_ref": last_rec["t_opt"],
             }
-            weights = copy.deepcopy(last_rec.get("weights", self.method.weights))
+            weights = copy.deepcopy(last_rec.get("weights", self.problem.method.weights))
             conv_data = last_rec.get("conv_data", {})
         else:
             refs = {
@@ -682,7 +628,7 @@ class Subproblem:
                 "dt_ref": last_rec["dt_ref"],
                 "t_ref": last_rec["t_ref"],
             }
-            weights = last_rec.get("weights", self.method.weights)
+            weights = last_rec.get("weights", self.problem.method.weights)
             conv_data = last_rec.get("conv_data", {})
 
         next_inputs = {
@@ -694,24 +640,18 @@ class Subproblem:
         return next_inputs
 
     def _load_parameters(self, inputs: Dict[str, Any]) -> float:
-
-        problem, method = self.problem, self.method
+        mission, model, method = self.problem.mission, self.problem.model, self.problem.method
 
         start = time.time()
         Ak, Bk, Bkp, Sk, z_minus = discretize.compute_linsys_discrete(
-            inputs["z_ref"], inputs["nu_ref"], inputs["dt_ref"], problem, method
+            inputs["z_ref"], inputs["nu_ref"], inputs["dt_ref"], self.problem
         )
         prop_time_ms = (time.time() - start) * 1000.0
 
         # compute linearized terminal and running costs
-        cost, dcostdz, dcostdnu = discretize.compute_linearized_costs(inputs["t_ref"], inputs["z_ref"], inputs["nu_ref"], problem, method)
+        cost, dcostdz, dcostdnu = discretize.compute_linearized_costs(inputs["t_ref"], inputs["z_ref"], inputs["nu_ref"], self.problem)
 
-        if problem.constraints.has("nodal", "nonconvex_inequality"):
-            g, dgdz, dgdnu = discretize.compute_nodal_inequality_constraints(inputs["t_ref"], inputs["z_ref"], inputs["nu_ref"], problem, method)
-        else:
-            g = None
-            dgdz = None
-            dgdnu = None
+        g, dgdz, dgdnu = discretize.compute_nodal_inequality_constraints(inputs["t_ref"], inputs["z_ref"], inputs["nu_ref"], self.problem)
 
         # Dynamics & references
         self._set_param(self.Ak,   Ak)
@@ -789,7 +729,7 @@ class Subproblem:
 
 
         # ctcs eps
-        self.eps_ctcs.value = float(method.conv["eps_ctcs"])
+        self.eps_ctcs.value = float(self.problem.method.conv["eps_ctcs"])
 
         # cache for optional debug
         inputs["_linsys_cache"] = (Ak, Bk, Bkp, Sk, z_minus)
@@ -810,21 +750,48 @@ class Subproblem:
         prop_time_ms = self._load_parameters(input_for_iter)
 
         # Solve subproblem
-        solver_name = self.method.solver_opts.get("solver", "ECOS")
-        ignore_dpp = self.method.flags.get("ignore_dpp", False)
-        self.subproblem.solve(solver=solver_name, warm_start=True, ignore_dpp=ignore_dpp)  # ignore_dpp=True if desired
+        solver_name     = self.problem.method.solver_opts.get("solver", "ECOS")
+        ignore_dpp      = self.problem.method.flags.get("ignore_dpp", False)
+
+
+        self.subproblem.solve(solver=solver_name, 
+                                warm_start=True, 
+                                ignore_dpp=ignore_dpp)  # ignore_dpp=True if desired
+    
+
+        # TODO(Skye): fix this / justify keeping it
+        '''
+        solver_persist  = self.problem.method.flags.get("solver_persist", False)
+        
+        try:
+            self.subproblem.solve(
+                solver=solver_name,
+                warm_start=True,
+                ignore_dpp=ignore_dpp,
+            )
+        except cp.SolverError as e:
+            if self.problem.method.flags.get("solver_persist", False):
+                # old behavior: crash hard
+                raise
+            else:
+                # new behavior: swallow error and continue
+                # you can mark the iteration as failed in conv_data
+                print(f"[WARN] Solver {solver_name} failed: {e}")
+
+        '''
 
         # Create unified record for this iteration and append
         iter_record = self._load_outputs(input_for_iter, prop_time_ms)
-        iter_record = convergence.check_convergence_tolerance(self.problem, self.method, iter_record)
-        iter_record = baseline_autotune(self.problem, self.method, iter_record)
+        # TODO: UNCOMMENT CONVERGENCE CHECK
+        iter_record = convergence.check_convergence_tolerance(self.problem, self, iter_record)
+        iter_record = baseline_autotune(self.problem, iter_record)
         self.iter_data.append(iter_record)
 
     # ============================================================
     # OUTPUT PACKING (UNIFIED RECORD)
     # ============================================================
     def _load_outputs(self, input_for_iter: Dict[str, Any], prop_time_ms: float) -> Dict[str, Any]:
-        # mission, model, method = self.problem.mission, self.problem.model, self.method
+        mission, model, method = self.problem.mission, self.problem.model, self.problem.method
         N, n, m = self.N, self.n, self.m
 
         dz_val, dnu_val = self.dz.value, self.dnu.value
@@ -867,10 +834,10 @@ class Subproblem:
         rec["Sk"]  = self.Sk.value if Sk is None else Sk
 
         # Path residuals and reference cost
-        g, _, _ = discretize.compute_nodal_inequality_constraints(rec["t_opt"], rec["z_opt"], rec["nu_opt"], self.problem, self.method)
+        g, _, _ = discretize.compute_nodal_inequality_constraints(rec["t_opt"], rec["z_opt"], rec["nu_opt"], self.problem)
 
         rec["cnst_path"] = g
-        rec["cost"]      = discretize.compute_linearized_costs(rec["t_opt"], rec["z_opt"], rec["nu_opt"], self.problem, self.method)[0].sum().item()
+        rec["cost"]      = discretize.compute_linearized_costs(rec["t_opt"], rec["z_opt"], rec["nu_opt"], self.problem)[0].sum().item()
  
         # Convergence data (buffers, defects, TR cost, ref cost)
         conv = {}
@@ -885,7 +852,7 @@ class Subproblem:
         conv["defect"]  = tools.safe_val(self.dz, rows=N, cols=n) + input_for_iter["z_ref"] - self.z_m.value
         conv["Jtr"]     = ( float(self.wtr_z.value) * np.sum(tools.safe_val(self.dz, rows=N, cols=n)**2)
                           + float(self.wtr_u.value) * np.sum(tools.safe_val(self.dnu, rows=N, cols=m)**2) )
-        ref_cost = discretize.compute_linearized_costs(input_for_iter["t_ref"], input_for_iter["z_ref"], input_for_iter["nu_ref"], self.problem, self.method)[0].sum().item()
+        ref_cost = discretize.compute_linearized_costs(input_for_iter["t_ref"], input_for_iter["z_ref"], input_for_iter["nu_ref"], self.problem)[0].sum().item()
         conv["cost_ref"] = ref_cost
 
         rec["conv_data"]  = conv
@@ -897,21 +864,21 @@ class Subproblem:
 # ===========================
 # Baseline autotune wrapper
 # ===========================
-def baseline_autotune(problem, method, rec: Dict[str, Any]) -> Dict[str, Any]:
-    flag = method.flags["flag_autotune"]
+def baseline_autotune(problem, rec: Dict[str, Any]) -> Dict[str, Any]:
+    flag = problem.method.flags["flag_autotune"]
     if flag == "1":
-        rec = hp.autotune1(problem, method, rec)
+        rec = hp.autotune1(problem, rec)
     elif flag == "2":
-        rec = hp.autotune2(problem, method, rec)
+        rec = hp.autotune2(problem, rec)
     elif flag == "3":
-        rec = hp.autotune3(problem, method, rec)
+        rec = hp.autotune3(problem, rec)
     return rec
 
 
 # ==========================================
 # Iteration status printout (unified record)
 # ==========================================
-def display_subprob_status(method, rec: Dict[str, Any]) -> None:
+def display_subprob_status(problem, rec: Dict[str, Any]) -> None:
     conv = rec.get("conv_data", {})
 
     chk_feas_path = conv.get("chk_feas_path", 0.0)
@@ -930,8 +897,8 @@ def display_subprob_status(method, rec: Dict[str, Any]) -> None:
     solve_stat  = conv.get("status", "UNKNOWN")
     iter_num    = int(rec.get("iter_num", -1))
 
-    nt    = float(method.nondim.nt)
-    ncost = float(method.nondim.nd_cost)
+    nt    = float(problem.method.nondim.get("nt", 1.0))
+    ncost = float(problem.method.nondim.get("ncost", 1.0))
 
     Ts   = float(rec.get("T_opt", 0.0))
     cost = float(rec.get("cost", 0.0))
