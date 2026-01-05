@@ -1,9 +1,9 @@
 import numpy as np
 import jax 
 import jax.numpy as jnp
-import trajopt.core.utils.tools as tools
+import trajopt.utils.tools as tools
 jax.config.update("jax_enable_x64", True)
-import trajopt.core.models.obstacles     as obstacles
+import trajopt.core.constraints.obstacles     as obstacles
 from trajopt.core.analysis.custom_functions_dan_pdg import DCM, calc_DCMs, calc_rt_I
 from trajopt.core.analysis.custom_functions_dan_pdg import thrust_mag, compute_tilt, ang_rate, omega_degrees
 from trajopt.core.analysis.custom_functions_dan_pdg import calc_u_vecs_scale1, calc_u_vecs_scale2

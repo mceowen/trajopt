@@ -1,3 +1,5 @@
+inherit: trajopt/library/methods/shared/default.yaml
+
 'N': 40
 
 flags:
@@ -7,7 +9,7 @@ flags:
   flag_autotune:      "3"       # '0', '1', '2
   buff_dyn:           "term"    # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
   buff_dyn_dual:      "none"    # 'l1', 'none'
-  ctcs:               'l2'  # 0, 1
+  ctcs:               'none'    # 0, 1
   ctcs_dual:          "none"    # 'l1', 'none'
   ode_fixed_dt:       0         # 0, 1
   nondim:             1         # 0, 1
@@ -24,12 +26,17 @@ flags:
   flag_vb:      1.0
 
 solver_opts:
-  solver: "ECOS"
+  solver: "CLARABEL"
 
-T_init: 1700
-T_min: 550.0
-T_max: 3000.0
-dT_max: 450.0
+guess: 
+  T_init: 1700
+  T_min: 550.0
+  T_max: 3000.0
+  dT_max: 450.0
+  nl_guess_u_start: [0.0, 0.0]
+  nl_guess_u_stop: [0.0, 0.0]
+
+  line_guess_u_init: "eval: np.tile([5.0, 0.0], (method['N'], 1))"
 
 conv:
   ctcs_mult_state: 1.0
@@ -38,14 +45,9 @@ conv:
   eps_ctcs: 1e-16
   eps_state: [500, 1, 1, 50, 1, 1]
   eps_cost: 1
-  eps_nfz: [1, 1]
-  eps_path: [180, 333, 0.24525]
-  eps_term: [333.0, 0.1, 0.1, 100, 0.1, 0.1]
-  eps_term_min: [10.0, 1.0, 1.0, 10.0, 1.0, 1.0]
-  eps_term_max: [10.0, 1.0, 1.0, 10.0, 1.0, 1.0]
   eps_defect: [0.01]
   eps_dyn: [10.0, 0.1, 0.1, 30.0, 0.1, 0.1]
-  iter_max: 80
+  iter_max: 1000
 
 weights:
   w_cost:         1.0
@@ -62,8 +64,3 @@ weights:
   w_dyn_scale:    10000.0
   w_term_scale:   100.0
   w_ctcs:         1.0
-  
-nl_guess_u_start: [0.0]
-nl_guess_u_stop: [0.0]
-
-line_guess_u_init: "eval: np.tile([5.0], (method['N'], 1))"

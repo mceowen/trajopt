@@ -1,6 +1,16 @@
-base_config: core.trajopt_configs.scitech26_lander_6dof
+problem:
+  model:
+    inherit: trajopt/library/models/lander_6dof/model.yaml
+  
+  mission:
+    inherit: trajopt/library/missions/lander_scitech26/mission.yaml
 
-method: 
+method:
+  inherit: method.yaml
+
   'N': 20
   flags: 
    ignore_dpp: 0
+
+  conv: 
+    iter_max: 50

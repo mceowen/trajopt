@@ -1,12 +1,11 @@
 import numpy as np
-from trajopt.core.methods    import initial_guess as guess
-from trajopt.core.methods    import convergence
-from trajopt.core.methods    import hyperparameters
-from trajopt.core.methods    import discretize
-from trajopt.core.methods    import integrators
-from trajopt.core.methods    import nondim
-from trajopt.core.index_map          import IndexMap
-
+from trajopt.core.scp    import initial_guess as guess
+from trajopt.core.scp    import convergence
+from trajopt.core.scp    import hyperparameters
+from trajopt.core.scp    import discretize
+from trajopt.core.scp    import integrators
+from trajopt.core.indexing.index_map import IndexMap
+from trajopt.core.scaling.nondim import Nondim
 
 class SolutionMethod:
 
@@ -28,8 +27,11 @@ class SolutionMethod:
         self.conv_data   = {}
 
         self.index_map = IndexMap(self)
+        self.nondim = Nondim(problem)
 
-        nondim.set_nondim_params(problem, self)
+        self.problem.constraints.nondim_constraints(self.nondim)
+        self.problem.constraints.convexify_constraints()
+
         discretize.jit_jax_discretize(problem, self)
         integrators.jit_rk4_jax_dense(problem, self)
 
@@ -78,9 +80,9 @@ class SolutionMethod:
             raise ValueError("Invalid ctcs flag.")
 
         ### Time of flight constraints ###
-        Ts_min       = self.guess["T_min"] / self.nondim["nt"]
-        Ts_max       = self.guess["T_max"] / self.nondim["nt"]
-        self.ddt_max = self.guess["dT_max"] / ((self.N - 1) * self.nondim["nt"])
+        Ts_min       = self.guess["T_min"] / self.nondim.nt
+        Ts_max       = self.guess["T_max"] / self.nondim.nt
+        self.ddt_max = self.guess["dT_max"] / ((self.N - 1) * self.nondim.nt)
         self.dt_min  = Ts_min / (self.N - 1)
         self.dt_max  = Ts_max / (self.N - 1)
 
@@ -111,10 +113,10 @@ class SolutionMethod:
 
     def get_initial_guess(self, problem):
 
-        self.nl_guess_u_start = self.nondim["M"]["ctrl"]["d2nd"] @ self.guess["nl_guess_u_start"]
-        self.nl_guess_u_stop  = self.nondim["M"]["ctrl"]["d2nd"] @ self.guess["nl_guess_u_stop"]
+        self.nl_guess_u_start = self.nondim.M["ctrl"]["d2nd"] @ self.guess["nl_guess_u_start"]
+        self.nl_guess_u_stop  = self.nondim.M["ctrl"]["d2nd"] @ self.guess["nl_guess_u_stop"]
 
-        self.line_guess_u_init = self.guess["line_guess_u_init"] @ self.nondim["M"]["ctrl"]["d2nd"]
+        self.line_guess_u_init = self.guess["line_guess_u_init"] @ self.nondim.M["ctrl"]["d2nd"]
 
         if self.flags["dynamics_nonconvex"] and (self.flags.get("buff_dyn")=="term"):
             nu_range = np.vstack([self.nl_guess_u_start, self.nl_guess_u_stop])

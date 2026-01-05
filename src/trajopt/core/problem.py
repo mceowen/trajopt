@@ -1,17 +1,12 @@
-from typing import Dict, Any, Optional, List
-from pprint import pprint
-import numpy as np
-import importlib
-
-import trajopt.core.methods.convexify as convexify
-from trajopt.core.constraints import Constraints
-from trajopt.core.costs import Costs
-import trajopt.core.utils.tools as tools
+from trajopt.core.constraints.constraints import Constraints
+from trajopt.core.costs.costs import Costs
+from trajopt.utils.config_loader import resolve_function
 
 # ████████████████████████████████████████████████████████████████████████████
 
-# TODO: STILL UNDER CONSTRUCTION, RUNS AND "CONVERGES" for:
-# examples/lander_6dof/standalone_prototype.ipynb
+# TODO: STILL UNDER CONSTRUCTION, RUNS for:
+# examples/lander_6dof/main_standalone.ipynb
+# examples/vtol1_entry_3dof/main_standalone.ipynb
 
 # ████████████████████████████████████████████████████████████████████████████
 
@@ -21,7 +16,13 @@ class Problem:
 
         # params already built by load_trajopt (includes model, mission, constraint params)
         self.params = problem_config['params']
+        
+        # Extract fcns config from mission and load actual functions
+        fcns_config = self.params['mission'].pop('fcns', {})
+        
         self.fcns = {}
+        for name, path in fcns_config.items():
+            self.fcns[name] = resolve_function(path)
 
         self.n = self.params['model']['dimensions']['n']
         self.m = self.params['model']['dimensions']['m']
@@ -37,7 +38,35 @@ class Problem:
         # ------------------------------------------------------------
 
         constraint_config_list = problem_config["constraints"]
-        self.constraints = Constraints(constraint_config_list)
+        self.constraints = Constraints(constraint_config_list, self.params)
+
+        # ------------------------------------------------------------
+        # Cost
+        # ------------------------------------------------------------
+
+        cost_config_list = problem_config["costs"]
+        self.costs = Costs(cost_config_list, self.params)
+
+        # ------------------------------------------------------------
+        # Add constraint/cost params to problem params and resolve functions
+        # ------------------------------------------------------------
+        
+        self.constraints.add_params(self.params)
+        self.costs.add_params(self.params)
+
+        self.constraints.resolve_functions(self.params, self.fcns)
+        self.costs.resolve_functions(self.params, self.fcns)
+
+        # ------------------------------------------------------------
+        # Augment CTCS dynamics
+        # ------------------------------------------------------------
+
+        self.constraints.augment_ctcs_dynamics(self.n)
+
+        # ------------------------------------------------------------
+        # CONSTRAINT BOOK KEEPING
+        # TODO: MOVE THIS TO INDEX_MAP AND DONT HARDCODE GROUPS
+        # ------------------------------------------------------------
 
         # constraint book keeping
         self.n_ineq = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality'))
@@ -60,40 +89,3 @@ class Problem:
         self.n_term_ineq = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'inequality_bc') if constraint.boundary == "final" and constraint.set == "state")
         self.n_term_ctcs = self.n_ctcs
         self.n_term_total = self.n_term + self.n_term_ineq + self.n_ctcs
-
-        # ------------------------------------------------------------
-        # Cost
-        # ------------------------------------------------------------
-
-        cost_config_list = problem_config["costs"]
-        self.costs = Costs(cost_config_list)
-
-        self.constraints.resolve_functions(self.params, self.fcns)
-        self.costs.resolve_functions(self.params, self.fcns)
-
-        # ------------------------------------------------------------
-        # Augment CTCS dynamics
-        # ------------------------------------------------------------
-
-        if self.constraints.has('ct'):
-            dynamics = self.constraints.get('dynamics').fcn
-            f_ctcs, dfcn_dz_ctcs, dfcn_du_ctcs = convexify.linearize_jax_ctcs(dynamics, self.constraints, self.n)
-
-            lin_dyn_ctcs = lambda t, z, nu: (f_ctcs(z, nu), dfcn_dz_ctcs(z, nu), dfcn_du_ctcs(z, nu))
-
-            self.lin_dyn = lin_dyn_ctcs
-
-        for constraint in self.constraints.constraints_list:
-            if "params" in constraint.__dict__:
-                if constraint.params is not None:
-                    self.params = tools.deep_update(self.params, constraint.params)
-
-        print("\n")
-        print("constraints config:")
-        pprint(problem_config["constraints"])
-        print("\n")
-
-        print("\n")
-        print("costs config:")
-        pprint(problem_config["costs"])
-        print("\n")

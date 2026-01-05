@@ -1,0 +1,9 @@
+problem:
+  model:
+    inherit: model.yaml
+
+  mission:
+    inherit: mission.yaml
+
+method:
+  inherit: method.yaml

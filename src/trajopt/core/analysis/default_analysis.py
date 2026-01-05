@@ -1,10 +1,10 @@
 import numpy as np
 from scipy.integrate import solve_ivp
-import trajopt.core.utils.tools as tools
+import trajopt.utils.tools as tools
 import jax
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
-import trajopt.core.methods.integrators as integrators
+import trajopt.core.scp.integrators as integrators
 
 '''
 outline of plt_data structure
@@ -72,9 +72,9 @@ def perform_default_analysis(trajopt_obj):
             # use JAX-based RK4 propagation
             z_nl = integrators.propagate_rk4_dense(z_opt_np[0, :n], nu_opt, t_opt, t_dense, method)
             
-            data['t_nl'] = t_dense * nondim['nt']
-            data['z_nl'] = z_nl @ nondim['M']['state']['nd2d']
-            data['nu_nl'] = u_ref_dense @ nondim['M']['ctrl']['nd2d']
+            data['t_nl'] = t_dense * nondim.nt
+            data['z_nl'] = z_nl @ nondim.M["state"]["nd2d"]
+            data['nu_nl'] = u_ref_dense @ nondim.M["ctrl"]["nd2d"]
         else:
             # use scipy solve_ivp
             def FOH_dynamics(t, z, nu_opt, t_opt):
@@ -94,20 +94,20 @@ def perform_default_analysis(trajopt_obj):
                 **odesettings
             )
             
-            data['t_nl'] = t_dense * nondim['nt']
-            data['z_nl'] = sol.y.T @ nondim['M']['state']['nd2d']
-            data['nu_nl'] = u_ref_dense @ nondim['M']['ctrl']['nd2d']
+            data['t_nl'] = t_dense * nondim.nt
+            data['z_nl'] = sol.y.T @ nondim.M["state"]["nd2d"]
+            data['nu_nl'] = u_ref_dense @ nondim.M["ctrl"]["nd2d"]
 
         # data['t_opt'] = data['t_opt'] * nondim['nt']
         # data['z_opt'] = data['z_opt'][:, :n] @ nondim['M']['state']['nd2d']
         # data['u_ref'] = data["nu_opt"] @ nondim['M']['ctrl']['nd2d']
 
-        data['t_init'] = method.t_init * nondim['nt']
-        data['z_init'] = method.z_init[:, :n] @ nondim['M']['state']['nd2d']
-        data['nu_init'] = method.nu_init @ nondim['M']['ctrl']['nd2d']
+        data['t_init'] = method.t_init * nondim.nt
+        data['z_init'] = method.z_init[:, :n] @ nondim.M["state"]["nd2d"]
+        data['nu_init'] = method.nu_init @ nondim.M["ctrl"]["nd2d"]
 
-        data['t_opt'] = data["t_opt"] * nondim['nt']
-        data['z_opt'] = data["z_opt"][:, :n] @ nondim['M']['state']['nd2d']
-        data['nu_opt'] = data["nu_opt"] @ nondim['M']['ctrl']['nd2d']
+        data['t_opt'] = data["t_opt"] * nondim.nt
+        data['z_opt'] = data["z_opt"][:, :n] @ nondim.M["state"]["nd2d"]
+        data['nu_opt'] = data["nu_opt"] @ nondim.M["ctrl"]["nd2d"]
 
     return {'iters': iter_data, 'params': params_dict}

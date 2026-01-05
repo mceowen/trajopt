@@ -1,0 +1,59 @@
+inherit: trajopt/library/methods/shared/default.yaml
+
+'N': 40
+
+flags:
+  free_final_time:    1       # 0, 1
+  dynamics_nonconvex: 1       # 0, 1
+  equal_dt:           0       # 0, 1
+  flag_autotune:      "3"     # '0', '1', '2
+  buff_dyn:           "l2"  # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
+  buff_dyn_dual:      "none"  # 'l1', 'none'
+  ctcs:               "none" # 0, 1
+  ctcs_dual:          "none"  # 'l1', 'none'
+  ode_fixed_dt:       0       # 0, 1
+  nondim:             1       # 0, 1
+  jax_dyn:            1       # 0, 1
+  flag_conv:          1       # 0, 1, 2
+  ignore_dpp:         1
+
+  flag_path:    1.0
+  flag_nfz:     1.0
+  flag_custom:  1.0
+  flag_term:    1.0
+  flag_dyn:     1.0
+  flag_tr:      1.0
+  flag_true:    1.0
+  flag_dual:    1.0
+  flag_vb:      1.0
+
+guess: {}
+
+conv:
+  #ctcs_mult_state: 1.0
+  ctcs_fac_cnst: 0.5     # 0.5, 25 THIS IS DT MAX OR MIN MAYBE NONDIM TOO
+  eps_ctcs: 1e-8
+  eps_state: [0.001]
+  eps_cost: 1
+  eps_defect: [0.0001]
+  eps_dyn: null
+  iter_max: 20
+
+weights:
+  w_cost:         1.0
+  alpha_z:        0.5
+  alpha_u:        0.5
+  beta:           10.0
+  gamma:          10.0
+  eps_nonzero1:   0.0000000001
+  eps_nonzero2:   0.0000000001
+  wbuff:          100.0
+  w_nfz_scale:    10.0
+  w_path_scale:   10.0
+  w_custom_scale: 0.0
+  w_dyn_scale:    10000.0
+  w_term_scale:   1000.0
+  w_ctcs:         100.0 # 10.0, 20.0
+
+solver_opts:
+  solver: "QOCO"
