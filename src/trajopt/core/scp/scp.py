@@ -557,7 +557,7 @@ class Subproblem:
                 use_constraint = False;
                 if time_steps == 'all': use_constraint = True; ## use if applied to all time steps
                 elif k in time_steps: use_constraint = True; ## use if positive index is in time_steps
-                elif k-N in use_constraint = True; ## use if negative index is in time_steps
+                elif k-N in time_steps: use_constraint = True; ## use if negative index is in time_steps
                 return use_constraint
 
             ############# ----------------------- CONVEX CONSTRAINTS ------------------- ################
