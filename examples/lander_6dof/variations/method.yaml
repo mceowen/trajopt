@@ -1,0 +1,9 @@
+# this defines the variations to the nominal method 
+
+standard:
+  flags:
+    ctcs:   "none" 
+
+autotune:
+  flags:
+    ctcs:   "l2" 

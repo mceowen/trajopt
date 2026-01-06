@@ -1,0 +1,50 @@
+
+'N': 40
+
+flags:
+  free_final_time: 1      # 0, 1
+  dynamics_nonconvex: 1  # 0, 1
+  equal_dt: 1             # 0, 1
+  flag_autotune: "0"      # '0', '1', '2
+  buff_dyn: "term"        # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
+  buff_dyn_dual: "none"   # 'l1', 'none'
+  ctcs: "none"                 # 0, 1
+  ode_fixed_dt: 0         # 0, 1
+  nondim: 1               # 0, 1
+  jax_dyn: 1              # 0, 1
+  match_dim_nondim_weights: 0  # 0, 1 # this is temporary, to be removed later
+
+solver_opts:
+  solver: "QOCO"
+
+T_init: 200.0
+T_min: 180.0
+T_max: 400.0
+dT_max: 20.0
+
+conv:
+  ctcs_mult_state: 0.5
+  ctcs_fac_cnst: 1.0
+  ctcs_mult_cnst: 1.0
+  eps_ctcs: 1e-4
+  eps_state: [0.1, 1, 1, 10, 1, 1]
+  eps_cost: 1.0
+  eps_nfz: 0.1
+  eps_term: [10.0, 1.0, 1.0, 10, 1.0, 1.0]
+  eps_term_min: [10.0, 1.0, 1.0, 10, 1.0, 1.0]
+  eps_term_max: [10.0, 1.0, 1.0, 10, 1.0, 1.0]
+  eps_defect: [0.01]
+  eps_dyn: [10.0, 1.0, 1.0, 10.0, 1.0, 1.0]
+  iter_max: 50
+
+weights:
+  w_cost: 20.0
+  eps_nonzero1: 0.2
+  eps_nonzero2: 0.0000000001
+  alpha_z: 0.5
+  alpha_u: 0.5
+  
+nl_guess_u_start: [5.0, 0.0]
+nl_guess_u_stop: [5.0, 0.0]
+
+line_guess_u_init: "eval: np.tile([5.0, 0.0], (method['N'], 1))"

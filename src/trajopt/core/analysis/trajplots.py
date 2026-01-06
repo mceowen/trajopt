@@ -1,0 +1,501 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib
+# matplotlib.rcParams['text.usetex'] = True
+plt.rcParams['text.usetex'] = True
+import numpy.linalg as mat
+import scipy.linalg as smat
+
+class SCVXPLOTS:
+    def __init__(self,data):
+        self.data = data;
+        self.scenarios = list(self.data); self.methods = {};
+        for tag in self.scenarios: self.methods[tag] = list(self.data[tag]);
+        self.base_pen = {'frgba':[0,0,0,0.1],'lrgba':[0,0,0,0.1]}
+        self.base_pen = {**self.base_pen,'lw':2,'ls':'-'}
+        self.base_pen = {**self.base_pen,'msty':'','msz':1}
+        self.legends = {};
+
+        self.use_current = False;
+        self.current_scenarios = [];
+        self.current_methods = [];
+        self.current_runs = []; 
+        self.current_iters = [];
+
+    def setCurrent(self,ins={}):
+        self.use_current = True
+        if 'methods' in ins: self.current_methods = ins['methods'];
+        if 'scenarios' in ins: self.current_scenarios = ins['scenarios'];
+        if 'runs' in ins: self.current_runs = ins['runs'];
+        if 'iters' in ins: self.current_iters = ins['iters'];
+
+
+    def calcField(self,tag,func,func_args=[],ins={}):
+        # scenarios = [self.scenarios[0]];
+        # methods = [self.methods[scenarios[0]][0]];
+        # runs = [0];
+        # iters = [0];
+        if self.use_current:
+            scenarios = self.current_scenarios;
+            methods = self.current_methods;
+            runs = self.current_runs;
+            iters = self.current_iters;
+        if 'scenarios' in ins: scenarios = ins['scenarios'];
+        if 'methods' in ins: methods = ins['methods'];
+        if 'runs' in ins: runs = ins['runs'];
+        if 'iters' in ins: iters = ins['iters'];
+        for scenario in scenarios:
+            for method in methods:
+                if method in self.data[scenario]:
+                    RUNS = self.data[scenario][method]['mc_data'];
+                    for r in runs:
+                        if r < len(RUNS):
+                            RUN = RUNS[r];
+                            for i in iters:
+                                if i < len(RUN['iters']):
+                                    data = RUN['iters'][i];
+                                    #############################
+                                    lens = []; args = []
+                                    for arg in func_args:
+                                        newarg = arg; 
+                                        if isinstance(arg,str): newarg = data[arg].copy();
+                                        if isinstance(newarg,(list,np.ndarray)): lens.append(len(newarg))
+                                        args.append(newarg);                                        
+                                    totlen = 1; 
+                                    if len(lens)>0: totlen = np.min(lens);
+                                    fxvals = [];
+                                    for t in range(totlen):
+                                        currargs = []
+                                        for arg in args:
+                                            if isinstance(arg,(list,np.ndarray)): currargs.append(arg[t]);
+                                            else: currargs.append(arg);
+                                        fxvals.append(func(*currargs))
+                                    fxvals = np.array(fxvals);
+                                    self.data[scenario][method]['mc_data'][r]['iters'][i][tag] = fxvals;
+                                    # lens = [];
+                                    # for arg in func_args:
+                                    #     given = False;
+                                    #     if 'given' in arg: newarg = arg['val']; given = arg['given'];
+                                    #     if not(given): newarg = data[arg['val']]
+                                    #     if isinstance(newarg,(list,np.ndarray)): lens.append(len(newarg))
+                                    # totlen = 1; 
+                                    # if len(lens)>0: totlen = np.min(lens);
+                                    # fxvals = [];                                    
+                                    # for t in range(totlen):
+                                    #     args = [];
+                                    #     for arg in func_args:
+                                    #         given = False;
+                                    #         if 'given' in arg: newarg = arg['val']; given = arg['given'];
+                                    #         if not(given): newarg = data[arg['val']]
+                                    #         if 'inds' in arg: newarg = newarg[:,arg['inds']];
+                                    #         if isinstance(newarg,(list,np.ndarray)): newarg[t]
+                                    #         args.append(newarg);
+                                    #     fxvals.append(func(*args))
+                                    # fxvals = np.array(fxvals);
+                                    # self.data[scenario][method]['mc_data'][r]['iters'][i][tag] = fxvals;
+
+
+    ########### BASIC 2D-PLOTTING ###############
+    def addPlot2D(self,ax,pen={},typ='line',ins={}):
+        if len(pen)==0: penn = self.base_pen.copy();
+        else: penn = {**self.base_pen,**pen}
+
+        scenarios = [self.scenarios[0]];
+        methods = [self.methods[scenarios[0]][0]];
+        runs = [0];
+        iters = [0];
+        if self.use_current:
+            scenarios = self.current_scenarios;
+            methods = self.current_methods;
+            runs = self.current_runs;
+            iters = self.current_iters;
+        if 'scenarios' in ins: scenarios = ins['scenarios'];
+        if 'methods' in ins: methods = ins['methods'];
+        if 'runs' in ins: runs = ins['runs'];
+        if 'iters' in ins: iters = ins['iters'];
+
+        xtag = None; ytag = None;
+        if 'x' in ins: xtag = ins['x'];
+        if 'y' in ins: ytag = ins['y'];
+        leg = None;
+        if 'legend' in ins: leg = ins['legend'];
+        if not(leg in self.legends):  self.legends[leg] = {};
+        label = '';
+        if 'label' in ins: label = ins['label']
+
+        ###############################################################
+        ### hacks
+        force_lens = True;
+        if 'force_lens' in ins: force_lens = ins['force_lens'];
+        dataloc = 'iters';
+        if 'dataloc' in ins: dataloc = ins['dataloc'];
+        use_quiver = False; qtag = None;
+        if 'quiver' in ins: qtag = ins['quiver']; use_quiver = True; 
+        # if dataloc == 'weights': iters = [0];
+        useskip = False; skip = 1;
+        if 'skip' in ins: skip = ins['skip']; useskip = True
+        ###############################################################
+        color_vars = []; use_color_vars = False;
+        if 'color_vars'  in ins: color_vars = ins['color_vars']
+        if 'color_variations'  in ins: color_vars = ins['color_variations']
+        if len(color_vars) > 0: use_color_vars = True;
+        ###############################################################
+        ###############################################################
+
+
+        for scenario in scenarios:
+            for method in methods:
+                if method in self.data[scenario]:
+                    RUNS = self.data[scenario][method]['mc_data'];
+                    for r in runs:
+                        if r < len(RUNS):
+                            RUN = RUNS[r];
+                            DAT = RUN['iters'];
+                            ################################
+                            # if dataloc == 'weights': DATW = [RUN['params']['methodp']['weights']];
+                            ################################
+                            for i in iters:
+                                if i < len(DAT):
+                                    data = DAT[i];
+                                    if not(ytag == None):
+                                        data_with_y = DAT[i]; 
+                                        if dataloc == 'weights': data_with_y = DAT[i]['weights']
+                                        if isinstance(ytag,(tuple,list)):
+                                            ydata = data_with_y[ytag[0]][:,ytag[1]];
+                                        else: ydata = data_with_y[ytag];
+                                        if xtag == None: xdata = list(range(len(ydata)));
+                                        else:
+                                            if isinstance(xtag,(tuple,list)):
+                                            	xdata = DAT[i][xtag[0]];
+                                            	shp = xdata.shape;
+                                            	if len(shp)==2: xdata = xdata[:,xtag[1]];
+                                            	if len(shp)==1: xdata = xdata[xtag[1]];
+                                            else: xdata = DAT[i][xtag];
+
+                                        penn2 = {};
+                                        ########################################
+                                        if use_color_vars:
+                                            for field in color_vars:
+                                                vals = color_vars[field]['values'];
+                                                by   = color_vars[field]['by'];
+                                                vers  = color_vars[field]['typ'];
+                                                if by == 'runs': ind1 = r; totlen = len(RUNS);
+                                                if by == 'iters': ind1 = i; totlen = len(DAT);
+                                                if vers == 'mod': ind1 = int(np.mod(ind1,len(vals)));
+                                                if vers == 'frac': ind1 = int((ind1/totlen)*len(vals));
+                                                penn2[field] = vals[ind1];
+
+                                        ########################################
+                                        if use_quiver: #not(vectag==None):
+                                            if isinstance(qtag,(tuple,list)):
+                                                qdata = DAT[i][qtag[0]][:,qtag[1]];
+                                            else: qdata = DAT[i][qtag];
+                                            if useskip: qdata = qdata[::skip]
+                                        ########################################
+
+                                        if useskip:
+                                            xdata = xdata[::skip]
+                                            ydata = ydata[::skip]
+
+
+                                        cpenn = {**penn,**penn2}
+                                        frgba = cpenn['frgba']; lrgba = cpenn['lrgba'];
+                                        lw = cpenn['lw']; ls = cpenn['ls']
+                                        msty = cpenn['msty']; msz = cpenn['msz']
+                                        if 'falpha' in cpenn: frgba[3] = cpenn['falpha']
+                                        if 'lalpha' in cpenn: lrgba[3] = cpenn['lalpha']
+                                        if typ == 'line':
+                                            if force_lens:
+                                                xlen = len(xdata); ylen = len(ydata); totlen = int(np.min([xlen,ylen]));
+                                                xdata = xdata[:totlen]; ydata = ydata[:totlen]
+                                            if leg == None: 
+                                                if use_quiver:
+                                                    ax.quiver(xdata,ydata,qdata[:,0],qdata[:,1],
+                                                              headlength=0,headwidth=1,scale=1,
+                                                              color=lrgba[:3],alpha=lrgba[3],linewidth=lw,linestyle = ls)
+                                                else: ax.plot(xdata,ydata,color=lrgba[:3],alpha=lrgba[3],linewidth=lw,linestyle = ls,marker=msty,markersize=msz)
+                                            else: 
+                                                if use_quiver: 
+                                                    self.legends[leg][label] = ax.quiver(xdata,ydata,qdata[:,0],qdata[:,1],
+                                                                                    headlength=0,headwidth=1,scale=1,
+                                                                                    color=lrgba[:3],alpha=lrgba[3],linewidth=lw,
+                                                                                    linestyle = ls)[0]
+                                                else:
+                                                    self.legends[leg][label] = ax.plot(xdata,ydata,
+                                                        label=label,color=lrgba[:3],alpha=lrgba[3],
+                                                        linewidth=lw,linestyle = ls,marker=msty,markersize=msz)[0]
+ 
+
+
+    ########### BASIC 2D-PLOTTING ###############
+    def addPlot3D(self,ax,pen={},typ='line',ins={}):
+        if len(pen)==0: penn = self.base_pen.copy();
+        else: penn = {**self.base_pen,**pen}
+
+        scenarios = [self.scenarios[0]];
+        methods = [self.methods[scenarios[0]][0]];
+        runs = [0];
+        iters = [0];
+        if self.use_current:
+            scenarios = self.current_scenarios;
+            methods = self.current_methods;
+            runs = self.current_runs;
+            iters = self.current_iters;
+        if 'scenarios' in ins: scenarios = ins['scenarios'];
+        if 'methods' in ins: methods = ins['methods'];
+        if 'runs' in ins: runs = ins['runs'];
+        if 'iters' in ins: iters = ins['iters'];
+
+        xtag = None; ytag = None; ztag = None;
+        if 'x' in ins: xtag = ins['x'];
+        if 'y' in ins: ytag = ins['y'];
+        if 'z' in ins: ztag = ins['z'];
+        leg = None;
+        if 'legend' in ins: leg = ins['legend'];
+        if not(leg in self.legends):  self.legends[leg] = {};
+        label = 'basic_label';
+        if 'label' in ins: label = ins['label']
+
+        ###############################################################
+        ### hacks
+        force_lens = True;
+        if 'force_lens' in ins: force_lens = ins['force_lens'];
+        dataloc = 'iters';
+        if 'dataloc' in ins: dataloc = ins['dataloc'];
+        # if dataloc == 'weights': iters = [0];
+        use_quiver = False; qtag = None;
+        if 'quiver' in ins: qtag = ins['quiver']; use_quiver = True; 
+        useskip = False; skip = 1;
+        if 'skip' in ins: skip = ins['skip']; useskip = True
+        ###############################################################
+        color_vars = []; use_color_vars = False;
+        if 'color_vars'  in ins: color_vars = ins['color_vars']
+        if 'color_variations'  in ins: color_vars = ins['color_variations']
+        if len(color_vars) > 0: use_color_vars = True;
+        ###############################################################
+        ###############################################################        
+
+        for scenario in scenarios:
+            for method in methods:
+                if method in self.data[scenario]:
+                    RUNS = self.data[scenario][method]['mc_data'];
+                    for r in runs:
+                        if r < len(RUNS):
+                            RUN = RUNS[r];
+                            for i in iters:
+                                if i < len(RUN['iters']):
+                                    data = RUN['iters'][i];
+                                    # if not(ytag == None):
+                                    if isinstance(xtag,(tuple,list)): xdata = data[xtag[0]][:,xtag[1]];
+                                    else: xdata = data[xtag];                                    
+                                    if isinstance(ytag,(tuple,list)): ydata = data[ytag[0]][:,ytag[1]];
+                                    else: ydata = data[ytag];
+                                    if isinstance(ztag,(tuple,list)): zdata = data[ztag[0]][:,ztag[1]];
+                                    else: zdata = data[ztag];
+
+                                    # frgba = penn['frgba']; lrgba = penn['lrgba'];
+                                    # lw = penn['lw']; ls = penn['ls']; msty = penn['msty']; msz = penn['msz']
+
+                                    penn2 = {};
+                                    ########################################
+                                    if use_color_vars:
+                                        for field in color_vars:
+                                            vals = color_vars[field]['values'];
+                                            by   = color_vars[field]['by'];
+                                            vers  = color_vars[field]['typ'];
+                                            if by == 'runs': ind1 = r; totlen = len(RUNS);
+                                            if by == 'iters': ind1 = i; totlen = len(DAT);
+                                            if vers == 'mod': ind1 = int(np.mod(ind1,len(vals)));
+                                            if vers == 'frac': ind1 = int((ind1/totlen)*len(vals));
+                                            penn2[field] = vals[ind1];
+                                    ########################################
+
+                                    ########################################
+                                    if use_quiver: #not(vectag==None):
+                                        if isinstance(qtag,(tuple,list)):
+                                            qdata = data[qtag[0]][:,qtag[1]];
+                                        else: qdata = data[qtag];
+                                        if useskip: qdata = qdata[::skip]
+                                    ########################################
+
+                                    cpenn = {**penn,**penn2}
+                                    frgba = cpenn['frgba']; lrgba = cpenn['lrgba'];
+                                    lw = cpenn['lw']; ls = cpenn['ls']
+                                    msty = cpenn['msty']; msz = cpenn['msz']
+                                    if 'falpha' in cpenn: frgba[3] = cpenn['falpha']
+                                    if 'lalpha' in cpenn: lrgba[3] = cpenn['lalpha']
+
+                                    if useskip:
+                                        xdata = xdata[::skip]
+                                        ydata = ydata[::skip]
+                                        zdata = zdata[::skip]
+
+
+                                    if typ == 'line':
+                                        if leg == None: 
+                                            if use_quiver:
+                                                ax.quiver3D(xdata,ydata,zdata,
+                                                            qdata[:,0],qdata[:,1],qdata[:,2],
+                                                            normalize = False,arrow_length_ratio = 0,
+                                                            color=lrgba[:3],alpha=lrgba[3],linewidth=lw,linestyle = ls)
+                                            else: ax.plot(xdata,ydata,zdata,color=lrgba[:3],alpha=lrgba[3],linewidth=lw,linestyle = ls,marker=msty,markersize=msz)
+                                        else:
+                                            if use_quiver: 
+                                                self.legends[leg][label] = ax.quiver3D(xdata,ydata,zdata,qdata[:,0],qdata[:,1],qdata[:,2],
+                                                                                        normalize = False,arrow_length_ratio = 0,
+                                                                                        color=lrgba[:3],alpha=lrgba[3],linewidth=lw,
+                                                                                        linestyle = ls)[0]
+
+                                            else: self.legends[leg][label] = ax.plot(xdata,ydata,zdata,label=label,color=lrgba[:3],alpha=lrgba[3],
+                                                                                linewidth=lw,linestyle = ls,marker=msty,markersize=msz)[0]
+
+
+
+
+    ########### BASIC 2D-PLOTTING ###############
+    def addPlot2DIter(self,ax,pen={},typ='line',ins={}):
+        if len(pen)==0: penn = self.base_pen.copy();
+        else: penn = {**self.base_pen,**pen}
+
+        scenarios = [self.scenarios[0]];
+        methods = [self.methods[scenarios[0]][0]];
+        runs = [0];
+        iters = [0];
+        if self.use_current:
+            scenarios = self.current_scenarios;
+            methods = self.current_methods;
+            runs = self.current_runs;
+            iters = self.current_iters;
+        if 'scenarios' in ins: scenarios = ins['scenarios'];
+        if 'methods' in ins: methods = ins['methods'];
+        if 'runs' in ins: runs = ins['runs'];
+        if 'iters' in ins: iters = ins['iters'];
+        if 'tinds' in ins: tinds = ins['tinds'];
+        if 'y' in ins: ytag = ins['y'];
+
+        leg = None;
+        if 'legend' in ins: leg = ins['legend'];
+        if not(leg in self.legends):  self.legends[leg] = {};
+        label = '';
+        if 'label' in ins: label = ins['label']
+
+        ###############################################################
+        ### hacks
+        force_lens = True;
+        if 'force_lens' in ins: force_lens = ins['force_lens'];
+        dataloc = 'iters';
+        if 'dataloc' in ins: dataloc = ins['dataloc'];
+        # if dataloc == 'weights': iters = [0];
+        ###############################################################
+        color_vars = []; use_color_vars = False;
+        if 'color_vars'  in ins: color_vars = ins['color_vars']
+        if 'color_variations'  in ins: color_vars = ins['color_variations']
+        if len(color_vars) > 0: use_color_vars = True;
+        ###############################################################
+        ###############################################################   
+
+        for scenario in scenarios:
+            for method in methods:
+                if method in self.data[scenario]:
+                    RUNS = self.data[scenario][method]['mc_data'];
+                    for r in runs:
+                        if r < len(RUNS):
+                            RUN = RUNS[r];
+                            for tind in tinds:
+                                xdata = []; ydata = [];
+                                DAT = RUN['iters'];
+                                for i in iters:
+                                    if i < len(RUN['iters']):
+                                        xdata.append(i);
+                                        data = DAT[i];
+                                        if dataloc == 'weights': data = DAT[i]['weights']
+                                        if dataloc == 'conv_data': data = DAT[i]['conv_data']
+                                        if tind == None: 
+                                            if isinstance(ytag,(tuple,list)): ydata.append(data[ytag[0]][ytag[1]]);
+                                            else: ydata.append(data[ytag]);                                            
+                                        else: 
+                                            if isinstance(ytag,(tuple,list)): ydata.append(data[ytag[0]][tind,ytag[1]]);
+                                            else: ydata.append(data[ytag][tind]);
+
+                                xdata = np.array(xdata);
+                                ydata = np.array(ydata);
+
+                                penn2 = {};
+                                ########################################
+                                if use_color_vars:
+                                    for field in color_vars:
+                                        vals = color_vars[field]['values'];
+                                        by   = color_vars[field]['by'];
+                                        vers  = color_vars[field]['typ'];
+                                        if by == 'runs': ind1 = r; totlen = len(RUNS);
+                                        if by == 'times': ind1 = i; totlen = len(tinds);
+                                        if vers == 'mod': ind1 = int(np.mod(ind1,len(vals)));
+                                        if vers == 'frac': ind1 = int((ind1/totlen)*len(vals));
+                                        penn2[field] = vals[ind1];
+                                ########################################
+                                cpenn = {**penn,**penn2}
+                                frgba = cpenn['frgba']; lrgba = cpenn['lrgba'];
+                                lw = cpenn['lw']; ls = cpenn['ls']
+                                msty = cpenn['msty']; msz = cpenn['msz']
+                                if 'falpha' in cpenn: frgba[3] = cpenn['falpha']
+                                if 'lalpha' in cpenn: lrgba[3] = cpenn['lalpha']
+
+
+                                if typ == 'line':
+                                    if leg == None: ax.plot(xdata,ydata,color=lrgba[:3],alpha=lrgba[3],linewidth=lw,linestyle = ls,marker=msty,markersize=msz)
+                                    else: self.legends[leg][label] = ax.plot(xdata,ydata,
+                                                         label=label,color=lrgba[:3],alpha=lrgba[3],
+                                                        linewidth=lw,linestyle = ls,marker=msty,markersize=msz)[0]
+
+
+    def setParams(self,ax,ins={}):
+        if 'ticks' in ins: ax.tick_params(**ins['ticks'])
+        if 'xticks' in ins: ax.tick_params(**ins['xticks'])
+        if 'yticks' in ins: ax.tick_params(**ins['yticks'])
+        if 'xlabel' in ins: temp = ins['xlabel']; label = temp['label']; temp.pop('label'); ax.set_xlabel(label,**temp)
+        if 'ylabel' in ins: temp = ins['ylabel']; label = temp['label']; temp.pop('label'); ax.set_ylabel(label,**temp)
+        if 'zlabel' in ins: temp = ins['zlabel']; label = temp['label']; temp.pop('label'); ax.set_zlabel(label,**temp)
+        if 'title' in ins: temp = ins['title']; title = temp['text']; temp.pop('text'); ax.set_title(title,**temp);
+
+
+    ######## LABELS AND LEGENDS ############
+    def setTicks(self,ax,x=False,y=False,ins={}):
+        if x==True:  ax.tick_params(**ins);
+        if y==True:  ax.tick_params(**ins);
+
+    def setLabels(self,ax,xlabel='',ylabel='',ins={}):
+        ax.set_xlabel(xlabel,**ins)
+        ax.set_ylabel(ylabel,**ins);
+    def setTitle(self,ax,title = '',ins={}):
+        ax.set_title(title,**ins)
+    def addLegend(self,ax,leg,labels=[],ins={}):
+        if len(labels) == 0: labels = list(self.legends[leg]);
+        handles = [self.legends[leg][label] for label in labels];
+        ax.legend(handles,labels,**ins)
+
+    def dumpLegend(self,leg):
+        self.legends[leg] = {};
+
+    ########## CONSTRUCT SUBPLOTS ##########
+    def genGridTags(self,fig,typ=None,params={}):
+        return self.createGrid(fig,typ=typ,grid=self.specGrid(typ=typ,params=params));
+    def specGrid(self,typ=None,params={}):
+        grid = {};
+        if typ=='2x2':
+            grid[(0,0)] = [0.05,0.05,0.45,0.4];
+            grid[(0,1)] = [0.05,0.6,0.45,0.4];
+            grid[(1,0)] = [0.55,0.05,0.45,0.4];
+            grid[(1,1)] = [0.55,0.6,0.45,0.4];
+        return grid; 
+
+    def createGrid(self,fig,typ='manual',grid={},ins={}):
+        plt_typ = '2D';
+        if 'plt_typ' in ins: plttyp = ins['plt_typ'];
+        if typ=='manual':
+            axs = {};
+            for tag in grid:
+                if plt_typ == '3d': axs[tag] = fig.add_axes(grid[tag],projection='3d')
+                else: axs[tag] = fig.add_axes(grid[tag])
+        return axs;
+
+            

@@ -1,0 +1,16 @@
+problem:
+  model:
+    inherit: trajopt/library/models/lander_6dof.yaml
+  
+  mission:
+    inherit: trajopt/library/missions/lander_scitech26.yaml
+
+method:
+  inherit: method.yaml
+
+  'N': 20
+  flags: 
+   ignore_dpp: 0
+
+  conv: 
+    iter_max: 50

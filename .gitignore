@@ -4,3 +4,5 @@ venv/
 .DS_Store
 local
 __pycache__/
+local
+local/

@@ -1,0 +1,105 @@
+dimensions:
+  n: 6
+  m: 2
+
+nondim:
+  z_types: ["d", "ang", "ang", "v", "ang", "ang"]
+  u_types: ["ang", "ang"]
+
+  anchor_types : ["t", "v", "m"]
+  anchor_scales: "eval: np.array([(params['mission']['planet']['r']/params['mission']['planet']['g'])**0.5, (params['mission']['planet']['r']*params['mission']['planet']['g'])**0.5, params['mission']['vehicle']['mass']])"
+
+flags:
+  ctrl_type: "bank_only"
+
+# ===============================
+# CONSTRAINT MODELS
+# ===============================
+
+constraint_models:
+- name: dynamics
+  type: dynamics
+  fcn: trajopt/library/models/reentry_3dof.py:dynamics
+  mission_params: null
+
+- name: initial_state
+  type: equality_bc
+  set: state
+  boundary: init
+
+- name: final_state
+  type: equality_bc
+  set: state
+  boundary: final
+
+- name: final_bank_angle
+  type: equality_bc
+  set: control
+  x: null
+  x_idx: null
+  boundary: final
+
+- name: state_limits
+  type: box
+  set: state
+  x_min: []
+  x_min_idx: []
+  x_max: []
+  x_max_idx: []
+
+- name: bank_angle_limit
+  type: box
+  set: control
+  x_min: null
+  x_min_idx: null
+  x_max: null
+  x_max_idx: null
+
+- name: bank_angle_rate_limit
+  type: control_rate_limit
+  udot_max: null
+  udot_max_idx: null
+
+- name: max_Q
+  type: nonconvex_inequality
+  group: path
+  fcn: trajopt/library/models/reentry_3dof.py:heat_rate
+  mission_params: {"cos_theta_max": null, "trigger_height": null}
+  max_val: null
+  eps: null
+  units: [{none: 1}]
+  dimension: 1
+  ct: 0
+
+- name: max_q
+  type: nonconvex_inequality
+  group: path
+  fcn: trajopt/library/models/reentry_3dof.py:dynamic_pressure
+  mission_params: {"cos_theta_max": null, "trigger_height": null}
+  max_val: null
+  eps: null
+  units: [{none: 1}]
+  dimension: 1
+  ct: 0
+
+- name: max_load
+  type: nonconvex_inequality
+  group: path
+  fcn: trajopt/library/models/reentry_3dof.py:aero_load
+  max_val: null
+  eps: null
+  units: [{none: 1}]
+  dimension: 1
+  ct: 0
+
+# ===============================
+# COST MODELS
+# ===============================
+
+cost_models:
+- type: min_time
+  name: min_time
+
+- name: min_terminal_velocity
+  type: terminal_state
+  x_idx: [3]

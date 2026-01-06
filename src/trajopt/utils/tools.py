@@ -89,63 +89,7 @@ def ensure_shape(M, shape):
         # Fallback reshape + broadcast
         return np.broadcast_to(M.reshape(-1, 1) if M.ndim == 1 else M, shape)
 
-
-def constraint_index_selector(min_idx, max_idx, n_elem):
-    M_min = -np.eye(n_elem)[min_idx, :]
-    M_max = np.eye(n_elem)[max_idx, :]
-
-    M_select = np.vstack([M_min, M_max])
-    return M_select
-
-def load_dict(yaml_file):
-    '''
-    Loads dictionary from a provided yaml file and converts all lists to np arrays 
-    unless the array stores tuples of strings.
-    '''
-
-    with open(yaml_file, 'r') as file:
-        dict_unconverted = yaml.safe_load(file)
-    
-    dict_converted = convert_list(dict_unconverted)
-
-    return dict_converted
-
-def convert_list(dictionary):
-    '''
-    Converts all lists to arrays with exception of lists with strings.
-    '''
-
-    temp_dict = {}
-
-    for key, value in dictionary.items():
-
-        if isinstance(value, str):
-            if value == "inf":
-                value = np.inf
-            elif value == "-inf":
-                value = -np.inf
-        
-        if isinstance(value, dict):
-            temp_dict[key] = convert_list(value)
-        elif isinstance(value, list):
-            if not value:
-                temp_dict[key] = np.array([], dtype=int)
-            elif all(isinstance(item, dict) for item in value):
-                temp_dict[key] = [convert_list(item) for item in value]
-            elif all(isinstance(item, str) for item in value):
-                temp_dict[key] = value
-            else:
-                temp_dict[key] = np.array(value)
-        else:
-            temp_dict[key] = value
-
-    return temp_dict
-
-def load_yaml(pkg, file_name):
-    path = importlib.resources.files(pkg).joinpath(file_name)
-    return load_dict(path)
-
-def num_timesteps(zs):
+def num_timesteps(z):
     if zs.ndim == 1:
         return 1
     elif zs.ndim == 2:
@@ -161,54 +105,20 @@ def deep_update(dst, src):
             dst[k] = v
     return dst
 
-def eval_expressions(param_type, config):
-
-    # config = {"mission": {}, "model": {}, "method": {}}
-    dictionary = config[param_type]
-
+def eval_expressions(dictionary, context=None):
+    """recursively evaluate 'eval:' prefixed strings in a dictionary."""
     for key, value in dictionary.items():
         
         if isinstance(value, str):
             if value.startswith("eval:"):
                 eval_str = value.split(":", 1)[1].strip()
-                dictionary[key] = eval(eval_str, {"np": np}, config)
+                dictionary[key] = eval(eval_str, {"np": np}, context)
+        elif isinstance(value, dict):
+            eval_expressions(value, context)
 
-def extract_non_function_params(obj, exclude=None):
-    """
-    Extract all non-function parameters from an object.
-    Returns a dictionary of attribute name -> value pairs, excluding:
-    - Methods/functions
-    - Private attributes starting with '__'
-    - The 'problem' attribute 
-    """
-    params = {}
+def extract_attributes(obj, names):
+    return {k: getattr(obj, k) for k in names if hasattr(obj, k)}
 
-    if exclude is None:
-        exclude = []
-    for attr_name in dir(obj):
-        # skip private attributes and methods
-        if attr_name.startswith('__'):
-            continue
-        
-        # skip the 'problem' attribute to avoid circular references
-        if attr_name == 'problem':
-            continue
-
-        if attr_name in exclude:
-            continue
-        
-        try:
-            attr_value = getattr(obj, attr_name)
-            # skip if it's a function/method
-            if isinstance(attr_value, types.MethodType) or isinstance(attr_value, types.FunctionType):
-                continue
-            # skip if it's a callable
-            if callable(attr_value) and not isinstance(attr_value, (np.ndarray, list, dict, str, int, float)):
-                continue
-            
-            params[attr_name] = attr_value
-        except:
-            # skip attributes that can't be accessed
-            continue
-    
-    return params
+def extract_attributes_exclude(obj, exclude=()):
+    excl = set(exclude)
+    return {k: v for k, v in vars(obj).items() if k not in excl}
