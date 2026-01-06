@@ -3,7 +3,7 @@ from pathlib import Path
 from trajopt.core.problem import Problem
 from trajopt.core.solution_method import SolutionMethod
 import trajopt.utils.config_loader as cfg
-import trajopt.core.scp.scp as scp
+import trajopt.library.methods.scp as scp
 from trajopt.core.analysis.standalone import run_standalone_analysis
 
 from trajopt.core.analysis.trajplots import *

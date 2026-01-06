@@ -2,7 +2,7 @@ import trajopt.core.costs.costs_library as costs_library
 from pprint import pprint
 import inspect
 from functools import partial
-import trajopt.core.scp.convexify as convexify
+import trajopt.library.methods.convexify as convexify
 import trajopt.utils.tools as tools
 
 class Costs:

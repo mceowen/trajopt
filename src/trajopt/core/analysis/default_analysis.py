@@ -4,7 +4,7 @@ import trajopt.utils.tools as tools
 import jax
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
-import trajopt.core.scp.integrators as integrators
+import trajopt.library.methods.integrators as integrators
 
 '''
 outline of plt_data structure
