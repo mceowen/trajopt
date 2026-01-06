@@ -1,4 +1,4 @@
-inherit: trajopt/library/methods/shared/default.yaml
+inherit: trajopt/library/methods/configs/shared/default.yaml
 
 'N': 40
 
