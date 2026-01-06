@@ -497,12 +497,8 @@ class Subproblem:
 
             # State box constraints
             for constraint in problem.constraints.get("nodal", "box"):
-<<<<<<< Updated upstream:src/trajopt/core/scp/scp.py
-
-=======
                 x_min_idx = constraint.x_min_idx
                 x_max_idx = constraint.x_max_idx
->>>>>>> Stashed changes:src/trajopt/core/methods/scp.py
                 x_min = constraint.x_min
                 x_max = constraint.x_max
 
