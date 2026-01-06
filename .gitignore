@@ -2,4 +2,5 @@ venv/
 .venv
 .vscode
 .DS_Store
+local
 __pycache__/
