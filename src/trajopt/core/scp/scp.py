@@ -549,7 +549,7 @@ class Subproblem:
 
 
             #### ----------------- DECIDE TO USE A CONSTRAINT BASED ON TIME STEP ------------------- ####
-            def use_constraint_at_time_query(time_steps)
+            def use_constraint_at_time_query(time_steps):
                 use_constraint = False;
                 if time_steps == 'all': use_constraint = True; ## use if applied to all time steps
                 elif k in time_steps: use_constraint = True; ## use if positive index is in time_steps
