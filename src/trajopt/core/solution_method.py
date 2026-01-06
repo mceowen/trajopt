@@ -1,9 +1,9 @@
 import numpy as np
-from trajopt.core.scp    import initial_guess as guess
-from trajopt.core.scp    import convergence
-from trajopt.core.scp    import hyperparameters
-from trajopt.core.scp    import discretize
-from trajopt.core.scp    import integrators
+from trajopt.library.methods    import initial_guess as guess
+from trajopt.library.methods    import convergence
+from trajopt.library.methods    import hyperparameters
+from trajopt.library.methods    import discretize
+from trajopt.library.methods    import integrators
 from trajopt.core.indexing.index_map import IndexMap
 from trajopt.core.scaling.nondim import Nondim
 

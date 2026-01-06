@@ -1,9 +1,9 @@
 problem:
   model:
-    inherit: trajopt/library/models/lander_6dof/model.yaml
+    inherit: trajopt/library/models/lander_6dof.yaml
   
   mission:
-    inherit: trajopt/library/missions/lander_scitech26/mission.yaml
+    inherit: trajopt/library/missions/lander_scitech26.yaml
 
 method:
   inherit: method.yaml

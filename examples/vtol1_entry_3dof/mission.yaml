@@ -18,10 +18,10 @@ flags:
 # ===============================
 
 fcns:
-  atmosphere_model_jax: trajopt/library/missions/vtol/functions.py:atmosphere_model_jax
-  atmosphere_model_nonjax: trajopt/library/missions/vtol/functions.py:atmosphere_model_nonjax
-  nonlinear_aero_jax: trajopt/library/missions/vtol/functions.py:nonlinear_aero_jax
-  nonlinear_aero_nonjax: trajopt/library/missions/vtol/functions.py:nonlinear_aero_nonjax
+  atmosphere_model_jax: trajopt/library/missions/vtol.py:atmosphere_model_jax
+  atmosphere_model_nonjax: trajopt/library/missions/vtol.py:atmosphere_model_nonjax
+  nonlinear_aero_jax: trajopt/library/missions/vtol.py:nonlinear_aero_jax
+  nonlinear_aero_nonjax: trajopt/library/missions/vtol.py:nonlinear_aero_nonjax
 
 # ===============================
 # CONSTRAINT/COST PARAMS

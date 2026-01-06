@@ -1,7 +1,7 @@
 import trajopt.core.constraints.constraints_library as constraints_library
 import inspect
 from functools import partial
-import trajopt.core.scp.convexify as convexify
+import trajopt.library.methods.convexify as convexify
 import trajopt.utils.tools as tools
 
 # ------------------------------------------------------------

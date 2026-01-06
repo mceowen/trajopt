@@ -2,7 +2,7 @@ import numpy as np
 import cvxpy as cp
 import jax
 import jax.numpy as jnp
-import trajopt.core.scp.convexify as convexify
+import trajopt.library.methods.convexify as convexify
 
 class min_time:
     def __init__(self, name, params=None, fcns=None):

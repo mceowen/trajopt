@@ -13,9 +13,9 @@ import jax.numpy as jnp
 import copy
 
 # trajopt imports
-from trajopt.core.scp import discretize
-from trajopt.core.scp import hyperparameters as hp
-from trajopt.core.scp import convergence
+from trajopt.library.methods import discretize
+from trajopt.library.methods import hyperparameters as hp
+from trajopt.library.methods import convergence
 from trajopt.utils import tools
 
 
