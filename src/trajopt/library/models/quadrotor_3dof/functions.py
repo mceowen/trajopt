@@ -66,7 +66,7 @@ def analytical_linsys(t, z, nu, trajopt_obj):
     ])
 
     # Compute B matrix (Jacobian w.r.t. control)
-    Bc = np.vstack([
+    Bc = np.vstack([ 
         np.zeros((n2, m)),
         np.eye(m)
     ]) * (1.0 / mass)

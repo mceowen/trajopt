@@ -59,9 +59,10 @@ class Constraints:
             constraint_name = constraint_config["name"]
             print(f"  {i}: {constraint_name}: {constraint_type}")
             constraint_params = {k:v for k, v in constraint_config.items() if k != "type"}
-            constraintClass = getattr(constraints_library, get_class_from_type(constraint_type))
+            constraintClass = getattr(constraints_library,constraint_type)
 
-            if constraint_type in GCONST_TYPES: self.constraints_list.append(constraintClass(ins = constraint_params,params=params))
+            if constraint_type in GCONST_TYPES:
+                self.constraints_list.append(constraintClass(ins = constraint_params,params=params))
             else: self.constraints_list.append(constraintClass(**constraint_params, params=params))
 
             implement_type = self.constraints_list[-1].implement_type;

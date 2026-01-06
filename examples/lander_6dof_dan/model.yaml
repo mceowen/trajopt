@@ -1,0 +1,104 @@
+# model yaml for lander_6dof model
+
+dimensions:
+  n: 14
+  m: 3
+
+nondim:
+
+  z_types: ["m", "d", "d", "d", "v", "v", "v", "none", "none", "none", "none", "none", "none", "none"]
+  u_types: ["f", "f", "f"]
+  anchor_types : ["d", "t", "m"]
+  anchor_scales: [1.0, 1.0, 1.0]
+
+constraint_models:
+- type: dynamics
+  name: dynamics
+  fcn: trajopt/library/models/lander_6dof/functions.py:dynamics
+
+- type: equality_bc
+  name: initial_state
+  set: state
+  boundary: init
+
+- type: equality_bc
+  name: final_state
+  set: state
+  x: null
+  x_idx: null
+  boundary: final
+
+- type: equality_bc
+  name: final_control
+  set: control
+  x: null
+  x_idx: null
+  boundary: final
+
+- type: box
+  name: state_limits
+  set: state
+  x_min: null
+  x_min_idx: null
+  x_max: null
+  x_max_idx: null
+
+- type: axis_angle_cone
+  name: gimbal_limit
+  set: control
+  axis: [1, 0, 0]
+  theta_max: null
+  x_idx: [0, 1, 2]
+
+- type: axis_angle_cone
+  name: glide_slope
+  set: state
+  axis: [1, 0, 0]
+  theta_max: null
+  x_idx: [1, 2, 3]
+
+- type: max_norm_cone
+  name: max_thrust
+  set: control
+  max_val: null
+  x_idx: [0, 1, 2]
+
+- type: max_norm_cone
+  name: max_angular_velocity
+  set: state
+  max_val: null
+  x_idx: [11, 12, 13]
+
+- type: quaternion_cone
+  name: tilt_limit
+  theta_max: null
+  axis_num: 1
+  quat_start_idx: 7
+
+- type: nonconvex_inequality
+  name: height_triggered_pitch
+  group: path
+  fcn: trajopt/library/models/lander_6dof/functions.py:height_triggered_pitch
+  mission_params: {"cos_theta_max": null, "trigger_height": null}
+  eps: null
+  units: null
+  dimension: 1
+  ct: 0
+
+- type: nonconvex_inequality
+  name: min_thrust_norm
+  group: path
+  fcn: trajopt/library/models/lander_6dof/functions.py:min_thrust_norm
+  mission_params: {"min_thrust": null}
+  eps: null
+  units: [{"f": 1}]
+  dimension: 1
+  ct: 0
+
+cost_models:
+- type: min_time
+  name: min_time
+
+- type: control_effort
+  name: control_effort
+  x_idx: [0, 1, 2]

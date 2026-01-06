@@ -47,6 +47,7 @@ class equality_bc:
         else:
             self.eps = np.zeros(len(x_idx))
         self.dimension = len(x_idx)
+        self.implement_type = 'equality_bc'
 
 
         self.x = None
@@ -77,6 +78,8 @@ class inequality_bc:
         self.x_min = None
         self.x_max = None
 
+        self.implement_type = 'inequality_bc'
+
     def nondim_constraint(self, nondim):
         if self.set == "state":
             self.x_min = nondim.M["state"]["d2nd"][np.ix_(self.x_min_idx, self.x_min_idx)] @ self.x_min_dim
@@ -101,6 +104,7 @@ class box:
         self.x_min = None
         self.x_max = None
 
+        self.implement_type = 'box'
 
         if self.set == "state":
             n_elem = params['model']['dimensions']['n']
@@ -131,6 +135,8 @@ class control_rate_limit:
         self.udot_max_idx = udot_max_idx
         self.dimension = len(udot_max_idx)
 
+        self.implement_type = 'control_rate_limit'
+
         n_elem = params['model']['dimensions']['m']
         M_min = -np.eye(n_elem)[self.udot_max_idx, :]
         M_max = np.eye(n_elem)[self.udot_max_idx, :]
@@ -154,6 +160,7 @@ class axis_angle_cone:
         self.cos_theta_max = np.cos(np.deg2rad(theta_max))
         self.x_idx = x_idx
         self.dimension = 1
+        self.implement_type = 'axis_angle_cone'
 
     def nondim_constraint(self, nondim):
         # the deg2rad is already nondimming
@@ -166,6 +173,7 @@ class max_norm_cone:
         self.max_val_dim = max_val
         self.x_idx = x_idx
         self.dimension = 1
+        self.implement_type = 'max_norm_cone'
 
         self.max_val = None
 
@@ -188,6 +196,8 @@ class quaternion_cone:
         self.rhs = np.sqrt((1.0 - self.cos_theta_max) * 0.5)
         self.dimension = 1
 
+        self.implement_type = 'quaternion_cone'
+
     def nondim_constraint(self, nondim):
         pass
 
@@ -196,7 +206,7 @@ class quaternion_cone:
 # ===============================================================
 
 # TODO: change to (func - max_val) / scale
-class custom_nonconvex_inequality:
+class nonconvex_inequality:
     def __init__(self, name, group, fcn, units, dimension, ct, eps=None, max_val=None, mission_params=None, params=None):
         self.name = name
         self.group = group
@@ -207,6 +217,7 @@ class custom_nonconvex_inequality:
         self.dimension = dimension
         self.ct = ct
 
+        self.implement_type = 'nonconvex_inequality'
         self.fcn_dim = resolve_function(fcn)
         
         # this will be a function f(t, z, nu)
@@ -253,6 +264,8 @@ class dynamics:
         # dynamically loaded from user module, gets closed
         # over with params and fcns dicts if necessary
         self.fcn_dim = resolve_function(fcn)
+
+        self.implement_type = 'dynamics'
 
         # this will be a function f(t, z, nu) and operates on nondim variables
         self.fcn = None
@@ -367,11 +380,6 @@ class dynamics:
 #     def cvxApprox_jax(self,x,version='version1'): pass ### - returns alternative convex approximations other than lineariation  or self.affineApprox (jax)
 
 
-def get_class_from_type(typ):
-    class_type = None
-    if typ in ['POLYTOPE_IN','POLYTOPE_OUT']: class_type = 'POLYTOPE'
-
-
 # =========================================================
 # GENERAL AFFINE CONSTRAINT
 # =========================================================
@@ -387,6 +395,7 @@ class AFFINE: ## IMPLEMENTED
         self.m = self.A.shape[0];
         #############################################
         self.type = 'AFFINE'
+        self.implement_type = 'AFFINE'
         self.subtype = 'AFFINE'
         self.set = 'state' ; ## from ['state','control']
         self.idx = list(range(self.n)); ## index 
@@ -471,6 +480,7 @@ class POLYTOPE: ## IMPLEMENTED
         self.b = self.M_out_inv@self.b_dim;
 
         if version == 'in':
+            self.implement_type = 'POLYTOPE'
             self.subtype = 'POLYTOPE_IN';
             self.convex = True;
             self.dimension = self.n;
@@ -480,6 +490,7 @@ class POLYTOPE: ## IMPLEMENTED
                 self.eps = self.eps*np.ones(self.dimension)
         ################################################
         if version == 'out':
+            self.implement_type = 'nonconvex_inequality'
             self.subtype = 'POLYTOPE_OUT';
             self.convex = False;
             self.dimension = 1;        
@@ -591,11 +602,6 @@ class SOC: ## IMPLEMENTED
         #############################################
         self.A = self.M_out_inv*self.A_dim@self.M_in
         self.b = self.M_out_inv*self.b_dim;
-
-        print(self.M_in)
-        print(self.M_out_inv)
-        print(self.C_dim)
-        print(self.d_dim)
 
         self.C = self.M_out_inv*self.C_dim@self.M_in
         self.d = self.M_out_inv*self.d_dim;
