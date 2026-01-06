@@ -553,30 +553,40 @@ class Subproblem:
 
 
             #### ----------------- DECIDE TO USE A CONSTRAINT BASED ON TIME STEP ------------------- ####
-            def use_constraint_query(time_steps)
+            def use_constraint_at_time_query(time_steps)
                 use_constraint = False;
                 if time_steps == 'all': use_constraint = True; ## use if applied to all time steps
                 elif k in time_steps: use_constraint = True; ## use if positive index is in time_steps
                 elif k-N in use_constraint = True; ## use if negative index is in time_steps
                 return use_constraint
 
-            
             ############# ----------------------- CONVEX CONSTRAINTS ------------------- ################
-            for constraint in problem.constraints.get('POLYTOPE_IN'):
-                if use_constraint_query(constraint.time_steps):
+            # for constraint in problem.constraints.get('POLYTOPE_IN'):
+            for constraint in problem.constraints.get('nodal','AFFINE'):                
+                if use_constraint_at_time_query(constraint.time_steps):
                     z = self.z_ref[k] + self.dz[k]; nu = self.nu_ref[k] + self.dnu[k]
                     idxx = constraint.idx;
                     AA = constraint.A; bb = constraint.b; 
-                    if constraint.set == 'state': C.append(AA @ z[idxx] <= bb)
-                    elif constraint.set == "control": C.append(AA @ nu[idxx] <= bb)
-            for constraint in problem.constraints.get('SOC_IN'):
-                if use_constraint_query(constraint.time_steps):
-                    z = self.z_ref[k] + self.dz[k]; nu = self.nu_ref[k] + self.dnu[k]
-                    idxx = constraint.idx;
-                    AA = constraint.A; bb = constraint.b;
-                    CC = constraint.C; dd = constraint.d;
-                    if constraint.set == 'state': C.append(cp.norm(AA@z[idxx] + bb) <= CC @ z[idxx] + dd)
-                    if constraint.set == 'control': C.append(cp.norm(AA@nu[idxx] + bb) <= CC @ nu[idxx] + dd)
+                    if constraint.set == 'state': C.append(AA @ z[idxx] == bb)
+                    elif constraint.set == "control": C.append(AA @ nu[idxx] == bb)
+
+            for constraint in problem.constraints.get('nodal','POLYTOPE'):
+                if constraint.convex == True:
+                    if use_constraint_at_time_query(constraint.time_steps):
+                        z = self.z_ref[k] + self.dz[k]; nu = self.nu_ref[k] + self.dnu[k]
+                        idxx = constraint.idx;
+                        AA = constraint.A; bb = constraint.b; 
+                        if constraint.set == 'state': C.append(AA @ z[idxx] <= bb)
+                        elif constraint.set == "control": C.append(AA @ nu[idxx] <= bb)
+            for constraint in problem.constraints.get('nodal','SOC'):
+                if constraint.convex == True:
+                    if use_constraint_at_time_query(constraint.time_steps):
+                        z = self.z_ref[k] + self.dz[k]; nu = self.nu_ref[k] + self.dnu[k]
+                        idxx = constraint.idx;
+                        AA = constraint.A; bb = constraint.b;
+                        CC = constraint.C; dd = constraint.d;
+                        if constraint.set == 'state': C.append(cp.norm(AA@z[idxx] + bb) <= CC @ z[idxx] + dd)
+                        if constraint.set == 'control': C.append(cp.norm(AA@nu[idxx] + bb) <= CC @ nu[idxx] + dd)
 
             ############# -------------------- NONCONVEX CONSTRAINTS ------------------- ################
             # for constraint in problem.constraints.get('POLYTOPE_OUT','SOC_OUT'):

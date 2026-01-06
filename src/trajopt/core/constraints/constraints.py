@@ -29,6 +29,23 @@ import trajopt.utils.tools as tools
 # }
 # ------------------------------------------------------------
 
+
+# input type -- in the config file
+# class type -- building constraint
+# 'AFFINE','POLYTOPE','SOC',
+# POLYTOPE - 'BOX','UPPER','LOWER', 
+# SOC - SPHERE, ELLIPSOID, CYLINDER,...
+
+# implementation type -- how to implement in the subproblem
+# --- POLYTOPE_IN, POLYTOPE_OUT, SOC_IN, SOC_OUT, AFFINE_IN, AFFINE_OUT
+
+
+GCONST_TYPES = ['AFFINE','POLYTOPE','SOC'];
+GCONST_TYPES = GCONST_TYPES + ['BOX','UPPER','LOWER'];
+GCONST_TYPES = GCONST_TYPES + ['ZONOTOPE'];
+GCONST_TYPES = GCONST_TYPES + ['SPHERE','ELLIPSOID','CYLINDER','CONE','PROXIMITY'];
+
+
 class Constraints:
     def __init__(self, constraint_config_list, params):
 
@@ -42,8 +59,14 @@ class Constraints:
             constraint_name = constraint_config["name"]
             print(f"  {i}: {constraint_name}: {constraint_type}")
             constraint_params = {k:v for k, v in constraint_config.items() if k != "type"}
-            constraintClass = getattr(constraints_library, constraint_type)
-            self.constraints_list.append(constraintClass(**constraint_params, params=params))
+            constraintClass = getattr(constraints_library, get_class_from_type(constraint_type))
+
+            if constraint_type in GCONST_TYPES: self.constraints_list.append(constraintClass(ins = constraint_params,params=params))
+            else: self.constraints_list.append(constraintClass(**constraint_params, params=params))
+
+            implement_type = self.constraints_list[-1].implement_type;
+            # self.constraints_list[-1].type == 'BOX';            
+            # self.constraints_list[-1].specific_type == 'BOX_IN'
 
             # add constraint to constraint_id map for indexing into list
             ct_type = "ct" if constraint_config.get('ct', 0) else "nodal"
@@ -52,17 +75,16 @@ class Constraints:
                 self.constraint_ids[ct_type] = {}
                 self.constraint_ids[ct_type]['all'] = []
 
-            if constraint_type not in self.constraint_ids[ct_type]:
-                self.constraint_ids[ct_type][constraint_type] = []
+            if implement_type not in self.constraint_ids[ct_type]:
+                self.constraint_ids[ct_type][implement_type] = []
 
             if 'name' not in self.constraint_ids:
                 self.constraint_ids['name'] = {}
 
             if constraint_name not in self.constraint_ids['name']:
                 self.constraint_ids['name'][constraint_name] = []
-
             
-            self.constraint_ids[ct_type][constraint_type].append(i)
+            self.constraint_ids[ct_type][implement_type].append(i)
             self.constraint_ids[ct_type]['all'].append(i)
             self.constraint_ids['name'][constraint_name].append(i)
         
