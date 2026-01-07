@@ -21,11 +21,10 @@ import trajopt.utils.tools as tools
 #
 # constraints = [axis_angle_cone, axis_angle_cone,  quaternion_cone, quaternion_cone, max_norm_cone]
 # constraint_ids = {
-#   "ct": {"control_axis_angle_cone": [0, 1], "state_max_norm_cone": [4], "all"},
-#   "nodal": {"quaternion_cone": [2, 3]},
-#   "type": [],
-#   "name": {"initial_state": [0], "final_state": [1]}
-#   
+#   "ct": {"control_axis_angle_cone": [0, 1], "state_max_norm_cone": [4], "all": [0, 1, 4]},
+#   "nodal": {"quaternion_cone": [2, 3], "all": [2, 3]},
+#   "type": {"axis_angle_cone": [0, 1], "quaternion_cone": [2, 3], "max_norm_cone": [4] "all": [0, 1, 2, 3, 4]},
+#   "name": {"initial_state": [0], "final_state": [1], "all": [0, 1]}
 # }
 # ------------------------------------------------------------
 
@@ -50,18 +49,25 @@ class Constraints:
     def __init__(self, constraint_config_list, params):
 
         self.constraints_list = []
-        self.constraint_ids = {'ct':{'all':[]},'nodal':{'all':[]},'type':{'all':[]},'name':{'all':[]}}
-        # self.constraint_ids['ct']['all'] = [];
-        # self.constraint_ids['nodal']['all'] = [];
-
+        self.constraint_ids = {
+            'ct':{'all':[]},
+            'nodal':{'all':[]},
+            'type':{'all':[]},
+            'name':{'all':[]}
+        }
 
         print(f"constraints:")
 
         # build constraint_ids mapping
         for i, constraint_config in enumerate(constraint_config_list):
+
+            # pull out constraint type and name
             constraint_type = constraint_config["type"]
             constraint_name = constraint_config["name"]
+
+
             print(f"  {i}: {constraint_name}: {constraint_type}")
+            # get the params
             constraint_params = {k:v for k, v in constraint_config.items() if k != "type"}
             constraintClass = getattr(constraints_library,constraint_type)
 
@@ -70,17 +76,9 @@ class Constraints:
             else: self.constraints_list.append(constraintClass(**constraint_params, params=params))
 
             implement_type = self.constraints_list[-1].implement_type;
-            # self.constraints_list[-1].type == 'BOX';            
-            # self.constraints_list[-1].specific_type == 'BOX_IN'
 
             # add constraint to constraint_id map for indexing into list
             ct_type = "ct" if constraint_config.get('ct', 0) else "nodal"
-            # if ct_type not in self.constraint_ids:
-            #     self.constraint_ids[ct_type] = {}
-            #     self.constraint_ids[ct_type]['all'] = []
-
-            # if constraint_name not in self.constraint_ids["name"]:
-            #     self.constraint_ids['name'] = {}
 
             if implement_type not in self.constraint_ids[ct_type]:
                 self.constraint_ids[ct_type][implement_type] = []
@@ -91,22 +89,22 @@ class Constraints:
             self.constraint_ids[ct_type]['all'].append(i)
             self.constraint_ids['name'][constraint_name].append(i)
         
-    def get(self, ct_type, constraint_type=None):
+    def get(self, level1, level2=None):
         
-        if constraint_type is not None:
-            constraint_ids = self.constraint_ids.get(ct_type, {}).get(constraint_type, [])
+        if level2 is not None:
+            ids = self.constraint_ids.get(level1, {}).get(level2, [])
         else:
-            constraint_ids = self.constraint_ids.get(ct_type, {}).get("all", [])
+            ids = self.constraint_ids.get(level1, {}).get("all", [])
 
-        constraints = [self.constraints_list[i] for i in constraint_ids]
+        selected_constraints = [self.constraints_list[i] for i in ids]
 
-        return constraints
+        return selected_constraints
 
-    def has(self, ct_type, constraint_type=None):
+    def has(self, level1, level2=None):
 
-        if constraint_type is not None:
-            return constraint_type in self.constraint_ids.get(ct_type, {})
-        else: return len(self.constraint_ids[ct_type]['all'])>0
+        if level2 is not None:
+            return level2 in self.constraint_ids.get(level1, {})
+        else: return len(self.constraint_ids[level1]['all'])>0
 
     def add_params(self, problem_params):
 
