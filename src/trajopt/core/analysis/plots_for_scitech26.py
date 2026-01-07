@@ -1,11 +1,7 @@
 import numpy as np
-import jax 
-import jax.numpy as jnp
-import trajopt.core.utils.tools as tools
-jax.config.update("jax_enable_x64", True)
-import trajopt.core.model.obstacles     as obstacles
-from trajopt.analysis.custom_functions_dan import max_q_nonjax, max_Q_nonjax, max_load_nonjax, terminal_cost, compute_altitude
-from trajopt.analysis.trajplots import *
+
+from trajopt.core.analysis.custom_functions_dan import max_q_nonjax, max_Q_nonjax, max_load_nonjax, compute_altitude#, #terminal_cost
+from trajopt.core.analysis.trajplots import *
 
 
 import matplotlib
@@ -88,15 +84,15 @@ def preProcess(PLTS1,trajopt_obj,cases={}):
         PLTS1.setCurrent(newcases)
         tag1 = tag + '_opt'; tag2 = tag + '_nl'; #tag4 = tag + '_init'
         #func_args1 = ['t_opt','z_opt',None,trajopt_obj];
-        func_args1 = ['t_opt','z_opt','nu_opt',trajopt_obj];        
+        func_args1 = ['t_opt','z_opt','nu_opt',trajopt_obj.problem.params];        
         #func_args2 = ['t_nl','z_nl',None,trajopt_obj];
-        func_args2 = ['t_nl','z_nl','nu_nl',trajopt_obj];
+        func_args2 = ['t_nl','z_nl','nu_nl',trajopt_obj.problem.params];
         # func_args4 = ['t_init','z_init','nu_init',trajopt_obj];
         
         if tag == 'max_q': func = max_q_nonjax
         if tag == 'max_Q': func = max_Q_nonjax
         if tag == 'max_load': func = max_load_nonjax
-        if tag == 'terminal_cost': func = terminal_cost;
+        # if tag == 'terminal_cost': func = terminal_cost;
         if tag == 'altitude': func = compute_altitude;
         
         PLTS1.calcField(tag1,func,func_args = func_args1)
@@ -105,7 +101,7 @@ def preProcess(PLTS1,trajopt_obj,cases={}):
 
         # PLTS1.setCurrent(newcases0)
         if tag in ['altitude','max_q','max_Q','max_load']:
-            func_args3 = [t_init_tag,z_init_tag,nu_init_tag,trajopt_obj];
+            func_args3 = [t_init_tag,z_init_tag,nu_init_tag,trajopt_obj.problem.params];
             tag3 = tag + '_init';
             PLTS1.calcField(tag3,func,func_args = func_args3)
     
@@ -252,6 +248,9 @@ def makePlotCtrls(PLTS1,ins={}):
 
 def makePlotCtrls2(PLTS1,ins={}):
     trajopt_obj = ins['trajopt_obj'];
+
+    problem = trajopt_obj.problem;
+
     data = ins['data'];
     versions = ins['versions'];
     NEWPENS = ins['PENS'];
@@ -370,8 +369,11 @@ def makePlotCtrls2(PLTS1,ins={}):
             ax = axs[j]; #state_plot_inds[j]];
 
             # #### hack for adding max value line... not that hacky anyway
-            umin = trajopt_obj.mission.u_min[j]*(180/np.pi)
-            umax = trajopt_obj.mission.u_max[j]*(180/np.pi)   
+            bank_aoa_angle_limits = problem.constraints.get('name', 'bank_aoa_angle_limits')[0];
+
+            umin = bank_aoa_angle_limits.x_min_dim[j]
+            umax = bank_aoa_angle_limits.x_max_dim[j]
+
             line_handle = ax.axhline(y=umin, xmin = 0, color=[0,0,0,0.7], linestyle='-', linewidth=1); # label=line_tag)
             line_handle = ax.axhline(y=umax, xmin = 0, color=[0,0,0,0.7], linestyle='-', linewidth=1); #, label=line_tag)
             # PLTS1.legends[lgnd][line_tag] = line_handle;
@@ -648,6 +650,9 @@ def makePlotTrajs(PLTS1,ins={}):
 # makePlot3(PLTS1,ins=plotparams);
 def makePlotStates(PLTS1,ins={}):
     trajopt_obj = ins['trajopt_obj'];
+    problem = trajopt_obj.problem;
+    params = problem.params;
+
     data = ins['data'];
     versions = ins['versions'];
     NEWPENS = ins['PENS'];
@@ -779,13 +784,16 @@ def makePlotStates(PLTS1,ins={}):
             line_tag = 'Max/Min Value'
             penn = PENS['max-value'];
             lrgba = penn['lrgba']; ls = penn['ls']; lw = penn['lw']
-            if sind in trajopt_obj.mission.z_min_idx:
-                iind = np.where(trajopt_obj.mission.z_min_idx == sind)[0][0]; zmin = trajopt_obj.mission.z_min[iind]
+
+            state_limits = problem.constraints.get('name', 'state_limits')[0]
+
+            if sind in state_limits.x_min_idx:
+                iind = np.where(state_limits.x_min_idx == sind)[0][0]; zmin = state_limits.x_min[iind]
                 line_handle = ax.axhline(y=zmin, xmin = 0, color=lrgba, linestyle=ls, linewidth=lw,label=line_tag); # label=line_tag)
                 PLTS1.legends[lgnd][line_tag] = line_handle;
-            if sind in trajopt_obj.mission.z_max_idx:
-                iind = np.where(trajopt_obj.mission.z_max_idx == sind)[0][0];
-                zmax = ((trajopt_obj.mission.z_max[iind]-1)*trajopt_obj.mission.planet['r'])/1000; 
+            if sind in state_limits.x_max_idx:
+                iind = np.where(state_limits.x_max_idx == sind)[0][0];
+                zmax = (state_limits.x_max_dim[iind]-params['mission']['planet']['r'])/1000; 
                  # - trajopt_obj.mission.planet['r']
                 line_handle = ax.axhline(y=zmax, xmin = 0, color=lrgba, linestyle=ls, linewidth=lw,label=line_tag); #, label=line_tag)
                 # PLTS1.legends[lgnd][line_tag] = line_handle;

@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 
-def atmosphere_model_jax(r, params):
+def atmosphere_model_jax(t, z, nu, params):
     '''
     Returns density as a function of orbital radius
 
@@ -11,6 +11,8 @@ def atmosphere_model_jax(r, params):
     expand 'lookup' option to be higher dimensional
     remember LUT grow exponenetiall in size!
     '''
+
+    r = z[0]
 
     h = r - params['mission']['planet']['r']
     
@@ -23,11 +25,14 @@ def atmosphere_model_jax(r, params):
 
     return rho
 
-def atmosphere_model_nonjax(r, params):
+def atmosphere_model_nonjax(t, z, nu, params):
     '''
     Returns density as a function of orbital radius
     ...rewritten from above for plain numpy
     '''
+
+    r = z[0]
+
     # Compute altitude
     h = r - params['mission']['planet']['r']
     # TODO (carlos): add the remaining options for atmosphere model
@@ -37,7 +42,7 @@ def atmosphere_model_nonjax(r, params):
         rho = params['mission']['planet']['rho'] * np.exp(-h / params['mission']['planet']['H'])
     return rho
 
-def nonlinear_aero_jax(r, v, params):
+def nonlinear_aero_jax(t, z, nu, params):
     '''
     returns all aero data as a function of full state
     
@@ -45,6 +50,9 @@ def nonlinear_aero_jax(r, v, params):
     this function currently only accepts a single time step!
     handle the general case? or make seperate function?ƒ
     '''
+
+    r = z[0]
+    v = z[3]
 
 
     ctrl_type = params['model']['flags']['ctrl_type']
@@ -89,7 +97,7 @@ def nonlinear_aero_jax(r, v, params):
     Cd = Kd1 + Kd2 * Cl + Kd3 * Cl**2
     alpha = jnp.deg2rad(alphlim_deg - kalph * (jnp.minimum(v, vlim) - vlim)**2)
 
-    rho = atmosphere_model_jax(r, params)
+    rho = atmosphere_model_jax(t, z, nu, params)
     sref = params['mission']['vehicle']['sref']
     mass = params['mission']['vehicle']['mass']
 
@@ -98,13 +106,16 @@ def nonlinear_aero_jax(r, v, params):
 
     return {'L': L, 'D': D, 'Cl': Cl, 'Cd': Cd, 'alpha': alpha, 'rho': rho}
 
-def nonlinear_aero_nonjax(r, v, params):
+def nonlinear_aero_nonjax(t, z, nu, params):
     '''
     returns all aero data as a function of full state
     ... rewritten from above without jax
     '''
 
     ctrl_type = params['model']['flags']['ctrl_type']
+
+    r = z[0]
+    v = z[3]
 
     # Setup coefficient values
     kl1         = -0.041065
@@ -145,7 +156,7 @@ def nonlinear_aero_nonjax(r, v, params):
     Cd = Kd1 + Kd2 * Cl + Kd3 * Cl**2
     alpha = np.deg2rad(alphlim_deg - kalph * (np.minimum(v, vlim) - vlim)**2)
     
-    rho = atmosphere_model_nonjax(r, params)
+    rho = atmosphere_model_nonjax(t, z, nu, params)
     sref = params['mission']['vehicle']['sref']
     mass = params['mission']['vehicle']['mass']
     

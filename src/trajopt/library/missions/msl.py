@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 
-def atmosphere_model_jax(r, params):
+def atmosphere_model_jax(t, z, nu, params):
     '''
     Returns density as a function of orbital radius
 
@@ -11,6 +11,8 @@ def atmosphere_model_jax(r, params):
     expand 'lookup' option to be higher dimensional
     remember LUT grow exponenetiall in size!
     '''
+
+    r = z[0]
 
     # Compute altitude
     h = r - params['mission']['planet']["r"]
@@ -24,7 +26,7 @@ def atmosphere_model_jax(r, params):
 
     return rho  
 
-def nonlinear_aero_jax(r, v, params):
+def nonlinear_aero_jax(t, z, nu, params):
     '''
     returns all aero data as a function of full state
     
@@ -33,7 +35,10 @@ def nonlinear_aero_jax(r, v, params):
     handle the general case? or make seperate function?
     '''
 
-    rho = atmosphere_model_jax(r, params)
+    r = z[0]
+    v = z[3]
+
+    rho = atmosphere_model_jax(t, z, nu, params)
 
     D    = 0.5 * (1 / params['mission']['vehicle']["bc"]) * rho * v**2
     L    = D * params['mission']['vehicle']["LD"]
