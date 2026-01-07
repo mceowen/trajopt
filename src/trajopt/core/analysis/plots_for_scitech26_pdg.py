@@ -2,6 +2,13 @@ import numpy as np
 import jax 
 import jax.numpy as jnp
 import trajopt.utils.tools as tools
+
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from mpl_toolkits.mplot3d import Axes3D
+
+
+
+
 jax.config.update("jax_enable_x64", True)
 import trajopt.core.constraints.obstacles     as obstacles
 from trajopt.core.analysis.custom_functions_dan_pdg import DCM, calc_DCMs, calc_rt_I
@@ -145,6 +152,8 @@ def makePlotTrajs(PLTS1,ins={}):
     #########################################
     ######  DEFAULTS FIG INFORMATION ########
 
+    show_obstacles = False;
+    if 'show_obstacles' in ins: show_obstacles = ins['show_obstacles']
 
 
     figsize = (9,9);
@@ -398,6 +407,25 @@ def makePlotTrajs(PLTS1,ins={}):
             #     params2 = {'label':method_labels[method],'x':('z_nl',sindx),'y':('z_nl',sindy),'iters':[-1],'color_vars':COLORVARS[method],'legend':lgnd};
             #     PLTS1.addPlot2D(ax,pen=PENS[method + '_opt'],ins=params1);
             #     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'],ins=params2);
+
+
+        if show_obstacles:
+            ax = axs[0]
+            pos_inds = (1,2,0)
+
+            problem = trajopt_obj.problem;
+
+            allnames = problem.constraints.constraint_ids['name'].keys();
+            if 'box_out' in allnames: obstacle = problem.constraints.get('name','box_out')[0];
+            if 'box_in_convex' in allnames: obstacle = problem.constraints.get('name','box_in_convex')[0];
+            if 'box_in_buffer' in allnames: obstacle = problem.constraints.get('name','box_in_buffer')[0];
+
+            verts = obstacle.vertices; verts = verts[:,pos_inds];
+            faces = obstacle.faces; faces = [face[:,pos_inds] for face in faces];
+
+            poly3d = Poly3DCollection(faces, facecolors='grey', linewidths=1, edgecolors=[0,0,1,0.2], alpha=.15)
+            ax.add_collection3d(poly3d)
+
 
 
 

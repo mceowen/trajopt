@@ -221,6 +221,27 @@ def eval_expressions(obj, context=None):
             elif isinstance(item, (dict, list)):
                 eval_expressions(item, context)
 
+def precompute_expressions(obj, context=None):
+    """Recursively precompute parameter from file custom.py."""
+    if context is None:
+        context = {}
+    if isinstance(obj, dict):
+        for key, val in obj.items():
+            if isinstance(val, str) and val.startswith("precompute-"):
+                expr = val.split("-", 1)[1].strip()
+                obj[key] = resolve_function(expr) ### May reload module many times.
+            elif isinstance(val, (dict, list)):
+                precompute_expressions(val, context)
+    elif isinstance(obj, list):
+        for i, item in enumerate(obj):
+            if isinstance(item, str) and item.startswith("precompute-"):
+                expr = item.split("-", 1)[1].strip()
+                obj[i] = resolve_function(expr) ### May reload module many times.
+            elif isinstance(item, (dict, list)):
+                precompute_expressions(item, context)
+
+
+
 
 def load_trajopt_config(path):
     """
@@ -302,6 +323,7 @@ def load_trajopt_config(path):
     
     # Evaluate all 'eval:' expressions with full config as context
     eval_expressions(config, context=eval_context)
+    precompute_expressions(config, context=eval_context) # Note: context not used atm.
     
     return config
 

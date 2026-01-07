@@ -1,12 +1,12 @@
 problem:
   model:
-    inherit: trajopt/library/models/lander_6dof/model.yaml
+    inherit: yamls/model.yaml
   
   mission:
-    inherit: trajopt/library/missions/lander_scitech26/mission.yaml
+    inherit: yamls/mission.yaml
 
 method:
-  inherit: method.yaml
+  inherit: yamls/method.yaml
 
   'N': 20
   flags: 

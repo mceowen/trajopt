@@ -50,7 +50,11 @@ class Constraints:
     def __init__(self, constraint_config_list, params):
 
         self.constraints_list = []
-        self.constraint_ids = {}
+        self.constraint_ids = {'ct':{'all':[]},'nodal':{'all':[]},'type':{'all':[]},'name':{'all':[]}}
+        # self.constraint_ids['ct']['all'] = [];
+        # self.constraint_ids['nodal']['all'] = [];
+
+
         print(f"constraints:")
 
         # build constraint_ids mapping
@@ -71,17 +75,15 @@ class Constraints:
 
             # add constraint to constraint_id map for indexing into list
             ct_type = "ct" if constraint_config.get('ct', 0) else "nodal"
-                
-            if ct_type not in self.constraint_ids:
-                self.constraint_ids[ct_type] = {}
-                self.constraint_ids[ct_type]['all'] = []
+            # if ct_type not in self.constraint_ids:
+            #     self.constraint_ids[ct_type] = {}
+            #     self.constraint_ids[ct_type]['all'] = []
+
+            # if constraint_name not in self.constraint_ids["name"]:
+            #     self.constraint_ids['name'] = {}
 
             if implement_type not in self.constraint_ids[ct_type]:
                 self.constraint_ids[ct_type][implement_type] = []
-
-            if 'name' not in self.constraint_ids:
-                self.constraint_ids['name'] = {}
-
             if constraint_name not in self.constraint_ids['name']:
                 self.constraint_ids['name'][constraint_name] = []
             
@@ -104,9 +106,7 @@ class Constraints:
 
         if constraint_type is not None:
             return constraint_type in self.constraint_ids.get(ct_type, {})
-        
-        else:
-            return ct_type in self.constraint_ids.keys()
+        else: return len(self.constraint_ids[ct_type]['all'])>0
 
     def add_params(self, problem_params):
 

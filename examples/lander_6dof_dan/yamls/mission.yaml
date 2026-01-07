@@ -1,0 +1,54 @@
+# mission yaml for lander mission
+
+inherit: trajopt/library/missions/lander_scitech26.yaml
+
+planet:
+  inherit: trajopt/library/missions/shared/planet/nondim_planet.yaml
+vehicle:
+  inherit: trajopt/library/missions/shared/vehicle/mikilander.yaml
+
+constraints:
+- name: dynamics
+
+- name: box_out
+# - name: box_in_convex
+# - name: box_in_buffer
+
+
+- name: initial_state
+  x: [4, 4, 0, 0.0 , -2.0, 2.0, 0, 0, 0]
+  x_idx: [1, 2, 3, 4, 5, 6, 11, 12, 13]
+
+- name: final_state
+  x: [0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
+  x_idx: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+  eps: [0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001]
+
+- name: gimbal_limit
+  theta_max: 20
+
+- name: max_thrust
+  max_val: 5
+
+- name: min_thrust_norm
+  mission_params: {"min_thrust": 0.3}
+  eps: [0.001]
+
+# - name: state_limits
+#   x_min: [1.0]
+#   x_min_idx: [0]
+#   x_max: []
+#   x_max_idx: []
+
+# - name: glide_slope
+#   theta_max: 45
+
+# - name: tilt_limit
+#   theta_max: 90
+
+# - name: height_triggered_pitch
+#   mission_params: {"cos_theta_max": 0.9, "trigger_height": 2.0}
+#   eps: [0.001]
+
+costs:
+- name: min_time

@@ -56,7 +56,6 @@ def set_convergence_tolerance(problem, method):
     # Compute dimensional tolerances
 
     if len(nodal_ncvx_constraints) > 0:
-
         eps_ineq = np.concatenate([constraint.eps for constraint in nodal_ncvx_constraints])
         eps_ineq_nd = M_ineq_d2nd @ eps_ineq
         eps_min_ineq = float(np.min(eps_ineq_nd)) if eps_ineq_nd.size > 0 else 0.

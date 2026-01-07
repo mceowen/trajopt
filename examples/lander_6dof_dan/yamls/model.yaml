@@ -1,20 +1,81 @@
 # model yaml for lander_6dof model
 
+inherit: trajopt/library/models/lander_6dof.yaml
+
 dimensions:
   n: 14
   m: 3
 
 nondim:
-
   z_types: ["m", "d", "d", "d", "v", "v", "v", "none", "none", "none", "none", "none", "none", "none"]
   u_types: ["f", "f", "f"]
+
   anchor_types : ["d", "t", "m"]
   anchor_scales: [1.0, 1.0, 1.0]
 
 constraint_models:
+
+### NEW
+# - type: AFFINE
+#   name: 'affine1'
+# - type: POLYTOPE
+#   name: 'affine1'
+# - type: SOC
+#   name: 'affine1'
+
+- type: BOX
+  name: box_out
+  group: path
+  idx: [1,2,3]
+  upper: precompute- custom.py:upper_out
+  lower: precompute- custom.py:lower_out
+  version: 'out'
+  ## just for plotting 
+  affine2vertices: precompute- custom.py:affine2vertices
+  vertices2edges: precompute- custom.py:vertices2edges
+  vertices2faces: precompute- custom.py:vertices2faces                  
+
+
+- type: BOX
+  name: box_in_convex
+  group: path
+  idx: [1,2,3]
+  upper: precompute- custom.py:upper_in_convex
+  lower: precompute- custom.py:lower_in_convex
+  version: 'in_convex'
+  ## just for plotting 
+  affine2vertices: precompute- custom.py:affine2vertices
+  vertices2edges: precompute- custom.py:vertices2edges
+  vertices2faces: precompute- custom.py:vertices2faces
+
+- type: BOX
+  name: box_in_buffer
+  group: path
+  idx: [1,2,3]
+  upper: precompute- custom.py:upper_in_buffer
+  lower: precompute- custom.py:lower_in_buffer
+  version: 'in_buffer'
+  ## just for plotting 
+  affine2vertices: precompute- custom.py:affine2vertices
+  vertices2edges: precompute- custom.py:vertices2edges
+  vertices2faces: precompute- custom.py:vertices2faces
+  
+
+
+# - type: UPPER
+# - type: LOWER
+
+# - type: SPHERE
+# - type: ELLIPSOID
+# - type: CYLINDER
+# - type: CONE
+
+
+
+### OLD
 - type: dynamics
   name: dynamics
-  fcn: trajopt/library/models/lander_6dof/functions.py:dynamics
+  fcn: trajopt/library/models/lander_6dof.py:dynamics
 
 - type: equality_bc
   name: initial_state
@@ -47,7 +108,7 @@ constraint_models:
   name: gimbal_limit
   set: control
   axis: [1, 0, 0]
-  theta_max: null
+  theta_max: null # loaded in mission
   x_idx: [0, 1, 2]
 
 - type: axis_angle_cone
@@ -78,7 +139,7 @@ constraint_models:
 - type: nonconvex_inequality
   name: height_triggered_pitch
   group: path
-  fcn: trajopt/library/models/lander_6dof/functions.py:height_triggered_pitch
+  fcn: trajopt/library/models/lander_6dof.py:height_triggered_pitch
   mission_params: {"cos_theta_max": null, "trigger_height": null}
   eps: null
   units: null
@@ -88,7 +149,7 @@ constraint_models:
 - type: nonconvex_inequality
   name: min_thrust_norm
   group: path
-  fcn: trajopt/library/models/lander_6dof/functions.py:min_thrust_norm
+  fcn: trajopt/library/models/lander_6dof.py:min_thrust_norm
   mission_params: {"min_thrust": null}
   eps: null
   units: [{"f": 1}]

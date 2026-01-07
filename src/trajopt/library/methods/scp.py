@@ -559,12 +559,13 @@ class Subproblem:
             ############# ----------------------- CONVEX CONSTRAINTS ------------------- ################
             # for constraint in problem.constraints.get('POLYTOPE_IN'):
             for constraint in problem.constraints.get('nodal','AFFINE'):                
-                if use_constraint_at_time_query(constraint.time_steps):
-                    z = self.z_ref[k] + self.dz[k]; nu = self.nu_ref[k] + self.dnu[k]
-                    idxx = constraint.idx;
-                    AA = constraint.A; bb = constraint.b; 
-                    if constraint.set == 'state': C.append(AA @ z[idxx] == bb)
-                    elif constraint.set == "control": C.append(AA @ nu[idxx] == bb)
+                if constraint.convex == True:
+                    if use_constraint_at_time_query(constraint.time_steps):
+                        z = self.z_ref[k] + self.dz[k]; nu = self.nu_ref[k] + self.dnu[k]
+                        idxx = constraint.idx;
+                        AA = constraint.A; bb = constraint.b; 
+                        if constraint.set == 'state': C.append(AA @ z[idxx] == bb)
+                        elif constraint.set == "control": C.append(AA @ nu[idxx] == bb)
 
             for constraint in problem.constraints.get('nodal','POLYTOPE'):
                 if constraint.convex == True:

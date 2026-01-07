@@ -406,16 +406,23 @@ class AFFINE: ## IMPLEMENTED
         self.eps = 0.0001;
         if 'eps' in ins: self.eps = ins['eps'];
 
-        #############################################
+        self.A = self.A_dim.copy()
+        self.b = self.b_dim.copy();        
+        self.nondimmed = False;
+    ### non dimensionalized version... 
+    def nondim_constraint(self,nondim):
+        ### update something with nondim...
+        ########################################
         self.M_out = np.eye(self.m);
         self.M_in = np.eye(self.n);
-        if 'M_out' in ins: self.M_out = ins['M_out'];
-        if 'M_in' in ins: self.M_in = ins['M_in'];
+        # if 'M_out' in ins: self.M_out = ins['M_out'];
+        # if 'M_in' in ins: self.M_in = ins['M_in'];
         self.M_out_inv = np.linalg.inv(self.M_out);
-        #############################################
+        #########################################
         self.A = self.M_out_inv@self.A_dim@self.M_in
         self.b = self.M_out_inv@self.b_dim;
-    ### non dimensionalized version... 
+        self.nondimmed = True; 
+
     def g(self,x): return self.A@x - self.b;
     def dgdx(self,x): return self.A;
     def g_jax(self,x): return self.A@x - self.b
@@ -445,17 +452,17 @@ class AFFINE: ## IMPLEMENTED
 # =========================================================
 
 class POLYTOPE: ## IMPLEMENTED 
-    # -- defines polytope constraint of the form Ax - b <= 0
+    # -- defines polytope constraint of the form 
+    # -- g(x) = Ax - b <= 0
     def __init__(self,ins={},params=None):
 
         self.name = ins['name'] ## unique identifier
         self.b_dim = ins['b'];
         self.A_dim = ins['A'];
-        version = ins['version'];
-        self.version = version; 
+        self.version = ins['version'];
         self.n = self.A_dim.shape[1];
         self.m = self.A_dim.shape[0];
-        self.sharp = 2;
+        
         self.type = 'POLYTOPE';
         #############################################
 
@@ -464,53 +471,94 @@ class POLYTOPE: ## IMPLEMENTED
         if 'name' in ins: self.name = ins['name'];
         if 'set' in ins: self.set = ins['set'];
         if 'idx' in ins: self.idx = ins['idx'];
-        if 'sharp' in ins: self.sharp = ins['sharp'];
+        
         self.time_steps = 'all';
         if 'tsteps' in ins: self.time_steps = ins['tsteps'];
         if 'time_steps' in ins: self.time_steps = ins['time_steps'];
         ################################################
-        self.M_out = np.eye(self.m);
-        self.M_in = np.eye(self.n);
-        if 'M_out' in ins: self.M_out = ins['M_out'];
-        if 'M_in' in ins: self.M_in = ins['M_in'];
-        self.M_out_inv = np.linalg.inv(self.M_out);
-        #############################################
-        #############################################
-        self.A = self.M_out_inv@self.A_dim@self.M_in
-        self.b = self.M_out_inv@self.b_dim;
+        self.A = self.A_dim.copy()
+        self.b = self.b_dim.copy();        
+        self.nondimmed = False;
 
-        if version == 'in':
+        self.eps = np.array([0.1]);
+        if 'eps' in ins: self.eps = ins['eps'];
+
+
+        sharp = 2;
+        if 'sharp' in ins: sharp = ins['sharp'];
+        if self.version == 'in_convex':
+            self.sharp = sharp;
             self.implement_type = 'POLYTOPE'
-            self.subtype = 'POLYTOPE_IN';
-            self.convex = True;
+            self.subtype = 'POLYTOPE_IN_CONVEX';
             self.dimension = self.n;
-            self.eps = 0.001;
-            if 'eps' in ins: self.eps = ins['eps'];
-            if not(isinstance(self.eps,(np.ndarray,jnp.ndarray))):
-                self.eps = self.eps*np.ones(self.dimension)
+            self.convex = True;
+
+        if self.version == 'in_buffer':
+            self.sharp = sharp;
+            self.convex = False;
+            self.dimension = 1;
+            self.subtype = 'POLYTOPE_IN_BUFFER';
+            self.implement_type = 'nonconvex_inequality'
+            self.group = ins['group']
+
         ################################################
-        if version == 'out':
+        if self.version == 'out':
             self.implement_type = 'nonconvex_inequality'
             self.subtype = 'POLYTOPE_OUT';
             self.convex = False;
-            self.dimension = 1;        
-            self.eps = 0.001;
-            if 'eps' in ins: self.eps = ins['eps']
-            if isinstance(self.eps,(np.ndarray,jnp.ndarray)):
-                temp = self.M_out_inv@self.eps; self.eps = np.min(temp);
+            self.dimension = 1;
+            self.sharp = -sharp;
+            self.group = ins['group']
 
         ## epsilon nondim logic...
         # M_out_inv @ A @ M_in @x_nodim - M_out_inv @ b  <= eps_scalar*1 <= M_out_inv @ eps 
         # where eps_scalar = min_j [M_out_inv@eps]_j
+
+        self.affine2vertices = [];
+        self.vertices = []; self.edges = []; self.faces = [];
+        self.vertices2edges = [];
+        self.vertices2faces = [];
+        if 'affine2vertices' in ins: self.affine2vertices = ins['affine2vertices']
+        if 'vertices2edges' in ins: self.vertices2edges = ins['vertices2edges']
+        if 'vertices2faces' in ins: self.vertices2faces = ins['vertices2faces']
+
+        if len(self.affine2vertices)>0: self.calcVertices();
+        if len(self.vertices2edges)>0: self.calcEdges();
+        if len(self.vertices2faces)>0: self.calcFaces();
+
+
+    ### non dimensionalized version... 
+    def nondim_constraint(self,nondim):
+        ### update something with nondim...
+        ########################################
+        self.M_out = np.eye(self.m);
+        self.M_in = np.eye(self.n);
+        # if 'M_out' in ins: self.M_out = ins['M_out'];
+        # if 'M_in' in ins: self.M_in = ins['M_in'];
+        self.M_out_inv = np.linalg.inv(self.M_out);
+        #########################################
+        self.A = self.M_out_inv@self.A_dim@self.M_in
+        self.b = self.M_out_inv@self.b_dim;
+        self.nondimmed = True; 
+
+        # #### needs to be fixed... 
+        # if self.version == 'in':
+        #     if not(isinstance(self.eps,(np.ndarray,jnp.ndarray))):
+        #         self.eps = self.eps*np.ones(self.dimension)
+        # ################################################
+        # if self.version == 'out':
+        #     if isinstance(self.eps,(np.ndarray,jnp.ndarray)):
+        #         temp = self.M_out_inv@self.eps; self.eps = np.min(temp);
+
     def g(self,x):
-        if self.version == 'in': return self.A@x - self.b; # g(x) # NEVER USED - CONVEX
-        if self.version == 'out': # max_j g_j(x)
+        if self.version == 'in_convex': return self.A@x - self.b; # g(x) # NEVER USED - CONVEX
+        if self.version in ['out','in_buffer']: # max_j g_j(x)
             z = self.A@x - self.b; 
             exps = np.exp(self.sharp*z) # softmax: implements approximation of exps = np.max(Cx - d); 
-            return (1./np.sum(exps))*exps*z
+            return (1./np.sum(exps))*np.sum(exps*z)
     def dgdx(self,x):
-        if self.version == 'in': return self.A
-        if self.version == 'out': 
+        if self.version == 'in_convex': return self.A
+        if self.version in ['out','in_buffer']:
             z = self.A@x - self.b;
             exps = np.exp(self.sharp*z)
             summ = np.sum(exps);
@@ -522,14 +570,14 @@ class POLYTOPE: ## IMPLEMENTED
             return dgdx
     ################################################
     def g_jax(self,x):
-        if self.version == 'in': return self.A@x - self.b;
-        if self.version == 'out': 
+        if self.version == 'in_convex': return self.A@x - self.b;
+        if self.version in ['out','in_buffer']:
             z = self.A@x - self.b; 
             exps = jnp.exp(self.sharp*z) # softmax: implements approximation of exps = np.max(Cx - d); 
-            return (1./jnp.sum(exps))*exps*z
+            return (1./jnp.sum(exps))*jnp.sum(exps*z)
     def dgdx_jax(self,x):
-        if self.version == 'in': return self.A
-        if self.version == 'out': 
+        if self.version == 'in_convex': return self.A
+        if self.version in ['out','in_buffer']:
             z = self.A@x - self.b;
             exps = jnp.exp(self.sharp*z)
             summ = jnp.sum(exps);
@@ -541,6 +589,7 @@ class POLYTOPE: ## IMPLEMENTED
             return dgdx
     ################################################
     def g_aff(self,t,z,nu):
+        ## g(x) + dgdx delta x <= 0
         dgdz = np.zeros([self.dimension,len(z)]);
         dgdu = np.zeros([self.dimension,len(nu)])
         if self.set == 'state': g = self.g(z[self.idx]); dgdz[:,self.idx] = self.dgdx(z[self.idx]);
@@ -554,6 +603,17 @@ class POLYTOPE: ## IMPLEMENTED
         if self.set == 'control': g = self.g_jax(nu[self.idx]); dgdu[:,self.idx] = self.dgdx_jax(nu[self.idx]);
         return g,dgdz,dgdu
     ################################################    
+    ################################################    
+
+    def calcVertex(self,inds): return np.linalg.inv(self.A_dim[inds])@self.b_dim[inds]
+    def calcVertices(self):        
+        for i,inds in enumerate(self.affine2vertices):
+            self.vertices.append(self.calcVertex(inds));
+        self.vertices = np.array(self.vertices);
+    def calcEdges(self):
+        for i,inds in enumerate(self.vertices2edges): self.edges.append(self.vertices[inds]);
+    def calcFaces(self):
+        for i,inds in enumerate(self.vertices2faces): self.faces.append(self.vertices[inds]);
 
 
 
@@ -582,7 +642,7 @@ class SOC: ## IMPLEMENTED
         if 'name' in ins: self.name = ins['name'];
         if 'set' in ins: self.set = ins['set'];
         if 'idx' in ins: self.idx = ins['idx'];
-        self.eps = 0.0001;
+        self.eps = np.array([0.0001]);
         if 'eps' in ins: self.eps = ins['eps'];
         ################################################
         self.time_steps = 'all';
@@ -591,21 +651,29 @@ class SOC: ## IMPLEMENTED
 
         ################################################
         self.epsilon_grad = 0.0000001;
+        self.A = self.A_dim.copy()
+        self.b = self.b_dim.copy()
+        self.C = self.C_dim.copy()
+        self.d = self.d_dim.copy()
+        self.nondimmed = False; 
+
+
+
+    def nondim_constraint(self,nondim):
         ################################################
         self.M_out = 1;
         self.M_in = np.eye(self.n);
-        if 'M_out' in ins: self.M_out = ins['M_out'];
-        if 'M_in' in ins: self.M_in = ins['M_in'];
+        # if 'M_out' in ins: self.M_out = ins['M_out'];
+        # if 'M_in' in ins: self.M_in = ins['M_in'];
         self.M_out_inv = 1./self.M_out;
         ## for a second order cone M_out must be a positive scalar
         #############################################
         #############################################
         self.A = self.M_out_inv*self.A_dim@self.M_in
         self.b = self.M_out_inv*self.b_dim;
-
         self.C = self.M_out_inv*self.C_dim@self.M_in
         self.d = self.M_out_inv*self.d_dim;
-
+        self.nondimmed = True; 
 
     def g(self,x): return np.linalg.norm(self.A@x + self.b) - (self.C@x + self.d);
     def dgdx(self,x): return (1./(np.linalg.norm(self.A@x + self.b)+self.epsilon_grad))*(self.A@x+self.b).T@self.A - self.C;
@@ -628,6 +696,7 @@ class SOC: ## IMPLEMENTED
     ################################################        
 
 
+
 # =========================================================
 # =========================================================
 #              SPECIFIC POLYTOPE SUBTYPES
@@ -637,38 +706,47 @@ class BOX(POLYTOPE):
     def __init__(self,ins={},params=None):    
         upper = ins['upper'];
         lower = ins['lower'];
-        # lower <= x <= upper;
+        version = ins['version'];
+        # lower <= I x <= upper;
+        # I x - upper <= 0;
+        # lower <= I x;
         n = len(upper);
-        b = np.hstack([upper,-lower]);
-        A = np.vstack([np.eye(n),-np.eye(n)]);
+        if version in ['in_convex','in_buffer']: b = np.hstack([upper,-lower]); A = np.vstack([np.eye(n),-np.eye(n)]);
+        if version == 'out': b = np.hstack([-upper,lower]); A = np.vstack([-np.eye(n),np.eye(n)]);
         POLYTOPE.__init__(self,ins={'A':A,'b':b,**ins},params=params)
         self.n = n
         self.lower = lower;
         self.upper = upper;                
-        if self.version == 'in': self.subtype = 'BOX_IN'
+        if self.version == 'in_convex': self.subtype = 'BOX_IN_CONVEX'
+        if self.version == 'in_buffer': self.subtype = 'BOX_IN_BUFFER'
         if self.version == 'out': self.subtype = 'BOX_OUT'
 
 class UPPER(POLYTOPE):
     def __init__(self,ins={},params=None):
         # x <= up;
         upper = ins['upper']
+        version = ins['version'];
         n = len(upper)
-        A = np.eye(n); b = upper        
+        if version in ['in_convex','in_buffer']:  A = np.eye(n); b = upper;
+        if version == 'out': A = -np.eye(n); b = -upper;
         POLYTOPE.__init__(self,ins={'A':A,'b':b,**ins},params=params)
         self.n = n 
         self.upper = upper;
-        if self.version == 'in': self.subtype = 'UPPER_IN'
+        if self.version == 'in_convex': self.subtype = 'UPPER_IN_CONVEX'
+        if self.version == 'in_buffer': self.subtype = 'UPPER_IN_BUFFER'
         if self.version == 'out': self.subtype = 'UPPER_OUT'
 class LOWER(POLYTOPE):
     def __init__(self,ins={},params=None):
         # low <= x
         lower = ins['lower'];
         n = len(lower)
-        A = -np.eye(n); b = -lower
+        if version in ['in_convex','in_buffer']:  A = -np.eye(n); b = -lower
+        if version == 'out': A = np.eye(n); b = lower
         POLYTOPE.__init__(self,ins={'A':A,'b':b,**ins},params=params)
         self.n = n
         self.lower = lower        
-        if self.version == 'in': self.subtype = 'LOWER_IN'
+        if self.version == 'in_convex': self.subtype = 'LOWER_IN_CONVEX'
+        if self.version == 'in_buffer': self.subtype = 'LOWER_IN_BUFFER'
         if self.version == 'out': self.subtype = 'LOWER_OUT'
 
 # =========================================================
@@ -691,6 +769,9 @@ class ZONOTOPE:  ### NOT FINISHED
 # ----------- SPECIFIC SOC CONSTRAINTS
 # =========================================================
 # =========================================================
+
+
+
 class SPHERE(SOC): 
     # -- Description: defines a spherical "keep in" region
     ## General SOC form: ||Ax+b||_2 <= Cx + d;

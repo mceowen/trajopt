@@ -1,6 +1,7 @@
 from trajopt.core.constraints.constraints import Constraints
 from trajopt.core.costs.costs import Costs
 from trajopt.utils.config_loader import resolve_function
+from pprint import pprint
 
 # ████████████████████████████████████████████████████████████████████████████
 
@@ -89,3 +90,7 @@ class Problem:
         self.n_term_ineq = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'inequality_bc') if constraint.boundary == "final" and constraint.set == "state")
         self.n_term_ctcs = self.n_ctcs
         self.n_term_total = self.n_term + self.n_term_ineq + self.n_ctcs
+
+
+        # pprint(constraint_config_list)
+        
