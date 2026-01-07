@@ -1,88 +1,44 @@
-# Dimensional mission configuration (no nondim)
-module_path: "trajopt.core.mission.msl"
+# ===============================
+# MISSION PARAMS
+# ===============================
 
-planet_name: "mars"
-vehicle_name: "msl"
+planet: 
+  inherit: trajopt/library/missions/shared/planet/mars.yaml
+vehicle:
+  inherit: trajopt/library/missions/shared/vehicle/msl.yaml
 
 flags:
-  flag_nfz: 0
-  init_ctrl: 0
-  final_ctrl: 0
   aero_type: 'exponential'  # 'exponential', 'jax_lookup', 'spline', 'none'
 
-# no fly zones positions and radii
-obs:
-  xc: [2.5, 5.0, 2.5, 5.5, 8.0, 5.5]
-  yc: [2.0, 2.5, 5.0, 5.25, 5.5, 8.0]
-  rc: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+fcns:
+  atmosphere_model_jax: trajopt/library/missions/msl.py:atmosphere_model_jax
+  nonlinear_aero_jax: trajopt/library/missions/msl.py:nonlinear_aero_jax
 
-# state min/max constraints
-z_min: "eval: np.array([mission['planet']['r'], 100.0])"
-z_min_idx: [0, 3]
-z_max: []
-z_max_idx: []
+constraints: 
+- name: dynamics
 
-# initial state constraints
-zi: "eval: np.array([(mission['planet']['r'] + 126e3), 0.0, 0.0, 5845, -15.47, 0.0])"
-zi_idx: [0, 1, 2, 3, 4, 5]
-zi_min: []
-zi_min_idx: []
-zi_max: []
-zi_max_idx: []
+- name: initial_state
+  x: "eval: np.array([(params['mission']['planet']['r'] + 126e3), 0.0, 0.0, 5845, -15.47, 0.0])"
+  x_idx: [0, 1, 2, 3, 4, 5]
 
-# final state constraints
-zf: "eval: np.array([(mission['planet']['r'] + 10e3), 0.0, 10.5768])" # , final 3 states: 406.0, -10.0, 0.0])"
-zf_idx: [0, 1, 2]
-zf_min: []
-zf_min_idx: []
-zf_max: []
-zf_max_idx: []
+- name: final_state
+  x: "eval: np.array([(params['mission']['planet']['r'] + 10e3), 0.0, 10.5768])"
+  x_idx: [0, 1, 2]
+  eps: [100, 0.1, 0.1]
 
-# final state guess for straight line initialization (not used with nonlinear initial guess)
-zi_guess: "eval: np.array([(mission['planet']['r'] + 126e3), 0.0, 0.0, 5845, -15.47, 0.0])"
-zf_guess: "eval: np.array([(mission['planet']['r'] + 10e3), 0.0, 10.5768, 406.0, -10.0, 0.0])" 
+- name: state_limits
+  x_min: "eval: np.array([params['mission']['planet']['r'], 100.0])"
+  x_min_idx: [0, 3]
 
-# control min/max constraints
-u_min: [-170.0, -5.0]
-u_max: [170.0, 5.0]
+- name: bank_aoa_angle_limits
+  x_min: [-170.0, -5.0]
+  x_min_idx: [0, 1]
+  x_max: [170.0, 5.0]
+  x_max_idx: [0, 1]
 
-u_min_idx: [0, 1]
-u_max_idx: [0, 1]
-
-# control boundary conditions
-ui: []
-uf: []
-
-ui_idx: []
-uf_idx: []
-
-# control rate constraints
-udot_max: []
-udot_max_idx: []
+costs:
+- name: min_terminal_velocity
 
 path_limits:
   max_q: 1000
   max_Q: 2000
-
-path_limits: {}
-
-custom_limits: {}
-
-# custom input dictionary
-custom_input_dict: {}
-
-# custom modules
-custom_modules: {}
-
-costs:
-- fcn: "trajopt.core.mission.msl.terminal_cost"
-  analytical_affine_approximation: "trajopt.core.mission.msl.analytical_affine_approximation_terminal_cost"
-  convex: 1
-  auto_diff: 0
-  category: "terminal"
-
-- fcn: "trajopt.core.mission.msl.running_cost"
-  analytical_affine_approximation: "trajopt.core.mission.msl.analytical_affine_approximation_running_cost"
-  convex: 1
-  auto_diff: 0
-  category: "running"

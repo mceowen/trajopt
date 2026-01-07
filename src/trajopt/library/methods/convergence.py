@@ -28,7 +28,7 @@ def set_convergence_tolerance(problem, method):
         ctcs_eps_list = ctcs_mult_cnst * (method.weights['w_ctcs'] * eps_list)**2
         
         eps_state = np.concatenate([eps_state, ctcs_eps_list])
-        M_state_d2nd = np.diag(np.concatenate([np.diag(M_state_d2nd), np.diag(method.nondim.M["ineq_ct"]["d2nd"])**2 / method.nondim['nt']]))
+        M_state_d2nd = np.diag(np.concatenate([np.diag(M_state_d2nd), np.diag(method.nondim.M["ineq_ct"]["d2nd"])**2 / method.nondim.nt]))
     
     eps_state_nd  = M_state_d2nd @ eps_state
     eps_min_state = float(np.min(eps_state_nd))

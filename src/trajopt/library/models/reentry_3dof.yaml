@@ -55,6 +55,14 @@ constraint_models:
   x_max: null
   x_max_idx: null
 
+- name: bank_aoa_angle_limits
+  type: box
+  set: control
+  x_min: null
+  x_min_idx: null
+  x_max: null
+  x_max_idx: null
+
 - name: bank_angle_rate_limit
   type: control_rate_limit
   udot_max: null

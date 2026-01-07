@@ -59,12 +59,6 @@ class Problem:
         self.costs.resolve_functions(self.params, self.fcns)
 
         # ------------------------------------------------------------
-        # Augment CTCS dynamics
-        # ------------------------------------------------------------
-
-        self.constraints.augment_ctcs_dynamics(self.n)
-
-        # ------------------------------------------------------------
         # CONSTRAINT BOOK KEEPING
         # TODO: MOVE THIS TO INDEX_MAP AND DONT HARDCODE GROUPS
         # ------------------------------------------------------------

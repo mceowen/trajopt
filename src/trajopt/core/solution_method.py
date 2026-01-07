@@ -31,6 +31,7 @@ class SolutionMethod:
 
         self.problem.constraints.nondim_constraints(self.nondim)
         self.problem.constraints.convexify_constraints()
+        self.problem.constraints.augment_ctcs_dynamics(self.problem.n)
 
         discretize.jit_jax_discretize(problem, self)
         integrators.jit_rk4_jax_dense(problem, self)

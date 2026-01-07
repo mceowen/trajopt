@@ -146,11 +146,11 @@ class Constraints:
 
     def augment_ctcs_dynamics(self, n):
         if self.has('ct'):
-            dynamics = self.get('name', 'dynamics')[0].fcn
-            f_ctcs, dfcn_dz_ctcs, dfcn_du_ctcs = convexify.linearize_jax_ctcs(dynamics, self, n)
+            dynamics_obj = self.get('name', 'dynamics')[0]
+            f_ctcs, dfcn_dz_ctcs, dfcn_du_ctcs = convexify.linearize_jax_ctcs(dynamics_obj.fcn, self, n)
 
             lin_dyn_ctcs = lambda t, z, nu: (f_ctcs(z, nu), dfcn_dz_ctcs(z, nu), dfcn_du_ctcs(z, nu))
 
-            dynamics.lin_dyn = lin_dyn_ctcs
+            dynamics_obj.lin_dyn = lin_dyn_ctcs
 
             print("ctcs dynamics augmented!")

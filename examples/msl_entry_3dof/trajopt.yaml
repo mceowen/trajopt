@@ -1,0 +1,9 @@
+problem: 
+  mission:
+    inherit: mission.yaml
+  
+  model: 
+    inherit: trajopt/library/models/reentry_3dof.yaml
+
+method:
+  inherit: method.yaml
