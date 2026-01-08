@@ -216,7 +216,7 @@ class TrajectoryAnalyzer:
 
             # print(W_dyn)
 
-            plot_module.makePlotWghts3(PLTS1,ins=plotparams);
+            # plot_module.makePlotWghts3(PLTS1,ins=plotparams);
 
             plot_module.makePlotConvs(PLTS1,ins=plotparams);
 

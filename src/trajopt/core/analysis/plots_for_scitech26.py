@@ -793,7 +793,7 @@ def makePlotStates(PLTS1,ins={}):
                 PLTS1.legends[lgnd][line_tag] = line_handle;
             if sind in state_limits.x_max_idx:
                 iind = np.where(state_limits.x_max_idx == sind)[0][0];
-                zmax = (state_limits.x_max_dim[iind]-params['mission']['planet']['r'])/1000; 
+                zmax = (state_limits.x_max_dim[iind]-problem.params['mission']['planet']['r'])/1000; 
                  # - trajopt_obj.mission.planet['r']
                 line_handle = ax.axhline(y=zmax, xmin = 0, color=lrgba, linestyle=ls, linewidth=lw,label=line_tag); #, label=line_tag)
                 # PLTS1.legends[lgnd][line_tag] = line_handle;
@@ -825,6 +825,7 @@ def makePlotStates(PLTS1,ins={}):
 
 def makePlotLoads(PLTS1,ins={}):
     trajopt_obj = ins['trajopt_obj'];
+    problem = trajopt_obj.problem;
     data = ins['data'];
     versions = ins['versions'];
     NEWPENS = ins['PENS'];
@@ -938,7 +939,9 @@ def makePlotLoads(PLTS1,ins={}):
 
             #### hack for adding max value line... not that hacky anyway
             line_tag = 'Max Value'
-            maxval = trajopt_obj.mission.path_limits[tag];
+            constraint = problem.constraints.get('name', tag)[0];
+
+            maxval = constraint.max_val_dim;
 
             penn = PENS['max-value'];
             lrgba = penn['lrgba']; ls = penn['ls']; lw = penn['lw']
@@ -1023,8 +1026,8 @@ def makePlotWghts(PLTS1,ins={}):
     # 'W_plus', 'W_minus', -> the weird quadratic 1-norm 
     # 'dual_ineq', 'dual_term', 'dual_dyn', 'dual_plus', 'dual_minus', <- dual versions
     # weight_info = weights = 
-    nfz_inds = trajopt_obj.indices.constraints.nonlinear_inequality['nfz'];
-    pth_inds = winds = trajopt_obj.indices.constraints.nonlinear_inequality['path'];
+    # nfz_inds = trajopt_obj.indices.constraints.nonlinear_inequality['nfz'];
+    pth_inds = winds = trajopt_obj.method.index_map.constraints.nonlinear_inequality['path'];
     # weight_info = [['W_ineq',nfz_inds],['dual_ineq',nfz_inds],['W_ineq',pth_inds],['dual_ineq',pth_inds]];
     weight_info = [['W_ineq',pth_inds],['dual_ineq',pth_inds]];
 
@@ -1327,8 +1330,8 @@ def makePlotWghts3(PLTS1,ins={}):
     # 'dual_ineq', 'dual_term', 'dual_dyn', 'dual_plus', 'dual_minus', <- dual versions
 
     # weight_info = weights = 
-    nfz_inds = trajopt_obj.indices.constraints.nonlinear_inequality['nfz'];
-    pth_inds = trajopt_obj.indices.constraints.nonlinear_inequality['path'];
+    # nfz_inds = trajopt_obj.indices.constraints.nonlinear_inequality['nfz'];
+    # pth_inds = trajopt_obj.indices.constraints.nonlinear_inequality['path'];
 
     # weight_info = [['W_ineq',nfz_inds],
     #             ['dual_ineq',nfz_inds],
@@ -1341,7 +1344,7 @@ def makePlotWghts3(PLTS1,ins={}):
     # buff_dyn_dual:      "none"    # 'l1', 'none'
     # ctcs:               'l2'  # 0, 1
     # ctcs_dual:          "none"   # 'l1', 'none'    
-    ctcs_idx = trajopt_obj.indices.z['ctcs']
+    ctcs_idx = trajopt_obj.method.index_map.z['ctcs']
     weight_info = [('W_dyn',ctcs_idx),('dual_dyn',ctcs_idx)];#'W_minus_ctcs','dual_plus_ctcs','dual_minus_ctcs'];
     # weight_info = [('W_dyn',ctcs_idx),('dual_dyn',[])];#'W_minus_ctcs','dual_plus_ctcs','dual_minus_ctcs'];
 
