@@ -125,20 +125,19 @@ def set_convergence_tolerance(problem, method):
         eps_dyn    = np.zeros((problem.nz,))
         M_dyn_d2nd = np.zeros((1, problem.nz))
 
-    eps_path_list = np.concatenate([constraint.eps for constraint in problem.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "path"]) if problem.n_path > 0 else np.array([])
-    eps_nfz_list = np.concatenate([constraint.eps for constraint in problem.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "nfz"]) if problem.n_nfz > 0 else np.array([])
-    eps_custom_list = np.concatenate([constraint.eps for constraint in problem.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "custom"]) if problem.n_custom > 0 else np.array([])
+    if problem.constraints.has('ct'):
+        eps_ct_list = np.concatenate([constraint.eps for constraint in problem.constraints.get('ct', 'all')])
+    else: 
+        eps_ct_list = np.array([])
 
-    if method.flags["ctcs"] != "none" and problem.n_ineq > 0:
+    if problem.constraints.has('ct'):
         eps_dyn = np.concatenate([
             ctcs_mult_state * eps_dyn,
-            ctcs_mult_cnst  * (method.weights['w_ctcs']*eps_path_list)**2  ,
-            ctcs_mult_cnst  * (method.weights['w_ctcs']*eps_nfz_list)**2    ,
-            ctcs_mult_cnst  * (method.weights['w_ctcs']*eps_custom_list)**2
+            ctcs_mult_cnst  * (method.weights['w_ctcs']*eps_ct_list)**2
         ])
         M_dyn_d2nd = np.diag(np.concatenate([
             np.diag(M_dyn_d2nd),
-            np.diag(method.nondim.M["cnst"]["d2nd"])**2 / method.nondim['nt']
+            np.diag(method.nondim.M["ineq_ct"]["d2nd"])**2 / method.nondim.nt
         ]))
     
     eps_dyn_nd  = M_dyn_d2nd @ eps_dyn
