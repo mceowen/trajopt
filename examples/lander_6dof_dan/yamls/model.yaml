@@ -13,62 +13,17 @@ nondim:
   anchor_types : ["d", "t", "m"]
   anchor_scales: [1.0, 1.0, 1.0]
 
+
+cost_models:
+- type: min_time
+  name: min_time
+
+- type: control_effort
+  name: control_effort
+  x_idx: [0, 1, 2]
+
+
 constraint_models:
-
-### NEW
-# - type: AFFINE
-#   name: 'affine1'
-# - type: POLYTOPE
-#   name: 'affine1'
-# - type: SOC
-#   name: 'affine1'
-
-- type: BOX
-  name: box_out
-  group: path
-  idx: [1,2,3]
-  upper: precompute- custom.py:upper_out
-  lower: precompute- custom.py:lower_out
-  version: 'out'
-  ## just for plotting 
-  affine2vertices: precompute- custom.py:affine2vertices
-  vertices2edges: precompute- custom.py:vertices2edges
-  vertices2faces: precompute- custom.py:vertices2faces                  
-
-
-- type: BOX
-  name: box_in_convex
-  group: path
-  idx: [1,2,3]
-  upper: precompute- custom.py:upper_in_convex
-  lower: precompute- custom.py:lower_in_convex
-  version: 'in_convex'
-  ## just for plotting 
-  affine2vertices: precompute- custom.py:affine2vertices
-  vertices2edges: precompute- custom.py:vertices2edges
-  vertices2faces: precompute- custom.py:vertices2faces
-
-- type: BOX
-  name: box_in_buffer
-  group: path
-  idx: [1,2,3]
-  upper: precompute- custom.py:upper_in_buffer
-  lower: precompute- custom.py:lower_in_buffer
-  version: 'in_buffer'
-  ## just for plotting 
-  affine2vertices: precompute- custom.py:affine2vertices
-  vertices2edges: precompute- custom.py:vertices2edges
-  vertices2faces: precompute- custom.py:vertices2faces
-  
-
-
-# - type: UPPER
-# - type: LOWER
-
-# - type: SPHERE
-# - type: ELLIPSOID
-# - type: CYLINDER
-# - type: CONE
 
 
 
@@ -156,10 +111,227 @@ constraint_models:
   dimension: 1
   ct: 0
 
-cost_models:
-- type: min_time
-  name: min_time
+### NEW
+# - type: AFFINE
+#   name: 'affine1'
+# - type: POLYTOPE
+#   name: 'affine1'
+# - type: SOC
+#   name: 'affine1'
 
-- type: control_effort
-  name: control_effort
-  x_idx: [0, 1, 2]
+- type: POLYTOPE
+  name: dodec_out
+  group: path
+  idx: [1,2,3]
+  A: precompute- custom.py:A_dodec
+  b: precompute- custom.py:b_dodec
+  version: 'out'
+  ## just for plotting 
+  vertices: precompute- custom.py:vertices_dodec
+  vertices2faces: precompute- custom.py:vertices2faces_dodec
+
+- type: POLYTOPE
+  name: dodec_out2
+  group: path
+  idx: [1,2,3]
+  A: precompute- custom.py:A_dodec_out2
+  b: precompute- custom.py:b_dodec_out2
+  version: 'out'
+  eps: [0.01]
+  ## just for plotting 
+  vertices: precompute- custom.py:vertices_dodec_out2
+  vertices2faces: precompute- custom.py:vertices2faces_dodec_out2  
+
+- type: POLYTOPE
+  name: dodec_out3
+  group: path
+  idx: [1,2,3]
+  A: precompute- custom.py:A_dodec_out3
+  b: precompute- custom.py:b_dodec_out3
+  version: 'out'
+  eps: [0.01]
+  ## just for plotting 
+  vertices: precompute- custom.py:vertices_dodec_out3
+  vertices2faces: precompute- custom.py:vertices2faces_dodec_out3
+
+
+- type: BOX
+  name: box_out
+  group: path
+  idx: [1,2,3]
+  upper: precompute- custom.py:upper_out
+  lower: precompute- custom.py:lower_out
+  version: 'out'
+  ## just for plotting 
+  affine2vertices: precompute- custom.py:affine2vertices
+  vertices2edges: precompute- custom.py:vertices2edges
+  vertices2faces: precompute- custom.py:vertices2faces                  
+
+
+- type: BOX
+  name: box_in_convex
+  group: path
+  idx: [1,2,3]
+  upper: precompute- custom.py:upper_in_convex
+  lower: precompute- custom.py:lower_in_convex
+  version: 'in_convex'
+  ## just for plotting 
+  affine2vertices: precompute- custom.py:affine2vertices
+  vertices2edges: precompute- custom.py:vertices2edges
+  vertices2faces: precompute- custom.py:vertices2faces
+
+- type: BOX
+  name: box_in_buffer
+  group: path
+  idx: [1,2,3]
+  upper: precompute- custom.py:upper_in_buffer
+  lower: precompute- custom.py:lower_in_buffer
+  version: 'in_buffer'
+  ## just for plotting 
+  affine2vertices: precompute- custom.py:affine2vertices
+  vertices2edges: precompute- custom.py:vertices2edges
+  vertices2faces: precompute- custom.py:vertices2faces
+  
+
+
+# - type: UPPER
+# - type: LOWER
+
+# - type: SPHERE
+# - type: ELLIPSOID
+# - type: CYLINDER
+# - type: CONE
+
+
+
+###########################################################
+########################## WAYPOINTS  #####################
+###########################################################
+# - type: POLYTOPE
+#   name: dodec_in1
+#   group: path
+#   idx: [1,2,3]
+#   time_steps: [] #[20,21,22]
+#   A: precompute- custom.py:A_dodec1
+#   b: precompute- custom.py:b_dodec1
+#   version: 'in_buffer'
+#   ## just for plotting
+#   vertices: precompute- custom.py:vertices_dodec1
+#   vertices2faces: precompute- custom.py:vertices2faces_dodec1
+#   ####################################################
+  
+# - type: POLYTOPE
+#   name: dodec_in2
+#   group: path
+#   idx: [1,2,3]
+#   time_steps: [] #[40,41,42]
+#   A: precompute- custom.py:A_dodec2
+#   b: precompute- custom.py:b_dodec2
+#   version: 'in_buffer'
+#   ## just for plotting 
+#   vertices: precompute- custom.py:vertices_dodec2
+#   vertices2faces: precompute- custom.py:vertices2faces_dodec2
+#   ####################################################
+# - type: POLYTOPE
+#   name: dodec_in3
+#   group: path
+#   idx: [1,2,3]
+#   time_steps: [] #[60,61,62]
+#   A: precompute- custom.py:A_dodec3
+#   b: precompute- custom.py:b_dodec3
+#   version: 'in_buffer'
+#   ## just for plotting 
+#   vertices: precompute- custom.py:vertices_dodec3
+#   vertices2faces: precompute- custom.py:vertices2faces_dodec3
+
+
+- type: BOX
+  name: box_in1
+  group: path
+  idx: [1,2,3]
+  time_steps: precompute- custom.py:time_steps1
+  upper: precompute- custom.py:upper_in1
+  lower: precompute- custom.py:lower_in1
+  version: 'in_buffer'
+  ## just for plotting 
+  affine2vertices: precompute- custom.py:affine2vertices
+  vertices2edges: precompute- custom.py:vertices2edges
+  vertices2faces: precompute- custom.py:vertices2faces  
+- type: BOX
+  name: box_in2
+  group: path
+  idx: [1,2,3]
+  time_steps: precompute- custom.py:time_steps2
+  upper: precompute- custom.py:upper_in2
+  lower: precompute- custom.py:lower_in2
+  version: 'in_buffer'
+  ## just for plotting 
+  affine2vertices: precompute- custom.py:affine2vertices
+  vertices2edges: precompute- custom.py:vertices2edges
+  vertices2faces: precompute- custom.py:vertices2faces  
+- type: BOX
+  name: box_in3
+  group: path
+  idx: [1,2,3]
+  time_steps: precompute- custom.py:time_steps3
+  upper: precompute- custom.py:upper_in3
+  lower: precompute- custom.py:lower_in3
+  version: 'in_buffer'
+  ## just for plotting 
+  affine2vertices: precompute- custom.py:affine2vertices
+  vertices2edges: precompute- custom.py:vertices2edges
+  vertices2faces: precompute- custom.py:vertices2faces
+- type: BOX
+  name: box_in4
+  group: path
+  idx: [1,2,3]
+  time_steps: precompute- custom.py:time_steps4
+  upper: precompute- custom.py:upper_in4
+  lower: precompute- custom.py:lower_in4
+  version: 'in_buffer'
+  ## just for plotting 
+  affine2vertices: precompute- custom.py:affine2vertices
+  vertices2edges: precompute- custom.py:vertices2edges
+  vertices2faces: precompute- custom.py:vertices2faces  
+- type: BOX
+  name: box_in5
+  group: path
+  idx: [1,2,3]
+  time_steps: precompute- custom.py:time_steps5
+  upper: precompute- custom.py:upper_in5
+  lower: precompute- custom.py:lower_in5
+  version: 'in_buffer'
+  ## just for plotting 
+  affine2vertices: precompute- custom.py:affine2vertices
+  vertices2edges: precompute- custom.py:vertices2edges
+  vertices2faces: precompute- custom.py:vertices2faces  
+- type: BOX
+  name: box_in6
+  group: path
+  idx: [1,2,3]
+  time_steps: precompute- custom.py:time_steps6
+  upper: precompute- custom.py:upper_in6
+  lower: precompute- custom.py:lower_in6
+  version: 'in_buffer'
+  ## just for plotting 
+  affine2vertices: precompute- custom.py:affine2vertices
+  vertices2edges: precompute- custom.py:vertices2edges
+  vertices2faces: precompute- custom.py:vertices2faces  
+- type: BOX
+  name: box_in7
+  group: path
+  idx: [1,2,3]
+  time_steps: precompute- custom.py:time_steps7
+  upper: precompute- custom.py:upper_in7
+  lower: precompute- custom.py:lower_in7
+  version: 'in_buffer'
+  ## just for plotting 
+  affine2vertices: precompute- custom.py:affine2vertices
+  vertices2edges: precompute- custom.py:vertices2edges
+  vertices2faces: precompute- custom.py:vertices2faces                
+########################################################################################################
+########################################################################################################
+########################################################################################################  
+
+
+

@@ -549,9 +549,9 @@ class Subproblem:
 
 
             #### ----------------- DECIDE TO USE A CONSTRAINT BASED ON TIME STEP ------------------- ####
-            def use_constraint_at_time_query(time_steps):
+            def use_constraint_at_time_query(k,N,time_steps):
                 use_constraint = False;
-                if time_steps == 'all': use_constraint = True; ## use if applied to all time steps
+                if 'all' in time_steps: use_constraint = True; ## use if applied to all time steps
                 elif k in time_steps: use_constraint = True; ## use if positive index is in time_steps
                 elif k-N in time_steps: use_constraint = True; ## use if negative index is in time_steps
                 return use_constraint
@@ -560,7 +560,7 @@ class Subproblem:
             # for constraint in problem.constraints.get('POLYTOPE_IN'):
             for constraint in problem.constraints.get('nodal','AFFINE'):                
                 if constraint.convex == True:
-                    if use_constraint_at_time_query(constraint.time_steps):
+                    if use_constraint_at_time_query(k,N,constraint.time_steps):
                         z = self.z_ref[k] + self.dz[k]; nu = self.nu_ref[k] + self.dnu[k]
                         idxx = constraint.idx;
                         AA = constraint.A; bb = constraint.b; 
@@ -569,7 +569,7 @@ class Subproblem:
 
             for constraint in problem.constraints.get('nodal','POLYTOPE'):
                 if constraint.convex == True:
-                    if use_constraint_at_time_query(constraint.time_steps):
+                    if use_constraint_at_time_query(k,N,constraint.time_steps):
                         z = self.z_ref[k] + self.dz[k]; nu = self.nu_ref[k] + self.dnu[k]
                         idxx = constraint.idx;
                         AA = constraint.A; bb = constraint.b; 
@@ -577,7 +577,7 @@ class Subproblem:
                         elif constraint.set == "control": C.append(AA @ nu[idxx] <= bb)
             for constraint in problem.constraints.get('nodal','SOC'):
                 if constraint.convex == True:
-                    if use_constraint_at_time_query(constraint.time_steps):
+                    if use_constraint_at_time_query(k,N,constraint.time_steps):
                         z = self.z_ref[k] + self.dz[k]; nu = self.nu_ref[k] + self.dnu[k]
                         idxx = constraint.idx;
                         AA = constraint.A; bb = constraint.b;

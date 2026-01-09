@@ -10,9 +10,24 @@ vehicle:
 constraints:
 - name: dynamics
 
-- name: box_out
+# - name: dodec_out
+# - name: dodec_out2
+# - name: dodec_out3
+# - name: dodec_in1
+# - name: dodec_in2
+# - name: dodec_in3
+# - name: dodec_in2
+# - name: dodec_in3
+# - name: box_out
 # - name: box_in_convex
 # - name: box_in_buffer
+- name: box_in1
+# - name: box_in2
+# - name: box_in3
+# - name: box_in4
+# - name: box_in5
+# - name: box_in6
+# - name: box_in7
 
 
 - name: initial_state

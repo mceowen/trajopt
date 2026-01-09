@@ -217,6 +217,8 @@ class nonconvex_inequality:
         self.dimension = dimension
         self.ct = ct
 
+        self.time_steps = ['all']
+
         self.implement_type = 'nonconvex_inequality'
         self.fcn_dim = resolve_function(fcn)
         
@@ -472,7 +474,7 @@ class POLYTOPE: ## IMPLEMENTED
         if 'set' in ins: self.set = ins['set'];
         if 'idx' in ins: self.idx = ins['idx'];
         
-        self.time_steps = 'all';
+        self.time_steps = ['all'];
         if 'tsteps' in ins: self.time_steps = ins['tsteps'];
         if 'time_steps' in ins: self.time_steps = ins['time_steps'];
         ################################################
@@ -480,7 +482,7 @@ class POLYTOPE: ## IMPLEMENTED
         self.b = self.b_dim.copy();        
         self.nondimmed = False;
 
-        self.eps = np.array([0.1]);
+        self.eps = np.array([0.001]);
         if 'eps' in ins: self.eps = ins['eps'];
 
 
@@ -495,20 +497,22 @@ class POLYTOPE: ## IMPLEMENTED
 
         if self.version == 'in_buffer':
             self.sharp = sharp;
+            self.implement_type = 'nonconvex_inequality'
+            self.group = ins['group']
             self.convex = False;
             self.dimension = 1;
             self.subtype = 'POLYTOPE_IN_BUFFER';
-            self.implement_type = 'nonconvex_inequality'
-            self.group = ins['group']
 
         ################################################
         if self.version == 'out':
+            self.sharp = -sharp;
             self.implement_type = 'nonconvex_inequality'
+            self.group = ins['group']
             self.subtype = 'POLYTOPE_OUT';
             self.convex = False;
             self.dimension = 1;
-            self.sharp = -sharp;
-            self.group = ins['group']
+            
+            
 
         ## epsilon nondim logic...
         # M_out_inv @ A @ M_in @x_nodim - M_out_inv @ b  <= eps_scalar*1 <= M_out_inv @ eps 
@@ -523,6 +527,7 @@ class POLYTOPE: ## IMPLEMENTED
         if 'vertices2faces' in ins: self.vertices2faces = ins['vertices2faces']
 
         if len(self.affine2vertices)>0: self.calcVertices();
+        if 'vertices' in ins: self.vertices = ins['vertices'];
         if len(self.vertices2edges)>0: self.calcEdges();
         if len(self.vertices2faces)>0: self.calcFaces();
 
@@ -645,7 +650,7 @@ class SOC: ## IMPLEMENTED
         self.eps = np.array([0.0001]);
         if 'eps' in ins: self.eps = ins['eps'];
         ################################################
-        self.time_steps = 'all';
+        self.time_steps = ['all'];
         if 'tsteps' in ins: self.time_steps = ins['tsteps'];
         if 'time_steps' in ins: self.time_steps = ins['time_steps'];
 
@@ -656,8 +661,6 @@ class SOC: ## IMPLEMENTED
         self.C = self.C_dim.copy()
         self.d = self.d_dim.copy()
         self.nondimmed = False; 
-
-
 
     def nondim_constraint(self,nondim):
         ################################################

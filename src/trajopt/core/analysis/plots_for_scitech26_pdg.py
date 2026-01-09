@@ -5,6 +5,7 @@ import trajopt.utils.tools as tools
 
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.patches as patches
 
 
 
@@ -152,7 +153,7 @@ def makePlotTrajs(PLTS1,ins={}):
     #########################################
     ######  DEFAULTS FIG INFORMATION ########
 
-    show_obstacles = False;
+    show_obstacles = True;
     if 'show_obstacles' in ins: show_obstacles = ins['show_obstacles']
 
 
@@ -409,24 +410,36 @@ def makePlotTrajs(PLTS1,ins={}):
             #     PLTS1.addPlot2D(ax,pen=PENS[method + '_nl'],ins=params2);
 
 
+        obs_names = ['dodec_out','dodec_out2','dodec_out3']
+        obs_names = obs_names + ['box_out','box_in_convex','box_in_buffer']
+        obs_names = obs_names + ['dodec_in1','dodec_in2','dodec_in3'];
+        obs_names = obs_names + ['box_in1','box_in2','box_in3','box_in4','box_in5','box_in6','box_in7'];
+
         if show_obstacles:
-            ax = axs[0]
-            pos_inds = (1,2,0)
-
+            ax = axs[j]; 
             problem = trajopt_obj.problem;
-
             allnames = problem.constraints.constraint_ids['name'].keys();
-            if 'box_out' in allnames: obstacle = problem.constraints.get('name','box_out')[0];
-            if 'box_in_convex' in allnames: obstacle = problem.constraints.get('name','box_in_convex')[0];
-            if 'box_in_buffer' in allnames: obstacle = problem.constraints.get('name','box_in_buffer')[0];
+            
+            for nam in obs_names:
+                if nam in allnames:
+                    obstacle = problem.constraints.get('name',nam)[0];
+                    verts = obstacle.vertices; faces = obstacle.faces; 
+                    # verts = verts[:,pos_inds];
+                    for j in plot_inds:
+                        ax = axs[j]
+                        if j == 0:
+                            qinds = (1,2,0); face_pts = [face[:,qinds] for face in faces];            
+                            poly3d = Poly3DCollection(face_pts, facecolors='grey', linewidths=1, edgecolors=[0,0,0,0.2], alpha=.1)
+                            ax.add_collection3d(poly3d)
+                        if j in [1,2,3]:
+                            if j == 1: qinds = (1,2)
+                            if j == 2: qinds = (1,0)
+                            if j == 3: qinds = (2,0)
 
-            verts = obstacle.vertices; verts = verts[:,pos_inds];
-            faces = obstacle.faces; faces = [face[:,pos_inds] for face in faces];
-
-            poly3d = Poly3DCollection(faces, facecolors='grey', linewidths=1, edgecolors=[0,0,1,0.2], alpha=.15)
-            ax.add_collection3d(poly3d)
-
-
+                            for face in faces:
+                                pts = face[:,qinds];
+                                poly_patch = patches.Polygon(pts, closed=True, facecolor='grey', edgecolor=[0,0,0,0.2], alpha=0.1)
+                                ax.add_patch(poly_patch)
 
 
         # ============================================================
@@ -469,7 +482,7 @@ def makePlotTrajs(PLTS1,ins={}):
 
 
 
-        # axs[0].set_aspect('equal')
+        
         # axs[1].set_aspect('equal')
 
         # axs[0].view_init(elev=50,azim=-20); #, azim=45)
@@ -535,7 +548,7 @@ def makePlotTrajs(PLTS1,ins={}):
                     ax.set_ylim([y_mid - max_lim * temp, y_mid + max_lim * temp])
 
 
-        
+        axs[0].set_aspect('equal')
         if printfigs: 
             figadd = '';
             if version in ['standalone','sa_iters']: figadd = '_sa';
@@ -1699,6 +1712,7 @@ def makePlotWghtsFlex(PLTS1,ins={}):
     weights_info = ['W_dyn','dual_dyn'];
     if 'weights_info' in ins: weights_info = ins['weights_info']
 
+
     #########################################
     ######  DEFAULTS FIG INFORMATION ########
     figsize = (10,4);
@@ -1755,6 +1769,11 @@ def makePlotWghtsFlex(PLTS1,ins={}):
         ylabels[3] = 'Path constraint \n linear \n penalty weights';
         uselegend = [3];        
 
+
+    if 'W_ineq' in weights_info:
+        ylabels[0] = 'Quadratic Weights: \n Inequality';
+        ylabels[1] = 'Dual Weights: \n Inequality';
+
     ##########################################
     if 'figsize' in ins: figsize = ins['figsize'];
     if 'grid' in ins: grid = {**grid,**ins['grid']};
@@ -1788,11 +1807,13 @@ def makePlotWghtsFlex(PLTS1,ins={}):
 
         for j,info in enumerate(weights_info):
             ax = axs[j];
-
             for method in methods: 
                 PLTS1.setCurrent({'scenarios':scenarios,'methods':[method],'runs':runs})
                 t_opt_len = trajopt_obj.method.N;
                 t_nl_len = int(t_opt_len * 20); # Hack
+
+                # weights_info = ['W_ineq','dual_ineq']
+
                 if version in ['standalone']: 
                     ttag = ['t_opt',list(range(t_opt_len))]; #[:-1]];
                     params1 = {'label':'Initial guess','x':ttag,'y':info,'iters':[1],'legend':lgnd,'dataloc':'weights'};

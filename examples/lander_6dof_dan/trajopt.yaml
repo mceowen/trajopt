@@ -12,5 +12,5 @@ method:
   flags: 
    ignore_dpp: 0
 
-  conv: 
-    iter_max: 50
+  # conv: 
+  #   iter_max: 100

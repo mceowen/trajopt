@@ -197,7 +197,6 @@ class SCVXPLOTS:
                                             xdata = xdata[::skip]
                                             ydata = ydata[::skip]
 
-
                                         cpenn = {**penn,**penn2}
                                         frgba = cpenn['frgba']; lrgba = cpenn['lrgba'];
                                         lw = cpenn['lw']; ls = cpenn['ls']
@@ -205,6 +204,7 @@ class SCVXPLOTS:
                                         if 'falpha' in cpenn: frgba[3] = cpenn['falpha']
                                         if 'lalpha' in cpenn: lrgba[3] = cpenn['lalpha']
                                         if typ == 'line':
+                                            # if dataloc == 'weights': print('weight data shape: ',ydata.shape);
                                             if force_lens:
                                                 xlen = len(xdata); ylen = len(ydata); totlen = int(np.min([xlen,ylen]));
                                                 xdata = xdata[:totlen]; ydata = ydata[:totlen]

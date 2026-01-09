@@ -6,6 +6,15 @@ from scipy.integrate import solve_ivp
 import trajopt.library.methods.convexify as convexify
 import time
 
+
+#### ----------------- DECIDE TO USE A CONSTRAINT BASED ON TIME STEP ------------------- ####
+def use_constraint_at_time_query(k,N,time_steps):
+    use_constraint = False;
+    if 'all' in time_steps: use_constraint = True; ## use if applied to all time steps
+    elif k in time_steps: use_constraint = True; ## use if positive index is in time_steps
+    elif k-N in time_steps: use_constraint = True; ## use if negative index is in time_steps
+    return use_constraint
+
 def set_ltv_indices(problem, method):
     """
     Function to set Linear Time Varying (LTV) indices and initialize arrays.
@@ -72,6 +81,9 @@ def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, problem, method):
     g    = np.zeros((N, n_ineq))
     dgdz = np.zeros((N, n_ineq, n))
     dgdnu = np.zeros((N, n_ineq, m))
+
+
+
     
     # Evaluate constraints at each timestep
     for k in range(N):
@@ -83,10 +95,11 @@ def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, problem, method):
         for constraint in problem.constraints.get("nodal", "nonconvex_inequality"):
             col_end = col_start + constraint.dimension
             
-            f, dfcn_dz, dfcn_du            = constraint.g_aff(tk, zk, uk)
-            g[k, col_start:col_end]        = np.asarray(f)
-            dgdz[k, col_start:col_end, :]  = np.asarray(dfcn_dz)[:, :n]
-            dgdnu[k, col_start:col_end, :] = np.asarray(dfcn_du)
+            if use_constraint_at_time_query(k,N,constraint.time_steps):
+                f, dfcn_dz, dfcn_du            = constraint.g_aff(tk, zk, uk)
+                g[k, col_start:col_end]        = np.asarray(f)
+                dgdz[k, col_start:col_end, :]  = np.asarray(dfcn_dz)[:, :n]
+                dgdnu[k, col_start:col_end, :] = np.asarray(dfcn_du)
             
             col_start = col_end
     

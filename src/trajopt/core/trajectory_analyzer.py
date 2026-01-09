@@ -47,8 +47,16 @@ class TrajectoryAnalyzer:
             cases = {'scenarios':['scenario1'],'methods':['standard','autotune'],'runs':list(range(1000)),'iters':list(range(1000))[1:]}
             preProcess(PLTS1,self,cases=cases);
 
-            versions = ['standalone','sa_iters'];
+
+            
+            ### WOULD RUN ALL OPTIONS ####
+            # versions = ['standalone','sa_iters','methodvar','mvmc','montecarlo'];
+            # figpaths = ['figs/standalone/','figs/sa_iters/','figs/methodvar/','figs/mvmc/','figs/montecarlo/'];
+
+            #### CHANGE 
+            versions = ['standalone','sa_iters']; 
             figpaths = ['figs/standalone/','figs/standalone/'];
+
 
             displayfigs = True;
             printfigs = True; 
@@ -90,13 +98,18 @@ class TrajectoryAnalyzer:
                 makePlotStates(PLTS1,ins=plotparams);
                 
                 ### looks in 'weights' plots over time 
-                newparams = {'weights_info':['W_dyn','dual_dyn']}
                 # # # newparams = {'weights_info':[('W_dyn',(0)),('dual_dyn',(0,1))]}
+                newparams = {'weights_info':['W_dyn','dual_dyn']}
                 makePlotWghtsFlex(PLTS1,ins={**plotparams,**newparams});
                 
                 # ### looks in 'conv_data' plots over iterations
                 # # newparams = {'converge_info':['chk_feas_term','chk_feas_dyn']}
                 makePlotConvsFlex(PLTS1,ins={**plotparams,**newparams});
+
+            if True: 
+                newparams = {'weights_info':['W_ineq','dual_ineq']}
+                makePlotWghtsFlex(PLTS1,ins={**plotparams,**newparams});
+
 
         if temporary_plotting_name == "vtol1_entry_3dof":
             pass
