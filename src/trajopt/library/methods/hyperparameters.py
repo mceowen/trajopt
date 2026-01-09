@@ -445,11 +445,16 @@ def autotune1(problem, method, iter_record):
     # Dual updates
     # ==========================================
 
-    # inequality
-    dual_ineq_plus = np.maximum(0, gamma * vb_ineq + dual_ineq)
+    W_ineq = iter_record["weights"]["W_ineq"]
 
+    # inequality
+    dual_ineq_plus = np.maximum(0, W_ineq * vb_ineq + dual_ineq)
+
+    W_dyn = iter_record["weights"]["W_dyn"]
+
+    # NOTE: testing the augmented lagrangian update rule for duals
     # dynamics
-    dual_dyn_plus = beta * vb_dyn + dual_dyn
+    dual_dyn_plus = W_dyn * vb_dyn + dual_dyn
 
     # terminal
     dual_term_plus = beta * vb_term + dual_term
@@ -567,7 +572,7 @@ def autotune2(problem, method, iter_record):
     ctcs = method.flags["ctcs"]
 
     Wh_ineq = np.zeros((N, problem.n_ineq))
-    Wh_dyn  = np.zeros((N, problem.nz))
+    Wh_dyn  = np.zeros((N - 1, problem.nz))
     Wh_term = np.zeros(problem.n_term_total)
 
     Wh_plus_real  = np.zeros((method.Npm_real, method.n_plus_real))

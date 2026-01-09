@@ -208,15 +208,17 @@ class TrajectoryAnalyzer:
 
             plot_module.makePlotLoads(PLTS1,ins=plotparams);
 
-            plot_module.makePlotWghts(PLTS1,ins=plotparams);
+            # UNCOMMENT FOR NODAL INEQUALITY WEIGHTS
+            # plot_module.makePlotWghts(PLTS1,ins=plotparams);
 
-            # makePlotWghts2(PLTS1,ins=plotparams);
+            # plot_module.makePlotWghts2(PLTS1,ins=plotparams);
 
             W_dyn = self.scenario_data["autotune"]["mc_data"][0]["iters"][-1]["weights"]["W_dyn"]
 
             # print(W_dyn)
 
-            # plot_module.makePlotWghts3(PLTS1,ins=plotparams);
+            # UNCOMMENT FOR CTCS
+            plot_module.makePlotWghts3(PLTS1,ins=plotparams);
 
             plot_module.makePlotConvs(PLTS1,ins=plotparams);
 

@@ -1169,8 +1169,8 @@ def makePlotWghts2(PLTS1,ins={}):
     # 'dual_ineq', 'dual_term', 'dual_dyn', 'dual_plus', 'dual_minus', <- dual versions
 
     # weight_info = weights = 
-    nfz_inds = trajopt_obj.indices.constraints.nonlinear_inequality['nfz'];
-    pth_inds = trajopt_obj.indices.constraints.nonlinear_inequality['path'];
+    # nfz_inds = trajopt_obj.indices.constraints.nonlinear_inequality['nfz'];
+    # pth_inds = trajopt_obj.indices.constraints.nonlinear_inequality['path'];
 
     # weight_info = [['W_ineq',nfz_inds],
     #             ['dual_ineq',nfz_inds],
