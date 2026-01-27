@@ -12,15 +12,19 @@ class TrajectoryAnalyzer:
     def __init__(self, trajopt_config_path):
 
         # load configs
-        trajopt_config = cfg.load_trajopt_config(trajopt_config_path)
-        problem_config = trajopt_config['problem']
-        method_config = trajopt_config['method']
+        trajopt_config  = cfg.load_trajopt_config(trajopt_config_path)
+        problem_config  = trajopt_config['problem']
+        method_config   = trajopt_config['method']
+
+        # TODO: Convert to list of problems and methods for batch analysis
+        # load problem dispersions
+        # load method variations
 
         # build optimal control problem and solution method from configs
-        self.problem = Problem(problem_config)
-        self.method  = SolutionMethod(self.problem, method_config)
+        self.problem    = Problem(problem_config)
+        self.method     = SolutionMethod(self.problem, method_config)
 
-        self.solution = None
+        self.solution   = None
         self.scenario_data = None
 
     def solve(self):

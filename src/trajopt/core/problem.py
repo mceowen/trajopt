@@ -66,8 +66,8 @@ class Problem:
         # constraint book keeping
         self.n_ineq = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality'))
 
-        # TODO: should the algorithm need to distinguish between path, nfz, and custom, can we collapse into n_ineq?
-        # TODO: ADD this to constraints class lol, ideally, shouldn't need any loops
+        # TODO: stop hardcoding specific groups/types. loop through keys and merge somehow with index_map class
+        # e.g. indices.constraints.group.n['path'] = ....
         self.n_path = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "path")
         self.n_nfz = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "nfz")
         self.n_custom = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "custom")
@@ -76,6 +76,7 @@ class Problem:
             self.n_ctcs = sum(constraint.dimension for constraint in self.constraints.get('ct', 'all'))
         else:
             self.n_ctcs = 0
+
 
         self.nz = self.n + self.n_ctcs
 
