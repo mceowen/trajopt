@@ -46,10 +46,25 @@ class Nondim:
             "v"    : nd / nt,
             "a"    : nd / (nt**2),
             "f"    : nm * nd / (nt**2),
+            "fdot" : nm * nd / (nt**3),
+            "mom"  : nm * (nd**2) / (nt**2),
+            "momdot"  : nm * (nd**2) / (nt**3),
             "ang"  : 180 / np.pi,
             "angv" : (180 / np.pi) / nt,
             "none": 1.0 
         }
+
+        # Apply any scale overrides from config
+        scale_overrides = problem.params['model']['nondim'].get('scale_overrides', {})
+        if scale_overrides:
+            print("Applying scale overrides:")
+            for key, value in scale_overrides.items():
+                if key in self.scales:
+                    old_val = self.scales[key]
+                    self.scales[key] = float(value)  # Convert to float in case YAML parsed as string
+                    print(f"  {key}: {old_val:.4e} -> {float(value):.4e}")
+                else:
+                    print(f"  Warning: unknown scale type '{key}', ignoring")
 
         d_lbl = "m"
         t_lbl = "s"
@@ -62,6 +77,9 @@ class Nondim:
             "v"    : f"{d_lbl} / {t_lbl}" ,
             "a"    : f"{d_lbl} / ({t_lbl}^2)",
             "f"    : f"{m_lbl} * {d_lbl} / ({t_lbl}^2)",
+            "fdot" : f"{m_lbl} * {d_lbl} / ({t_lbl}^3)",
+            "mom"  : f"{m_lbl} * ({d_lbl}^2) / ({t_lbl}^2)",
+            "momdot"  : f"{m_lbl} * ({d_lbl}^2) / ({t_lbl}^3)",
             "ang"  : "deg",
             "angv" : f"deg / {t_lbl}",
             "none": ""
@@ -75,6 +93,18 @@ class Nondim:
 
         self.nd_state = np.array([self.scales[self.z_types[i]] for i in range(n)])
         self.nd_ctrl  = np.array([self.scales[self.u_types[i]] for i in range(m)])
+
+        if problem.params['model']['nondim'].get('z_scales', None) is not None:
+            self.nd_state = np.array(problem.params['model']['nondim']['z_scales'])
+
+        if problem.params['model']['nondim'].get('u_scales', None) is not None:
+            self.nd_ctrl  = np.array(problem.params['model']['nondim']['u_scales'])
+
+        if problem.params['model']['nondim'].get('t_scale', None) is not None:
+            self.nd_time = problem.params['model']['nondim']['t_scale']
+
+        else:
+            self.nd_time = self.scales['t']
 
         self.M          = {}
         self.M["state"] = {}
@@ -93,7 +123,7 @@ class Nondim:
         # add scalar nondim variables to nondim substruct
         self.nd = self.scales["d"]
         self.na = self.scales["a"]
-        self.nt = self.scales["t"]
+        self.nt = self.nd_time
         self.nt_inv = 1 / self.nt
         self.nv = self.scales["v"]
         self.nm = self.scales["m"]
@@ -142,10 +172,6 @@ class Nondim:
 
         self.M["ineq_ct"]["d2nd"] = np.diag(1 / self.nd_ctcs).copy()
         self.M["ineq_ct"]["nd2d"] = np.diag(self.nd_ctcs).copy()
-
-        # TODO (CARLOS): fix this pls, set to all ones so i can run it
-        # the problem is vb_term mixes different constraint types 
-        # together so indexing into is a bit tricky
 
         terminal_constraint = problem.constraints.get('name', 'final_state')[0]
         x_idx = terminal_constraint.x_idx

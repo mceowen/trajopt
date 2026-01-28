@@ -29,13 +29,16 @@ class TrajectoryAnalyzer:
         """
         self.solution = scp.run_scp(self)
 
-    def analyze(self, temporary_plotting_name=None):
+    def analyze(self, temporary_plotting_name=None, run_type="standalone"):
         """
         Perform analysis of the solution
         """
 
         # store scenario data struct for plotting
-        self.scenario_data = run_standalone_analysis(self)
+        if run_type == "standalone":
+            self.scenario_data = run_standalone_analysis(self)
+        elif run_type == "mc":
+            self.scenario_data = run_mc_analysis(self)
 
 
         if temporary_plotting_name == "lander_6dof":
@@ -209,7 +212,7 @@ class TrajectoryAnalyzer:
             plot_module.makePlotLoads(PLTS1,ins=plotparams);
 
             # UNCOMMENT FOR NODAL INEQUALITY WEIGHTS
-            # plot_module.makePlotWghts(PLTS1,ins=plotparams);
+            plot_module.makePlotWghts(PLTS1,ins=plotparams);
 
             # plot_module.makePlotWghts2(PLTS1,ins=plotparams);
 
@@ -218,7 +221,7 @@ class TrajectoryAnalyzer:
             # print(W_dyn)
 
             # UNCOMMENT FOR CTCS
-            plot_module.makePlotWghts3(PLTS1,ins=plotparams);
+            # plot_module.makePlotWghts3(PLTS1,ins=plotparams);
 
             plot_module.makePlotConvs(PLTS1,ins=plotparams);
 

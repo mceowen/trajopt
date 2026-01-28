@@ -46,18 +46,13 @@ def dynamics(t, z, nu, params, fcns):
     r = z[0:3]
     v = z[3:6]
     q = z[6:10]
-    q = q
+    q = q / jnp.linalg.norm(q)
     w = jnp.deg2rad(z[10:13])
 
     moment_rates = nu[:3]
 
     # deflection_rates = jnp.array([0, 0])
-    # deflection_rates = nu[:2]
-
-    # moment = nu[:3]
-    # force = nu[3:6]
-
-    moment = z[13:16]
+    deflection_rates = nu[:2]
 
     # parameters
     veh = params['mission']['vehicle']
@@ -79,12 +74,12 @@ def dynamics(t, z, nu, params, fcns):
 
     # rotational kinematics and dynamics
     q_dot = (1/2) * omega(w) @ q
-    w_dot = jnp.rad2deg(Jbinv @ (m_aero_rot + moment - cr(w) @ Jb @ w))
+    w_dot = jnp.rad2deg(Jbinv @ (m_aero_rot - cr(w) @ Jb @ w))
 
     # state derivative function
-    x_dot = jnp.concatenate([v, a_aero_trans + a_grav, q_dot, w_dot, moment_rates])
+    xDot = jnp.concatenate([v, a_aero_trans + a_grav, q_dot, w_dot, deflection_rates])
 
-    return x_dot
+    return xDot
 
 def heat_rate(t, z, nu, params, fcns): # heat rate
 
@@ -137,9 +132,6 @@ def aero_load_nonjax(t, z, nu, params, fcns):
 def quaternion_norm(t, z, nu, params):
     return jnp.array([jnp.linalg.norm(z[6:10])])
 
-def minimum_quaternion_norm(t, z, nu, params):
-    return jnp.array([-jnp.linalg.norm(z[6:10])])
-
 def minimum_velocity(t, z, nu, params):
     return jnp.array([- jnp.linalg.norm(z[3:6])])
 
@@ -155,7 +147,8 @@ def aoa(t, z, nu, params):
     v_norm = jnp.maximum(v_norm, 1e-10)
 
     q = z[6:10]
-    q = q
+    # CRITICAL: Normalize quaternion to ensure valid DCM and avoid NaN gradients
+    q = q / jnp.linalg.norm(q)
 
     # get AoA and sideslip angles
     DCM_q = DCM(q)
@@ -176,7 +169,8 @@ def sideslip(t, z, nu, params):
     v_norm = jnp.maximum(v_norm, 1e-10)
 
     q = z[6:10]
-    q = q
+    # CRITICAL: Normalize quaternion to ensure valid DCM and avoid NaN gradients
+    q = q / jnp.linalg.norm(q)
 
     # get AoA and sideslip angles
     DCM_q = DCM(q)

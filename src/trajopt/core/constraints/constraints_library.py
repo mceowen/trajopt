@@ -5,29 +5,6 @@ import jax.numpy as jnp
 import trajopt.library.methods.convexify as convexify
 from trajopt.utils.config_loader import resolve_function
 
-# NOTE TO SELF (CARLOS):
-# let z = M_in @ x, then:
-# g(z) <= max_val  <==>  M_out^-1 @ g(M_in @ x) <= M_out^-1 @ max_val
-
-# GIVEN THAT M IS POSITIVE DIAGONAL!
-# WHEN WE NONDIM WE ARE DOING BOTH SCALING OF INPUTS AND CONDITIONING OF OUTPUTS!
-# only need linear scaling for now because we're using deviation variables in scp
-
-# dynamics:
-# let z = M_in_x @ x, and nu = M_in_u @ u
-# z_dot = f(z, nu)
-# M_in_x @ x_dot = f(M_in_x @ x, M_in_u @ u)
-# dx/dt = M_in_x^-1 @ f(M_in_x @ x, M_in_u @ u) # WRT TO PHYSICAL TIME!
-#
-# WRT TO normalized time:
-# let t = nt * tau, then:
-# dx/dtau = nt * M_in_x^-1 @ f(M_in_x @ x, M_in_u @ u)
-
-# local caobra example has better scaling 
-
-
-# TODO: need to add affine approx of convex constraints for ctcs
-
 # ===============================================================
 # CONVEX CONSTRAINTS
 # ===============================================================
@@ -37,6 +14,7 @@ class equality_bc:
 
         # parameters
         self.name = name
+        self.group = None
         self.set = set
         self.x_dim = x
         self.x_idx = x_idx
@@ -48,8 +26,6 @@ class equality_bc:
             self.eps = np.zeros(len(x_idx))
         self.dimension = len(x_idx)
         self.implement_type = 'equality_bc'
-
-
         self.x = None
 
     # written for nondim input
@@ -67,6 +43,7 @@ class inequality_bc:
 
         # parameters
         self.name = name
+        self.group = None
         self.set = set
         self.x_min_dim = x_min
         self.x_min_idx = x_min_idx
@@ -94,6 +71,7 @@ class inequality_bc:
 class box:
     def __init__(self, name, set, x_min, x_min_idx, x_max, x_max_idx, params=None):
         self.name = name
+        self.group = None
         self.set = set
         self.x_min_dim = x_min
         self.x_min_idx = x_min_idx
@@ -125,12 +103,31 @@ class box:
             self.x_min = nondim.M["ctrl"]["d2nd"][np.ix_(self.x_min_idx, self.x_min_idx)] @ self.x_min_dim
             self.x_max = nondim.M["ctrl"]["d2nd"][np.ix_(self.x_max_idx, self.x_max_idx)] @ self.x_max_dim
 
+    def compute_constraint_values(self, t, z, nu):
+        if self.set == "state":
+            values = z @ self.M_select.T
+        elif self.set == "control":
+            values = nu @ self.M_select.T
+
+        output = {
+            "values": values,
+            "M_select": self.M_select,
+            "x_min": self.x_min,
+            "x_max": self.x_max
+        }
+
+        return output
+
+
+        
+
 # ---------------------------------------------------------------
 # rate constraints
 # ---------------------------------------------------------------
 class control_rate_limit:
     def __init__(self, name, udot_max, udot_max_idx, params=None):
         self.name = name
+        self.group = None
         self.udot_max_dim = udot_max
         self.udot_max_idx = udot_max_idx
         self.dimension = len(udot_max_idx)
@@ -155,8 +152,10 @@ class control_rate_limit:
 class axis_angle_cone:
     def __init__(self, name, set, axis, theta_max, x_idx, params=None):
         self.name = name
+        self.group = None
         self.set = set
         self.axis = axis / np.linalg.norm(axis)
+        self.theta_max = theta_max
         self.cos_theta_max = np.cos(np.deg2rad(theta_max))
         self.x_idx = x_idx
         self.dimension = 1
@@ -166,9 +165,24 @@ class axis_angle_cone:
         # the deg2rad is already nondimming
         pass
 
+    def compute_constraint_values(self, t, z, nu):
+        if self.set == "state":
+            theta = self.axis @ z[self.x_idx] / np.linalg.norm(z[self.x_idx], axis=1)
+        
+        elif self.set == "control":
+            theta = self.axis @ nu[self.x_idx] / np.linalg.norm(nu[self.x_idx], axis=1)
+
+        output = {
+            "theta": np.rad2deg(theta),
+            "theta_max": self.theta_max
+        }
+
+        return output
+
 class max_norm_cone:
     def __init__(self, name, set, max_val, x_idx, params=None):
         self.name = name
+        self.group = None
         self.set = set
         self.max_val_dim = max_val
         self.x_idx = x_idx
@@ -187,9 +201,22 @@ class max_norm_cone:
             nondim_key = nondim.u_types[self.x_idx[0]]
             self.max_val =  self.max_val_dim * nondim.scales[nondim_key]
 
+    def compute_constraint_values(self, t, z, nu):
+        if self.set == "state":
+            norm = np.linalg.norm(z[self.x_idx], axis=1)
+        
+        elif self.set == "control":
+            norm = np.linalg.norm(nu[self.x_idx], axis=1)
+
+        output = {
+            "values": norm,
+            "max_val": self.max_val
+        }
+
 class quaternion_cone:
     def __init__(self, name, theta_max, axis_num, quat_start_idx, params=None):
         self.name = name
+        self.group = None
         self.quat_start_idx = quat_start_idx
         self.cos_theta_max = np.cos(np.deg2rad(theta_max))
         self.axis_num = axis_num
@@ -205,9 +232,8 @@ class quaternion_cone:
 # NONCONVEX CONSTRAINTS
 # ===============================================================
 
-# TODO: change to (func - max_val) / scale
 class nonconvex_inequality:
-    def __init__(self, name, group, fcn, units, dimension, ct, eps=None, max_val=None, mission_params=None, params=None):
+    def __init__(self, name, group, fcn, units, dimension, ct, hard=0, eps=None, max_val=None, mission_params=None, params=None):
         self.name = name
         self.group = group
         self.mission_params = mission_params
@@ -216,6 +242,8 @@ class nonconvex_inequality:
         self.eps = eps
         self.dimension = dimension
         self.ct = ct
+        self.hard = hard
+        self.backend = "jax"
 
         self.implement_type = 'nonconvex_inequality'
         self.fcn_dim = resolve_function(fcn)
@@ -240,7 +268,7 @@ class nonconvex_inequality:
     def nondim_constraint(self, nondim):
 
         if self.max_val_dim is not None:
-            M_out_d2nd = np.diag(1 / self.max_val_dim)
+            M_out_d2nd = np.diag(1 / np.abs(self.max_val_dim))
         else:
             M_out_d2nd, M_out_nd2d = nondim.build_nondim_matrix(self.units)
 
@@ -255,9 +283,28 @@ class nonconvex_inequality:
         else:
             self.fcn = lambda t, z, nu: nd_fcn_lhs(t, z, nu)
 
+    def compute_constraint_values(self, t, z, nu):
+
+        if self.backend == "jax":
+            # convert t, z, nu to jax arrays for vmapping (need this for dense nl_prop)
+            t_jax = jnp.asarray(t)
+            z_jax = jnp.asarray(z)
+            nu_jax = jnp.asarray(nu)
+
+            f_batched = jax.vmap(self.fcn, in_axes=(0,0,0))
+            constraint_values = np.asarray(f_batched(t_jax, z_jax, nu_jax))
+        
+        elif self.backend == "sympy":
+            # here we need to use a batched version of the symbolic sympy functions
+            pass
+
+        return constraint_values
+
+
 class dynamics:
     def __init__(self, name, fcn, mission_params=None, params=None):
         self.name = name
+        self.group = None
         self.mission_params = mission_params
         self.params = params
         
@@ -278,7 +325,7 @@ class dynamics:
         return self.fcn_jit(z, nu), self.dfcn_dz_jit(z, nu), self.dfcn_du_jit(z, nu)
 
     def nondim_constraint(self, nondim):
-        M_out_d2nd = nondim.M["state"]["d2nd"] * nondim.nt
+        M_out_d2nd = nondim.M["state"]["d2nd"] * nondim.nd_time
 
         # fcn_dim is already bound with params/fcns by resolve_functions
         self.fcn = nondim.nondim_function(self.fcn_dim, nondim.M["state"]["nd2d"], nondim.M["ctrl"]["nd2d"], M_out_d2nd)

@@ -5,9 +5,9 @@ from pprint import pprint
 
 # ████████████████████████████████████████████████████████████████████████████
 
-# TODO: STILL UNDER CONSTRUCTION, RUNS for:
-# examples/lander_6dof/main_standalone.ipynb
-# examples/vtol1_entry_3dof/main_standalone.ipynb
+# TODO:
+# need to remove constriant bookkeeping section (54-79)
+# i kept it there for compatibility with the rest of the code
 
 # ████████████████████████████████████████████████████████████████████████████
 
@@ -27,12 +27,6 @@ class Problem:
 
         self.n = self.params['model']['dimensions']['n']
         self.m = self.params['model']['dimensions']['m']
-
-        # ████████████████████████████████████████████████████████████████████████████
-        # █                                                                          █
-        # █                         O C P   D E F I N I T I O N                      █
-        # █                                                                          █
-        # ████████████████████████████████████████████████████████████████████████████
 
         # ------------------------------------------------------------
         # Constraints
@@ -84,7 +78,3 @@ class Problem:
         self.n_term_ineq = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'inequality_bc') if constraint.boundary == "final" and constraint.set == "state")
         self.n_term_ctcs = self.n_ctcs
         self.n_term_total = self.n_term + self.n_term_ineq + self.n_ctcs
-
-
-        # pprint(constraint_config_list)
-        

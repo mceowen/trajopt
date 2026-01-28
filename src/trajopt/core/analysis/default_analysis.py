@@ -7,7 +7,7 @@ jax.config.update("jax_enable_x64", True)
 import trajopt.library.methods.integrators as integrators
 
 '''
-outline of plt_data structure
+outline of solution_data structure:
 scenario_data = {
     "method1": {
         "mc_data": [{"iters": {}, "params": {}}, {"iters": {}, "params": {}}, ...]
@@ -18,7 +18,6 @@ scenario_data = {
     }, 
 }
 '''
-
 
 def perform_default_analysis(trajopt_obj):
     problem = trajopt_obj.problem
@@ -34,19 +33,12 @@ def perform_default_analysis(trajopt_obj):
                           'name', 'n_minus', 'n_plus', 'nl_guess_u_start', 'nl_guess_u_stop', 'solver_opts',
                           'nondim', 't_init', 'nu_init', 'weights', 'z_ind', 'z_init']
     #===================================================================================================================
-    
-    # TODO: clean this up
     n = problem.n
-    m = problem.m
-    N = method.N
     nondim = method.nondim
 
     problem_params = problem.params
     method_params = tools.extract_attributes(method, method_params_list)
     params_dict = {**problem_params, **method_params}
-
-    odesettings = {"atol": 1e-12, "rtol": 1e-12}
-    N_dense = 20 * N
 
     for data in iter_data[1:]:
         
@@ -54,60 +46,54 @@ def perform_default_analysis(trajopt_obj):
         t_opt = np.asarray(data['t_opt'])
         z_opt = np.asarray(data['z_opt'])
         nu_opt = np.asarray(data["nu_opt"])
-        
-        # create dense time grid for this iteration based on its reference trajectory time span
-        t_dense = np.linspace(t_opt[0], t_opt[-1], N_dense)
-        
-        # create dense control interpolation for this iteration
-        nu_opt_dense = np.hstack([np.interp(t_dense, t_opt, nu_opt[:, i]).reshape((-1, 1)) for i in range(m)])
-        u_ref_dense = nu_opt_dense
-        
-        # TODO: need to move this to an integrator module
-        # choose integrator based on jax_dyn flag
-        use_jax = method.flags.get("jax_dyn", 0)
-        
-        z_opt_np = np.asarray(z_opt)
-        
-        if use_jax:
-            # use JAX-based RK4 propagation
-            z_nl = integrators.propagate_rk4_dense(z_opt_np[0, :n], nu_opt, t_opt, t_dense, method)
-            
-            data['t_nl'] = t_dense * nondim.nt
-            data['z_nl'] = z_nl @ nondim.M["state"]["nd2d"]
-            data['nu_nl'] = u_ref_dense @ nondim.M["ctrl"]["nd2d"]
-        else:
-            # use scipy solve_ivp
-            def FOH_dynamics(t, z, nu_opt, t_opt):
-                """First-order hold dynamics for RK45 integration."""
-                # Interpolate control at time t (each control dimension separately)
-                u_t = np.array([np.interp(t, t_opt, nu_opt[:, i]) for i in range(m)])
-                # Call model dynamics
-                return  problem.dynamics(t, z, u_t)
-            
-            sol = solve_ivp(
-                FOH_dynamics,
-                [t_opt[0], t_opt[-1]],
-                z_opt_np[0, :n],
-                args=(nu_opt, t_opt),
-                t_eval=t_dense,
-                method='RK45',
-                **odesettings
-            )
-            
-            data['t_nl'] = t_dense * nondim.nt
-            data['z_nl'] = sol.y.T @ nondim.M["state"]["nd2d"]
-            data['nu_nl'] = u_ref_dense @ nondim.M["ctrl"]["nd2d"]
 
-        # data['t_opt'] = data['t_opt'] * nondim['nt']
-        # data['z_opt'] = data['z_opt'][:, :n] @ nondim['M']['state']['nd2d']
-        # data['u_ref'] = data["nu_opt"] @ nondim['M']['ctrl']['nd2d']
+        # nonlinear propagation
+        t_nl, z_nl, nu_nl = integrators.nonlinear_propagation(t_opt, z_opt, nu_opt, problem, method)
 
-        data['t_init'] = method.t_init * nondim.nt
-        data['z_init'] = method.z_init[:, :n] @ nondim.M["state"]["nd2d"]
-        data['nu_init'] = method.nu_init @ nondim.M["ctrl"]["nd2d"]
+        t_init = method.t_init
+        z_init = method.z_init
+        nu_init = method.nu_init
 
-        data['t_opt'] = data["t_opt"] * nondim.nt
-        data['z_opt'] = data["z_opt"][:, :n] @ nondim.M["state"]["nd2d"]
-        data['nu_opt'] = data["nu_opt"] @ nondim.M["ctrl"]["nd2d"]
+        # compute constraints for z_nl, z_opt, name = SUBPLOT , TYPE, group = FIGURE, units
+        constraint_data = {}
+
+        for constraint in problem.constraints.get("all"):
+            if hasattr(constraint, "compute_constraint_values"):
+                name  = constraint.name
+                type  = constraint.implement_type
+                group = constraint.group
+
+                if group == None:
+                    group = name
+                
+                opt_vals  = constraint.compute_constraint_values(t_opt, z_opt, nu_opt)
+                nl_vals   = constraint.compute_constraint_values(t_nl, z_nl, nu_nl)
+                init_vals = constraint.compute_constraint_values(t_init, z_init, nu_init)
+
+                output = {
+                    "name": name,
+                    "type": type,
+                    "opt_vals": opt_vals,
+                    "nl_vals": nl_vals,
+                    "init_vals": init_vals
+                }
+
+                constraint_data[group] = {}
+                constraint_data[group][name] = output
+
+        # re-dimensionalize all the data (the goal is to keep nondim data internal, user should only have
+        # to worry about dimensional data)
+        data['t_nl']  = t_nl * nondim.nt
+        data['z_nl']  = z_nl @ nondim.M["state"]["nd2d"]
+        data['nu_nl'] = nu_nl @ nondim.M["ctrl"]["nd2d"]
+
+        data['t_init']  = t_init * nondim.nt
+        data['z_init']  = z_init[:, :n] @ nondim.M["state"]["nd2d"]
+        data['nu_init'] = nu_init @ nondim.M["ctrl"]["nd2d"]
+
+        data['t_opt']  = t_opt * nondim.nt
+        data['z_opt']  = z_opt[:, :n] @ nondim.M["state"]["nd2d"]
+        data['nu_opt'] = nu_opt @ nondim.M["ctrl"]["nd2d"]
+        data['constraint_data'] = constraint_data
 
     return {'iters': iter_data, 'params': params_dict}

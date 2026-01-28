@@ -38,7 +38,3 @@ constraints:
 
 costs:
 - name: min_terminal_velocity
-
-path_limits:
-  max_q: 1000
-  max_Q: 2000

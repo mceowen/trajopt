@@ -517,6 +517,13 @@ class Subproblem:
                 if str(self.flag_autotune) in {"1", "3", "al-scvx"} and self.vb_ineq[k]:
                     C.append(self.vb_ineq[k] >= 0)
 
+                # TODO: TEMPORARY: force slack to zero for hard constraints
+                idx = 0
+                for c in problem.constraints.get("nodal", "nonconvex_inequality"):
+                    if c.hard:
+                        C.append(self.dgdz[k,idx:idx+c.dimension] @ self.dz[k, :n] + self.dgdnu[k,idx:idx+c.dimension] @ self.dnu[k, :m] + self.g0[k,idx:idx+c.dimension] <= 0)
+                    idx += c.dimension
+
             # convex constraints
             for constraint in problem.constraints.get("nodal", "axis_angle_cone"):
                 z = self.z_ref[k] + self.dz[k]
@@ -632,6 +639,12 @@ class Subproblem:
             time_cost = cp.sum(dt) / (self.N - 1)
             
             TRUE += time_cost
+
+        for cost in problem.costs.get("min_norm_terminal"):
+            zf = self.z_ref[-1] + self.dz[-1]
+            x_idx = cost.x_idx
+            term_cost = cp.norm(zf[x_idx])
+            TRUE += term_cost
 
         if problem.costs.has("terminal_state"):
             cost_obj = problem.costs.get("terminal_state")[0]

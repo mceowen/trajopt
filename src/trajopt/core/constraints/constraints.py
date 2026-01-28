@@ -53,7 +53,8 @@ class Constraints:
             'ct':{'all':[]},
             'nodal':{'all':[]},
             'type':{'all':[]},
-            'name':{'all':[]}
+            'name':{'all':[]},
+            'all': {'all':[]}
         }
 
         print(f"constraints:")
@@ -88,6 +89,7 @@ class Constraints:
             self.constraint_ids[ct_type][implement_type].append(i)
             self.constraint_ids[ct_type]['all'].append(i)
             self.constraint_ids['name'][constraint_name].append(i)
+            self.constraint_ids['all']['all'].append(i)
         
     def get(self, level1, level2=None):
         

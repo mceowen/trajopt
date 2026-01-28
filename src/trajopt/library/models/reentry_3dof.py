@@ -42,7 +42,7 @@ def dynamics(t, z, nu, params, fcns):
     ss  = jnp.sin(sigma_rad)
     
     # state derivative function
-    xDot = jnp.array([
+    x_dot = jnp.array([
         v * sg,
         jnp.rad2deg(v * cg * sps / (r * cp)),
         jnp.rad2deg(v * cg * cps / r), 
@@ -51,7 +51,7 @@ def dynamics(t, z, nu, params, fcns):
         jnp.rad2deg((1 / v) * ( L * ss / cg + v**2 * cg * sps * tp / r ) - 2 * Om * (tg * cps * cp - sp) + Om**2 * r * (1 / (v * cg)) * sps * sp * cp)
     ])
 
-    return xDot
+    return x_dot
 
 def heat_rate(t, z, nu, params, fcns): # heat rate
 

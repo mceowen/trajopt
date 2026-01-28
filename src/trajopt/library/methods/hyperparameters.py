@@ -170,10 +170,6 @@ def configure_penalty_weights(problem, method):
                 method.weights["dual_term"][term_idx["ctcs"]] += eps
 
 
-    ### ctcs convergence adjustments ###
-    #method.weights["w_ctcs"] = 10.0
-
-
 # -------------- PENALTIES ----------------------------------------------------------------------------------------
 
 def build_virtual_buffer_cost(subprob) -> cp.Expression:
@@ -453,11 +449,12 @@ def autotune1(problem, method, iter_record):
     W_dyn = iter_record["weights"]["W_dyn"]
 
     # NOTE: testing the augmented lagrangian update rule for duals
-    # dynamics
     dual_dyn_plus = W_dyn * vb_dyn + dual_dyn
 
+    W_term = iter_record["weights"]["W_term"]
+
     # terminal
-    dual_term_plus = beta * vb_term + dual_term
+    dual_term_plus = W_term * vb_term + dual_term
 
     # plus/minus (quadratic 1-norm decomposition)
     dual_plus_plus_real  = beta * vb_plus_real  + dual_plus_real

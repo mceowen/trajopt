@@ -34,6 +34,12 @@ constraints:
   x: "eval: np.array([params['mission']['planet']['r'] + 100e3, 0.0, 0.0, 7450, -0.5, 0.0])"
   x_idx: [0, 1, 2, 3, 4, 5]
 
+# - name: final_state
+#   x: "eval: np.array([(params['mission']['planet']['r'] + 15e3), 12, 70, -10, 90])"
+#   x_idx: [0, 1, 2, 4, 5]
+#   eps: [100, 0.1, 0.1, 0.1, 0.1]
+
+
 - name: final_state
   x: "eval: np.array([(params['mission']['planet']['r'] + 15e3), 12, 70, -10, 90])"
   x_idx: [0, 1, 2, 4, 5]
@@ -57,11 +63,11 @@ constraints:
 
 - name: max_Q
   max_val: 33300
-  eps: [100]
+  eps: [0.01]
 
 - name: max_q
   max_val: 18000
-  eps: [180]
+  eps: [0.01]
 
 - name: max_load
   max_val: 24.525

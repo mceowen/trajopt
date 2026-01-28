@@ -1,9 +1,0 @@
-# this defines the variations to the nominal method 
-
-standard:
-  flags:
-    flag_autotune: "0"
-
-autotune:
-  flags:
-    flag_autotune: "3"

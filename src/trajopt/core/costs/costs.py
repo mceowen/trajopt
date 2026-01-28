@@ -13,7 +13,7 @@ class Costs:
 
         print(f"costs:")
 
-        # build constraint_ids mapping
+        # build cost_ids mapping
         for i, cost_config in enumerate(cost_config_list):
             cost_type = cost_config["type"]
             cost_name = cost_config["name"]
@@ -53,8 +53,9 @@ class Costs:
 
     def resolve_functions(self, params, fcns):
         for cost in self.costs_list:
-            if getattr(cost, 'fcn', None) is not None:
-                sig = inspect.signature(cost.fcn)
+            # Check fcn_dim (the raw function) since fcn may be None until nondim wrapping
+            if getattr(cost, 'fcn_dim', None) is not None:
+                sig = inspect.signature(cost.fcn_dim)
                 param_names = sig.parameters.keys()
 
                 kwargs_to_bind = {}
@@ -63,6 +64,20 @@ class Costs:
                 if 'fcns' in param_names:
                     kwargs_to_bind['fcns'] = fcns
 
-                cost.fcn = partial(cost.fcn, **kwargs_to_bind)
+                if kwargs_to_bind:
+                    cost.fcn_dim = partial(cost.fcn_dim, **kwargs_to_bind)
 
+    def nondim_costs(self, nondim):
+        # apply scaling to each cost so that they are nondim
+        # by the time it gets to the discretization and solver
+        for cost in self.costs_list:
+            cost.nondim_cost(nondim)
+
+        print("costs nondimmed!")
+
+    def convexify_costs(self):
+        for cost in self.costs_list:
+            if getattr(cost, 'fcn', None) is not None:
                 cost.fcn_jit, cost.dfcn_dz_jit, cost.dfcn_du_jit = convexify.linearize_jax(cost.fcn)
+
+        print("costs convexified!")

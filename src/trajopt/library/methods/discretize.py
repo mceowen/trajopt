@@ -125,7 +125,7 @@ def compute_linearized_costs(t_ref, z_ref, u_ref, problem, method):
         zk = z_jax[-1]
         uk = nu_jax[-1]
         
-        f, dfcn_dz, dfcn_du = cost_fn.affine_approximation(tk, zk, uk)
+        f, dfcn_dz, dfcn_du = cost_fn.g_aff(tk, zk, uk)
         cost[-1, 0, 0] += np.asarray(f)
         dcostdz[-1, 0, :] += np.asarray(dfcn_dz).flatten()
         dcostdnu[-1, 0, :] += np.asarray(dfcn_du).flatten()

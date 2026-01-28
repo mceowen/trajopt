@@ -1,9 +1,12 @@
+# states: [x, y, z, vx, vy, vz]
+# controls: 
+
 dimensions:
   n: 6
   m: 2
 
 nondim:
-  z_types: ["d", "ang", "ang", "v", "ang", "ang"]
+  z_types: ["d", "d", "d", "v", "v", "v"]
   u_types: ["ang", "ang"]
 
   anchor_types : ["t", "v", "m"]
@@ -19,7 +22,7 @@ flags:
 constraint_models:
 - name: dynamics
   type: dynamics
-  fcn: trajopt/library/models/reentry_3dof.py:dynamics
+  fcn: trajopt/library/models/reentry_3dof_cartesian.py:dynamics
   mission_params: null
 
 - name: initial_state
@@ -38,6 +41,13 @@ constraint_models:
   x: null
   x_idx: null
   boundary: final
+
+- name: initial_control
+  type: equality_bc
+  set: control
+  x: null
+  x_idx: null
+  boundary: init
 
 - name: state_limits
   type: box
@@ -68,10 +78,15 @@ constraint_models:
   udot_max: null
   udot_max_idx: null
 
+- name: bank_aoa_rate_limit
+  type: control_rate_limit
+  udot_max: null
+  udot_max_idx: null
+
 - name: max_Q
   type: nonconvex_inequality
   group: path
-  fcn: trajopt/library/models/reentry_3dof.py:heat_rate
+  fcn: trajopt/library/models/reentry_3dof_cartesian.py:heat_rate
   mission_params: {"cos_theta_max": null, "trigger_height": null}
   max_val: null
   eps: null
@@ -82,7 +97,7 @@ constraint_models:
 - name: max_q
   type: nonconvex_inequality
   group: path
-  fcn: trajopt/library/models/reentry_3dof.py:dynamic_pressure
+  fcn: trajopt/library/models/reentry_3dof_cartesian.py:dynamic_pressure
   mission_params: {"cos_theta_max": null, "trigger_height": null}
   max_val: null
   eps: null
@@ -93,7 +108,7 @@ constraint_models:
 - name: max_load
   type: nonconvex_inequality
   group: path
-  fcn: trajopt/library/models/reentry_3dof.py:aero_load
+  fcn: trajopt/library/models/reentry_3dof_cartesian.py:aero_load
   max_val: null
   eps: null
   units: [{none: 1}]
@@ -109,5 +124,5 @@ cost_models:
   name: min_time
 
 - name: min_terminal_velocity
-  type: terminal_state
-  x_idx: [3]
+  type: min_norm_terminal
+  x_idx: [3, 4, 5]
