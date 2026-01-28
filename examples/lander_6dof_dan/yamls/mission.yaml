@@ -21,7 +21,7 @@ constraints:
 # - name: box_out
 # - name: box_in_convex
 # - name: box_in_buffer
-- name: box_in1
+# - name: box_in1
 # - name: box_in2
 # - name: box_in3
 # - name: box_in4
