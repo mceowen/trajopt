@@ -1,42 +1,42 @@
 
-DPENS = {};
+PENS = {};
 
-# DPENS['z_opt'] = {'frgba':[0,0,0,0.1],'lrgba':[0,0,0,0.1],'lw':2,'ls':'-','msty':'','msz':4};
+# PENS['z_opt'] = {'frgba':[0,0,0,0.1],'lrgba':[0,0,0,0.1],'lw':2,'ls':'-','msty':'','msz':4};
 # standalone 
-DPENS['init'] = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,.0,1.],'lw':1,'ls':'--','msty':'' ,'msz':3};
-DPENS['nl'] = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,.0,.0,1.],'lw':2,'ls':'-' ,'msty':'' ,'msz':3};
-DPENS['opt']  = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,1.,1.],'lw':1,'ls':''  ,'msty':'o','msz':3};
+PENS['init'] = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,.0,1.],'lw':1,'ls':'--','msty':'' ,'msz':3};
+PENS['nl'] = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,.0,.0,1.],'lw':2,'ls':'-' ,'msty':'' ,'msz':3};
+PENS['opt']  = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,1.,1.],'lw':1,'ls':''  ,'msty':'o','msz':3};
 # iteration values
-DPENS['itr_opt']  = {'frgba':[.0,.0,.0,.1],'lrgba':[0.7,.0,0.3,.2],'lw':1,'ls':'','msty':'o' ,'msz':3};
-DPENS['itr_nl']   = {'frgba':[.0,.0,.0,.1],'lrgba':[0.7,.0,0.3,.4],'lw':1,'ls':'-','msty':'' ,'msz':3};
+PENS['itr_opt']  = {'frgba':[.0,.0,.0,.1],'lrgba':[0.7,.0,0.3,.2],'lw':1,'ls':'','msty':'o' ,'msz':3};
+PENS['itr_nl']   = {'frgba':[.0,.0,.0,.1],'lrgba':[0.7,.0,0.3,.4],'lw':1,'ls':'-','msty':'' ,'msz':3};
 # final iteration values
-DPENS['fitr_opt']  = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,1.,1.],'lw':2,'ls':'','msty':'o' ,'msz':3};
-DPENS['fitr_nl']   = {'frgba':[.0,.0,.0,.1],'lrgba':[0.,.0,1.,1.],'lw':2,'ls':'-','msty':'' ,'msz':3};
+PENS['fitr_opt']  = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,1.,1.],'lw':2,'ls':'','msty':'o' ,'msz':3};
+PENS['fitr_nl']   = {'frgba':[.0,.0,.0,.1],'lrgba':[0.,.0,1.,1.],'lw':2,'ls':'-','msty':'' ,'msz':3};
 
 # convergence
-DPENS['opt2']  = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,1.,1.],'lw':1,'ls':'-'  ,'msty':'o','msz':3};
-DPENS['fitr_opt2']  = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,1.,1.],'lw':1,'ls':'-'  ,'msty':'o','msz':3};
+PENS['opt2']  = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,1.,1.],'lw':1,'ls':'-'  ,'msty':'o','msz':3};
+PENS['fitr_opt2']  = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,1.,1.],'lw':1,'ls':'-'  ,'msty':'o','msz':3};
 
-DPENS['ref']  = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,.0,1.],'lw':1,'ls':'--','msty':'*','msz':3};
-DPENS['standard']  = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,1.,1.],'lw':1,'ls':'-','msty':'o','msz':3};
-DPENS['standard_nl']  = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,1.,1.],'lw':1,'ls':'-','msty':'','msz':3};
-DPENS['standard_opt']  = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,1.,1.],'lw':1,'ls':'','msty':'o','msz':3};
-DPENS['standard_opt2']  = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,1.,1.],'lw':1,'ls':'-','msty':'','msz':3};
+PENS['ref']  = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,.0,1.],'lw':1,'ls':'--','msty':'*','msz':3};
+PENS['standard']  = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,1.,1.],'lw':1,'ls':'-','msty':'o','msz':3};
+PENS['standard_nl']  = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,1.,1.],'lw':1,'ls':'-','msty':'','msz':3};
+PENS['standard_opt']  = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,1.,1.],'lw':1,'ls':'','msty':'o','msz':3};
+PENS['standard_opt2']  = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,1.,1.],'lw':1,'ls':'-','msty':'','msz':3};
 
-DPENS['autotune']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,.0,1.,1.],'lw':1,'ls':'-','msty':'o','msz':3};
-DPENS['autotune_nl']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,.0,1.,1.],'lw':1,'ls':'-','msty':'','msz':3};
-DPENS['autotune_opt']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,.0,1.,1.],'lw':1,'ls':'','msty':'o','msz':3};
-DPENS['autotune_opt2']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,.0,1.,1.],'lw':1,'ls':'-','msty':'','msz':3};
+PENS['autotune']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,.0,1.,1.],'lw':1,'ls':'-','msty':'o','msz':3};
+PENS['autotune_nl']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,.0,1.,1.],'lw':1,'ls':'-','msty':'','msz':3};
+PENS['autotune_opt']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,.0,1.,1.],'lw':1,'ls':'','msty':'o','msz':3};
+PENS['autotune_opt2']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,.0,1.,1.],'lw':1,'ls':'-','msty':'','msz':3};
 
 # TODO(Skye): Tune this line thickness
-DPENS['max-value'] = {'frgba':[.0,.0,.0,.1],'lrgba':[0.0,.0,0.,0.7],'lw':2.5,'ls':'-','msty':'','msz':0};
+PENS['max-value'] = {'frgba':[.0,.0,.0,.1],'lrgba':[0.0,.0,0.,0.7],'lw':2.5,'ls':'-','msty':'','msz':0};
 
 # for 3D plot
-DPENS['u_vec']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,0.25,0.,1.],'lw':2,'ls':'-','msty':'','msz':0};
-DPENS['body_vec'] = {'frgba':[.0,.0,.0,.1],'lrgba':[0.,0.,0.,1.],'lw':2,'ls':'-','msty':'','msz':0};
+PENS['u_vec']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,0.25,0.,1.],'lw':2,'ls':'-','msty':'','msz':0};
+PENS['body_vec'] = {'frgba':[.0,.0,.0,.1],'lrgba':[0.,0.,0.,1.],'lw':2,'ls':'-','msty':'','msz':0};
 # for 2D plots...
-DPENS['u_vec2']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,0.25,0.,1.],'lw':4,'ls':'-','msty':'','msz':0};
-DPENS['body_vec2'] = {'frgba':[.0,.0,.0,.1],'lrgba':[0.,0.,0.,1.],'lw':4,'ls':'-','msty':'','msz':0};
+PENS['u_vec2']  = {'frgba':[.0,.0,.0,.1],'lrgba':[1.,0.25,0.,1.],'lw':4,'ls':'-','msty':'','msz':0};
+PENS['body_vec2'] = {'frgba':[.0,.0,.0,.1],'lrgba':[0.,0.,0.,1.],'lw':4,'ls':'-','msty':'','msz':0};
 
 
 
@@ -50,9 +50,6 @@ DPENS['body_vec2'] = {'frgba':[.0,.0,.0,.1],'lrgba':[0.,0.,0.,1.],'lw':4,'ls':'-
 # grid info -- how to setup a grid of subplots
 # y-axes labels, and subplot titles  - for each subplot
 # state name and indices - what to put on each subplot
-
-PENS['basic_pen'] = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,1.,1.],'lw':1,'ls':'','msty':'o','msz':3};           
-PENS['basic_pen2'] = {'frgba':[.0,.0,.0,.1],'lrgba':[.0,.0,1.,1.],'lw':1,'ls':'','msty':'o','msz':3};
 
 PLTS1 = SCVXPLOTS(data);
 
@@ -108,13 +105,15 @@ params = {'scenarios': scenarios, # which scenarios to loop through
            'skip': 2, # downsample data points
            }
 
-
 for j in range(num_states):
+  ### add plot of final iterations ie. iters = [-1]
   params = {'label':'state '+str(j),'x':'t_nl','y':('z_nl',j),'iters':[-1],'legend':'legend1'};
-  PLTS1.addPLot2D(axs[j],pen=PENS['basic_pen'],ins=params)
+  PLTS1.addPLot2D(axs[j],pen=PENS['nl'],ins=params)
+  ### add plot of all iterations ie. iters = iters
+  params = {'label':'state '+str(j),'x':'t_nl','y':('z_nl',j),'iters':iters,'legend':'legend1'};
+  PLTS1.addPLot2D(axs[j],pen=PENS['itr_nl'],ins=params)
 
-
-params2 = {'label':'Iterations','tinds':[None],'y':tag,'iters':itrs,'legend':lgnd,'dataloc':'conv_data'};
+params2 = {'label':'Iterations','tinds':[None],'y':tag,'iters':itrs,'legend':'legend1','dataloc':'conv_data'};
 PLTS1.addPLot2DIter(ax,pen=PENS['basic_pen2'],ins=params2)
 
 params = {};
