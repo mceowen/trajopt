@@ -9,8 +9,10 @@ import scipy.linalg as smat
 class SCVXPLOTS:
     def __init__(self,data):
         self.data = data;
-        self.scenarios = list(self.data); self.methods = {};
-        for tag in self.scenarios: self.methods[tag] = list(self.data[tag]);
+        self.scenarios = list(self.data); 
+        self.methods = {};
+        for tag in self.scenarios: 
+            self.methods[tag] = list(self.data[tag]);
         self.base_pen = {'frgba':[0,0,0,0.1],'lrgba':[0,0,0,0.1]}
         self.base_pen = {**self.base_pen,'lw':2,'ls':'-'}
         self.base_pen = {**self.base_pen,'msty':'','msz':1}
@@ -159,7 +161,12 @@ class SCVXPLOTS:
                                     data = DAT[i];
                                     if not(ytag == None):
                                         data_with_y = DAT[i]; 
-                                        if dataloc == 'weights': data_with_y = DAT[i]['weights']
+                                        # Handle nested dataloc paths (e.g., ('constraint_data', group, name, 'nl_vals'))
+                                        if isinstance(dataloc, (tuple, list)):
+                                            for key in dataloc:
+                                                data_with_y = data_with_y[key]
+                                        elif dataloc == 'weights': 
+                                            data_with_y = DAT[i]['weights']
                                         if isinstance(ytag,(tuple,list)):
                                             ydata = data_with_y[ytag[0]][:,ytag[1]];
                                         else: ydata = data_with_y[ytag];

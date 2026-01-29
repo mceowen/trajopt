@@ -25,14 +25,10 @@ def perform_default_analysis(trajopt_obj):
 
     iter_data = method.subprob.iter_data
 
-    #================== KEEP THESE AS REFERENCE FOR NOW TO KNOW WHAT WE NEED FOR PLOTTING PLS ==========================
-    mission_params_exclude_list = ['_nonlinear_aero', 'costs', 'custom_modules', 'mission_module', '_get_cost_cnstr_nondim', '_set_custom_params', '_custom_constraints', '_custom_cost', 'trajopt_obj'] 
-    model_params_list = ['constraint_config_list', 'flags', 'm', 'n', 'name', 'nz', 'obs', 'u_types', 'z_types']
     method_params_list = ['N', 'N_dens', 'Npm', 'T_init', 'T_max', 'T_min', 'Ts_init', 'conv', 'conv_data', 'cost_init', 
                           'dT_max', 'ddt_max', 'dt_init', 'dt_init', 'dt_max', 'dt_min', 'flags', 'line_guess_u_init',
                           'name', 'n_minus', 'n_plus', 'nl_guess_u_start', 'nl_guess_u_stop', 'solver_opts',
                           'nondim', 't_init', 'nu_init', 'weights', 'z_ind', 'z_init']
-    #===================================================================================================================
     n = problem.n
     nondim = method.nondim
 
@@ -78,7 +74,9 @@ def perform_default_analysis(trajopt_obj):
                     "init_vals": init_vals
                 }
 
-                constraint_data[group] = {}
+                if constraint_data.get(group) is None:
+                    constraint_data[group] = {}
+                
                 constraint_data[group][name] = output
 
         # re-dimensionalize all the data (the goal is to keep nondim data internal, user should only have
@@ -97,3 +95,88 @@ def perform_default_analysis(trajopt_obj):
         data['constraint_data'] = constraint_data
 
     return {'iters': iter_data, 'params': params_dict}
+
+
+# ======================================================================
+# STANDALONE ANALYSIS
+# ======================================================================
+
+def run_standalone_analysis(trajopt_obj):
+
+    # perform the default analysis
+    data = perform_default_analysis(trajopt_obj)
+    
+    # populate scenario_data dict for plotting
+    scenario_data = {"autotune": {"mc_data": [data]}}
+
+    return scenario_data
+
+# ======================================================================
+# MONTE CARLO ANALYSIS
+# ======================================================================
+
+def add_monte_carlo_dispersions(mission_dict, realization):
+        for mc_var, mc_disp in realization.items():
+            mission_dict[mc_var] = mission_dict[mc_var] + mc_disp
+
+def run_mc_analysis(example_name, nominal_config, gen_mc_variations=1, save_mc_variations=0, save_scenario_data=0, mc_name="mc1", local=False):
+
+
+    mv_variations = cfg.load_mv_variations(example_name, local=local)
+
+    if gen_mc_variations:
+        mc_variations = cfg.gen_mc_variations(example_name, local=local)
+
+        if save_mc_variations:
+            np.save(f"data/mc_variations/{mc_name}", mc_variations)
+    else:
+        mc_variations = np.load(f"data/mc_variations/{mc_name}.npy", allow_pickle=True).item()
+
+    variations = {
+        "method": mv_variations,
+        "mission": mc_variations
+    }
+
+    scenario_data = {}
+
+    # loop through method variations
+    for name, method_variation in variations["method"].items():
+        
+        # initialize method sub-dictionary for scenario_data dict
+        scenario_data[name] = {"method_params": {},
+                                    'mc_data': [None] * (variations["mission"]["num_variations"] + 1),
+                                    }
+
+        cached_subprob = None
+        
+        # loop through monte-carlo mission parameter realizations (number of runs)
+        for run_idx, realization in enumerate(variations["mission"]["realizations"]):
+            
+            # take in nominal configs
+            run_config = copy.deepcopy(nominal_config)
+
+            # set method variations
+            run_config["method"] = tools.deep_update(run_config["method"], method_variation)
+
+            # set monte carlo mission variations
+            add_monte_carlo_dispersions(run_config["mission"], realization)
+
+            # create trajopt_obj instance
+            trajopt_obj = traj.Problem(run_config, cached_subprob)
+            
+            # run SCP
+            trajopt_obj = scp.run_scp(trajopt_obj)
+
+            # perform default analysis on this mc run and store related params
+            scenario_data[name]["mc_data"][run_idx] = default_analysis.perform_default_analysis(trajopt_obj)
+
+            # store total time for scp (used to calculate time to converge)
+            scenario_data[name]['mc_data'][run_idx]['t_full'] = trajopt_obj.solution['t_full']
+            
+            # cache subproblem graph to speed up solves
+            cached_subprob = None # trajopt_obj.method.subprob
+
+    if save_scenario_data:
+        np.save(f"data/scenario_data/{example_name}_{mc_name}", scenario_data)
+
+    return scenario_data, trajopt_obj

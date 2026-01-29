@@ -109,8 +109,12 @@ class box:
         elif self.set == "control":
             values = nu @ self.M_select.T
 
+        stacked_limits = np.hstack([self.x_min, self.x_max])
+        limits = np.tile(stacked_limits, (values.shape[0], 1))
+
         output = {
             "values": values,
+            "limits": limits,
             "M_select": self.M_select,
             "x_min": self.x_min,
             "x_max": self.x_max
@@ -167,14 +171,16 @@ class axis_angle_cone:
 
     def compute_constraint_values(self, t, z, nu):
         if self.set == "state":
-            theta = self.axis @ z[self.x_idx] / np.linalg.norm(z[self.x_idx], axis=1)
+            theta = (z[:, self.x_idx] @ self.axis.T / np.linalg.norm(z[:, self.x_idx], axis=1)).reshape(-1, 1)
+
+            print("theta.shape: " + str(theta.shape))
         
         elif self.set == "control":
-            theta = self.axis @ nu[self.x_idx] / np.linalg.norm(nu[self.x_idx], axis=1)
+            theta = (nu[:, self.x_idx] @ self.axis.T / np.linalg.norm(nu[:, self.x_idx], axis=1)).reshape(-1, 1)
 
         output = {
-            "theta": np.rad2deg(theta),
-            "theta_max": self.theta_max
+            "values": np.rad2deg(theta),
+            "limits": self.theta_max
         }
 
         return output
@@ -203,15 +209,17 @@ class max_norm_cone:
 
     def compute_constraint_values(self, t, z, nu):
         if self.set == "state":
-            norm = np.linalg.norm(z[self.x_idx], axis=1)
+            values = np.linalg.norm(z[:, self.x_idx], axis=1).reshape(-1, 1)
         
         elif self.set == "control":
-            norm = np.linalg.norm(nu[self.x_idx], axis=1)
+            values = np.linalg.norm(nu[:, self.x_idx], axis=1).reshape(-1, 1)
 
         output = {
-            "values": norm,
-            "max_val": self.max_val
+            "values": values,
+            "limits": self.max_val
         }
+
+        return output
 
 class quaternion_cone:
     def __init__(self, name, theta_max, axis_num, quat_start_idx, params=None):
@@ -292,13 +300,18 @@ class nonconvex_inequality:
             nu_jax = jnp.asarray(nu)
 
             f_batched = jax.vmap(self.fcn, in_axes=(0,0,0))
-            constraint_values = np.asarray(f_batched(t_jax, z_jax, nu_jax))
+            values = np.asarray(f_batched(t_jax, z_jax, nu_jax))
         
         elif self.backend == "sympy":
             # here we need to use a batched version of the symbolic sympy functions
             pass
 
-        return constraint_values
+        output = {
+            "values": values,
+            'limits': None
+        }
+
+        return output
 
 
 class dynamics:

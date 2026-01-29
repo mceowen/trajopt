@@ -39,7 +39,7 @@ jax.config.update("jax_enable_x64", True)
 # 'lookup' option for nonlinear_aero relies on local aero data not in repo
 
 import sys
-import trajopt.local.aero.marsgram_dens_lut_jax as dens
+# import trajopt.local.aero.marsgram_dens_lut_jax as dens
 import trajopt.local.aero.cobra_aero_nonjax as aero
 # ================================================================================
 
