@@ -14,14 +14,13 @@ def atmosphere_model_jax(t, z, nu, params):
 
     r = z[0]
 
-    h = r - params['mission']['planet']['r']
+    h = r - params['planet']['r']
     
-    # TODO (carlos): add the remaining options for atmosphere model
-    if params['mission']['flags']['aero_type'] == "lookup":
+    if params['flags']['aero_type'] == "lookup":
         rho = jnp.interp(h/1e3, dens.h_grid, dens.rho_vals)
 
-    elif params['mission']['flags']['aero_type'] == "exponential":
-        rho = params['mission']['planet']['rho'] * jnp.exp(-h / params['mission']['planet']['H'])
+    elif params['flags']['aero_type'] == "exponential":
+        rho = params['planet']['rho'] * jnp.exp(-h / params['planet']['H'])
 
     return rho
 
@@ -33,13 +32,11 @@ def atmosphere_model_nonjax(t, z, nu, params):
 
     r = z[0]
 
-    # Compute altitude
-    h = r - params['mission']['planet']['r']
-    # TODO (carlos): add the remaining options for atmosphere model
-    if params['mission']['flags']['aero_type'] == "lookup":
+    h = r - params['planet']['r']
+    if params['flags']['aero_type'] == "lookup":
         rho = np.interp(h/1e3, dens.h_grid, dens.rho_vals)
-    elif params['mission']['flags']['aero_type'] == "exponential":
-        rho = params['mission']['planet']['rho'] * np.exp(-h / params['mission']['planet']['H'])
+    elif params['flags']['aero_type'] == "exponential":
+        rho = params['planet']['rho'] * np.exp(-h / params['planet']['H'])
     return rho
 
 def nonlinear_aero_jax(t, z, nu, params):
@@ -98,8 +95,8 @@ def nonlinear_aero_jax(t, z, nu, params):
     alpha = jnp.deg2rad(alphlim_deg - kalph * (jnp.minimum(v, vlim) - vlim)**2)
 
     rho = atmosphere_model_jax(t, z, nu, params)
-    sref = params['mission']['vehicle']['sref']
-    mass = params['mission']['vehicle']['mass']
+    sref = params['vehicle']['sref']
+    mass = params['vehicle']['mass']
 
     L = (0.5 / mass) * rho * sref * Cl * v**2
     D = (0.5 / mass) * rho * sref * Cd * v**2
@@ -112,7 +109,7 @@ def nonlinear_aero_nonjax(t, z, nu, params):
     ... rewritten from above without jax
     '''
 
-    ctrl_type = params['model']['flags']['ctrl_type']
+    ctrl_type = params['flags']['ctrl_type']
 
     r = z[0]
     v = z[3]
@@ -157,8 +154,8 @@ def nonlinear_aero_nonjax(t, z, nu, params):
     alpha = np.deg2rad(alphlim_deg - kalph * (np.minimum(v, vlim) - vlim)**2)
     
     rho = atmosphere_model_nonjax(t, z, nu, params)
-    sref = params['mission']['vehicle']['sref']
-    mass = params['mission']['vehicle']['mass']
+    sref = params['vehicle']['sref']
+    mass = params['vehicle']['mass']
     
     L = (0.5 / mass) * rho * sref * Cl * v**2
     D = (0.5 / mass) * rho * sref * Cd * v**2

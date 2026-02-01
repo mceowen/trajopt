@@ -66,7 +66,7 @@ def nonlinear_propagation(t_opt, z_opt, nu_opt, problem, method):
     N = method.N
     
     odesettings = {"atol": 1e-12, "rtol": 1e-12}
-    N_dense =  20 * N
+    N_dense =  100 * N
 
     # create dense time grid for this iteration based on its reference trajectory time span
     t_nl = np.linspace(t_opt[0], t_opt[-1], N_dense)

@@ -19,29 +19,40 @@ def rk4_propagate_jax(dynamics, z0, nu_ref, t_ref, problem, method):
     N = len(t_ref_jax)
     n = len(z0_jax)
     
-    def rk4_step(zi, ti, dt, ui, ui_next):
+    # Number of subnodes between each knot point (matches discretization)
+    n_sub = 20
+    
+    def rk4_step(zi, ti, dt, ui):
+        """Single RK4 step with constant control"""
         k1 = dynamics(ti, zi, ui)
-        u2 = 0.5 * ui + 0.5 * ui_next
-        k2 = dynamics(ti + 0.5*dt, zi + 0.5*dt*k1, u2)
-        k3 = dynamics(ti + 0.5*dt, zi + 0.5*dt*k2, u2)
-        k4 = dynamics(ti + dt, zi + dt*k3, ui_next)
+        k2 = dynamics(ti + 0.5*dt, zi + 0.5*dt*k1, ui)
+        k3 = dynamics(ti + 0.5*dt, zi + 0.5*dt*k2, ui)
+        k4 = dynamics(ti + dt, zi + dt*k3, ui)
+        return zi + (dt/6.0) * (k1 + 2*k2 + 2*k3 + k4)
     
-        zi_next = zi + (dt/6.0) * (k1 + 2*k2 + 2*k3 + k4)
-        return zi_next
-    
-    # Define loop body for scan
-    def scan_fn(zi, i):
-        dt = t_ref_jax[i+1] - t_ref_jax[i]
-        ti = t_ref_jax[i]
+    def propagate_interval(zi, i):
+        """Propagate from node i to node i+1 using n_sub substeps"""
+        dt_interval = t_ref_jax[i+1] - t_ref_jax[i]
+        dt_sub = dt_interval / n_sub
+        ti_start = t_ref_jax[i]
         ui = nu_ref_jax[i]
         ui_next = nu_ref_jax[i+1]
         
-        zi_next = rk4_step(zi, ti, dt, ui, ui_next)
-        return zi_next, zi_next
+        def substep(carry, j):
+            zi_sub = carry
+            # Linear interpolation of control within interval
+            alpha = j / n_sub
+            u_interp = (1 - alpha) * ui + alpha * ui_next
+            ti_sub = ti_start + j * dt_sub
+            zi_next = rk4_step(zi_sub, ti_sub, dt_sub, u_interp)
+            return zi_next, None
+        
+        zi_final, _ = jax.lax.scan(substep, zi, jnp.arange(n_sub))
+        return zi_final, zi_final
     
     # Wrap scan in a function, then JIT-compile it
     def scan_wrapper(z0, xs):
-        _, z_propagated = jax.lax.scan(scan_fn, z0, xs)
+        _, z_propagated = jax.lax.scan(propagate_interval, z0, xs)
         return z_propagated
     
     scan_jit = jax.jit(scan_wrapper)

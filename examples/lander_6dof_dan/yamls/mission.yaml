@@ -1,11 +1,7 @@
-# mission yaml for lander mission
-
 inherit: trajopt/library/missions/lander_scitech26.yaml
 
-planet:
-  inherit: trajopt/library/missions/shared/planet/nondim_planet.yaml
-vehicle:
-  inherit: trajopt/library/missions/shared/vehicle/mikilander.yaml
+params.planet.inherit: trajopt/library/missions/shared/planet/nondim_planet.yaml
+params.vehicle.inherit: trajopt/library/missions/shared/vehicle/mikilander.yaml
 
 constraints:
 - name: dynamics

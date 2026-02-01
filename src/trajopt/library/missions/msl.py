@@ -14,15 +14,13 @@ def atmosphere_model_jax(t, z, nu, params):
 
     r = z[0]
 
-    # Compute altitude
-    h = r - params['mission']['planet']["r"]
+    h = r - params['planet']["r"]
     
-    # TODO (carlos): add the remaining options for atmosphere model
-    if params['mission']['flags']["aero_type"] == "lookup":
+    if params['flags']["aero_type"] == "lookup":
         rho = jnp.interp(h/1e3, dens.h_grid, dens.rho_vals)
 
-    elif params['mission']['flags']["aero_type"] == "exponential":
-        rho = params['mission']['planet']["rho"] * jnp.exp(-h / params['mission']['planet']["H"])
+    elif params['flags']["aero_type"] == "exponential":
+        rho = params['planet']["rho"] * jnp.exp(-h / params['planet']["H"])
 
     return rho  
 
@@ -40,8 +38,8 @@ def nonlinear_aero_jax(t, z, nu, params):
 
     rho = atmosphere_model_jax(t, z, nu, params)
 
-    D    = 0.5 * (1 / params['mission']['vehicle']["bc"]) * rho * v**2
-    L    = D * params['mission']['vehicle']["LD"]
+    D    = 0.5 * (1 / params['vehicle']["bc"]) * rho * v**2
+    L    = D * params['vehicle']["LD"]
 
     alpha = 0
 

@@ -793,7 +793,7 @@ def makePlotStates(PLTS1,ins={}):
                 PLTS1.legends[lgnd][line_tag] = line_handle;
             if sind in state_limits.x_max_idx:
                 iind = np.where(state_limits.x_max_idx == sind)[0][0];
-                zmax = (state_limits.x_max_dim[iind]-problem.params['mission']['planet']['r'])/1000; 
+                zmax = (state_limits.x_max_dim[iind]-problem.params['planet']['r'])/1000; 
                  # - trajopt_obj.mission.planet['r']
                 line_handle = ax.axhline(y=zmax, xmin = 0, color=lrgba, linestyle=ls, linewidth=lw,label=line_tag); #, label=line_tag)
                 # PLTS1.legends[lgnd][line_tag] = line_handle;

@@ -1,45 +1,44 @@
-dimensions:
-  n: 6
-  m: 2
+dimensions.n: 6
+dimensions.m: 2
 
-nondim:
-  z_types: ["d", "ang", "ang", "v", "ang", "ang"]
-  u_types: ["ang", "ang"]
+nondim.z_types: ["d", "ang", "ang", "v", "ang", "ang"]
+nondim.u_types: ["ang", "ang"]
 
-  anchor_types : ["t", "v", "m"]
-  anchor_scales: "eval: np.array([(params['mission']['planet']['r']/params['mission']['planet']['g'])**0.5, (params['mission']['planet']['r']*params['mission']['planet']['g'])**0.5, params['mission']['vehicle']['mass']])"
+params.planet.inherit: trajopt/library/missions/shared/planet/mars.yaml
+params.vehicle.inherit: trajopt/library/missions/shared/vehicle/msl.yaml
 
-flags:
-  ctrl_type: "bank_only"
+nondim.anchor_types : ["t", "v", "m"]
+nondim.anchor_scales: ["${(planet.r / planet.g)**0.5}", "${(planet.r * planet.g)**0.5}", "${vehicle.mass}"]
+
+flags.ctrl_type: "bank_only"
 
 # ===============================
 # CONSTRAINT MODELS
 # ===============================
 
-constraint_models:
-- name: dynamics
+constraints.dynamics:
   type: dynamics
   fcn: trajopt/library/models/reentry_3dof.py:dynamics
   mission_params: null
 
-- name: initial_state
+constraints.initial_state:
   type: equality_bc
   set: state
   boundary: init
 
-- name: final_state
+constraints.final_state:
   type: equality_bc
   set: state
   boundary: final
 
-- name: final_bank_angle
+constraints.final_bank_angle:
   type: equality_bc
   set: control
   x: null
   x_idx: null
   boundary: final
 
-- name: state_limits
+constraints.state_limits:
   type: box
   set: state
   x_min: []
@@ -47,7 +46,7 @@ constraint_models:
   x_max: []
   x_max_idx: []
 
-- name: control_limits
+constraints.control_limits:
   type: box
   set: control
   x_min: null
@@ -55,7 +54,7 @@ constraint_models:
   x_max: null
   x_max_idx: null
 
-- name: bank_angle_limit
+constraints.bank_angle_limit:
   type: box
   set: control
   x_min: null
@@ -63,7 +62,7 @@ constraint_models:
   x_max: null
   x_max_idx: null
 
-- name: bank_aoa_angle_limits
+constraints.bank_aoa_angle_limits:
   type: box
   set: control
   x_min: null
@@ -71,39 +70,37 @@ constraint_models:
   x_max: null
   x_max_idx: null
 
-- name: bank_angle_rate_limit
+constraints.bank_angle_rate_limit:
   type: control_rate_limit
   udot_max: null
   udot_max_idx: null
 
-- name: bank_aoa_rate_limit
+constraints.bank_aoa_rate_limit:
   type: control_rate_limit
   udot_max: null
   udot_max_idx: null
 
-- name: max_Q
+constraints.max_Q:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/reentry_3dof.py:heat_rate
-  mission_params: {"cos_theta_max": null, "trigger_height": null}
   max_val: null
   eps: null
   units: [{none: 1}]
   dimension: 1
   ct: 0
 
-- name: max_q
+constraints.max_q:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/reentry_3dof.py:dynamic_pressure
-  mission_params: {"cos_theta_max": null, "trigger_height": null}
   max_val: null
   eps: null
   units: [{none: 1}]
   dimension: 1
   ct: 0
 
-- name: max_load
+constraints.max_load:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/reentry_3dof.py:aero_load
@@ -117,10 +114,9 @@ constraint_models:
 # COST MODELS
 # ===============================
 
-cost_models:
-- type: min_time
-  name: min_time
+costs.min_time:
+  type: min_time
 
-- name: min_terminal_velocity
+costs.min_terminal_velocity:
   type: terminal_state
   x_idx: [3]

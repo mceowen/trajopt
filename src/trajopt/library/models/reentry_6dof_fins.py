@@ -54,9 +54,8 @@ def dynamics(t, z, nu, params, fcns):
     # deflection_rates = jnp.array([0, 0])
     deflection_rates = nu[:2]
 
-    # parameters
-    veh = params['mission']['vehicle']
-    planet = params['mission']['planet']
+    veh = params['vehicle']
+    planet = params['planet']
     mu = planet['mu']
     Jbvec = jnp.array([veh["Jb11"], veh["Jb22"], veh["Jb33"]])
     Jb = jnp.diag(Jbvec)
@@ -88,7 +87,7 @@ def heat_rate(t, z, nu, params, fcns): # heat rate
 
     rho = fcns['atmosphere_model_jax'](t, z, nu, params)
 
-    return jnp.array([params['mission']['vehicle']['kQ'] * rho ** 0.5 * v ** 3])
+    return jnp.array([params['vehicle']['kQ'] * rho ** 0.5 * v ** 3])
 
 def dynamic_pressure(t, z, nu, params, fcns):  #dynamic pressure
     
@@ -119,7 +118,7 @@ def heat_rate_nonjax(t, z, nu, params, fcns):
 
     rho = fcns['atmosphere_model_nonjax'](t, z, nu, params)
 
-    return params['mission']['vehicle']['kQ'] * rho ** 0.5 * v ** 3
+    return params['vehicle']['kQ'] * rho ** 0.5 * v ** 3
 
 def aero_load_nonjax(t, z, nu, params, fcns):
     r = jnp.linalg.norm(z[0:3])
@@ -136,7 +135,7 @@ def minimum_velocity(t, z, nu, params):
     return jnp.array([- jnp.linalg.norm(z[3:6])])
 
 def minimum_altitude(t, z, nu, params):
-    return jnp.array([-(jnp.linalg.norm(z[0:3]) - params['mission']['planet']['r'])])
+    return jnp.array([-(jnp.linalg.norm(z[0:3]) - params['planet']['r'])])
 
 def aoa(t, z, nu, params):
     # Extract states and controls

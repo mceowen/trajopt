@@ -1,9 +1,0 @@
-method1_name:
-  flags:
-    "free_final_time" : 1
-    "equal_dt"        : 0
-
-method2_name:
-  flags:
-    "free_final_time" : 0
-    "equal_dt"        : 1

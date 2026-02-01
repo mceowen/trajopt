@@ -41,32 +41,46 @@ def cr(v):
     return jnp.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
     
 def dynamics(t, z, nu, params, fcns):
-
-    # extract states and controls
+    """
+    6DOF reentry dynamics with PD attitude controller tracking reference quaternion.
+    
+    State z[0:16]:
+      - z[0:3]   = position (m)
+      - z[3:6]   = velocity (m/s)  
+      - z[6:10]  = quaternion (scalar-first)
+      - z[10:13] = angular velocity (deg/s)
+      - z[13:16] = reference quaternion vector part (optimized by SCP)
+    
+    Control nu[0:3] = rate of reference quaternion vector
+    """
+    # extract states
     r = z[0:3]
     v = z[3:6]
     q = z[6:10]
-    q = q
-    w = jnp.deg2rad(z[10:13])
+    w = jnp.deg2rad(z[10:13]) 
+    q_ref_vec = z[13:16]
+    q_ref_vec_dot = nu[:3]
 
-    moment_rates = nu[:3]
-
-    # deflection_rates = jnp.array([0, 0])
-    # deflection_rates = nu[:2]
-
-    # moment = nu[:3]
-    # force = nu[3:6]
-
-    moment = z[13:16]
-
-    # parameters
-    veh = params['mission']['vehicle']
-    planet = params['mission']['planet']
+    veh = params['vehicle']
+    planet = params['planet']
     mu = planet['mu']
     Jbvec = jnp.array([veh["Jb11"], veh["Jb22"], veh["Jb33"]])
     Jb = jnp.diag(Jbvec)
     Jbinv = jnp.diag(1 / Jbvec)
     mass = veh["mass"]
+
+    # === SIMPLE PD CONTROLLER ===
+    q_sign = jnp.sign(q[0] + 1e-10)  # +1 if q[0] >= 0, -1 if q[0] < 0
+    q_vec = q_sign * q[1:4]
+    q_err = q_vec - q_ref_vec
+    
+    wn = 5.0
+    zeta = 2.0
+    Kp = wn**2 * Jbvec
+    Kd = 2.0 * zeta * wn * Jbvec
+    
+    moment = -Kp * q_err - Kd * w
+    # ============================
 
     r_norm = jnp.linalg.norm(r)
     a_grav = -mu * r / r_norm ** 3
@@ -75,14 +89,13 @@ def dynamics(t, z, nu, params, fcns):
     aero = fcns['nonlinear_aero_jax'](t, z, nu, params)
     a_aero_trans = 1 / mass * DCM(q).T @ aero["f_trans"]
     m_aero_rot = aero["m_rot"]
-    # m_aero_rot = 0.0
 
     # rotational kinematics and dynamics
     q_dot = (1/2) * omega(w) @ q
     w_dot = jnp.rad2deg(Jbinv @ (m_aero_rot + moment - cr(w) @ Jb @ w))
 
-    # state derivative function
-    x_dot = jnp.concatenate([v, a_aero_trans + a_grav, q_dot, w_dot, moment_rates])
+    # state derivative
+    x_dot = jnp.concatenate([v, a_aero_trans + a_grav, q_dot, w_dot, q_ref_vec_dot])
 
     return x_dot
 
@@ -93,7 +106,7 @@ def heat_rate(t, z, nu, params, fcns): # heat rate
 
     rho = fcns['atmosphere_model_jax'](t, z, nu, params)
 
-    return jnp.array([params['mission']['vehicle']['kQ'] * rho ** 0.5 * v ** 3])
+    return jnp.array([params['vehicle']['kQ'] * rho ** 0.5 * v ** 3])
 
 def dynamic_pressure(t, z, nu, params, fcns):  #dynamic pressure
     
@@ -124,7 +137,7 @@ def heat_rate_nonjax(t, z, nu, params, fcns):
 
     rho = fcns['atmosphere_model_nonjax'](t, z, nu, params)
 
-    return params['mission']['vehicle']['kQ'] * rho ** 0.5 * v ** 3
+    return params['vehicle']['kQ'] * rho ** 0.5 * v ** 3
 
 def aero_load_nonjax(t, z, nu, params, fcns):
     r = jnp.linalg.norm(z[0:3])
@@ -144,7 +157,7 @@ def minimum_velocity(t, z, nu, params):
     return jnp.array([- jnp.linalg.norm(z[3:6])])
 
 def minimum_altitude(t, z, nu, params):
-    return jnp.array([-(jnp.linalg.norm(z[0:3]) - params['mission']['planet']['r'])])
+    return jnp.array([-(jnp.linalg.norm(z[0:3]) - params['planet']['r'])])
 
 def aoa(t, z, nu, params):
     # Extract states and controls

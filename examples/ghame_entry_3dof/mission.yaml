@@ -17,13 +17,13 @@ obs:
   rc: [5,5]
 
 # state min/max constraints
-z_min: "eval: np.array([mission['planet']['r'], 100.0])"
+z_min: "${np.array([planet.r, 100.0])}"
 z_min_idx: [0, 3]
 z_max: []
 z_max_idx: []
 
 # initial state constraints
-zi: "eval: np.array([mission['planet']['r'] + 80e3, 0.0, 0.0, 5612, -0.5, 90.0])"
+zi: "${np.array([planet.r + 80e3, 0.0, 0.0, 5612, -0.5, 90.0])}"
 zi_idx: [0, 1, 2, 3, 4, 5]
 zi_min: []
 zi_min_idx: []
@@ -31,14 +31,14 @@ zi_max: []
 zi_max_idx: []
 
 # final state constraints
-zf: "eval: np.array([(mission['planet']['r'] + 10e3)])"
+zf: "${np.array([planet.r + 10e3])}"
 zf_idx: [0]
 zf_min: []
 zf_min_idx: []
 zf_max: []
 zf_max_idx: []
 
-zi_guess: "eval: np.array([mission['planet']['r'] + 80e3, 0.0, 0.0, 5612, -0.5, 90.0])"
+zi_guess: "${np.array([planet.r + 80e3, 0.0, 0.0, 5612, -0.5, 90.0])}"
 zf_guess: []
 
 # control min/max constraints

@@ -46,8 +46,8 @@ GCONST_TYPES = GCONST_TYPES + ['SPHERE','ELLIPSOID','CYLINDER','CONE','PROXIMITY
 
 
 class Constraints:
-    def __init__(self, constraint_config_list, params):
-
+    def __init__(self, constraint_config_list, config, params_ref=None):
+        self.params_ref = params_ref
         self.constraints_list = []
         self.constraint_ids = {
             'ct':{'all':[]},
@@ -59,22 +59,23 @@ class Constraints:
 
         print(f"constraints:")
 
-        # build constraint_ids mapping
         for i, constraint_config in enumerate(constraint_config_list):
-
-            # pull out constraint type and name
             constraint_type = constraint_config["type"]
             constraint_name = constraint_config["name"]
 
-
             print(f"  {i}: {constraint_name}: {constraint_type}")
-            # get the params
             constraint_params = {k:v for k, v in constraint_config.items() if k != "type"}
-            constraintClass = getattr(constraints_library,constraint_type)
+            constraintClass = getattr(constraints_library, constraint_type)
 
             if constraint_type in GCONST_TYPES:
-                self.constraints_list.append(constraintClass(ins = constraint_params,params=params))
-            else: self.constraints_list.append(constraintClass(**constraint_params, params=params))
+                self.constraints_list.append(constraintClass(ins=constraint_params, params=config))
+            else:
+                # Handle 'params' field specially for nonconvex constraints
+                # If YAML has constraints.X.params: value, merge into params_ref
+                if 'params' in constraint_params and constraint_type == 'nonconvex_inequality':
+                    constraint_params.pop('params')
+                constraint_params['params_ref'] = params_ref
+                self.constraints_list.append(constraintClass(**constraint_params, params=config))
 
             implement_type = self.constraints_list[-1].implement_type;
 
@@ -132,12 +133,14 @@ class Constraints:
                     constraint.fcn_dim = partial(constraint.fcn_dim, **kwargs_to_bind)
 
     def nondim_constraints(self, nondim):
-        # apply scaling to each constraint so that they are nondim
-        # by the time it gets to the discretization and solver
         for constraint in self.constraints_list:
             constraint.nondim_constraint(nondim)
-
         print("constraints nondimmed!")
+
+    def sync_from_params(self):
+        for constraint in self.constraints_list:
+            if hasattr(constraint, 'sync_from_params'):
+                constraint.sync_from_params()
 
     def convexify_constraints(self):
         for constraint in self.constraints_list:

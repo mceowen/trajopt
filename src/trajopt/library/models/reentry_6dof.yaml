@@ -1,165 +1,125 @@
-dimensions:
-  n: 16
-  m: 3
+dimensions.n: 16
+dimensions.m: 3
 
-nondim:
-  z_types: ["d", "d", "d", "v", "v", "v", "none", "none", "none", "none", "angv", "angv", "angv", "none", "none", "none"]
-  # u_types: ["angv", "angv"]
-  u_types: ["mom", "mom", "mom", "f", "f", "f"]
+params.planet.inherit: trajopt/library/missions/shared/planet/mars.yaml
+params.vehicle.inherit: trajopt/library/missions/shared/vehicle/msl.yaml
 
-  anchor_types : ["t", "v", "m"]
-  anchor_scales: "eval: np.array([(params['mission']['planet']['r']/params['mission']['planet']['g'])**0.5, (params['mission']['planet']['r']*params['mission']['planet']['g'])**0.5, params['mission']['vehicle']['mass']])"
+nondim.z_types: ["d", "d", "d", "v", "v", "v", "none", "none", "none", "none", "angv", "angv", "angv", "none", "none", "none"]
+nondim.u_types: ["mom", "mom", "mom", "f", "f", "f"]
+nondim.anchor_types: ["t", "v", "m"]
+nondim.anchor_scales: ["${(planet.r / planet.g)**0.5}", "${(planet.r * planet.g)**0.5}", "${vehicle.mass}"]
 
-flags:
-  ctrl_type: "bank_only"
+flags.ctrl_type: bank_only
 
-# ===============================
-# CONSTRAINT MODELS
-# ===============================
-
-constraint_models:
-- name: dynamics
+constraints.dynamics:
   type: dynamics
   fcn: trajopt/library/models/reentry_6dof.py:dynamics
-  mission_params: null
 
-- name: initial_state
+constraints.initial_state:
   type: equality_bc
   set: state
   boundary: init
 
-- name: final_state
+constraints.final_state:
   type: equality_bc
   set: state
   boundary: final
 
-- name: state_limits
+constraints.state_limits:
   type: box
   set: state
-  x_min: []
-  x_min_idx: []
-  x_max: []
-  x_max_idx: []
 
-- name: control_limits
+constraints.control_limits:
   type: box
   set: control
-  x_min: []
-  x_min_idx: []
-  x_max: []
-  x_max_idx: []
 
-- name: control_rate_limits
+constraints.control_rate_limits:
   type: control_rate_limit
-  udot_max: null
-  udot_max_idx: null
 
-- name: quaternion_norm
+constraints.quaternion_norm:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/reentry_6dof.py:quaternion_norm
   max_val: 1.0
-  eps: null
   units: [{none: 1}]
   dimension: 1
   ct: 0
 
-- name: minimum_quaternion_norm
+constraints.minimum_quaternion_norm:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/reentry_6dof.py:minimum_quaternion_norm
   max_val: -0.8
-  eps: null
   units: [{none: 1}]
   dimension: 1
   ct: 0
 
-- name: max_quat_norm
+constraints.max_quat_norm:
   type: max_norm_cone
   set: state
-  max_val: null
   x_idx: [6, 7, 8, 9]
 
-- name: minimum_velocity
+constraints.minimum_velocity:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/reentry_6dof.py:minimum_velocity
-  max_val: null
-  eps: null
   units: [{v: 1}]
   dimension: 1
   ct: 0
 
-- name: minimum_altitude
+constraints.minimum_altitude:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/reentry_6dof.py:minimum_altitude
-  max_val: null
-  eps: null
   units: [{d: 1}]
   dimension: 1
   ct: 0
 
-- name: aoa_limits
+constraints.aoa_limits:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/reentry_6dof.py:aoa
-  max_val: null
-  eps: null
   units: [{ang: 1}, {ang: 1}]
   dimension: 2
   ct: 0
 
-- name: sideslip_limits
+constraints.sideslip_limits:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/reentry_6dof.py:sideslip
-  max_val: null
-  eps: null
   units: [{ang: 1}, {ang: 1}]
   dimension: 2
   ct: 0
 
-- name: max_Q
+constraints.max_Q:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/reentry_6dof.py:heat_rate
   mission_params: {"cos_theta_max": null, "trigger_height": null}
-  max_val: null
-  eps: null
   units: [{none: 1}]
   dimension: 1
   ct: 0
 
-- name: max_q
+constraints.max_q:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/reentry_6dof.py:dynamic_pressure
   mission_params: {"cos_theta_max": null, "trigger_height": null}
-  max_val: null
-  eps: null
   units: [{none: 1}]
   dimension: 1
   ct: 0
 
-- name: max_load
+constraints.max_load:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/reentry_6dof.py:aero_load
-  max_val: null
-  eps: null
   units: [{none: 1}]
   dimension: 1
   ct: 0
 
-# ===============================
-# COST MODELS
-# ===============================
+costs.min_time:
+  type: min_time
 
-cost_models:
-- type: min_time
-  name: min_time
-
-- name: min_terminal_velocity
+costs.min_terminal_velocity:
   type: min_norm_terminal
   x_idx: [3, 4, 5]

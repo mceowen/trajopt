@@ -49,4 +49,4 @@ weights:
 nl_guess_u_start: [0.0]
 nl_guess_u_stop: [0.0]
 
-line_guess_u_init: "eval: np.tile([5.0], (method['N'], 1))"
+line_guess_u_init: "${np.tile([5.0], (N, 1))}"

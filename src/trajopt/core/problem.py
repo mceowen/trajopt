@@ -1,7 +1,6 @@
 from trajopt.core.constraints.constraints import Constraints
 from trajopt.core.costs.costs import Costs
 from trajopt.utils.config_loader import resolve_function
-from pprint import pprint
 
 # ████████████████████████████████████████████████████████████████████████████
 
@@ -15,35 +14,46 @@ class Problem:
 
     def __init__(self, problem_config):
 
-        # params already built by load_trajopt (includes model, mission, constraint params)
-        self.params = problem_config['params']
+        # ------------------------------------------------------------
+        # Config
+        # ------------------------------------------------------------
+
+        self.config = problem_config['config']
+        self.n = self.config['model']['dimensions']['n']
+        self.m = self.config['model']['dimensions']['m']
+
+        # ------------------------------------------------------------
+        # Functions
+        # ------------------------------------------------------------
         
-        # Extract fcns config from mission and load actual functions
-        fcns_config = self.params['mission'].pop('fcns', {})
+        fcns_config = self.config['mission'].pop('fcns', {})
         
         self.fcns = {}
         for name, path in fcns_config.items():
             self.fcns[name] = resolve_function(path)
 
-        self.n = self.params['model']['dimensions']['n']
-        self.m = self.params['model']['dimensions']['m']
+        # ------------------------------------------------------------
+        # Parameters (these can be varied during montecarlo)
+        # ------------------------------------------------------------
+
+        self.params = problem_config['params']
 
         # ------------------------------------------------------------
         # Constraints
         # ------------------------------------------------------------
 
         constraint_config_list = problem_config["constraints"]
-        self.constraints = Constraints(constraint_config_list, self.params)
+        self.constraints = Constraints(constraint_config_list, self.config, self.params)
 
         # ------------------------------------------------------------
         # Cost
         # ------------------------------------------------------------
 
         cost_config_list = problem_config["costs"]
-        self.costs = Costs(cost_config_list, self.params)
+        self.costs = Costs(cost_config_list, self.config)
 
         # ------------------------------------------------------------
-        # Add constraint/cost params to problem params and resolve functions
+        # Add constraint/cost config and resolve functions
         # ------------------------------------------------------------
         
         self.constraints.add_params(self.params)

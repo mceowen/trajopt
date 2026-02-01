@@ -10,79 +10,92 @@ from trajopt.utils.config_loader import resolve_function
 # ===============================================================
 
 class equality_bc:
-    def __init__(self, name, set, x, x_idx, boundary, eps=None, params=None):
-
-        # parameters
+    def __init__(self, name, set, x, x_idx, boundary, eps=None, params=None, param_key=None, params_ref=None):
         self.name = name
         self.group = None
         self.set = set
-        self.x_dim = x
+        self.x_dim = np.atleast_1d(x)
         self.x_idx = x_idx
         self.boundary = boundary
         self.idx = 0 if boundary == 'init' else -1 if boundary == 'final' else None
-        if eps is not None:
-            self.eps = eps
-        else:
-            self.eps = np.zeros(len(x_idx))
+        self.eps = eps if eps is not None else np.zeros(len(x_idx))
         self.dimension = len(x_idx)
         self.implement_type = 'equality_bc'
         self.x = None
+        self.nondim = None
+        self.params_ref = params_ref
+        self.param_key = param_key
 
-    # written for nondim input
-    def fcn(self,x):
+    def fcn(self, x):
         return x[self.x_idx] - self.x
 
     def nondim_constraint(self, nondim):
+        self.nondim = nondim
+        self._apply_nondim()
+
+    def _apply_nondim(self):
+        if self.nondim is None:
+            return
         if self.set == "state":
-            self.x = nondim.M["state"]["d2nd"][np.ix_(self.x_idx, self.x_idx)] @ self.x_dim
+            self.x = self.nondim.M["state"]["d2nd"][np.ix_(self.x_idx, self.x_idx)] @ self.x_dim
         elif self.set == "control":
-            self.x = nondim.M["ctrl"]["d2nd"][np.ix_(self.x_idx, self.x_idx)] @ self.x_dim
+            self.x = self.nondim.M["ctrl"]["d2nd"][np.ix_(self.x_idx, self.x_idx)] @ self.x_dim
+
+    def sync_from_params(self):
+        if self.params_ref is not None and self.param_key is not None:
+            self.x_dim = np.atleast_1d(self.params_ref.get(self.param_key, self.x_dim))
+            self._apply_nondim()
 
 class inequality_bc:
-    def __init__(self, name, set, x_min, x_min_idx, x_max, x_max_idx, boundary, eps=np.array([]), params=None):
-
-        # parameters
+    def __init__(self, name, set, x_min, x_min_idx, x_max, x_max_idx, boundary, eps=np.array([]), params=None, params_ref=None):
         self.name = name
         self.group = None
         self.set = set
-        self.x_min_dim = x_min
+        self.x_min_dim = np.atleast_1d(x_min)
         self.x_min_idx = x_min_idx
-        self.x_max_dim = x_max
+        self.x_max_dim = np.atleast_1d(x_max)
         self.x_max_idx = x_max_idx
         self.idx = 0 if boundary == 'init' else -1 if boundary == 'final' else None
         self.eps = eps
         self.dimension = len(x_min_idx) + len(x_max_idx)
         self.x_min = None
         self.x_max = None
-
         self.implement_type = 'inequality_bc'
+        self.nondim = None
+        self.params_ref = params_ref
 
     def nondim_constraint(self, nondim):
-        if self.set == "state":
-            self.x_min = nondim.M["state"]["d2nd"][np.ix_(self.x_min_idx, self.x_min_idx)] @ self.x_min_dim
-            self.x_max = nondim.M["state"]["d2nd"][np.ix_(self.x_max_idx, self.x_max_idx)] @ self.x_max_dim
-        elif self.set == "control":
-            self.x_min = nondim.M["ctrl"]["d2nd"][np.ix_(self.x_min_idx, self.x_min_idx)] @ self.x_min_dim
-            self.x_max = nondim.M["ctrl"]["d2nd"][np.ix_(self.x_max_idx, self.x_max_idx)] @ self.x_max_dim
+        self.nondim = nondim
+        self._apply_nondim()
 
-# ---------------------------------------------------------------
-# path inequality constraints
-# ---------------------------------------------------------------
+    def _apply_nondim(self):
+        if self.nondim is None:
+            return
+        if self.set == "state":
+            self.x_min = self.nondim.M["state"]["d2nd"][np.ix_(self.x_min_idx, self.x_min_idx)] @ self.x_min_dim
+            self.x_max = self.nondim.M["state"]["d2nd"][np.ix_(self.x_max_idx, self.x_max_idx)] @ self.x_max_dim
+        elif self.set == "control":
+            self.x_min = self.nondim.M["ctrl"]["d2nd"][np.ix_(self.x_min_idx, self.x_min_idx)] @ self.x_min_dim
+            self.x_max = self.nondim.M["ctrl"]["d2nd"][np.ix_(self.x_max_idx, self.x_max_idx)] @ self.x_max_dim
+
+    def sync_from_params(self):
+        self._apply_nondim()
+
 class box:
-    def __init__(self, name, set, x_min, x_min_idx, x_max, x_max_idx, params=None):
+    def __init__(self, name, set, x_min, x_min_idx, x_max, x_max_idx, params=None, params_ref=None):
         self.name = name
         self.group = None
         self.set = set
-        self.x_min_dim = x_min
+        self.x_min_dim = np.atleast_1d(x_min)
         self.x_min_idx = x_min_idx
-        self.x_max_dim = x_max
+        self.x_max_dim = np.atleast_1d(x_max)
         self.x_max_idx = x_max_idx
         self.dimension = len(x_min_idx) + len(x_max_idx)
-
         self.x_min = None
         self.x_max = None
-
         self.implement_type = 'box'
+        self.nondim = None
+        self.params_ref = params_ref
 
         if self.set == "state":
             n_elem = params['model']['dimensions']['n']
@@ -91,19 +104,27 @@ class box:
 
         M_min = -np.eye(n_elem)[self.x_min_idx, :]
         M_max = np.eye(n_elem)[self.x_max_idx, :]
-
         self.M_select = np.vstack([M_min, M_max])
 
     def nondim_constraint(self, nondim):
-        if self.set == "state":
-            self.x_min = nondim.M["state"]["d2nd"][np.ix_(self.x_min_idx, self.x_min_idx)] @ self.x_min_dim
-            self.x_max = nondim.M["state"]["d2nd"][np.ix_(self.x_max_idx, self.x_max_idx)] @ self.x_max_dim
+        self.nondim = nondim
+        self._apply_nondim()
 
-        if self.set == "control":
-            self.x_min = nondim.M["ctrl"]["d2nd"][np.ix_(self.x_min_idx, self.x_min_idx)] @ self.x_min_dim
-            self.x_max = nondim.M["ctrl"]["d2nd"][np.ix_(self.x_max_idx, self.x_max_idx)] @ self.x_max_dim
+    def _apply_nondim(self):
+        if self.nondim is None:
+            return
+        if self.set == "state":
+            self.x_min = self.nondim.M["state"]["d2nd"][np.ix_(self.x_min_idx, self.x_min_idx)] @ self.x_min_dim
+            self.x_max = self.nondim.M["state"]["d2nd"][np.ix_(self.x_max_idx, self.x_max_idx)] @ self.x_max_dim
+        elif self.set == "control":
+            self.x_min = self.nondim.M["ctrl"]["d2nd"][np.ix_(self.x_min_idx, self.x_min_idx)] @ self.x_min_dim
+            self.x_max = self.nondim.M["ctrl"]["d2nd"][np.ix_(self.x_max_idx, self.x_max_idx)] @ self.x_max_dim
+
+    def sync_from_params(self):
+        self._apply_nondim()
 
     def compute_constraint_values(self, t, z, nu):
+
         if self.set == "state":
             values = z @ self.M_select.T
         elif self.set == "control":
@@ -123,38 +144,44 @@ class box:
         return output
 
 
-        
-
 # ---------------------------------------------------------------
 # rate constraints
 # ---------------------------------------------------------------
 class control_rate_limit:
-    def __init__(self, name, udot_max, udot_max_idx, params=None):
+    def __init__(self, name, udot_max, udot_max_idx, params=None, params_ref=None):
         self.name = name
         self.group = None
-        self.udot_max_dim = udot_max
+        self.udot_max_dim = np.atleast_1d(udot_max)
         self.udot_max_idx = udot_max_idx
         self.dimension = len(udot_max_idx)
-
         self.implement_type = 'control_rate_limit'
+        self.udot_max = None
+        self.nondim = None
+        self.params_ref = params_ref
 
         n_elem = params['model']['dimensions']['m']
         M_min = -np.eye(n_elem)[self.udot_max_idx, :]
         M_max = np.eye(n_elem)[self.udot_max_idx, :]
-
-        self.udot_max = None
-
         self.M_select = np.vstack([M_min, M_max])
 
     def nondim_constraint(self, nondim):
-        self.udot_max = nondim.nt * nondim.M["ctrl"]["d2nd"][np.ix_(self.udot_max_idx, self.udot_max_idx)] @ self.udot_max_dim
+        self.nondim = nondim
+        self._apply_nondim()
+
+    def _apply_nondim(self):
+        if self.nondim is None:
+            return
+        self.udot_max = self.nondim.nt * self.nondim.M["ctrl"]["d2nd"][np.ix_(self.udot_max_idx, self.udot_max_idx)] @ self.udot_max_dim
+
+    def sync_from_params(self):
+        self._apply_nondim()
 
 # ---------------------------------------------------------------
 # Second-order cone cosntraints
 # ---------------------------------------------------------------
 
 class axis_angle_cone:
-    def __init__(self, name, set, axis, theta_max, x_idx, params=None):
+    def __init__(self, name, set, axis, theta_max, x_idx, params=None, params_ref=None):
         self.name = name
         self.group = None
         self.set = set
@@ -164,29 +191,24 @@ class axis_angle_cone:
         self.x_idx = x_idx
         self.dimension = 1
         self.implement_type = 'axis_angle_cone'
+        self.params_ref = params_ref
 
     def nondim_constraint(self, nondim):
-        # the deg2rad is already nondimming
+        pass
+
+    def sync_from_params(self):
         pass
 
     def compute_constraint_values(self, t, z, nu):
         if self.set == "state":
             theta = (z[:, self.x_idx] @ self.axis.T / np.linalg.norm(z[:, self.x_idx], axis=1)).reshape(-1, 1)
-
             print("theta.shape: " + str(theta.shape))
-        
         elif self.set == "control":
             theta = (nu[:, self.x_idx] @ self.axis.T / np.linalg.norm(nu[:, self.x_idx], axis=1)).reshape(-1, 1)
-
-        output = {
-            "values": np.rad2deg(theta),
-            "limits": self.theta_max
-        }
-
-        return output
+        return {"values": np.rad2deg(theta), "limits": self.theta_max}
 
 class max_norm_cone:
-    def __init__(self, name, set, max_val, x_idx, params=None):
+    def __init__(self, name, set, max_val, x_idx, params=None, param_key=None, params_ref=None):
         self.name = name
         self.group = None
         self.set = set
@@ -194,35 +216,39 @@ class max_norm_cone:
         self.x_idx = x_idx
         self.dimension = 1
         self.implement_type = 'max_norm_cone'
-
         self.max_val = None
+        self.nondim = None
+        self.params_ref = params_ref
+        self.param_key = param_key
 
     def nondim_constraint(self, nondim):
+        self.nondim = nondim
+        self._apply_nondim()
 
+    def _apply_nondim(self):
+        if self.nondim is None:
+            return
         if self.set == "state":
-            nondim_key = nondim.z_types[self.x_idx[0]]
-            self.max_val = self.max_val_dim * nondim.scales[nondim_key]
-        
+            nondim_key = self.nondim.z_types[self.x_idx[0]]
+            self.max_val = self.max_val_dim * self.nondim.scales[nondim_key]
         elif self.set == "control":
-            nondim_key = nondim.u_types[self.x_idx[0]]
-            self.max_val =  self.max_val_dim * nondim.scales[nondim_key]
+            nondim_key = self.nondim.u_types[self.x_idx[0]]
+            self.max_val = self.max_val_dim * self.nondim.scales[nondim_key]
+
+    def sync_from_params(self):
+        if self.params_ref is not None and self.param_key is not None:
+            self.max_val_dim = self.params_ref.get(self.param_key, self.max_val_dim)
+            self._apply_nondim()
 
     def compute_constraint_values(self, t, z, nu):
         if self.set == "state":
             values = np.linalg.norm(z[:, self.x_idx], axis=1).reshape(-1, 1)
-        
         elif self.set == "control":
             values = np.linalg.norm(nu[:, self.x_idx], axis=1).reshape(-1, 1)
-
-        output = {
-            "values": values,
-            "limits": self.max_val
-        }
-
-        return output
+        return {"values": values, "limits": self.max_val}
 
 class quaternion_cone:
-    def __init__(self, name, theta_max, axis_num, quat_start_idx, params=None):
+    def __init__(self, name, theta_max, axis_num, quat_start_idx, params=None, params_ref=None):
         self.name = name
         self.group = None
         self.quat_start_idx = quat_start_idx
@@ -230,10 +256,13 @@ class quaternion_cone:
         self.axis_num = axis_num
         self.rhs = np.sqrt((1.0 - self.cos_theta_max) * 0.5)
         self.dimension = 1
-
         self.implement_type = 'quaternion_cone'
+        self.params_ref = params_ref
 
     def nondim_constraint(self, nondim):
+        pass
+
+    def sync_from_params(self):
         pass
 
 # ===============================================================
@@ -241,11 +270,12 @@ class quaternion_cone:
 # ===============================================================
 
 class nonconvex_inequality:
-    def __init__(self, name, group, fcn, units, dimension, ct, hard=0, eps=None, max_val=None, mission_params=None, params=None):
+    def __init__(self, name, group, fcn, units, dimension, ct, hard=0, eps=None, max_val=None, mission_params=None, params=None, params_ref=None):
         self.name = name
         self.group = group
         self.mission_params = mission_params
         self.params = params
+        self.params_ref = params_ref
         self.units = units
         self.eps = eps
         self.dimension = dimension
@@ -291,51 +321,40 @@ class nonconvex_inequality:
         else:
             self.fcn = lambda t, z, nu: nd_fcn_lhs(t, z, nu)
 
-    def compute_constraint_values(self, t, z, nu):
+    def sync_from_params(self):
+        pass
 
+    def compute_constraint_values(self, t, z, nu):
         if self.backend == "jax":
-            # convert t, z, nu to jax arrays for vmapping (need this for dense nl_prop)
             t_jax = jnp.asarray(t)
             z_jax = jnp.asarray(z)
             nu_jax = jnp.asarray(nu)
-
             f_batched = jax.vmap(self.fcn, in_axes=(0,0,0))
             values = np.asarray(f_batched(t_jax, z_jax, nu_jax))
-        
         elif self.backend == "sympy":
-            # here we need to use a batched version of the symbolic sympy functions
             pass
-
-        output = {
-            "values": values,
-            'limits': None
-        }
-
-        return output
+        return {"values": values, 'limits': None}
 
 
 class dynamics:
-    def __init__(self, name, fcn, mission_params=None, params=None):
+    def __init__(self, name, fcn, mission_params=None, params=None, params_ref=None):
         self.name = name
         self.group = None
         self.mission_params = mission_params
         self.params = params
-        
-        # dynamically loaded from user module, gets closed
-        # over with params and fcns dicts if necessary
+        self.params_ref = params_ref
         self.fcn_dim = resolve_function(fcn)
-
         self.implement_type = 'dynamics'
-
-        # this will be a function f(t, z, nu) and operates on nondim variables
         self.fcn = None
-
         self.fcn_jit = None
         self.dfcn_dz_jit = None
         self.dfcn_du_jit = None
 
     def lin_dyn(self, t, z, nu):
         return self.fcn_jit(z, nu), self.dfcn_dz_jit(z, nu), self.dfcn_du_jit(z, nu)
+
+    def sync_from_params(self):
+        pass
 
     def nondim_constraint(self, nondim):
         M_out_d2nd = nondim.M["state"]["d2nd"] * nondim.nd_time

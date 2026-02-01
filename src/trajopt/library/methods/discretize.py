@@ -76,7 +76,7 @@ def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, problem, method):
     # Evaluate constraints at each timestep
     for k in range(N):
         tk = t_jax[k]
-        zk = z_jax[k]
+        zk = z_jax[k, :n]
         uk = nu_jax[k]
         
         col_start = 0
@@ -85,7 +85,7 @@ def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, problem, method):
             
             f, dfcn_dz, dfcn_du            = constraint.g_aff(tk, zk, uk)
             g[k, col_start:col_end]        = np.asarray(f)
-            dgdz[k, col_start:col_end, :]  = np.asarray(dfcn_dz)[:, :n]
+            dgdz[k, col_start:col_end, :]  = np.asarray(dfcn_dz)
             dgdnu[k, col_start:col_end, :] = np.asarray(dfcn_du)
             
             col_start = col_end
@@ -257,7 +257,7 @@ def jit_jax_discretize(problem, method):
     lin_dyn = problem.constraints.get('name', 'dynamics')[0].lin_dyn
 
     # nsub defines the number of sub *nodes* between knot points
-    nsub_nodes = 15
+    nsub_nodes = 20
     dt_sub = 1.0 / (nsub_nodes + 1)
     t = jnp.linspace(0.0, 1.0, nsub_nodes + 2)
 

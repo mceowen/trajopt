@@ -1,6 +1,6 @@
 inherit: trajopt/library/methods/configs/shared/default.yaml
 
-'N': 40
+N: 40
 
 flags:
   free_final_time:    1         # 0, 1
@@ -37,7 +37,7 @@ guess:
   nl_guess_u_start: [0.0, 0.0]
   nl_guess_u_stop: [0.0, 0.0]
 
-  line_guess_u_init: "eval: np.tile([5.0, 0.0], (method['N'], 1))"
+  line_guess_u_init: "${np.tile([5.0, 0.0], (N, 1))}"
 
 conv:
   ctcs_mult_state: 1.0

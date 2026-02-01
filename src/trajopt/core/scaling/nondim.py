@@ -28,8 +28,8 @@ class Nondim:
             "f": np.array([1, -2,  1]),
         }
 
-        A = np.vstack([exponents[key] for key in problem.params['model']['nondim']['anchor_types']])
-        b = np.log(np.array([val for val in problem.params['model']['nondim']['anchor_scales']]))
+        A = np.vstack([exponents[key] for key in problem.config['model']['nondim']['anchor_types']])
+        b = np.log(np.array([val for val in problem.config['model']['nondim']['anchor_scales']]))
 
         log_base_scales = np.linalg.solve(A, b)
         base_scales = np.exp(log_base_scales)
@@ -54,8 +54,7 @@ class Nondim:
             "none": 1.0 
         }
 
-        # Apply any scale overrides from config
-        scale_overrides = problem.params['model']['nondim'].get('scale_overrides', {})
+        scale_overrides = problem.config['model']['nondim'].get('scale_overrides', {})
         if scale_overrides:
             print("Applying scale overrides:")
             for key, value in scale_overrides.items():
@@ -88,20 +87,20 @@ class Nondim:
         print("scales: ")
         print(", ".join(f"{k}: {v:.4f}" for k, v in self.scales.items()))
 
-        self.z_types = problem.params['model']['nondim']['z_types']
-        self.u_types = problem.params['model']['nondim']['u_types']
+        self.z_types = problem.config['model']['nondim']['z_types']
+        self.u_types = problem.config['model']['nondim']['u_types']
 
         self.nd_state = np.array([self.scales[self.z_types[i]] for i in range(n)])
         self.nd_ctrl  = np.array([self.scales[self.u_types[i]] for i in range(m)])
 
-        if problem.params['model']['nondim'].get('z_scales', None) is not None:
-            self.nd_state = np.array(problem.params['model']['nondim']['z_scales'])
+        if problem.config['model']['nondim'].get('z_scales', None) is not None:
+            self.nd_state = np.array(problem.config['model']['nondim']['z_scales'])
 
-        if problem.params['model']['nondim'].get('u_scales', None) is not None:
-            self.nd_ctrl  = np.array(problem.params['model']['nondim']['u_scales'])
+        if problem.config['model']['nondim'].get('u_scales', None) is not None:
+            self.nd_ctrl  = np.array(problem.config['model']['nondim']['u_scales'])
 
-        if problem.params['model']['nondim'].get('t_scale', None) is not None:
-            self.nd_time = problem.params['model']['nondim']['t_scale']
+        if problem.config['model']['nondim'].get('t_scale', None) is not None:
+            self.nd_time = problem.config['model']['nondim']['t_scale']
 
         else:
             self.nd_time = self.scales['t']
