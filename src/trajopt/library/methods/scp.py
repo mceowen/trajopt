@@ -371,6 +371,14 @@ class Subproblem:
         # CTCS epsilon (scalar)
         self.eps_ctcs = cp.Parameter(nonneg=True, name="eps_ctcs")
 
+        self.constraint_params = {}
+        for constraint in problem.constraints.get("nodal", "equality_bc"):
+            if constraint.name == "initial_state":
+                self.constraint_params[constraint.name] = {
+                    "x": cp.Parameter(len(constraint.x_idx), name=f"{constraint.name}_x")
+                }
+                self.constraint_params[constraint.name]["x"].value = constraint.x
+
     # ============================================================
     # CONSTRAINTS (build-once)
     # ============================================================
@@ -389,7 +397,11 @@ class Subproblem:
         for constraint in problem.constraints.get("nodal", "equality_bc"):
             x_idx = constraint.x_idx
             idx   = constraint.idx
-            x     = constraint.x
+            
+            if constraint.name in self.constraint_params:
+                x = self.constraint_params[constraint.name]["x"]
+            else:
+                x = constraint.x
 
             if constraint.set == "state":
                 if constraint.boundary == "final":
@@ -752,6 +764,10 @@ class Subproblem:
         self.z_ref.value  = inputs["z_ref"]
         self.nu_ref.value  = inputs["nu_ref"]
         self.dt_ref.value = inputs["dt_ref"].reshape(self.N - 1, 1)
+
+        for constraint in problem.constraints.get("nodal", "equality_bc"):
+            if constraint.name in self.constraint_params:
+                self.constraint_params[constraint.name]["x"].value = constraint.x
 
         self.nu_ref_sq.value = np.sum(inputs["nu_ref"] * inputs["nu_ref"], axis=1)
 

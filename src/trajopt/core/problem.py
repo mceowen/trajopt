@@ -1,3 +1,4 @@
+import numpy as np
 from trajopt.core.constraints.constraints import Constraints
 from trajopt.core.costs.costs import Costs
 from trajopt.utils.config_loader import resolve_function
@@ -33,7 +34,7 @@ class Problem:
             self.fcns[name] = resolve_function(path)
 
         # ------------------------------------------------------------
-        # Parameters (these can be varied during montecarlo)
+        # Parameters
         # ------------------------------------------------------------
 
         self.params = problem_config['params']
@@ -43,7 +44,7 @@ class Problem:
         # ------------------------------------------------------------
 
         constraint_config_list = problem_config["constraints"]
-        self.constraints = Constraints(constraint_config_list, self.config, self.params)
+        self.constraints = Constraints(constraint_config_list, self.config)
 
         # ------------------------------------------------------------
         # Cost
@@ -88,3 +89,25 @@ class Problem:
         self.n_term_ineq = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'inequality_bc') if constraint.boundary == "final" and constraint.set == "state")
         self.n_term_ctcs = self.n_ctcs
         self.n_term_total = self.n_term + self.n_term_ineq + self.n_ctcs
+
+    def update_from_config(self, varied_paths, nondim):
+        mission_config = self.config['mission']
+        for path in varied_paths:
+            parts = path.split('.')
+            if parts[0] == 'constraints' and len(parts) >= 3:
+                name, field = parts[1], parts[2]
+                val = mission_config.get('constraints', {}).get(name, {}).get(field)
+                if val is not None:
+                    for c in self.constraints.get('all'):
+                        if c.name == name:
+                            setattr(c, field, np.atleast_1d(val))
+                            c.nondim_constraint(nondim)
+                            break
+            elif parts[0] == 'params' and len(parts) >= 2:
+                target = self.params
+                source = mission_config.get('params', {})
+                for part in parts[1:-1]:
+                    target = target.setdefault(part, {})
+                    source = source.get(part, {})
+                if parts[-1] in source:
+                    target[parts[-1]] = source[parts[-1]]

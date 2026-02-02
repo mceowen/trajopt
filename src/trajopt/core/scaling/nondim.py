@@ -226,8 +226,7 @@ class Nondim:
         return M_d2nd, M_nd2d
 
     def nondim_function(self, fcn, M_state_nd2d, M_ctrl_nd2d, M_out_d2nd):
-        
-        def wrapped_fcn(t, z, nu, *args, **kwargs):
-            return M_out_d2nd @ fcn(t, M_state_nd2d @ z, M_ctrl_nd2d @ nu, *args, **kwargs)
+        def wrapped_fcn(t, z, nu, params, *args, **kwargs):
+            return M_out_d2nd @ fcn(t, M_state_nd2d @ z, M_ctrl_nd2d @ nu, params, *args, **kwargs)
         
         return wrapped_fcn

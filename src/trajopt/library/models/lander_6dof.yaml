@@ -1,3 +1,7 @@
+# ===============================
+# MODEL CONFIGURATION
+# ===============================
+
 dimensions.n: 14
 dimensions.m: 3
 
@@ -5,6 +9,20 @@ nondim.z_types: ["m", "d", "d", "d", "v", "v", "v", "none", "none", "none", "non
 nondim.u_types: ["f", "f", "f"]
 nondim.anchor_types: ["d", "t", "m"]
 nondim.anchor_scales: [1.0, 1.0, 1.0]
+
+plotting.state_groups: 
+  "Mass": [0]
+  "Position": [1, 2, 3]
+  "Velocity": [4, 5, 6]
+  "Attitude": [7, 8, 9, 10]
+  "Angular Velocity": [11, 12, 13]
+
+plotting.control_groups:
+  "Thrust": [0, 1, 2]
+
+# ===============================
+# CONSTRAINT MODELS
+# ===============================
 
 constraints.dynamics:
   type: dynamics
@@ -60,7 +78,6 @@ constraints.height_triggered_pitch:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/lander_6dof.py:height_triggered_pitch
-  mission_params: {"cos_theta_max": null, "trigger_height": null}
   dimension: 1
   ct: 0
 
@@ -71,6 +88,10 @@ constraints.min_thrust_norm:
   units: [{"f": 1}]
   dimension: 1
   ct: 0
+
+# ===============================
+# COST MODELS
+# ===============================
 
 costs.min_time:
   type: min_time

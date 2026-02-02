@@ -1,3 +1,12 @@
+"""
+Simple YAML config loader with:
+  - Dot notation: `foo.bar.x: 1` expands to `{foo: {bar: {x: 1}}}`
+  - Inheritance: `foo.inherit: path` or top-level `inherit: path`
+  - Expressions: `${expr}` evaluates Python with access to config values and numpy
+  - Functions: `path:func` loads a function from a Python file
+  - Auto-arrays: lists of numbers become numpy arrays
+"""
+
 import yaml
 import numpy as np
 import importlib.resources
@@ -6,14 +15,22 @@ from pathlib import Path
 import re
 
 
+# =============================================================================
+# PATH AND FUNCTION RESOLUTION
+# =============================================================================
+
 def resolve_path(path_str):
+    """Resolve a path string to a Path object. Handles local and package paths."""
     if not path_str:
         return None
+    # Absolute path (not package path)
     if path_str.startswith('/') and not path_str.startswith('/trajopt'):
         return Path(path_str)
-    local_path = Path(path_str)
-    if local_path.exists():
-        return local_path
+    # Local path exists
+    local = Path(path_str)
+    if local.exists():
+        return local
+    # Package path: trajopt/library/... -> importlib.resources
     if path_str.startswith('trajopt/') or path_str.startswith('/trajopt/'):
         path_str = path_str.lstrip('/')
         parts = path_str.split('/')
@@ -22,27 +39,23 @@ def resolve_path(path_str):
 
 
 def resolve_function(path_str):
+    """Load a function from 'path/to/file.py:function_name' format."""
     if not path_str or ':' not in path_str:
         return None
     file_path, func_name = path_str.rsplit(':', 1)
-    if file_path.startswith('trajopt/') or file_path.startswith('/trajopt/'):
-        file_path = file_path.lstrip('/')
-        parts = file_path.split('/')
-        file_path = importlib.resources.files('.'.join(parts[:-1])).joinpath(parts[-1])
-    else:
-        file_path = Path(file_path)
-    spec = importlib.util.spec_from_file_location("dynamic_module", file_path)
+    resolved = resolve_path(file_path)
+    spec = importlib.util.spec_from_file_location("dynamic_module", resolved)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return getattr(module, func_name)
 
 
-def load_yaml(path):
-    with open(path, 'r') as f:
-        return yaml.safe_load(f) or {}
-
+# =============================================================================
+# CONFIG LOADING AND MERGING
+# =============================================================================
 
 def deep_merge(base, override):
+    """Recursively merge override into base, returning new dict."""
     result = base.copy()
     for key, val in override.items():
         if key in result and isinstance(result[key], dict) and isinstance(val, dict):
@@ -53,160 +66,150 @@ def deep_merge(base, override):
 
 
 def set_nested(d, path, value):
+    """Set a value in nested dict using dot path: 'a.b.c' -> d['a']['b']['c']."""
     parts = path.split('.')
     for part in parts[:-1]:
         d = d.setdefault(part, {})
     d[parts[-1]] = value
 
 
-def get_nested(d, path):
-    parts = path.split('.')
-    for part in parts:
-        if isinstance(d, dict) and part in d:
-            d = d[part]
-        else:
-            return None
-    return d
-
-
-def expand_config(raw):
+def expand_dotted_keys(raw):
+    """Expand dotted keys and handle .inherit directives."""
     expanded = {}
-    inherit_keys = []
+    inherits = []
 
     for key, val in raw.items():
         if key.endswith('.inherit'):
-            inherit_keys.append((key[:-8], val))
+            inherits.append((key[:-8], val))
         elif '.' in key:
             set_nested(expanded, key, val)
         else:
             expanded[key] = val
 
-    for base_key, path in inherit_keys:
+    # Process inherits: load base config and merge with any existing values
+    for base_key, path in inherits:
         inherited = load_config(path)
-        existing = get_nested(expanded, base_key)
-        if existing and isinstance(existing, dict):
-            merged = deep_merge(inherited, existing)
-        else:
-            merged = inherited
-        set_nested(expanded, base_key, merged)
+        # Navigate to the target location
+        parts = base_key.split('.')
+        target = expanded
+        for part in parts[:-1]:
+            target = target.setdefault(part, {})
+        existing = target.get(parts[-1], {})
+        target[parts[-1]] = deep_merge(inherited, existing) if isinstance(existing, dict) else inherited
 
     return expanded
 
 
 def load_config(path):
-    raw = load_yaml(resolve_path(path))
-    config = expand_config(raw)
-
+    """Load YAML, expand dotted keys, and handle inheritance."""
+    with open(resolve_path(path), 'r') as f:
+        raw = yaml.safe_load(f) or {}
+    
+    config = expand_dotted_keys(raw)
+    
+    # Handle top-level inherit
     if 'inherit' in config:
         base = load_config(config.pop('inherit'))
         config = deep_merge(base, config)
-
+    
     return config
 
 
-def build_context(config):
+# =============================================================================
+# EXPRESSION EVALUATION
+# =============================================================================
+
+def flatten_to_context(config):
+    """Flatten nested config into a flat dict for expression evaluation."""
     ctx = {'np': np}
-
-    def flatten(obj, prefix=''):
+    
+    def recurse(obj, prefix=''):
         if isinstance(obj, dict):
             for key, val in obj.items():
-                full_key = f"{prefix}.{key}" if prefix else key
-                ctx[full_key] = val
-                ctx[full_key.replace('.', '_')] = val
-                flatten(val, full_key)
-
-    def add_aliases(obj, prefix=''):
-        if isinstance(obj, dict):
-            for key, val in obj.items():
-                full_key = f"{prefix}.{key}" if prefix else key
-                parts = full_key.split('.')
-                if len(parts) > 1:
-                    short_key = '.'.join(parts[1:])
-                    if short_key not in ctx:
-                        ctx[short_key] = val
-                        ctx[short_key.replace('.', '_')] = val
-                add_aliases(val, full_key)
-
-    flatten(config)
-    add_aliases(config)
+                full = f"{prefix}.{key}" if prefix else key
+                ctx[full] = val
+                ctx[full.replace('.', '_')] = val
+                recurse(val, full)
+    
+    recurse(config)
     return ctx
 
 
 def eval_expr(expr_str, ctx):
-    ref_pattern = r'\b([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)+)\b'
-    refs = re.findall(ref_pattern, expr_str)
-    local_ctx = dict(ctx)
-
+    """Evaluate a Python expression with dotted references resolved."""
+    # Find dotted references like params.planet.r
+    refs = re.findall(r'\b([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)+)\b', expr_str)
+    local = dict(ctx)
+    
     for ref in sorted(refs, key=len, reverse=True):
         val = ctx.get(ref) or ctx.get(ref.replace('.', '_'))
         if val is not None:
-            var_name = ref.replace('.', '_')
-            local_ctx[var_name] = val
-            expr_str = expr_str.replace(ref, var_name)
-
-    return eval(expr_str, local_ctx)
-
-
-def eval_value(obj, ctx, param_refs=None):
-    if param_refs is None:
-        param_refs = {}
+            safe_name = ref.replace('.', '_')
+            local[safe_name] = val
+            expr_str = expr_str.replace(ref, safe_name)
     
+    return eval(expr_str, local)
+
+
+def eval_value(obj, ctx):
+    """Recursively evaluate expressions in a config object."""
     if isinstance(obj, dict):
-        result = {}
-        for k, v in obj.items():
-            result[k] = eval_value(v, ctx, param_refs)
-            if k == 'x' and isinstance(v, str) and v.startswith('${params.'):
-                key = v[9:-1]
-                result['param_key'] = key
-        return result
-
+        return {k: eval_value(v, ctx) for k, v in obj.items()}
+    
     if isinstance(obj, list):
-        result = [eval_value(item, ctx, param_refs) for item in obj]
-        if result and all(isinstance(x, (int, float, np.number, np.ndarray)) for x in result):
-            return np.array(result)
-        return result
-
+        results = [eval_value(item, ctx) for item in obj]
+        # Convert numeric lists to numpy arrays
+        if results and all(isinstance(x, (int, float, np.number, np.ndarray)) for x in results):
+            return np.array(results)
+        return results
+    
     if isinstance(obj, str):
+        # Function reference
         if obj.startswith("precompute-"):
             return resolve_function(obj.split("-", 1)[1].strip())
-
-        if obj.startswith("eval:"):
-            return eval_expr(obj.split(":", 1)[1].strip(), ctx)
-
+        # Expression: ${...}
         if '${' in obj:
             if obj.startswith('${') and obj.endswith('}') and obj.count('${') == 1:
-                return eval_expr(obj[2:-1], ctx)
-
-            def replace_expr(match):
-                result = eval_expr(match.group(1), ctx)
-                return str(result) if not isinstance(result, (int, float)) else repr(result)
-
-            return re.sub(r'\$\{([^}]+)\}', replace_expr, obj)
-
+                result = eval_expr(obj[2:-1], ctx)
+                return eval_value(result, ctx)
+            # Multiple expressions in string
+            def replace(m):
+                r = eval_expr(m.group(1), ctx)
+                return str(r) if not isinstance(r, (int, float)) else repr(r)
+            return re.sub(r'\$\{([^}]+)\}', replace, obj)
+    
     return obj
 
 
+# =============================================================================
+# MAIN ENTRY POINT
+# =============================================================================
+
 def load_trajopt_config(mission_path, model_path, method_path):
+    """Load and combine mission, model, and method configs."""
     mission = load_config(mission_path)
     model = load_config(model_path)
     method = load_config(method_path)
 
+    # Model is base, mission overrides
     combined = deep_merge(model, mission)
-    ctx = build_context(combined)
-    ctx['method'] = method
     
-    # Add method keys directly to context so N, flags, etc. are accessible
+    # Build context and add method values
+    ctx = flatten_to_context(combined)
+    ctx['method'] = method
     for key, val in method.items():
         if key not in ctx:
             ctx[key] = val
 
+    # Evaluate expressions
     combined = eval_value(combined, ctx)
     method = eval_value(method, ctx)
-    model_evaluated = eval_value(model, ctx)
+    model_eval = eval_value(model, ctx)
 
+    # Extract constraints and costs by name
     all_constraints = combined.get('constraints', {})
     all_costs = combined.get('costs', {})
-
+    
     constraint_list = ['dynamics'] + list(combined.get('constraint_list', []))
     cost_list = combined.get('cost_list', [])
 
@@ -224,22 +227,17 @@ def load_trajopt_config(mission_path, model_path, method_path):
             c['name'] = name
             costs.append(c)
 
-    exclude = {'constraints', 'costs', 'constraint_list', 'cost_list', 'fcns'}
-    params = {}
-    for k, v in combined.items():
-        if k == 'params':
-            params.update(v)
-        elif k not in exclude:
-            params[k] = v
-    
+    # Params only contains what's explicitly under params.* in YAMLs
+    params = combined.get('params', {})
+
     return {
         'problem': {
             'mission': combined,
-            'model': model_evaluated,
+            'model': model_eval,
             'constraints': constraints,
             'costs': costs,
             'params': params,
-            'config': {'mission': combined, 'model': model_evaluated}
+            'config': {'mission': combined, 'model': model_eval}
         },
         'method': method
     }

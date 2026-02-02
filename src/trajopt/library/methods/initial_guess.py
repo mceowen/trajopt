@@ -1,70 +1,7 @@
 import numpy as np
 from scipy.integrate import solve_ivp
-import importlib
-import jax
-import jax.numpy as jnp
-jax.config.update("jax_enable_x64", True)
 import time
-import pprint
-
-def rk4_propagate_jax(dynamics, z0, nu_ref, t_ref, problem, method):
-
-    time0 = time.perf_counter()
-
-    # convert to JAX arrays
-    z0_jax = jnp.array(z0)
-    nu_ref_jax = jnp.array(nu_ref)
-    t_ref_jax = jnp.array(t_ref)
-    
-    N = len(t_ref_jax)
-    n = len(z0_jax)
-    
-    # Number of subnodes between each knot point (matches discretization)
-    n_sub = 20
-    
-    def rk4_step(zi, ti, dt, ui):
-        """Single RK4 step with constant control"""
-        k1 = dynamics(ti, zi, ui)
-        k2 = dynamics(ti + 0.5*dt, zi + 0.5*dt*k1, ui)
-        k3 = dynamics(ti + 0.5*dt, zi + 0.5*dt*k2, ui)
-        k4 = dynamics(ti + dt, zi + dt*k3, ui)
-        return zi + (dt/6.0) * (k1 + 2*k2 + 2*k3 + k4)
-    
-    def propagate_interval(zi, i):
-        """Propagate from node i to node i+1 using n_sub substeps"""
-        dt_interval = t_ref_jax[i+1] - t_ref_jax[i]
-        dt_sub = dt_interval / n_sub
-        ti_start = t_ref_jax[i]
-        ui = nu_ref_jax[i]
-        ui_next = nu_ref_jax[i+1]
-        
-        def substep(carry, j):
-            zi_sub = carry
-            # Linear interpolation of control within interval
-            alpha = j / n_sub
-            u_interp = (1 - alpha) * ui + alpha * ui_next
-            ti_sub = ti_start + j * dt_sub
-            zi_next = rk4_step(zi_sub, ti_sub, dt_sub, u_interp)
-            return zi_next, None
-        
-        zi_final, _ = jax.lax.scan(substep, zi, jnp.arange(n_sub))
-        return zi_final, zi_final
-    
-    # Wrap scan in a function, then JIT-compile it
-    def scan_wrapper(z0, xs):
-        _, z_propagated = jax.lax.scan(propagate_interval, z0, xs)
-        return z_propagated
-    
-    scan_jit = jax.jit(scan_wrapper)
-    z_propagated = scan_jit(z0_jax, jnp.arange(N-1))
-    
-    z_jax = jnp.vstack([z0_jax[None, :], z_propagated])
-    z_numpy = np.array(z_jax)
-
-    init_guess_time = time.perf_counter() - time0
-    print(f"Initial guess time: {init_guess_time} seconds")
-
-    return z_numpy
+from trajopt.library.methods.integrators import jit_rk4_jax_dense, propagate_rk4_dense
 
 def straight_line_initial_guess(problem, method):
     """
@@ -187,28 +124,29 @@ def nonlinear_initial_guess(nu_range, problem, method):
     # ---- Propagate initial trajectory ----
     # Choose integrator based on jax_dyn flag
     use_jax = method.flags.get("jax_dyn", 0)
+    z0 = problem.constraints.get('name', 'initial_state')[0].x
     
     if use_jax:
-        z_init = rk4_propagate_jax(
-            problem.constraints.get('name', 'dynamics')[0].fcn,
-            problem.constraints.get('name', 'initial_state')[0].x,
-            nu_init,
-            t_init,
-            problem,
-            method
-        )
+        # Setup JAX integrator if not already done
+        if not hasattr(method, 'propagate_rk4_dense_jit'):
+            jit_rk4_jax_dense(problem, method)
+        
+        # Propagate at knot points (use t_init as both reference and evaluation grid)
+        z_init = propagate_rk4_dense(z0, nu_init, t_init, t_init, problem, method)
     else:
         # Wrapper that does FOH interpolation before calling dynamics
+        dynamics_fcn = problem.constraints.get('name', 'dynamics')[0].fcn
+        
         def dynamics_wrapper_scipy(t, z):
             # FOH interpolation to get control at time t
             u = np.array([np.interp(t, t_init, nu_init[:, i]) for i in range(m)])
-            return problem.constraints.get('name', 'dynamics')[0].fcn(t, z, u)
+            return dynamics_fcn(t, z, u)
         
         odesettings = {"atol": 1e-12, "rtol": 1e-12}
         sol = solve_ivp(
             dynamics_wrapper_scipy,
             [t_init[0], t_init[-1]],
-            problem.zi,
+            z0,
             t_eval=t_init,
             **odesettings
         )
@@ -240,62 +178,3 @@ def ctcs_initial_guess(problem, method):
     ctcs_init = np.zeros((method.z_init.shape[0], problem.n_ctcs))
 
     method.z_init = np.hstack([method.z_init, ctcs_init])
-
-# Example usage
-if __name__ == "__main__":
-    # Define dummy data for testing
-    params = {
-        "T_init": 10,
-        "N": 50,
-        "n": 4,
-        "m": 2,
-        "zi": np.array([0, 0, 0, 0]),
-        "zf": np.array([1, 1, 1, 1]),
-        "nondim": {"nt": 1}
-    }
-    
-    updated_params = straight_line_initial_guess(params)
-    print(updated_params)
-
-
-    # Define dummy data for testing
-    params = {
-        "T_init": 10,
-        "N": 50,
-        "n": 4,
-        "m": 2,
-        "zi": np.array([0, 0, 0, 0]),
-        "zf": np.array([1, 1, 1, 1]),
-        "zi_idx": np.array([0, 1, 2, 3]),
-        "zf_idx": np.array([0, 1, 2, 3]),
-        "n_init": 4,
-        "n_term": 4,
-        "nondim": {"nt": 1}
-    }
-    
-    updated_params = waypoint_initial_guess(params)
-    print(updated_params)
-
-
-    # Define dummy data for testing
-    nu_range = np.array([[0, 1], [1, 2]])
-    params = {
-        "T_init": 10,
-        "N": 50,
-        "nondim": {"nt": 1},
-        "z0s": np.zeros(4)
-    }
-    
-    updated_params = nonlinear_initial_guess(nu_range, params)
-    print(updated_params)
-
-
-    # Define dummy data for testing
-    params = {
-        "z_init": np.array([[1, 2, 3], [4, 5, 6]]),
-        "n_ineq": 2,
-        "N": 3
-    }
-    
-    updated_params = ctcs_initial_guess(params)
-    print(updated_params)

@@ -46,8 +46,7 @@ GCONST_TYPES = GCONST_TYPES + ['SPHERE','ELLIPSOID','CYLINDER','CONE','PROXIMITY
 
 
 class Constraints:
-    def __init__(self, constraint_config_list, config, params_ref=None):
-        self.params_ref = params_ref
+    def __init__(self, constraint_config_list, config):
         self.constraints_list = []
         self.constraint_ids = {
             'ct':{'all':[]},
@@ -68,14 +67,11 @@ class Constraints:
             constraintClass = getattr(constraints_library, constraint_type)
 
             if constraint_type in GCONST_TYPES:
-                self.constraints_list.append(constraintClass(ins=constraint_params, params=config))
+                self.constraints_list.append(constraintClass(ins=constraint_params, config=config))
             else:
-                # Handle 'params' field specially for nonconvex constraints
-                # If YAML has constraints.X.params: value, merge into params_ref
                 if 'params' in constraint_params and constraint_type == 'nonconvex_inequality':
                     constraint_params.pop('params')
-                constraint_params['params_ref'] = params_ref
-                self.constraints_list.append(constraintClass(**constraint_params, params=config))
+                self.constraints_list.append(constraintClass(**constraint_params, config=config))
 
             implement_type = self.constraints_list[-1].implement_type;
 
@@ -109,8 +105,7 @@ class Constraints:
             return level2 in self.constraint_ids.get(level1, {})
         else: return len(self.constraint_ids[level1]['all'])>0
 
-    def add_params(self, problem_params):
-
+    def add_params(self, problem_params): 
         for constraint in self.constraints_list:
             if "params" in constraint.__dict__:
                 if constraint.params is not None:
@@ -124,8 +119,6 @@ class Constraints:
                 param_names = sig.parameters.keys()
 
                 kwargs_to_bind = {}
-                if 'params' in param_names:
-                    kwargs_to_bind['params'] = params
                 if 'fcns' in param_names:
                     kwargs_to_bind['fcns'] = fcns
 
@@ -136,11 +129,6 @@ class Constraints:
         for constraint in self.constraints_list:
             constraint.nondim_constraint(nondim)
         print("constraints nondimmed!")
-
-    def sync_from_params(self):
-        for constraint in self.constraints_list:
-            if hasattr(constraint, 'sync_from_params'):
-                constraint.sync_from_params()
 
     def convexify_constraints(self):
         for constraint in self.constraints_list:
@@ -154,7 +142,7 @@ class Constraints:
             dynamics_obj = self.get('name', 'dynamics')[0]
             f_ctcs, dfcn_dz_ctcs, dfcn_du_ctcs = convexify.linearize_jax_ctcs(dynamics_obj.fcn, self, n)
 
-            lin_dyn_ctcs = lambda t, z, nu: (f_ctcs(z, nu), dfcn_dz_ctcs(z, nu), dfcn_du_ctcs(z, nu))
+            lin_dyn_ctcs = lambda t, z, nu, params: (f_ctcs(t, z, nu, params), dfcn_dz_ctcs(t, z, nu, params), dfcn_du_ctcs(t, z, nu, params))
 
             dynamics_obj.lin_dyn = lin_dyn_ctcs
 

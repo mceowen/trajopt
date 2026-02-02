@@ -23,6 +23,7 @@ constraints.gimbal_limit.theta_max: 20
 constraints.max_thrust.max_val: 5
 
 # min thrust norm constraint config
+constraints.min_thrust_norm.params: ["${params.min_thrust}"]
 constraints.min_thrust_norm.eps: [0.001]
 
 constraint_list: [initial_state, final_state, gimbal_limit, max_thrust, min_thrust_norm]

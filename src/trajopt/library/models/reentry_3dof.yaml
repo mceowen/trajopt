@@ -1,3 +1,6 @@
+# ===============================
+# MODEL CONFIGURATION
+# ===============================
 dimensions.n: 6
 dimensions.m: 2
 
@@ -8,9 +11,17 @@ params.planet.inherit: trajopt/library/missions/shared/planet/mars.yaml
 params.vehicle.inherit: trajopt/library/missions/shared/vehicle/msl.yaml
 
 nondim.anchor_types : ["t", "v", "m"]
-nondim.anchor_scales: ["${(planet.r / planet.g)**0.5}", "${(planet.r * planet.g)**0.5}", "${vehicle.mass}"]
+nondim.anchor_scales: ["${(params.planet.r / params.planet.g)**0.5}", "${(params.planet.r * params.planet.g)**0.5}", "${params.vehicle.mass}"]
 
 flags.ctrl_type: "bank_only"
+
+plotting.state_groups:
+  "Radius": [0]
+  "Theta": [1]
+  "Phi": [2]
+  "Velocity": [3]
+  "Gamma": [4]
+  "Psi": [5]
 
 # ===============================
 # CONSTRAINT MODELS
@@ -19,7 +30,6 @@ flags.ctrl_type: "bank_only"
 constraints.dynamics:
   type: dynamics
   fcn: trajopt/library/models/reentry_3dof.py:dynamics
-  mission_params: null
 
 constraints.initial_state:
   type: equality_bc

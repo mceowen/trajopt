@@ -1,0 +1,26 @@
+# ===============================
+# VARIATION CONFIGURATION
+# ===============================
+num_mission_variations: 10
+num_method_variations: 2
+seed: 42
+
+# ===============================
+# MISSION VARIATIONS
+# ===============================
+mission_variations:
+  constraints.initial_state.x:
+    type: uniform
+    lb: [0, 0, 0, 0, 0.0, 0.0]
+    ub: [0, 0, 0,  0, 0.0, 0.0]
+
+  params.vehicle.bc: 
+    type: uniform
+    lb: -20
+    ub: 20
+
+# ===============================
+# METHOD VARIATIONS
+# ===============================
+method_variations:
+  autotune.flags.flag_autotune: "3"

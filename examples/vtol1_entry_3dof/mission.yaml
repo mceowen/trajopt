@@ -1,24 +1,17 @@
 params.planet.inherit: trajopt/library/missions/shared/planet/earth.yaml
 params.vehicle.inherit: trajopt/library/missions/shared/vehicle/vtol.yaml
 
-flags.flag_nfz: 0
-flags.init_ctrl: 0
-flags.final_ctrl: 0
-flags.aero_type: exponential
+fcns.density_model: trajopt/library/missions/vtol.py:exp_density_jax
+fcns.nonlinear_aero: trajopt/library/missions/vtol.py:nonlinear_aero_jax
 
-fcns.atmosphere_model_jax: trajopt/library/missions/vtol.py:atmosphere_model_jax
-fcns.atmosphere_model_nonjax: trajopt/library/missions/vtol.py:atmosphere_model_nonjax
-fcns.nonlinear_aero_jax: trajopt/library/missions/vtol.py:nonlinear_aero_jax
-fcns.nonlinear_aero_nonjax: trajopt/library/missions/vtol.py:nonlinear_aero_nonjax
-
-constraints.initial_state.x: ["${planet.r + 100e3}", 0.0, 0.0, 7450, -0.5, 0.0]
+constraints.initial_state.x: ["${params.planet.r + 100e3}", 0.0, 0.0, 7450, -0.5, 0.0]
 constraints.initial_state.x_idx: [0, 1, 2, 3, 4, 5]
 
-constraints.final_state.x: ["${planet.r + 15e3}", 12, 70, -10, 90]
+constraints.final_state.x: ["${params.planet.r + 15e3}", 12, 70, -10, 90]
 constraints.final_state.x_idx: [0, 1, 2, 4, 5]
 constraints.final_state.eps: [100, 0.1, 0.1, 0.1, 0.1]
 
-constraints.state_limits.x_min: ["${planet.r}", 100.0]
+constraints.state_limits.x_min: ["${params.planet.r}", 100.0]
 constraints.state_limits.x_min_idx: [0, 3]
 
 constraints.bank_angle_limit.x_min: [-80.0]

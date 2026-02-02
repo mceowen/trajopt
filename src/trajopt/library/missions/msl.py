@@ -3,28 +3,17 @@ import jax
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 
-def atmosphere_model_jax(t, z, nu, params):
-    '''
-    Returns density as a function of orbital radius
-
-    TODO: (carlos)
-    expand 'lookup' option to be higher dimensional
-    remember LUT grow exponenetiall in size!
-    '''
+def exp_density_jax(t, z, nu, params):
 
     r = z[0]
 
     h = r - params['planet']["r"]
-    
-    if params['flags']["aero_type"] == "lookup":
-        rho = jnp.interp(h/1e3, dens.h_grid, dens.rho_vals)
 
-    elif params['flags']["aero_type"] == "exponential":
-        rho = params['planet']["rho"] * jnp.exp(-h / params['planet']["H"])
+    rho = params['planet']["rho"] * jnp.exp(-h / params['planet']["H"])
 
-    return rho  
+    return rho
 
-def nonlinear_aero_jax(t, z, nu, params):
+def nonlinear_aero_jax(t, z, nu, params, fcns):
     '''
     returns all aero data as a function of full state
     
@@ -36,7 +25,7 @@ def nonlinear_aero_jax(t, z, nu, params):
     r = z[0]
     v = z[3]
 
-    rho = atmosphere_model_jax(t, z, nu, params)
+    rho = fcns['density_model'](t, z, nu, params)
 
     D    = 0.5 * (1 / params['vehicle']["bc"]) * rho * v**2
     L    = D * params['vehicle']["LD"]

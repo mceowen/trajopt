@@ -1,29 +1,18 @@
 # ===============================
-# MISSION PARAMS
+# FUNCTIONS
 # ===============================
+fcns.density_model: trajopt/library/missions/msl.py:exp_density_jax
+fcns.nonlinear_aero: trajopt/library/missions/msl.py:nonlinear_aero_jax
 
+# ===============================
+# FUNCTION PARAMETERS
+# ===============================
 params.planet.inherit: trajopt/library/missions/shared/planet/mars.yaml
 params.vehicle.inherit: trajopt/library/missions/shared/vehicle/msl.yaml
-params.flags.aero_type: exponential
-
-# ===============================
-# MISSION FUNCTIONS
-# ===============================
-
-fcns.atmosphere_model_jax: trajopt/library/missions/msl.py:atmosphere_model_jax
-fcns.nonlinear_aero_jax: trajopt/library/missions/msl.py:nonlinear_aero_jax
-
-# ===============================
-# monte carlo settings
-# ===============================
-
-mc.num_samples: 100
-mc.seed: 42
 
 # ===============================
 # CONSTRAINT/COST PARAMS
 # ===============================
-
 constraints.initial_state.x: ["${params.planet.r + 126e3}", 0.0, 0.0, 5845, -15.47, 0.0]
 constraints.initial_state.x_idx: [0, 1, 2, 3, 4, 5]
 
@@ -40,8 +29,7 @@ constraints.bank_aoa_angle_limits.x_max: [170.0, 5.0]
 constraints.bank_aoa_angle_limits.x_max_idx: [0, 1]
 
 # ===============================
-# LIST OF ACTIVE CONSTRAINTS AND COSTS
+# ACTIVE CONSTRAINTS AND COSTS
 # ===============================
-
 constraint_list: [initial_state, final_state, state_limits, bank_aoa_angle_limits]
 cost_list: [min_terminal_velocity]

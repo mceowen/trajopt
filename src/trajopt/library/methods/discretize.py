@@ -67,6 +67,8 @@ def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, problem, method):
     t_jax = jnp.asarray(t_ref)
     z_jax = jnp.asarray(z_ref)
     nu_jax = jnp.asarray(u_ref)
+
+    params = problem.params
     
     # Preallocate stacked arrays
     g    = np.zeros((N, n_ineq))
@@ -83,7 +85,7 @@ def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, problem, method):
         for constraint in problem.constraints.get("nodal", "nonconvex_inequality"):
             col_end = col_start + constraint.dimension
             
-            f, dfcn_dz, dfcn_du            = constraint.g_aff(tk, zk, uk)
+            f, dfcn_dz, dfcn_du            = constraint.g_aff(tk, zk, uk, params)
             g[k, col_start:col_end]        = np.asarray(f)
             dgdz[k, col_start:col_end, :]  = np.asarray(dfcn_dz)
             dgdnu[k, col_start:col_end, :] = np.asarray(dfcn_du)
@@ -253,6 +255,8 @@ def jit_jax_discretize(problem, method):
     Bkp_ind0  = Bk_ind0  + nz*m
     Sk_ind0   = Bkp_ind0 + nz*m
 
+    params = problem.params
+
     # pull ltv dynamics
     lin_dyn = problem.constraints.get('name', 'dynamics')[0].lin_dyn
 
@@ -262,7 +266,7 @@ def jit_jax_discretize(problem, method):
     t = jnp.linspace(0.0, 1.0, nsub_nodes + 2)
 
     # packs the derivative of stacked RHS vector for node k
-    def pack_lds_dot(tau, lds_k, nu_k, nu_kp, dt_k):
+    def pack_lds_dot(tau, lds_k, nu_k, nu_kp, dt_k, params):
         a = 1 - tau
         b = tau
 
@@ -275,7 +279,7 @@ def jit_jax_discretize(problem, method):
         u = a * nu_k + b * nu_kp
         sigma = dt_k
 
-        fc, Ac, Bc    = lin_dyn(tau, x, u)
+        fc, Ac, Bc    = lin_dyn(tau, x, u, params)
 
         P1_dot = (sigma * fc)
         P2_dot = (sigma * Ac @ phi_a).reshape((nz*nz,))
@@ -286,11 +290,11 @@ def jit_jax_discretize(problem, method):
         return jnp.concatenate([P1_dot, P2_dot, P3_dot, P4_dot, P5_dot])
 
     # rk4 single step function for jax integration
-    def rk4_step_jax(tau, lds, nu_k, nu_kp, dt_k):
-        k1 = pack_lds_dot(tau, lds, nu_k, nu_kp, dt_k)
-        k2 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k1, nu_k, nu_kp, dt_k)
-        k3 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k2, nu_k, nu_kp, dt_k)
-        k4 = pack_lds_dot(tau + dt_sub, lds + dt_sub * k3, nu_k, nu_kp, dt_k)
+    def rk4_step_jax(tau, lds, nu_k, nu_kp, dt_k, params):
+        k1 = pack_lds_dot(tau, lds, nu_k, nu_kp, dt_k, params)
+        k2 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k1, nu_k, nu_kp, dt_k, params)
+        k3 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k2, nu_k, nu_kp, dt_k, params)
+        k4 = pack_lds_dot(tau + dt_sub, lds + dt_sub * k3, nu_k, nu_kp, dt_k, params)
         
         lds_next = lds + (dt_sub / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
         return lds_next, None
@@ -318,7 +322,7 @@ def jit_jax_discretize(problem, method):
         return (A_jax_k, B_jax_k, Bp_jax_k, S_jax_k, z_minus_k)
 
     # propagation function for node k
-    def propagate_k(k, z_ref, nu_ref, dt_ref):
+    def propagate_k(k, z_ref, nu_ref, dt_ref, params):
         z_k  = z_ref[k]
         nu_k  = nu_ref[k]
         nu_kp = nu_ref[k+1]
@@ -329,14 +333,14 @@ def jit_jax_discretize(problem, method):
 
         # propagate stacked vector
         def rk4_step_jax_partial(lds, tau):
-            return rk4_step_jax_jit(tau, lds, nu_k, nu_kp, dt_k)
+            return rk4_step_jax_jit(tau, lds, nu_k, nu_kp, dt_k, params)
 
         ldsf_k, _ = jax.lax.scan(rk4_step_jax_partial, lds0_k, t[:-1])
 
         # unpack the stacked vector back into appropriate shapes
         return unpack_ldsf(ldsf_k)
     
-    propagate = jax.jit(jax.vmap(propagate_k, in_axes=(0, None, None, None)))
+    propagate = jax.jit(jax.vmap(propagate_k, in_axes=(0, None, None, None, None)))
 
     method.propagate_discretization_jax = propagate
 
@@ -348,9 +352,11 @@ def discretize_inv_free_jax(z_ref_np, nu_ref_np, dt_ref_np, problem, method):
     nu_ref = jnp.asarray(nu_ref_np)
     dt_ref = jnp.asarray(dt_ref_np)
 
+    params = problem.params
+
     # call jitted propagator for each node
     ks = jnp.arange(method.N - 1)
-    A_jax, B_jax, Bp_jax, S_jax, z_minus = method.propagate_discretization_jax(ks, z_ref, nu_ref, dt_ref)
+    A_jax, B_jax, Bp_jax, S_jax, z_minus = method.propagate_discretization_jax(ks, z_ref, nu_ref, dt_ref, params)
 
     z_ref_0 = z_ref[[0], :]
     

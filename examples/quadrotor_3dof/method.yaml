@@ -61,7 +61,7 @@ weights:
   w_term_scale:   100.0
 
 
-nl_guess_u_start: "${(np.array([0, 0, planet.g]) * vehicle.mass) + np.array([0.08, 0.08, 0.0])}"
-nl_guess_u_stop:  "${(np.array([0, 0, planet.g]) * vehicle.mass) + np.array([0.08, 0.08, 0.0])}"
+nl_guess_u_start: "${(np.array([0, 0, params.planet.g]) * params.vehicle.mass) + np.array([0.08, 0.08, 0.0])}"
+nl_guess_u_stop:  "${(np.array([0, 0, params.planet.g]) * params.vehicle.mass) + np.array([0.08, 0.08, 0.0])}"
 
-line_guess_u_init: "${np.tile(np.array([0, 0, planet.g]) * vehicle.mass, (N, 1))}"
+line_guess_u_init: "${np.tile(np.array([0, 0, params.planet.g]) * params.vehicle.mass, (N, 1))}"

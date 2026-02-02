@@ -36,7 +36,7 @@ class SolutionMethod:
         self.problem.costs.convexify_costs()
 
         discretize.jit_jax_discretize(problem, self)
-        integrators.jit_rk4_jax_dense(problem, self)
+        integrators.jit_rk4_jax_dense(problem, self, problem.params)
 
         buff_dyn = str(self.flags.get("buff_dyn", "term"))
 

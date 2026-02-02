@@ -123,30 +123,6 @@ def aero_load(t, z, nu, params, fcns): # normal load
 
     return jnp.linalg.norm(aero["f_trans"])
 
-def dynamic_pressure_nonjax(t, z, nu, params, fcns):
-    r = jnp.linalg.norm(z[0:3])
-    v = jnp.linalg.norm(z[3:6])
-
-    rho = fcns['atmosphere_model_nonjax'](t, z, nu, params)
-
-    return 0.5 * rho * v ** 2
-
-def heat_rate_nonjax(t, z, nu, params, fcns):
-    r = jnp.linalg.norm(z[0:3])
-    v = jnp.linalg.norm(z[3:6])
-
-    rho = fcns['atmosphere_model_nonjax'](t, z, nu, params)
-
-    return params['vehicle']['kQ'] * rho ** 0.5 * v ** 3
-
-def aero_load_nonjax(t, z, nu, params, fcns):
-    r = jnp.linalg.norm(z[0:3])
-    v = jnp.linalg.norm(z[3:6])
-
-    aero = fcns['nonlinear_aero_nonjax'](t, z, nu, params)
-
-    return jnp.linalg.norm(aero["f_trans"])
-
 def quaternion_norm(t, z, nu, params):
     return jnp.array([jnp.linalg.norm(z[6:10])])
 

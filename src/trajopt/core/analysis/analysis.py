@@ -1,3 +1,4 @@
+import copy
 import numpy as np
 from scipy.integrate import solve_ivp
 import trajopt.utils.tools as tools
@@ -32,9 +33,10 @@ def perform_default_analysis(trajopt_obj):
     n = problem.n
     nondim = method.nondim
 
-    problem_params = problem.config
-    method_params = tools.extract_attributes(method, method_params_list)
-    params_dict = {**problem_params, **method_params}
+    problem_config = problem.config
+    method_config = tools.extract_attributes(method, method_params_list)
+    params = problem.params
+    all_params_dict = {**problem_config, **params, **method_config}
 
     for data in iter_data[1:]:
         
@@ -64,9 +66,9 @@ def perform_default_analysis(trajopt_obj):
                 
                 # slice state to original dimension (n) to handle augmented states from 
                 # continuous time reformulation
-                opt_vals  = constraint.compute_constraint_values(t_opt, z_opt[:, :n], nu_opt)
-                nl_vals   = constraint.compute_constraint_values(t_nl, z_nl[:, :n], nu_nl)
-                init_vals = constraint.compute_constraint_values(t_init, z_init[:, :n], nu_init)
+                opt_vals  = constraint.compute_constraint_values(t_opt, z_opt[:, :n], nu_opt, params)
+                nl_vals   = constraint.compute_constraint_values(t_nl, z_nl[:, :n], nu_nl, params)
+                init_vals = constraint.compute_constraint_values(t_init, z_init[:, :n], nu_init, params)
 
                 output = {
                     "name": name,
@@ -96,7 +98,7 @@ def perform_default_analysis(trajopt_obj):
         data['nu_opt'] = nu_opt @ nondim.M["ctrl"]["nd2d"]
         data['constraint_data'] = constraint_data
 
-    return {'iters': iter_data, 'params': params_dict}
+    return {'iters': iter_data, 'params': all_params_dict}
 
 
 # ======================================================================
@@ -117,14 +119,69 @@ def run_standalone_analysis(trajopt_obj):
 # MONTE CARLO ANALYSIS
 # ======================================================================
 
-def add_monte_carlo_dispersions(mission_dict, realization):
-        for mc_var, mc_disp in realization.items():
-            mission_dict[mc_var] = mission_dict[mc_var] + mc_disp
+def get_nested(d, path):
+    for part in path.split('.'):
+        d = d.get(part, {}) if isinstance(d, dict) else None
+        if d is None:
+            return None
+    return d
 
-def run_mc_analysis(trajopt_obj):
+def set_nested(d, path, value):
+    parts = path.split('.')
+    for part in parts[:-1]:
+        d = d.setdefault(part, {})
+    d[parts[-1]] = value
 
-    # what is in nominal config?
-
-    num_runs = variations_config["num_runs"]
-
-    nomainal_data = perform_default_analysis(trajopt_obj)
+def run_mv_pv_analysis(trajopt_obj):
+    cfg = trajopt_obj.variation_config
+    mission_vars = cfg.get('mission_variations', {})
+    mission_config = trajopt_obj.problem.config['mission']
+    num = cfg.get('num_mission_variations', 1)
+    
+    if 'seed' in cfg:
+        np.random.seed(cfg['seed'])
+    
+    nominal = {}
+    for path in mission_vars:
+        val = get_nested(mission_config, path)
+        nominal[path] = np.array(val).copy() if val is not None else None
+    
+    scenario_data = {"autotune": {"mc_data": [perform_default_analysis(trajopt_obj)]}}
+    
+    for i in range(num):
+        print(f"\n=== MC Run {i+1}/{num} ===")
+        for path, spec in mission_vars.items():
+            if spec.get("type") == "uniform":
+                delta = np.random.uniform(np.array(spec["lb"]), np.array(spec["ub"]))
+            else:
+                delta = np.random.normal(np.array(spec["mu"]), np.array(spec["sigma"]))
+            new_val = nominal[path] + delta
+            print(f"  {path}: {nominal[path]} + {delta} = {new_val}")
+            set_nested(mission_config, path, new_val.tolist() if hasattr(new_val, 'tolist') else new_val)
+        
+        trajopt_obj.problem.update_from_config(mission_vars.keys(), trajopt_obj.method.nondim)
+        trajopt_obj.method.get_initial_guess(trajopt_obj.problem)
+        m = trajopt_obj.method
+        problem = trajopt_obj.problem
+        subprob = m.subprob
+        trajopt_obj.method.subprob.iter_data = [{
+            "iter_num": 0,
+            "z_ref": m.z_init,
+            "nu_ref": m.nu_init,
+            "dt_ref": m.dt_init,
+            "t_ref": m.t_init,
+            "conv_data": {
+                "vb_ineq": np.zeros((subprob.N, problem.n_ineq)),
+                "vb_dyn":  np.zeros((subprob.N - 1, subprob.n_dyn)),
+                "vb_term": np.zeros((problem.n_term_total, 1)),
+            },
+            "weights": copy.deepcopy(m.weights),
+        }]
+        trajopt_obj.solve()
+        scenario_data["autotune"]["mc_data"].append(perform_default_analysis(trajopt_obj))
+    
+    for path, val in nominal.items():
+        if val is not None:
+            set_nested(mission_config, path, val.tolist() if hasattr(val, 'tolist') else val)
+    
+    return scenario_data

@@ -7,7 +7,7 @@ params.vehicle.inherit: trajopt/library/missions/shared/vehicle/msl.yaml
 nondim.z_types: ["d", "d", "d", "v", "v", "v"]
 nondim.u_types: ["ang", "ang"]
 nondim.anchor_types: ["t", "v", "m"]
-nondim.anchor_scales: ["${(planet.r / planet.g)**0.5}", "${(planet.r * planet.g)**0.5}", "${vehicle.mass}"]
+nondim.anchor_scales: ["${(params.planet.r / params.planet.g)**0.5}", "${(params.planet.r * params.planet.g)**0.5}", "${params.vehicle.mass}"]
 
 flags.ctrl_type: bank_only
 
@@ -57,7 +57,6 @@ constraints.max_Q:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/reentry_3dof_cartesian.py:heat_rate
-  mission_params: {"cos_theta_max": null, "trigger_height": null}
   units: [{none: 1}]
   dimension: 1
   ct: 0
@@ -66,7 +65,6 @@ constraints.max_q:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/reentry_3dof_cartesian.py:dynamic_pressure
-  mission_params: {"cos_theta_max": null, "trigger_height": null}
   units: [{none: 1}]
   dimension: 1
   ct: 0

@@ -42,8 +42,8 @@ zf_max_idx: []
 zf_guess: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
 
 # control boundary conditions
-ui: "${np.array([0, 0, planet.g]) * vehicle.mass}"
-uf: "${np.array([0, 0, planet.g]) * vehicle.mass}"
+ui: "${np.array([0, 0, params.planet.g]) * params.vehicle.mass}"
+uf: "${np.array([0, 0, params.planet.g]) * params.vehicle.mass}"
 ui_idx: [0, 1, 2]
 uf_idx: [0, 1, 2]
 
