@@ -4,25 +4,6 @@
 dimensions.n: 6
 dimensions.m: 2
 
-nondim.z_types: ["d", "ang", "ang", "v", "ang", "ang"]
-nondim.u_types: ["ang", "ang"]
-
-params.planet.inherit: trajopt/library/missions/shared/planet/mars.yaml
-params.vehicle.inherit: trajopt/library/missions/shared/vehicle/msl.yaml
-
-nondim.anchor_types : ["t", "v", "m"]
-nondim.anchor_scales: ["${(params.planet.r / params.planet.g)**0.5}", "${(params.planet.r * params.planet.g)**0.5}", "${params.vehicle.mass}"]
-
-flags.ctrl_type: "bank_only"
-
-plotting.state_groups:
-  "Radius": [0]
-  "Theta": [1]
-  "Phi": [2]
-  "Velocity": [3]
-  "Gamma": [4]
-  "Psi": [5]
-
 # ===============================
 # CONSTRAINT MODELS
 # ===============================
@@ -130,3 +111,26 @@ costs.min_time:
 costs.min_terminal_velocity:
   type: terminal_state
   x_idx: [3]
+
+# ===============================
+# MISC CONFIG
+# ===============================
+
+nondim.z_types: ["d", "ang", "ang", "v", "ang", "ang"]
+nondim.u_types: ["ang", "ang"]
+
+params.planet.inherit: trajopt/library/missions/shared/planet/mars.yaml
+params.vehicle.inherit: trajopt/library/missions/shared/vehicle/msl.yaml
+
+nondim.anchor_types : ["t", "v", "m"]
+nondim.anchor_scales: ["${(params.planet.r / params.planet.g)**0.5}", "${(params.planet.r * params.planet.g)**0.5}", "${params.vehicle.mass}"]
+
+flags.ctrl_type: "bank_only"
+
+plotting.state_groups:
+  "Radius": [0]
+  "Theta": [1]
+  "Phi": [2]
+  "Velocity": [3]
+  "Gamma": [4]
+  "Psi": [5]
