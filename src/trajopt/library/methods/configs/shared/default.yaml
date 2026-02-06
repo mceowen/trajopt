@@ -60,3 +60,6 @@ weights:
   w_term_scale: 100.0
 
 N: 40
+
+solver_opts:
+  solver: "CLARABEL"

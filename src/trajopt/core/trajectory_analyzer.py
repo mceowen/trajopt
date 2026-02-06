@@ -10,7 +10,7 @@ import yaml
 
 class TrajectoryAnalyzer:
 
-    def __init__(self, mission_path, model_path, method_path, variation_config_path=None):
+    def __init__(self, mission_path, model_path, method_path, variations=None):
         config = cfg.load_trajopt_config(mission_path, model_path, method_path)
         problem_config = config['problem']
         method_config = config['method']
@@ -22,8 +22,8 @@ class TrajectoryAnalyzer:
         self.scenario_data = None
         self.variation_config = None
         
-        if variation_config_path is not None:
-            with open(variation_config_path, 'r') as f:
+        if variations is not None:
+            with open(variations, 'r') as f:
                 self.variation_config = yaml.safe_load(f)
 
     def solve(self):
@@ -34,8 +34,8 @@ class TrajectoryAnalyzer:
         # run standalone anaylsis by default or method/parameter variations if specified
         if analysis_type == "standalone":
             self.scenario_data = analysis.run_standalone_analysis(self)
-        elif analysis_type == "mv_pv":
-            self.scenario_data = analysis.run_mv_pv_analysis(self)
+        elif analysis_type == "mc":
+            self.scenario_data = analysis.run_mc_analysis(self)
 
         # plot the results
         plotting.plot_default(self)

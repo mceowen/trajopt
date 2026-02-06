@@ -52,7 +52,7 @@ def dynamics(t, z, nu, params, fcns):
 
     return x_dot
 
-def heat_rate(t, z, nu, params, fcns): # heat rate
+def heat_rate(t, z, nu, params, fcns):
 
     r = z[0]
     v = z[3]
@@ -61,7 +61,7 @@ def heat_rate(t, z, nu, params, fcns): # heat rate
 
     return jnp.array([params['vehicle']['kQ'] * rho ** 0.5 * v ** 3])
 
-def dynamic_pressure(t, z, nu, params, fcns):  #dynamic pressure
+def dynamic_pressure(t, z, nu, params, fcns):
     
     r = z[0]
     v = z[3]
@@ -70,7 +70,7 @@ def dynamic_pressure(t, z, nu, params, fcns):  #dynamic pressure
 
     return jnp.array([0.5 * rho * (v) ** 2])
 
-def aero_load(t, z, nu, params, fcns): # normal load
+def aero_load(t, z, nu, params, fcns):
 
     aero = fcns['nonlinear_aero'](t, z, nu, params, fcns)
 

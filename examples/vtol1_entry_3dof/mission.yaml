@@ -1,8 +1,20 @@
-params.planet.inherit: trajopt/library/missions/shared/planet/earth.yaml
-params.vehicle.inherit: trajopt/library/missions/shared/vehicle/vtol.yaml
+# ===============================
+# FUNCTIONS
+# ===============================
 
 fcns.density_model: trajopt/library/missions/vtol.py:exp_density_jax
 fcns.nonlinear_aero: trajopt/library/missions/vtol.py:nonlinear_aero_jax
+
+# ===============================
+# FUNCTION PARAMETERS
+# ===============================
+
+params.planet.inherit: trajopt/library/missions/shared/planet/earth.yaml
+params.vehicle.inherit: trajopt/library/missions/shared/vehicle/vtol.yaml
+
+# ===============================
+# CONSTRAINT/COST PARAMS
+# ===============================
 
 constraints.initial_state.x: ["${params.planet.r + 100e3}", 0.0, 0.0, 7450, -0.5, 0.0]
 constraints.initial_state.x_idx: [0, 1, 2, 3, 4, 5]
@@ -30,6 +42,10 @@ constraints.max_q.eps: [0.01]
 
 constraints.max_load.max_val: 24.525
 constraints.max_load.eps: [0.01]
+
+# ===============================
+# ACTIVE CONSTRAINTS AND COSTS
+# ===============================
 
 constraint_list: [initial_state, final_state, state_limits, bank_angle_limit, bank_angle_rate_limit, max_Q, max_q, max_load]
 cost_list: [min_terminal_velocity]

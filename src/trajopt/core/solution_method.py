@@ -119,12 +119,11 @@ class SolutionMethod:
         self.nl_guess_u_start = self.nondim.M["ctrl"]["d2nd"] @ self.guess["nl_guess_u_start"]
         self.nl_guess_u_stop  = self.nondim.M["ctrl"]["d2nd"] @ self.guess["nl_guess_u_stop"]
 
-        self.line_guess_u_init = self.guess["line_guess_u_init"] @ self.nondim.M["ctrl"]["d2nd"]
-
         if self.flags["dynamics_nonconvex"] and (self.flags.get("buff_dyn")=="term"):
             nu_range = np.vstack([self.nl_guess_u_start, self.nl_guess_u_stop])
             guess.nonlinear_initial_guess(nu_range, problem, self)
         else:
+            self.line_guess_u_init = self.guess["line_guess_u_init"] @ self.nondim.M["ctrl"]["d2nd"]
             guess.straight_line_initial_guess(problem, self)
             self.nu_init = self.guess["line_guess_u_init"]
 

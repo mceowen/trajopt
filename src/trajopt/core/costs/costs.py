@@ -1,5 +1,4 @@
 import trajopt.core.costs.costs_library as costs_library
-from pprint import pprint
 import inspect
 from functools import partial
 import trajopt.library.methods.convexify as convexify
@@ -29,9 +28,6 @@ class Costs:
             
             self.cost_ids[cost_type].append(i)
             self.cost_ids['all'].append(i)
-
-        # print("cost_ids: \n")
-        # pprint(self.cost_ids)
 
     def get(self, cost_type):
         
@@ -73,11 +69,7 @@ class Costs:
         for cost in self.costs_list:
             cost.nondim_cost(nondim)
 
-        print("costs nondimmed!")
-
     def convexify_costs(self):
         for cost in self.costs_list:
             if getattr(cost, 'fcn', None) is not None:
                 cost.fcn_jit, cost.dfcn_dz_jit, cost.dfcn_du_jit = convexify.linearize_jax(cost.fcn)
-
-        print("costs convexified!")

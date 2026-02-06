@@ -182,7 +182,6 @@ class axis_angle_cone:
     def compute_constraint_values(self, t, z, nu, params):
         if self.set == "state":
             theta = (z[:, self.x_idx] @ self.axis.T / np.linalg.norm(z[:, self.x_idx], axis=1)).reshape(-1, 1)
-            print("theta.shape: " + str(theta.shape))
         elif self.set == "control":
             theta = (nu[:, self.x_idx] @ self.axis.T / np.linalg.norm(nu[:, self.x_idx], axis=1)).reshape(-1, 1)
         return {"values": np.rad2deg(theta), "limits": self.theta_max}

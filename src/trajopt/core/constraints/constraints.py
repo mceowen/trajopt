@@ -128,14 +128,11 @@ class Constraints:
     def nondim_constraints(self, nondim):
         for constraint in self.constraints_list:
             constraint.nondim_constraint(nondim)
-        print("constraints nondimmed!")
 
     def convexify_constraints(self):
         for constraint in self.constraints_list:
             if getattr(constraint, 'fcn', None) is not None:
                 constraint.fcn_jit, constraint.dfcn_dz_jit, constraint.dfcn_du_jit = convexify.linearize_jax(constraint.fcn)
-
-        print("constraints convexified!")
 
     def augment_ctcs_dynamics(self, n):
         if self.has('ct'):
@@ -145,5 +142,3 @@ class Constraints:
             lin_dyn_ctcs = lambda t, z, nu, params: (f_ctcs(t, z, nu, params), dfcn_dz_ctcs(t, z, nu, params), dfcn_du_ctcs(t, z, nu, params))
 
             dynamics_obj.lin_dyn = lin_dyn_ctcs
-
-            print("ctcs dynamics augmented!")

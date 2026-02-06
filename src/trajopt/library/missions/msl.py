@@ -14,13 +14,6 @@ def exp_density_jax(t, z, nu, params):
     return rho
 
 def nonlinear_aero_jax(t, z, nu, params, fcns):
-    '''
-    returns all aero data as a function of full state
-    
-    TODO: (carlos)
-    this function currently only accepts a single time step!
-    handle the general case? or make seperate function?
-    '''
 
     r = z[0]
     v = z[3]

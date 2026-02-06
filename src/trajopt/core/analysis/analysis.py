@@ -132,7 +132,7 @@ def set_nested(d, path, value):
         d = d.setdefault(part, {})
     d[parts[-1]] = value
 
-def run_mv_pv_analysis(trajopt_obj):
+def run_mc_analysis(trajopt_obj):
     cfg = trajopt_obj.variation_config
     mission_vars = cfg.get('mission_variations', {})
     mission_config = trajopt_obj.problem.config['mission']
@@ -156,7 +156,6 @@ def run_mv_pv_analysis(trajopt_obj):
             else:
                 delta = np.random.normal(np.array(spec["mu"]), np.array(spec["sigma"]))
             new_val = nominal[path] + delta
-            print(f"  {path}: {nominal[path]} + {delta} = {new_val}")
             set_nested(mission_config, path, new_val.tolist() if hasattr(new_val, 'tolist') else new_val)
         
         trajopt_obj.problem.update_from_config(mission_vars.keys(), trajopt_obj.method.nondim)
