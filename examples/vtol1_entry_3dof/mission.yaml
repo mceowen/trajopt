@@ -38,6 +38,7 @@ constraints.max_Q.max_val: 33300
 constraints.max_Q.eps: [0.01]
 
 constraints.max_q.max_val: 18000
+constraints.max_q.min_val: 100
 constraints.max_q.eps: [0.01]
 
 constraints.max_load.max_val: 24.525

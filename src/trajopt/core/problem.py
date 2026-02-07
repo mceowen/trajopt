@@ -56,12 +56,10 @@ class Problem:
         # ------------------------------------------------------------
         # Add constraint/cost config and resolve functions
         # ------------------------------------------------------------
-        
-        self.constraints.add_params(self.params)
-        self.costs.add_params(self.params)
 
-        self.constraints.resolve_functions(self.params, self.fcns)
-        self.costs.resolve_functions(self.params, self.fcns)
+        self.constraints.resolve_functions(self.fcns)
+        self.costs.resolve_functions(self.fcns)
+        # self.costs.make_epigraph_constraints()
 
         # ------------------------------------------------------------
         # CONSTRAINT BOOK KEEPING
@@ -103,6 +101,7 @@ class Problem:
                             setattr(c, field, np.atleast_1d(val))
                             c.nondim_constraint(nondim)
                             break
+            
             elif parts[0] == 'params' and len(parts) >= 2:
                 target = self.params
                 source = mission_config.get('params', {})

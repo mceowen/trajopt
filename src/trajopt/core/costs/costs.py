@@ -40,23 +40,13 @@ class Costs:
 
         return cost_type in self.cost_ids.keys()
 
-    def add_params(self, problem_params):
-
+    def resolve_functions(self, fcns):
         for cost in self.costs_list:
-            if "params" in cost.__dict__:
-                if cost.params is not None:
-                    problem_params = tools.deep_update(problem_params, cost.params)
-
-    def resolve_functions(self, params, fcns):
-        for cost in self.costs_list:
-            # Check fcn_dim (the raw function) since fcn may be None until nondim wrapping
             if getattr(cost, 'fcn_dim', None) is not None:
                 sig = inspect.signature(cost.fcn_dim)
                 param_names = sig.parameters.keys()
 
                 kwargs_to_bind = {}
-                if 'params' in param_names:
-                    kwargs_to_bind['params'] = params
                 if 'fcns' in param_names:
                     kwargs_to_bind['fcns'] = fcns
 
@@ -64,8 +54,6 @@ class Costs:
                     cost.fcn_dim = partial(cost.fcn_dim, **kwargs_to_bind)
 
     def nondim_costs(self, nondim):
-        # apply scaling to each cost so that they are nondim
-        # by the time it gets to the discretization and solver
         for cost in self.costs_list:
             cost.nondim_cost(nondim)
 
@@ -73,3 +61,8 @@ class Costs:
         for cost in self.costs_list:
             if getattr(cost, 'fcn', None) is not None:
                 cost.fcn_jit, cost.dfcn_dz_jit, cost.dfcn_du_jit = convexify.linearize_jax(cost.fcn)
+
+    def make_epigraph_constraints(self, constraints):
+        for cost in self.costs_list:
+            if getattr(cost, 'make_epigraph_constraint', None) is not None:
+                constraints.register_constraint
