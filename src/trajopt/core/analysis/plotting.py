@@ -38,9 +38,14 @@ def _get_plotting_config(trajopt_obj):
     return model_config.get('plotting', {})
 
 
+def _method_key(trajopt_obj):
+    return next(iter(trajopt_obj.scenario_data))
+
+
 def _get_final_iter_data(trajopt_obj):
     """Get the final iteration data for setting axis limits."""
-    return trajopt_obj.scenario_data['autotune']['mc_data'][0]['iters'][-1]
+    key = _method_key(trajopt_obj)
+    return trajopt_obj.scenario_data[key]['mc_data'][0]['iters'][-1]
 
 
 def _set_axis_limits(ax, y_data, margin_frac=0.1):
@@ -196,7 +201,8 @@ def _plot_trajectories(PLTS, trajopt_obj, lgnd):
 
 def _plot_constraints(PLTS, data, show_iters, iters, lgnd):
     """Plot constraint data. Axis limits based on converged solution."""
-    constraint_data = data['scenario1']['autotune']['mc_data'][0]['iters'][-1].get('constraint_data', {})
+    key = next(iter(data['scenario1']))
+    constraint_data = data['scenario1'][key]['mc_data'][0]['iters'][-1].get('constraint_data', {})
     
     for constraint_group, group_data in constraint_data.items():
         num_constraints = len(group_data)
@@ -252,9 +258,10 @@ def plot_default(trajopt_obj, show_iters=True):
     lgnd = 'legend1'
     iters = list(range(1000))
     
+    method_key = _method_key(trajopt_obj)
     PLTS.setCurrent({
         'scenarios': ['scenario1'],
-        'methods': ['autotune'],
+        'methods': [method_key],
         'runs': list(range(1000)),
         'iters': iters
     })
@@ -274,8 +281,9 @@ makeGridSpecs = _make_grid_specs
 
 def plot_animated(trajopt_obj, interval=200):
     from IPython.display import display, HTML
-    
-    iters = trajopt_obj.scenario_data['autotune']['mc_data'][0]['iters'][1:]
+
+    key = _method_key(trajopt_obj)
+    iters = trajopt_obj.scenario_data[key]['mc_data'][0]['iters'][1:]
     n_iters, n_states, n_ctrl = len(iters), trajopt_obj.problem.n, trajopt_obj.problem.m  # use original state dimension
     
     t_all = np.concatenate([it['t_nl'] for it in iters])

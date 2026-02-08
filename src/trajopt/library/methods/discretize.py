@@ -4,7 +4,6 @@ import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 from scipy.integrate import solve_ivp
 import trajopt.library.methods.convexify as convexify
-import time
 
 def set_ltv_indices(problem, method):
     """
@@ -230,7 +229,7 @@ def RHS_ltv(tau, lds, nu_ref, dt_ref, problem, method):
 
     return lds_dot
 
-def jit_jax_discretize(problem, method):
+def compile_jax_discretization(problem, method):
     
     n = problem.n
     nz = problem.nz

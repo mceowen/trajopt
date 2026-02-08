@@ -1,7 +1,7 @@
 # ===============================
 # VARIATION CONFIGURATION
 # ===============================
-num_mission_variations: 10
+num_mission_variations: 2
 num_method_variations: 2
 seed: 42
 
@@ -24,3 +24,7 @@ mission_variations:
 # ===============================
 method_variations:
   autotune.flags.flag_autotune: "3"
+  
+  autotune_fixed_final_time.flags.flag_autotune: "3"
+  autotune_fixed_final_time.flags.buff_dyn: "term"
+  autotune_fixed_final_time.flags.free_final_time: 0

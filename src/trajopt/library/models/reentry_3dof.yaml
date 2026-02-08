@@ -112,6 +112,10 @@ costs.min_terminal_velocity:
   type: terminal_state
   x_idx: [3]
 
+# TODO (carlos): add back minimax heating cost 
+# costs.min_max_heat_rate:
+#   type: nonconvex_minmax
+
 # ===============================
 # MISC CONFIG
 # ===============================

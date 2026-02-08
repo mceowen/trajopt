@@ -14,6 +14,7 @@ class equality_bc:
         # required properties
         self.name = cnstr_config["name"]
         self.group = cnstr_config.get("group", None)
+        self.x_guess = cnstr_config.get("x_guess", None)
 
         # type-specific properties
         self.set = cnstr_config["set"]

@@ -1,3 +1,4 @@
+import copy
 from trajopt.core.problem import Problem
 from trajopt.core.solution_method import SolutionMethod
 import trajopt.utils.config_loader as cfg
@@ -15,8 +16,10 @@ class TrajectoryAnalyzer:
         problem_config = config['problem']
         method_config = config['method']
 
-        self.problem = Problem(problem_config)
-        self.method = SolutionMethod(self.problem, method_config)
+        self.problem = Problem(copy.deepcopy(problem_config))
+        self.method = SolutionMethod(self.problem, copy.deepcopy(method_config))
+        self.problem_config = copy.deepcopy(problem_config)
+        self.method_config = copy.deepcopy(method_config)
 
         self.solution = None
         self.scenario_data = None
