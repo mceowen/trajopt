@@ -5,7 +5,7 @@ import trajopt.library.methods.convexify as convexify
 import trajopt.utils.tools as tools
 
 class Costs:
-    def __init__(self, cost_config_list, params):
+    def __init__(self, cost_config_list, config):
 
         self.costs_list = []
         self.cost_ids = {'all': []}
@@ -13,31 +13,32 @@ class Costs:
         print(f"costs:")
 
         # build cost_ids mapping
-        for i, cost_config in enumerate(cost_config_list):
-            cost_type = cost_config["type"]
-            cost_name = cost_config["name"]
+        for cost_number, cost_config in enumerate(cost_config_list):
+            self.register_cost(cost_number, cost_config, config)
 
-            print(f"  {i}: {cost_name}: {cost_type}")
-            cost_params = {k:v for k, v in cost_config.items() if k != "type"}
-            costClass = getattr(costs_library, cost_type)
-            self.costs_list.append(costClass(**cost_params, params=params))
+    def register_cost(self, cost_number, cost_config, config):
+        cost_type = cost_config["type"]
+        cost_name = cost_config["name"]
 
-            if cost_type not in self.cost_ids:
-                self.cost_ids[cost_type] = []
+        print(f"  {cost_number}: {cost_name}: {cost_type}")
+        cost_config = {k:v for k, v in cost_config.items() if k != "type"}
+        
+        costClass = getattr(costs_library, cost_type)
+        self.costs_list.append(costClass(cost_config, config=config))
 
-            
-            self.cost_ids[cost_type].append(i)
-            self.cost_ids['all'].append(i)
+        if cost_type not in self.cost_ids:
+            self.cost_ids[cost_type] = []
+
+        self.cost_ids[cost_type].append(cost_number)
+        self.cost_ids['all'].append(cost_number)
 
     def get(self, cost_type):
-        
         cost_ids = self.cost_ids.get(cost_type, [])
         costs = [self.costs_list[i] for i in cost_ids]
 
         return costs
 
     def has(self, cost_type):
-
         return cost_type in self.cost_ids.keys()
 
     def resolve_functions(self, fcns):
@@ -60,9 +61,4 @@ class Costs:
     def convexify_costs(self):
         for cost in self.costs_list:
             if getattr(cost, 'fcn', None) is not None:
-                cost.fcn_jit, cost.dfcn_dz_jit, cost.dfcn_du_jit = convexify.linearize_jax(cost.fcn)
-
-    def make_epigraph_constraints(self, constraints):
-        for cost in self.costs_list:
-            if getattr(cost, 'make_epigraph_constraint', None) is not None:
-                constraints.register_constraint
+                cost.fcn_compiled, cost.dfcn_dz_compiled, cost.dfcn_du_compiled = convexify.linearize_jax(cost.fcn)

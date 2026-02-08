@@ -68,11 +68,6 @@ class inequality_bc:
             self.x_min = nondim.M["ctrl"]["d2nd"][np.ix_(self.x_min_idx, self.x_min_idx)] @ self.x_min
             self.x_max = nondim.M["ctrl"]["d2nd"][np.ix_(self.x_max_idx, self.x_max_idx)] @ self.x_max
 
-    def update_parameters(self, new_values):
-        # update the parameters of the constraint and re-nondimensionalize it
-        for key, value in new_values.items():
-            self.__dict__[key] = value 
-
 class box:
     def __init__(self, cnstr_config, config=None):
         self.name = cnstr_config["name"]
@@ -102,11 +97,6 @@ class box:
         elif self.set == "control":
             self.x_min = nondim.M["ctrl"]["d2nd"][np.ix_(self.x_min_idx, self.x_min_idx)] @ self.x_min
             self.x_max = nondim.M["ctrl"]["d2nd"][np.ix_(self.x_max_idx, self.x_max_idx)] @ self.x_max
-
-    def update_parameters(self, new_values):
-        # update the parameters of the constraint and re-nondimensionalize it
-        for key, value in new_values.items():
-            self.__dict__[key] = value 
 
     def compute_constraint_values(self, t, z, nu, params):
         if self.set == "state":
@@ -147,11 +137,6 @@ class control_rate_limit:
     def nondim_constraint(self, nondim):
         self.udot_max = nondim.nt * nondim.M["ctrl"]["d2nd"][np.ix_(self.udot_max_idx, self.udot_max_idx)] @ self.udot_max
 
-    def update_parameters(self, new_values):
-        # update the parameters of the constraint and re-nondimensionalize it
-        for key, value in new_values.items():
-            self.__dict__[key] = value
-
 # ---------------------------------------------------------------
 # Second-order cone cosntraints
 # ---------------------------------------------------------------
@@ -171,11 +156,6 @@ class axis_angle_cone:
 
     def nondim_constraint(self, nondim):
         pass
-
-    def update_parameters(self, new_values):
-        # update the parameters of the constraint and re-nondimensionalize it
-        for key, value in new_values.items():
-            self.__dict__[key] = value 
 
     def compute_constraint_values(self, t, z, nu, params):
         if self.set == "state":
@@ -201,11 +181,6 @@ class max_norm_cone:
         elif self.set == "control":
             nondim_key = nondim.u_types[self.x_idx[0]]
             self.max_val = self.max_val * nondim.scales[nondim_key]
-
-    def update_parameters(self, new_values):
-        # update the parameters of the constraint and re-nondimensionalize it
-        for key, value in new_values.items():
-            self.__dict__[key] = value
 
     def compute_constraint_values(self, t, z, nu, params):
         if self.set == "state":
@@ -269,7 +244,7 @@ class nonconvex_inequality:
         self.fcn_dim = resolve_function(self.fcn_string)
         self.fcn_nd = None
 
-        # the symbolic scaled version of fcn_fim will 
+        # this is the symbolic nondimmed version of fcn_fim, it will 
         # be provided once the nondim_constraint() function is called
         self.fcn = None
 

@@ -47,18 +47,6 @@ def set_ltv_indices(problem, method):
     method.Sk_ind_jax    = jnp.asarray(method.Sk_ind)
 
 def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, problem, method):
-    # TODO(carlos):
-    # relying on jax for a bit, will change this once we add general
-    # autodiffing / analytical jacobians
-    #
-    # important considerations: 
-    # - if we allow the user to use different
-    #   autodiffing for different constraints, we lose the ability to 
-    #   vectorize things. currently not vectorized even though we're 
-    #   using jax, but i think the bottleneck is discretization
-    #
-    # - should analytical jacobians be an option?
-
     n_ineq = problem.n_ineq
     n = problem.n
     m = problem.m
@@ -110,8 +98,8 @@ def compute_linearized_costs(t_ref, z_ref, u_ref, problem, method):
     dcostdnu = np.zeros((N, 1, m))
 
     # evaluate costs at each timestep
-    for cost_fn in problem.costs.get("nonconvex_running"):
-        if cost_fn.type == "nonconvex_running":
+    for cost in problem.costs.get("nonconvex"):
+        if cost.type.term == 0:
             for k in range(N-1):
                 tk = t_jax[k]
                 zk = z_jax[k]

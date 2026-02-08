@@ -53,10 +53,11 @@ class Constraints:
             self.register_constraint(cnstr_number, cnstr_config, config)
 
     def register_constraint(self, cnstr_number, cnstr_config, config):
+        cnstr_name = cnstr_config["name"]
         cnstr_type = cnstr_config["type"]
-        constraint_name = cnstr_config["name"]
 
-        print(f"  {cnstr_number}: {constraint_name}: {cnstr_type}")
+        print(f"  {cnstr_number}: {cnstr_name}: {cnstr_type}")
+        
         cnstr_config = {k:v for k, v in cnstr_config.items() if k != "type"}
         constraintClass = getattr(constraints_library, cnstr_type)
 
@@ -73,12 +74,12 @@ class Constraints:
 
         if implement_type not in self.constraint_ids[ct_type]:
             self.constraint_ids[ct_type][implement_type] = []
-        if constraint_name not in self.constraint_ids['name']:
-            self.constraint_ids['name'][constraint_name] = []
+        if cnstr_name not in self.constraint_ids['name']:
+            self.constraint_ids['name'][cnstr_name] = []
         
         self.constraint_ids[ct_type][implement_type].append(cnstr_number)
         self.constraint_ids[ct_type]['all'].append(cnstr_number)
-        self.constraint_ids['name'][constraint_name].append(cnstr_number)
+        self.constraint_ids['name'][cnstr_name].append(cnstr_number)
         self.constraint_ids['all']['all'].append(cnstr_number)
         
     def get(self, level1, level2=None):
