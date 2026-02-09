@@ -1,9 +1,0 @@
-# this defines the variations to the nominal method 
-
-method1:
-  flags:
-    "equal_dt"        : 1
-
-# method2:
-#   flags:
-#     "equal_dt"        : 1
