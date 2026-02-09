@@ -138,3 +138,7 @@ plotting.state_groups:
   "Velocity": [3]
   "Gamma": [4]
   "Psi": [5]
+
+plotting.state_traj_groups:
+  "long_lat_alt": [0, 1, 2]
+  "long_lat": [1, 2]

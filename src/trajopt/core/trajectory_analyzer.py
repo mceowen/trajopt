@@ -40,8 +40,8 @@ class TrajectoryAnalyzer:
         elif analysis_type == "mc":
             self.scenario_data = analysis.run_mc_analysis(self)
 
-        # plot the results
-        plotting.plot_default(self)
+        # plot the results (use MC-style plots when analysis_type is "mc")
+        plotting.plot_default(self, analysis_type=analysis_type)
 
         # animate the results if specified
         if animate:

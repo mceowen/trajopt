@@ -522,10 +522,9 @@ class SCVXPLOTS:
         if typ=='manual':
             axs = {};
             for tag in grid:
-                if tag in plttyps:
-                    if plttyps[tag] == '3D':
-                        axs[tag] = fig.add_axes(grid[tag],projection='3d')
-                else: 
+                if tag in plttyps and plttyps[tag] == '3D':
+                    axs[tag] = fig.add_axes(grid[tag],projection='3d')
+                else:
                     axs[tag] = fig.add_axes(grid[tag])
         return axs;
 

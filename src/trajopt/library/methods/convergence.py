@@ -14,7 +14,7 @@ def set_convergence_tolerance(problem, method):
     n = problem.nz
 
     ctcs_mult_state = 1.0; #method.conv["ctcs_mult_state"]
-    ctcs_mult_cnst  =  method.conv["ctcs_fac_cnst"] * method.guess["T_init"] / (method.N-1)
+    ctcs_mult_cnst  =  method.conv.get("ctcs_fac_cnst", 1.0) * method.guess["T_init"] / (method.N-1)
 
     if len(method.conv["eps_state"]) == 1:
         eps_state    = method.conv["eps_state"] * np.ones(n)
