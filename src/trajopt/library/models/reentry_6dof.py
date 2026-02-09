@@ -49,44 +49,66 @@ def dynamics(t, z, nu, params, fcns):
       - z[3:6]   = velocity (m/s)  
       - z[6:10]  = quaternion (scalar-first)
       - z[10:13] = angular velocity (deg/s)
-      - z[13:16] = reference quaternion vector part (optimized by SCP)
     
-    Control nu[0:3] = rate of reference quaternion vector
+    Control nu[0:3] = reference quaternion vector
     """
     # extract states
     r = z[0:3]
     v = z[3:6]
     q = z[6:10]
     w = jnp.deg2rad(z[10:13]) 
-    q_ref_vec = z[13:16]
-    q_ref_vec_dot = nu[:3]
+    quat_vec_ref = nu[:3]
 
-    veh = params['vehicle']
+
+    # extract parameters
+    veh    = params['vehicle']
     planet = params['planet']
-    mu = planet['mu']
-    Jbvec = jnp.array([veh["Jb11"], veh["Jb22"], veh["Jb33"]])
-    Jb = jnp.diag(Jbvec)
-    Jbinv = jnp.diag(1 / Jbvec)
-    mass = veh["mass"]
+    mu     = planet['mu']
+    Jbvec  = jnp.array([veh["Jb11"], veh["Jb22"], veh["Jb33"]])
+    Jb     = jnp.diag(Jbvec)
+    Jbinv  = jnp.diag(1 / Jbvec)
+    mass   = veh["mass"]
 
-    # === SIMPLE PD CONTROLLER ===
-    q_sign = jnp.sign(q[0] + 1e-10)  # +1 if q[0] >= 0, -1 if q[0] < 0
+    # Dynamic pressure for gain scheduling (inverse scaling: high q -> lower gains)
+    rho = fcns['density_model'](t, z, nu, params)
+    v_norm = jnp.linalg.norm(v)
+    q_dyn = 0.5 * rho * v_norm**2
+    q_ref = veh.get("ctrl_q_ref", 1e4)       # Pa, reference dynamic pressure
+    q_min = veh.get("ctrl_q_min", 1.0)       # Pa, lower bound to avoid huge gains
+    scale_lo = veh.get("ctrl_scale_lo", 0.2)
+    scale_hi = veh.get("ctrl_scale_hi", 5.0)
+    q_dyn_safe = jnp.maximum(q_dyn, q_min)
+    scale = jnp.clip(q_ref / q_dyn_safe, scale_lo, scale_hi)
+
+    # === PD CONTROLLER (gain scheduled by dynamic pressure) ===
+    q_sign = jnp.sign(q[0] + 1e-10)
     q_vec = q_sign * q[1:4]
-    q_err = q_vec - q_ref_vec
-    
+    q_err = q_vec - quat_vec_ref
+
     wn = 5.0
-    zeta = 2.0
-    Kp = wn**2 * Jbvec
-    Kd = 2.0 * zeta * wn * Jbvec
-    
+    zeta = 1.0
+    Kp = wn**2 * Jbvec * scale
+    Kd = 2.0 * zeta * wn * Jbvec * scale
+
     moment = -Kp * q_err - Kd * w
-    # ============================
+    # ==========================================================
+    
+    # controller:
+    # - real 6-dof sytems need feedback to be stable
+    # - real physics, include feedback OR simplified physics and feedforward
+    # can we optimize kp, kd as a state
+    # can we come up with a rule from breannas paper for tuning gains (or just get from breanna, use and cite, dont need to worry about reviewers)
+
+
+    # simplified model / forward
+    # - 
+    # - 
 
     r_norm = jnp.linalg.norm(r)
     a_grav = -mu * r / r_norm ** 3
 
     # aero forces and moments
-    aero = fcns['nonlinear_aero_jax'](t, z, nu, params)
+    aero = fcns['nonlinear_aero'](t, z, nu, params, fcns)
     a_aero_trans = 1 / mass * DCM(q).T @ aero["f_trans"]
     m_aero_rot = aero["m_rot"]
 
@@ -95,7 +117,7 @@ def dynamics(t, z, nu, params, fcns):
     w_dot = jnp.rad2deg(Jbinv @ (m_aero_rot + moment - cr(w) @ Jb @ w))
 
     # state derivative
-    x_dot = jnp.concatenate([v, a_aero_trans + a_grav, q_dot, w_dot, q_ref_vec_dot])
+    x_dot = jnp.concatenate([v, a_aero_trans + a_grav, q_dot, w_dot])
 
     return x_dot
 
@@ -104,7 +126,7 @@ def heat_rate(t, z, nu, params, fcns): # heat rate
     r = jnp.linalg.norm(z[0:3])
     v = jnp.linalg.norm(z[3:6])
 
-    rho = fcns['atmosphere_model_jax'](t, z, nu, params)
+    rho = fcns['density_model'](t, z, nu, params)
 
     return jnp.array([params['vehicle']['kQ'] * rho ** 0.5 * v ** 3])
 
@@ -113,27 +135,21 @@ def dynamic_pressure(t, z, nu, params, fcns):  #dynamic pressure
     r = jnp.linalg.norm(z[0:3])
     v = jnp.linalg.norm(z[3:6])
 
-    rho = fcns['atmosphere_model_jax'](t, z, nu, params)
+    rho = fcns['density_model'](t, z, nu, params)
 
     return jnp.array([0.5 * rho * v ** 2])
 
 def aero_load(t, z, nu, params, fcns): # normal load
 
-    aero = fcns['nonlinear_aero_jax'](t, z, nu, params)
+    aero = fcns['nonlinear_aero'](t, z, nu, params, fcns)
 
     return jnp.linalg.norm(aero["f_trans"])
 
 def quaternion_norm(t, z, nu, params):
     return jnp.array([jnp.linalg.norm(z[6:10])])
 
-def minimum_quaternion_norm(t, z, nu, params):
-    return jnp.array([-jnp.linalg.norm(z[6:10])])
-
-def minimum_velocity(t, z, nu, params):
-    return jnp.array([- jnp.linalg.norm(z[3:6])])
-
-def minimum_altitude(t, z, nu, params):
-    return jnp.array([-(jnp.linalg.norm(z[0:3]) - params['planet']['r'])])
+def velocity(t, z, nu, params):
+    return jnp.array([jnp.linalg.norm(z[3:6])])
 
 def aoa(t, z, nu, params):
     # Extract states and controls
@@ -154,7 +170,7 @@ def aoa(t, z, nu, params):
 
     alpha = jnp.rad2deg(jnp.arctan2(e_v_body[2], e_v_body[0]))  # AoA: angle in x-z plane
 
-    return jnp.array([-alpha, alpha])
+    return jnp.array([alpha])
 
 def sideslip(t, z, nu, params):
     # Extract states and controls
@@ -175,4 +191,7 @@ def sideslip(t, z, nu, params):
 
     beta = jnp.rad2deg(jnp.arctan2(e_v_body[1], e_v_body[0]))
 
-    return jnp.array([-beta, beta])
+    return jnp.array([beta])
+
+def altitude(t, z, nu, params):
+    return jnp.array([(jnp.linalg.norm(z[0:3]) - params['planet']['r'])])

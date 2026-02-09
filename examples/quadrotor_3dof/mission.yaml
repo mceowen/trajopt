@@ -9,7 +9,11 @@
 params.planet.inherit: trajopt/library/missions/shared/planet/earth.yaml
 params.vehicle.inherit: trajopt/library/missions/shared/vehicle/quadrotor.yaml
 
-constraints: 
+# ===============================
+# CONSTRAINT/COST PARAMS
+# ===============================
+
+constraints:
   dynamics:
     type: dynamics
     fcn: trajopt/library/models/quadrotor_3dof.py:dynamics_jax
@@ -77,13 +81,20 @@ costs:
   min_time:
     type: min_time
 
-constraint_list: [dynamics, initial_state, state_limits, final_state, initial_control, final_control, control_rate_limit, max_thrust, min_thrust]
-cost_list: [min_time]
+# ===============================
+# ACTIVE CONSTRAINTS AND COSTS
+# ===============================
 
+constraint_list:
+  - dynamics
+  - initial_state
+  - state_limits
+  - final_state
+  - initial_control
+  - final_control
+  - control_rate_limit
+  - max_thrust
+  - min_thrust
 
-# TODO: add noflyzones constraints as nonconvex inequality 
-# # no fly zones positions and radii
-# obs:
-#   xc: [2.5, 5.0, 2.5, 5.5, 8.0, 5.5]
-#   yc: [2.0, 2.5, 5.0, 5.25, 5.5, 8.0]
-#   rc: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+cost_list:
+  - min_time

@@ -53,6 +53,7 @@ def nonlinear_initial_guess(problem, method):
     nl_guess_u_stop  = method.nondim.M["ctrl"]["d2nd"] @ method.guess["nl_guess_u_stop"]
 
     t_init           = np.cumsum(np.concatenate(([0], method.dt_init)))
+    t_nl = np.linspace(t_init[0], t_init[-1], 10000)
 
     # linearly interpolate the control between the start and stop values using scipy.interpolate.interp1d
     t_start_end_pts = np.array([t_init[0], t_init[-1]])
@@ -63,13 +64,13 @@ def nonlinear_initial_guess(problem, method):
     dynamics_cnstr = problem.constraints.get('name', 'dynamics')[0]
     
     if dynamics_cnstr.backend == "jax":
-        t_nl, z_nl, nu_nl = integrators.propagate_jax_rk4_dense(z0, nu_init, t_init, t_init, problem, method)
+        t_nl, z_nl, nu_nl = integrators.propagate_jax_rk4_dense(z0, nu_init, t_init, t_nl, problem, method)
 
         z_interp_func = interp1d(t_nl, z_nl, axis=0)
         z_init        = z_interp_func(t_init)
     
     else:
-        t_nl, z_nl, nu_nl = integrators.propagate_scipy_rk45(z0, nu_init, t_init, t_init, problem, method)
+        t_nl, z_nl, nu_nl = integrators.propagate_scipy_rk45(z0, nu_init, t_init, t_nl, problem, method)
 
     return t_init, z_init, nu_init
 

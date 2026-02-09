@@ -254,8 +254,6 @@ def compile_jax_discretization(problem, method):
 
     # packs the derivative of stacked RHS vector for node k
     def pack_lds_dot(tau, lds_k, nu_k, nu_kp, dt_k, params):
-        a = 1 - tau
-        b = tau
 
         x       = lds_k[         : Ak_ind0]
         phi_a   = lds_k[Ak_ind0  : Bk_ind0].reshape((nz, nz))
@@ -263,6 +261,8 @@ def compile_jax_discretization(problem, method):
         phi_b_p = lds_k[Bkp_ind0 : Sk_ind0].reshape((nz, m))
         phi_s   = lds_k[Sk_ind0  : ]
 
+        a = 1 - tau
+        b = tau
         u = a * nu_k + b * nu_kp
         sigma = dt_k
 

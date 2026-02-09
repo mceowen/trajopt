@@ -28,16 +28,6 @@ import trajopt.utils.tools as tools
 # }
 # ------------------------------------------------------------
 
-
-# input type -- in the config file
-# class type -- building constraint
-# 'AFFINE','POLYTOPE','SOC',
-# POLYTOPE - 'BOX','UPPER','LOWER', 
-# SOC - SPHERE, ELLIPSOID, CYLINDER,...
-
-# implementation type -- how to implement in the subproblem
-# --- POLYTOPE_IN, POLYTOPE_OUT, SOC_IN, SOC_OUT, AFFINE_IN, AFFINE_OUT
-
 class Constraints:
     def __init__(self, cnstr_config_list, config):
         self.constraints_list = []

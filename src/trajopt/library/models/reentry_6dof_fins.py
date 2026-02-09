@@ -168,10 +168,8 @@ def sideslip(t, z, nu, params):
     v_norm = jnp.maximum(v_norm, 1e-10)
 
     q = z[6:10]
-    # CRITICAL: Normalize quaternion to ensure valid DCM and avoid NaN gradients
     q = q / jnp.linalg.norm(q)
 
-    # get AoA and sideslip angles
     DCM_q = DCM(q)
     e_v = v / v_norm
 

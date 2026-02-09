@@ -140,5 +140,5 @@ plotting.state_groups:
   "Psi": [5]
 
 plotting.state_traj_groups:
-  "long_lat_alt": [0, 1, 2]
+  "long_lat_alt": [1, 2, 0]
   "long_lat": [1, 2]

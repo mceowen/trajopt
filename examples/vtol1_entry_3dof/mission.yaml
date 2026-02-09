@@ -21,7 +21,7 @@ constraints.initial_state.x_idx: [0, 1, 2, 3, 4, 5]
 
 constraints.final_state.x: ["${params.planet.r + 15e3}", 12, 70, -10, 90]
 constraints.final_state.x_idx: [0, 1, 2, 4, 5]
-constraints.final_state.eps: [100, 0.1, 0.1, 0.1, 0.1]
+constraints.final_state.eps: [300, 0.1, 0.1, 0.1, 0.1]
 
 constraints.state_limits.x_min: ["${params.planet.r}", 100.0]
 constraints.state_limits.x_min_idx: [0, 3]

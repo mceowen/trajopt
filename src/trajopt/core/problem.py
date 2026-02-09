@@ -71,8 +71,8 @@ class Problem:
 
         # TODO: should the algorithm need to distinguish between path, nfz, and custom, can we collapse into n_ineq?
         # TODO: ADD this to constraints class lol, ideally, shouldn't need any loops
-        self.n_path = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "path")
-        self.n_nfz = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "nfz")
+        self.n_path   = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "path")
+        self.n_nfz    = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "nfz")
         self.n_custom = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "custom")
 
         if self.constraints.has('ct'):
@@ -83,9 +83,9 @@ class Problem:
         self.nz = self.n + self.n_ctcs
 
         # TODO: same here
-        self.n_term = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'equality_bc') if constraint.boundary == "final" and constraint.set == "state")
-        self.n_term_ineq = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'inequality_bc') if constraint.boundary == "final" and constraint.set == "state")
-        self.n_term_ctcs = self.n_ctcs
+        self.n_term       = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'equality_bc') if constraint.boundary == "final" and constraint.set == "state")
+        self.n_term_ineq  = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'inequality_bc') if constraint.boundary == "final" and constraint.set == "state")
+        self.n_term_ctcs  = self.n_ctcs
         self.n_term_total = self.n_term + self.n_term_ineq + self.n_ctcs
 
     def update_from_config(self, varied_paths, nondim):

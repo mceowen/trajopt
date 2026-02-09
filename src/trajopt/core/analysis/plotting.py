@@ -25,11 +25,15 @@ def _make_grid_specs(num):
     """Create a grid layout for subplots."""
     colnum = int(np.ceil(np.sqrt(num)))
     rownum = int(np.ceil(num / colnum))
-    dx, dy = 0.8 / colnum, 0.8 / rownum
+    gap_x, gap_y = 0.04, 0.06
+    dx = (0.8 - (colnum - 1) * gap_x) / colnum
+    dy = (0.8 - (rownum - 1) * gap_y) / rownum
     grid = {}
     for i in range(rownum):
         for j in range(colnum):
-            grid[i * colnum + j] = [0.05 + dx * j, 0.95 - dy * (i + 1), dx, dy]
+            left = 0.05 + j * (dx + gap_x)
+            bottom = 0.95 - (i + 1) * dy - i * gap_y
+            grid[i * colnum + j] = [left, bottom, dx, dy]
     return grid
 
 
@@ -69,13 +73,14 @@ def _plot_states(PLTS, trajopt_obj, show_iters, iters, lgnd, opt_pen):
     if state_groups is None:
         state_groups = {f'State {i}': [i] for i in range(trajopt_obj.problem.n)}
     num_plots = len(state_groups)
-    fig = plt.figure(figsize=(20, 10))
+    fig = plt.figure(figsize=(20, 10), dpi=300)
     fig.suptitle('States')
     axs = PLTS.createGrid(fig, grid=_make_grid_specs(num_plots))
     PLTS.dumpLegend(lgnd)
     for j, (label, indices) in enumerate(state_groups.items()):
         ax = axs[j]
         ax.set_title(label)
+        ax.grid(True, alpha=0.3)
         for state_idx in indices:
             if show_iters:
                 PLTS.addPlot2D(ax, pen=PENS['itr_nl'],  ins={'label': 'Iterations', 'x': 't_nl',  'y': ('z_nl', state_idx),  'iters': iters[1:], 'legend': lgnd})
@@ -92,12 +97,13 @@ def _plot_controls(PLTS, trajopt_obj, show_iters, iters, lgnd, opt_pen):
     """Plot control trajectories."""
     num_controls = trajopt_obj.problem.m
     final_data = _get_final_iter_data(trajopt_obj)
-    fig = plt.figure(figsize=(20, 10))
+    fig = plt.figure(figsize=(20, 10), dpi=300)
     fig.suptitle('Controls')
     axs = PLTS.createGrid(fig, grid=_make_grid_specs(num_controls))
     PLTS.dumpLegend(lgnd)
     for j in range(num_controls):
         ax = axs[j]
+        ax.grid(True, alpha=0.3)
         if show_iters:
             PLTS.addPlot2D(ax, pen=PENS['itr_nl'],  ins={'label': 'Iterations', 'x': 't_nl',  'y': ('nu_nl', j),  'iters': iters[1:], 'legend': lgnd})
             PLTS.addPlot2D(ax, pen=PENS['itr_opt'], ins={'label': 'Iterations', 'x': 't_opt', 'y': ('nu_opt', j), 'iters': iters[1:], 'legend': lgnd})
@@ -116,13 +122,14 @@ def _plot_trajectories(PLTS, trajopt_obj, lgnd, opt_pen, show_init=True):
         state_traj_groups = list(state_traj_groups.values())
     n = len(state_traj_groups)
     plt_types = {i: ('3D' if len(g) >= 3 else '2D') for i, g in enumerate(state_traj_groups)}
-    fig = plt.figure(figsize=(20, 10))
+    fig = plt.figure(figsize=(20, 10), dpi=300)
     fig.suptitle('Trajectory')
     axs = PLTS.createGrid2(fig, grid=_make_grid_specs(n), ins={'plt_typs': plt_types})
     PLTS.dumpLegend(lgnd)
     for idx, group in enumerate(state_traj_groups):
         g = [int(i) for i in group]
         ax = axs[idx]
+        ax.grid(True, alpha=0.3)
         if len(g) == 2:
             if show_init:
                 PLTS.addPlot2D(ax, pen=PENS['init'], ins={'label': 'Initial guess', 'x': ('z_opt', g[0]), 'y': ('z_opt', g[1]), 'iters': [1], 'legend': lgnd})
@@ -142,13 +149,14 @@ def _plot_constraints(PLTS, data, show_iters, iters, lgnd, opt_pen):
         num_constraints = len(group_data)
         if num_constraints == 0:
             continue
-        fig = plt.figure(figsize=(20, 10))
+        fig = plt.figure(figsize=(20, 10), dpi=300)
         fig.suptitle(constraint_group)
         axs = PLTS.createGrid(fig, grid=_make_grid_specs(num_constraints))
         PLTS.dumpLegend(lgnd)
         for idx, (name, constraint) in enumerate(group_data.items()):
             ax = axs[idx]
             ax.set_title(name)
+            ax.grid(True, alpha=0.3)
             nl_loc = ('constraint_data', constraint_group, name, 'nl_vals')
             opt_loc = ('constraint_data', constraint_group, name, 'opt_vals')
             num_cols = constraint['nl_vals']['values'].shape[1]
@@ -232,7 +240,7 @@ def plot_animated(trajopt_obj, interval=200):
         return lines_nl, lines_opt
 
     nr, nc = make_grid(n_states)
-    fig_s, axs_s = plt.subplots(nr, nc, figsize=(5*nc, 4*nr))
+    fig_s, axs_s = plt.subplots(nr, nc, figsize=(5*nc, 4*nr), dpi=300)
     fig_s.suptitle('States - Iteration Convergence')
     axs_s = np.atleast_1d(axs_s)
     state_nl, state_opt = setup_axes(fig_s, axs_s, n_states, 'z_nl', 'State')
@@ -252,7 +260,7 @@ def plot_animated(trajopt_obj, interval=200):
     display(HTML(anim_s.to_jshtml()))
 
     nr_c, nc_c = make_grid(n_ctrl)
-    fig_c, axs_c = plt.subplots(nr_c, nc_c, figsize=(5*nc_c, 4*nr_c))
+    fig_c, axs_c = plt.subplots(nr_c, nc_c, figsize=(5*nc_c, 4*nr_c), dpi=300)
     fig_c.suptitle('Controls - Iteration Convergence')
     axs_c = np.atleast_1d(axs_c)
     ctrl_nl, ctrl_opt = setup_axes(fig_c, axs_c, n_ctrl, 'nu_nl', 'Control')
@@ -277,7 +285,7 @@ def plot_animated(trajopt_obj, interval=200):
         if n_cnst == 0:
             continue
         nr_cn, nc_cn = make_grid(n_cnst)
-        fig_cn, axs_cn = plt.subplots(nr_cn, nc_cn, figsize=(5*nc_cn, 4*nr_cn))
+        fig_cn, axs_cn = plt.subplots(nr_cn, nc_cn, figsize=(5*nc_cn, 4*nr_cn), dpi=300)
         fig_cn.suptitle(f'{group_name} - Iteration Convergence')
         axs_cn = np.atleast_1d(axs_cn).flatten()
         

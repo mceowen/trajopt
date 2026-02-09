@@ -33,7 +33,6 @@ class min_norm_terminal:
 
 class nonconvex:
     def __init__(self, cnstr_config, config=None):
-
         # required config
         self.name            = cnstr_config["name"]
         self.group           = cnstr_config["group"]

@@ -20,22 +20,5 @@ def dynamics_jax(t, z, nu, params, fcns):
 
     return x_dot
 
-def dynamics_sympy(t, z, nu, params, fcns):
-
-    # extract parameters
-    g     = params["planet"]["g"]
-    mass  = params["vehicle"]["mass"]
-    g_vec = sp.Matrix([0,0, -g])
-
-
-    r = z[0:3]
-    v = z[3:6]
-    
-    T = nu
-
-    x_dot = sp.Matrix(jnp.concatenate([v, T/mass + g_vec]))
-
-    return x_dot
-
 def thrust_norm(t, z, nu, params, fcns):
     return jnp.array([jnp.linalg.norm(nu)])
