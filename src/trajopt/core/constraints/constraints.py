@@ -9,7 +9,6 @@ class Constraints:
         self.constraints_list = []
 
         for i, cnstr_config in enumerate(cnstr_config_list):
-            print(cnstr_config["name"])
             print(f"  {i}: {cnstr_config['name']}: {cnstr_config['type']}")
             self.register_constraint(cnstr_config, config)
 
