@@ -8,22 +8,22 @@ def straight_line_initial_guess(problem, method):
     t_init            = np.cumsum(np.concatenate(([0], method.dt_init)))
 
     
-    init_state_constraint = problem.constraints.get('name', 'initial_state')[0]
-    terminal_state_constraint = problem.constraints.get('name', 'final_state')[0]
+    init_state_constraint = problem.constraints.get(type="equality_bc", boundary="init")[0]
+    terminal_state_constraint = problem.constraints.get(type="equality_bc", boundary="final")[0]
 
-    if len(init_state_constraint.x_idx) == problem.n:
+    if len(init_state_constraint.idx) == problem.n:
         zi_full = init_state_constraint.x
     else:
-        zi_guess = getattr(init_state_constraint, 'x_guess', None)
+        zi_guess = getattr(init_state_constraint, 'value_guess', None)
         if zi_guess is not None:
             zi_full = zi_guess
         else:
             raise ValueError("Initial_state.zi_guess must be provided for straight_line_initial_guess if initial_state is not fully defined")
 
-    if len(terminal_state_constraint.x_idx) == problem.n:
-        zf_full = terminal_state_constraint.x
+    if len(terminal_state_constraint.idx) == problem.n:
+        zf_full = terminal_state_constraint.value
     else:
-        zf_guess = getattr(terminal_state_constraint, 'x_guess', None)
+        zf_guess = getattr(terminal_state_constraint, 'value_guess', None)
         if zf_guess is not None:
             zf_full = zf_guess
         else:
@@ -43,7 +43,7 @@ def straight_line_initial_guess(problem, method):
 
 def nonlinear_initial_guess(problem, method):
     
-    z0 = problem.constraints.get('name', 'initial_state')[0].x
+    z0 = problem.constraints.get(type="equality_bc", boundary="init")[0].value
 
     # ---- Control initialization ----
     m = problem.m
@@ -52,8 +52,8 @@ def nonlinear_initial_guess(problem, method):
     nl_guess_u_start = method.nondim.M["ctrl"]["d2nd"] @ method.guess["nl_guess_u_start"]
     nl_guess_u_stop  = method.nondim.M["ctrl"]["d2nd"] @ method.guess["nl_guess_u_stop"]
 
-    t_init           = np.cumsum(np.concatenate(([0], method.dt_init)))
-    t_nl = np.linspace(t_init[0], t_init[-1], 10000)
+    t_init = np.cumsum(np.concatenate(([0], method.dt_init)))
+    t_nl   = np.linspace(t_init[0], t_init[-1], 10000)
 
     # linearly interpolate the control between the start and stop values using scipy.interpolate.interp1d
     t_start_end_pts = np.array([t_init[0], t_init[-1]])
@@ -61,7 +61,7 @@ def nonlinear_initial_guess(problem, method):
     nu_init_interp_func = interp1d(t_start_end_pts, nu_start_end_pts, axis=0)
     nu_init = nu_init_interp_func(t_init)
 
-    dynamics_cnstr = problem.constraints.get('name', 'dynamics')[0]
+    dynamics_cnstr = problem.constraints.get(type="dynamics")[0]
     
     if dynamics_cnstr.backend == "jax":
         t_nl, z_nl, nu_nl = integrators.propagate_jax_rk4_dense(z0, nu_init, t_init, t_nl, problem, method)

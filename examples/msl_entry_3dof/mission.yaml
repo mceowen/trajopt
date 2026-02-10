@@ -15,23 +15,23 @@ params.vehicle.inherit: trajopt/library/missions/shared/vehicle/msl.yaml
 # ==============================
 constraints:
   initial_state:
-    x: ["${params.planet.r + 126e3}", 0.0, 0.0, 5845, -15.47, 0.0]
-    x_idx: [0, 1, 2, 3, 4, 5]
+    value: ["${params.planet.r + 126e3}", 0.0, 0.0, 5845, -15.47, 0.0]
+    idx: [0, 1, 2, 3, 4, 5]
 
   final_state:
-    x: ["${params.planet.r + 10e3}", 0.0, 10.5768]
-    x_idx: [0, 1, 2]
+    value: ["${params.planet.r + 10e3}", 0.0, 10.5768]
+    idx: [0, 1, 2]
     eps: [100, 0.01, 0.01]
 
   state_limits:
-    x_min: ["${params.planet.r}", 100.0]
-    x_min_idx: [0, 3]
+    min_value: ["${params.planet.r + 5e3}", 100.0]
+    min_value_idx: [0, 3]
 
   bank_aoa_angle_limits:
-    x_min: [-170.0, -5.0]
-    x_min_idx: [0, 1]
-    x_max: [170.0, 5.0]
-    x_max_idx: [0, 1]
+    min_value: [-170.0, -5.0]
+    min_value_idx: [0, 1]
+    max_value: [170.0, 5.0]
+    max_value_idx: [0, 1]
 
 # ===============================
 # ACTIVE CONSTRAINTS AND COSTS

@@ -7,6 +7,7 @@ from trajopt.utils.config_loader import resolve_function
 
 class min_time:
     def __init__(self, cost_config, config=None):
+        self.type = __name__
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
     
@@ -15,18 +16,19 @@ class min_time:
 
 class terminal_state:
     def __init__(self, cost_config, config=None):
+        self.type = __name__
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
-        self.x_idx = cost_config["x_idx"]
-
+        self.idx = cost_config["idx"]
     def nondim_cost(self, nondim):
         pass
 
 class min_norm_terminal:
     def __init__(self, cost_config, config=None):
+        self.type = __name__
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
-        self.x_idx = cost_config["x_idx"]
+        self.idx = cost_config["idx"]
     
     def nondim_cost(self, nondim):
         pass
@@ -34,6 +36,7 @@ class min_norm_terminal:
 class nonconvex:
     def __init__(self, cnstr_config, config=None):
         # required config
+        self.type = __name__
         self.name            = cnstr_config["name"]
         self.group           = cnstr_config["group"]
         self.units           = cnstr_config["units"]
@@ -72,7 +75,6 @@ class nonconvex:
             self.fcn_nd = nondim.nondim_function(self.fcn_dim, M_state_nd2d, M_ctrl_nd2d, M_out_d2nd)
 
     def convexify_cost(self):
-    
         if self.backend == "jax":
             self.fcn = self.fcn_nd
             self.fcn_compiled, self.dfcn_dz_compiled, self.dfcn_du_compiled = convexify.linearize_jax(self.fcn)

@@ -2,46 +2,69 @@ import trajopt.core.costs.costs_library as costs_library
 import inspect
 from functools import partial
 import trajopt.library.methods.convexify as convexify
-import trajopt.utils.tools as tools
 
 class Costs:
     def __init__(self, cost_config_list, config):
 
         self.costs_list = []
-        self.cost_ids = {'all': []}
 
         print(f"costs:")
 
         # build cost_ids mapping
-        for cost_number, cost_config in enumerate(cost_config_list):
-            self.register_cost(cost_number, cost_config, config)
+        for i, cost_config in enumerate(cost_config_list):
+            print(f"  {i}: {cost_config['name']}: {cost_config['type']}")
+            self.register_cost(cost_config, config)
 
-    def register_cost(self, cost_number, cost_config, config):
+    def register_cost(self, cost_config, config):
+        """
+        Register a cost object in the costs list given a cost configuration.
+
+        Args:
+            cost_config: Cost configuration dictionary.
+            config: Problem configuration dictionary.
+
+        Returns:
+            None.
+        """
         cost_type = cost_config["type"]
-        cost_name = cost_config["name"]
-
-        print(f"  {cost_number}: {cost_name}: {cost_type}")
-        cost_config = {k:v for k, v in cost_config.items() if k != "type"}
-        
         costClass = getattr(costs_library, cost_type)
         self.costs_list.append(costClass(cost_config, config=config))
 
-        if cost_type not in self.cost_ids:
-            self.cost_ids[cost_type] = []
+    def get(self, **kwargs):
+        """
+        Get all costs that match given keyword arguments.
 
-        self.cost_ids[cost_type].append(cost_number)
-        self.cost_ids['all'].append(cost_number)
+        Args:
+            **kwargs: Keyword arguments to match against cost attributes.
 
-    def get(self, cost_type):
-        cost_ids = self.cost_ids.get(cost_type, [])
-        costs = [self.costs_list[i] for i in cost_ids]
+        Returns:
+            List of costs that match the given keyword arguments.
+        """
+        selected_costs = [cost for cost in self.costs_list if all(getattr(cost, k, None) == v for k, v in kwargs.items())]
+        return selected_costs
 
-        return costs
+    def has(self, **kwargs):
+        """
+        Check if any costs match given keyword arguments.
 
-    def has(self, cost_type):
-        return cost_type in self.cost_ids.keys()
+        Args:
+            **kwargs: Keyword arguments to match against cost attributes.
+
+        Returns:
+            True if any costs match all given keyword arguments, False otherwise.
+        """
+        return any(all(getattr(cost, k, None) == v for k, v in kwargs.items()) for cost in self.costs_list)
 
     def resolve_functions(self, fcns):
+        """
+        Bind user-provided functions to cost objects and wrap 'fcns' dictionary.
+
+        Args:
+            fcns: Dictionary of user-provided functions.
+
+        Returns:
+            None.
+        """
         for cost in self.costs_list:
             if getattr(cost, 'fcn_dim', None) is not None:
                 sig = inspect.signature(cost.fcn_dim)
@@ -55,10 +78,28 @@ class Costs:
                     cost.fcn_dim = partial(cost.fcn_dim, **kwargs_to_bind)
 
     def nondim_costs(self, nondim):
+        """
+        Non-dimensionalize all costs.
+
+        Args:
+            nondim: Non-dimensionalization object.
+
+        Returns:
+            None.
+        """
         for cost in self.costs_list:
             cost.nondim_cost(nondim)
 
     def convexify_costs(self):
+        """
+        Convexify all costs. If a cost has a 'convexify_cost' method, call it.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         for cost in self.costs_list:
             if getattr(cost, 'fcn', None) is not None:
                 cost.fcn_compiled, cost.dfcn_dz_compiled, cost.dfcn_du_compiled = convexify.linearize_jax(cost.fcn)

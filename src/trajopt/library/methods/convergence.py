@@ -23,8 +23,8 @@ def set_convergence_tolerance(problem, method):
         eps_state    = method.conv["eps_state"]
         M_state_d2nd = method.nondim.M["state"]["d2nd"]
 
-    if problem.constraints.has('ct'):
-        eps_list = np.concatenate([constraint.eps for constraint in problem.constraints.get('ct', 'all')])
+    if problem.constraints.has(ct=1):
+        eps_list = np.concatenate([constraint.eps for constraint in problem.constraints.get(ct=1)])
         ctcs_eps_list = ctcs_mult_cnst * (method.weights['w_ctcs'] * eps_list)**2
         
         eps_state = np.concatenate([eps_state, ctcs_eps_list])
@@ -50,7 +50,7 @@ def set_convergence_tolerance(problem, method):
     # stacked inequality
     # =======================
 
-    nodal_ncvx_constraints = problem.constraints.get('nodal', 'nonconvex_inequality')
+    nodal_ncvx_constraints = problem.constraints.get(ct=0, type='nonconvex_inequality')
     M_ineq_d2nd = method.nondim.M["ineq_nodal"]["d2nd"]
 
     # Compute dimensional tolerances
@@ -125,12 +125,12 @@ def set_convergence_tolerance(problem, method):
         eps_dyn    = np.zeros((problem.nz,))
         M_dyn_d2nd = np.zeros((1, problem.nz))
 
-    if problem.constraints.has('ct'):
-        eps_ct_list = np.concatenate([constraint.eps for constraint in problem.constraints.get('ct', 'all')])
+    if problem.constraints.has(ct=1):
+        eps_ct_list = np.concatenate([constraint.eps for constraint in problem.constraints.get(ct=1)])
     else: 
         eps_ct_list = np.array([])
 
-    if problem.constraints.has('ct'):
+    if problem.constraints.has(ct=1):
         eps_dyn = np.concatenate([
             ctcs_mult_state * eps_dyn,
             ctcs_mult_cnst  * (method.weights['w_ctcs']*eps_ct_list)**2

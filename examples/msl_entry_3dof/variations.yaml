@@ -9,7 +9,7 @@ seed: 42
 # MISSION VARIATIONS
 # ===============================
 mission_variations:
-  constraints.initial_state.x:
+  constraints.initial_state.value:
     type: uniform
     lb: [0, 0, 0, 0, 0.0, 0.0]
     ub: [0, 0, 0,  0, 0.0, 0.0]

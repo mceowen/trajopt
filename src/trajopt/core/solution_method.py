@@ -99,9 +99,9 @@ class SolutionMethod:
         hyperparameters.configure_penalty_weights(problem, self)
 
         # Extract only those terminal constraints used
-        term_eq_constraints   = [constraint for constraint in problem.constraints.get('nodal', 'equality_bc')   if constraint.boundary == "final" and constraint.set == "state"]
-        term_ineq_constraints = [constraint for constraint in problem.constraints.get('nodal', 'inequality_bc') if constraint.boundary == "final" and constraint.set == "state"]
-        term_ctcs_constraints = [constraint for constraint in problem.constraints.get('ct', 'all')]
+        term_eq_constraints   = problem.constraints.get(ct=0, type='equality_bc', boundary="final", set="state")
+        term_ineq_constraints = problem.constraints.get(ct=0, type='inequality_bc', boundary="final", set="state")
+        term_ctcs_constraints = problem.constraints.get(ct=1)
 
         term_constraints = term_eq_constraints + term_ineq_constraints + term_ctcs_constraints
 
@@ -126,7 +126,7 @@ class SolutionMethod:
         else:
             self.t_init, self.z_init, self.nu_init = guess.straight_line_initial_guess(problem, self)
 
-        if problem.constraints.has('ct'):
+        if problem.constraints.has(ct=1):
             self.z_init = guess.ctcs_initial_guess(problem, self)
 
         self.cost_init = discretize.compute_linearized_costs(self.t_init, self.z_init, self.nu_init, problem, self)[0].sum().item()

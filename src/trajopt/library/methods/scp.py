@@ -295,7 +295,7 @@ class Subproblem:
         self.nu_ref_sq = cp.Parameter((N,), name="nu_ref_sq")
 
         # Path/NFZ/AUX linearized constraints
-        if problem.constraints.get("nodal", "nonconvex_inequality"):
+        if problem.constraints.get(ct=0, type="nonconvex_inequality"):
             self.dgdz = cp.Parameter((N, problem.n_ineq, n), name="dgdz")
             self.dgdnu = cp.Parameter((N, problem.n_ineq, m), name="dgdnu")
             self.g0   = cp.Parameter((N, problem.n_ineq),    name="g0")
@@ -372,12 +372,12 @@ class Subproblem:
         self.eps_ctcs = cp.Parameter(nonneg=True, name="eps_ctcs")
 
         self.constraint_params = {}
-        for constraint in problem.constraints.get("nodal", "equality_bc"):
+        for constraint in problem.constraints.get(ct=0, type="equality_bc"):
             if constraint.name == "initial_state":
                 self.constraint_params[constraint.name] = {
-                    "x": cp.Parameter(len(constraint.x_idx), name=f"{constraint.name}_x")
+                    "value": cp.Parameter(len(constraint.idx), name=f"{constraint.name}_value")
                 }
-                self.constraint_params[constraint.name]["x"].value = constraint.x
+                self.constraint_params[constraint.name]["value"].value = constraint.value
 
     # ============================================================
     # CONSTRAINTS (build-once)
@@ -394,30 +394,30 @@ class Subproblem:
         # Terminal equalities / inequalities
         term_idx  = index_map.constraints.terminal  
 
-        for constraint in problem.constraints.get("nodal", "equality_bc"):
-            x_idx = constraint.x_idx
-            idx   = constraint.idx
+        for constraint in problem.constraints.get(ct=0, type="equality_bc"):
+            idx = constraint.idx
+            boundary_idx   = constraint.boundary_idx
             
             if constraint.name in self.constraint_params:
-                x = self.constraint_params[constraint.name]["x"]
+                value = self.constraint_params[constraint.name]["value"]
             else:
-                x = constraint.x
+                value = constraint.value
 
             if constraint.set == "state":
                 if constraint.boundary == "final":
                     vb = self.vb_term[term_idx["eq"]] if self.vb_term is not None else 0.0
                 else:
                     vb = 0
-                C.append(self.dz[idx,x_idx] + self.z_ref[idx, x_idx] - vb == x)
+                C.append(self.dz[boundary_idx,idx] + self.z_ref[boundary_idx, idx] - vb == value)
             elif constraint.set == "control":
-                C.append(self.dnu[idx,x_idx] + self.nu_ref[idx, x_idx] == x)
+                C.append(self.dnu[boundary_idx,idx] + self.nu_ref[boundary_idx, idx] == value)
 
-        for constraint in problem.constraints.get("nodal", "inequality_bc"):
+        for constraint in problem.constraints.get(ct=0, type="inequality_bc"):
 
-            x_min_idx = constraint.x_min_idx
-            x_max_idx = constraint.x_max_idx
-            x_min = constraint.x_min
-            x_max = constraint.x_max
+            min_value_idx = constraint.min_value_idx
+            max_value_idx = constraint.max_value_idx
+            min_value = constraint.min_value
+            max_value = constraint.max_value
             idx   = constraint.idx
             M_select = constraint.M_select
 
@@ -427,10 +427,10 @@ class Subproblem:
                 else:
                     vb = 0
                 
-                C.append(M_select @ (self.dz[idx, :n] + self.z_ref[idx, :n]) - vb <= cp.hstack([-x_min, x_max]))
+                C.append(M_select @ (self.dz[idx, :n] + self.z_ref[idx, :n]) - vb <= cp.hstack([-min_value, max_value]))
             
             elif constraint.set == "control":
-                C.append(M_select @ (self.dnu[idx, :m] + self.nu_ref[idx, :m]) <= cp.hstack([-x_min, x_max]))
+                C.append(M_select @ (self.dnu[idx, :m] + self.nu_ref[idx, :m]) <= cp.hstack([-min_value, max_value]))
         
         # CTCS terminal equalities
         if problem.n_term_ctcs>0:
@@ -499,67 +499,68 @@ class Subproblem:
                     C.append(cp.abs(self.dt[k]) <= self.ddt_max)
 
                 # Control slew (udot)
-                for constraint in problem.constraints.get("nodal", "control_rate_limit"):
-                    udot_max = constraint.udot_max
+                for constraint in problem.constraints.get(ct=0, type="control_rate_limit"):
+                    value = constraint.value
                     M_sel = constraint.M_select
                     C.append(
                         M_sel @ (self.nu_ref[k + 1] + self.dnu[k + 1] - (self.nu_ref[k] + self.dnu[k]))
-                        <= (self.dt_ref[k] + self.dt[k]) * np.concatenate([udot_max, udot_max])
+                        <= (self.dt_ref[k] + self.dt[k]) * np.concatenate([value, value])
                     )
 
             # State box constraints
-            for constraint in problem.constraints.get("nodal", "box"):
-                x_min_idx = constraint.x_min_idx
-                x_max_idx = constraint.x_max_idx
-                x_min = constraint.x_min
-                x_max = constraint.x_max
+            for constraint in problem.constraints.get(ct=0, type="box"):
+                min_value = constraint.min_value
+                max_value = constraint.max_value
 
                 M_select = constraint.M_select
 
                 if constraint.set == "state":
 
-                    C.append(M_select @ (self.z_ref[k, :n] + self.dz[k, :n]) <= np.concatenate([-x_min, x_max]))
+                    C.append(M_select @ (self.z_ref[k, :n] + self.dz[k, :n]) <= np.concatenate([-min_value, max_value]))
                 elif constraint.set == "control":
-                    C.append(M_select @ (self.nu_ref[k] + self.dnu[k]) <= np.concatenate([-x_min, x_max]))
+                    C.append(M_select @ (self.nu_ref[k] + self.dnu[k]) <= np.concatenate([-min_value, max_value]))
 
             # Linearized inequality constraints (path + nfz + custom)
             # if problem.constraints.has("nodal", "nonconvex_inequality","POLYTOPE_OUT","SOC_OUT"):  ### DAN: UPDATE BELOW LINE TO
-            if problem.constraints.has("nodal", "nonconvex_inequality"):
+            if problem.constraints.has(ct=0, type="nonconvex_inequality"):
                 C.append(self.dgdz[k] @ self.dz[k, :n] + self.dgdnu[k] @ self.dnu[k, :m] + self.g0[k] - self.vb_ineq[k] <= 0)
                 if str(self.flag_autotune) in {"1", "3", "al-scvx"} and self.vb_ineq[k]:
                     C.append(self.vb_ineq[k] >= 0)
 
                 # TODO: TEMPORARY: force slack to zero for hard constraints
                 idx = 0
-                for c in problem.constraints.get("nodal", "nonconvex_inequality"):
+                for c in problem.constraints.get(ct=0, type="nonconvex_inequality"):
                     if c.hard:
                         C.append(self.dgdz[k,idx:idx+c.dimension] @ self.dz[k, :n] + self.dgdnu[k,idx:idx+c.dimension] @ self.dnu[k, :m] + self.g0[k,idx:idx+c.dimension] <= 0)
                     idx += c.dimension
 
+            if problem.costs.has(ct=0, type="nonconvex_inequality"):
+                C.append(self.dcdz[k] @ self.dz[k, :n] + self.dgdnu[k] @ self.dnu[k, :m] + self.g0[k] - self.vb_ineq[k] <= 0)
+
             # convex constraints
-            for constraint in problem.constraints.get("nodal", "axis_angle_cone"):
+            for constraint in problem.constraints.get(ct=0, type="axis_angle_cone"):
                 z = self.z_ref[k] + self.dz[k]
                 nu = self.nu_ref[k] + self.dnu[k]
                 
-                x_idx = constraint.x_idx
+                idx = constraint.idx
                 axis = constraint.axis
 
                 if constraint.set == "state":
-                    C.append(constraint.cos_theta_max * cp.norm(z[x_idx]) <= axis @ z[x_idx])
+                    C.append(constraint.cos_theta_max * cp.norm(z[idx]) <= axis @ z[idx])
                 elif constraint.set == "control":
-                    C.append(constraint.cos_theta_max * cp.norm(nu[x_idx]) <= axis @ nu[x_idx])
+                    C.append(constraint.cos_theta_max * cp.norm(nu[idx]) <= axis @ nu[idx])
 
-            for constraint in problem.constraints.get("nodal", "max_norm_cone"):
+            for constraint in problem.constraints.get(ct=0, type="max_norm_cone"):
                 z = self.z_ref[k] + self.dz[k]
                 nu = self.nu_ref[k] + self.dnu[k]
 
-                x_idx = constraint.x_idx
-                max_val = constraint.max_val
+                idx = constraint.idx
+                max_value = constraint.max_value
                 
                 if constraint.set == "state":
-                    C.append(cp.norm(z[x_idx]) <= max_val)
+                    C.append(cp.norm(z[idx]) <= max_value)
                 elif constraint.set == "control":
-                    C.append(cp.norm(nu[x_idx]) <= max_val)
+                    C.append(cp.norm(nu[idx]) <= max_value)
 
             #############################################################################################
             #### ----------------------------------------------------------------------------------- ####
@@ -577,7 +578,7 @@ class Subproblem:
 
             ############# ----------------------- CONVEX CONSTRAINTS ------------------- ################
             # for constraint in problem.constraints.get('POLYTOPE_IN'):
-            for constraint in problem.constraints.get('nodal','AFFINE'):                
+            for constraint in problem.constraints.get(ct=0, type='AFFINE'):                
                 if constraint.convex == True:
                     if use_constraint_at_time_query(constraint.time_steps):
                         z = self.z_ref[k] + self.dz[k]; nu = self.nu_ref[k] + self.dnu[k]
@@ -586,7 +587,7 @@ class Subproblem:
                         if constraint.set == 'state': C.append(AA @ z[idxx] == bb)
                         elif constraint.set == "control": C.append(AA @ nu[idxx] == bb)
 
-            for constraint in problem.constraints.get('nodal','POLYTOPE'):
+            for constraint in problem.constraints.get(ct=0, type='POLYTOPE'):
                 if constraint.convex == True:
                     if use_constraint_at_time_query(constraint.time_steps):
                         z = self.z_ref[k] + self.dz[k]; nu = self.nu_ref[k] + self.dnu[k]
@@ -594,7 +595,7 @@ class Subproblem:
                         AA = constraint.A; bb = constraint.b; 
                         if constraint.set == 'state': C.append(AA @ z[idxx] <= bb)
                         elif constraint.set == "control": C.append(AA @ nu[idxx] <= bb)
-            for constraint in problem.constraints.get('nodal','SOC'):
+            for constraint in problem.constraints.get(ct=0, type='SOC'):
                 if constraint.convex == True:
                     if use_constraint_at_time_query(constraint.time_steps):
                         z = self.z_ref[k] + self.dz[k]; nu = self.nu_ref[k] + self.dnu[k]
@@ -616,7 +617,7 @@ class Subproblem:
 
             # TODO(carlos): think about where to put this, this is a special constraint
             # but general enough to apply to different 6-dof models using quaternions
-            for constraint in problem.constraints.get("nodal", "quaternion_cone"):
+            for constraint in problem.constraints.get(ct=0, type="quaternion_cone"):
                 z = self.z_ref[k] + self.dz[k]
                 quat_start_idx = constraint.quat_start_idx
                 C.append(cp.norm(z[quat_start_idx + 2: quat_start_idx + 4]) <= constraint.rhs)
@@ -646,25 +647,25 @@ class Subproblem:
           + cp.sum(self.w_cost_times_cost0)
         )
 
-        if problem.costs.has("min_time"):
+        if problem.costs.has(type="min_time"):
             dt = self.dt_ref + self.dt
             time_cost = cp.sum(dt) / (self.N - 1)
             
             TRUE += time_cost
 
-        for cost in problem.costs.get("min_norm_terminal"):
+        for cost in problem.costs.get(type="min_norm_terminal"):
             zf = self.z_ref[-1] + self.dz[-1]
-            x_idx = cost.x_idx
-            term_cost = cp.norm(zf[x_idx])
+            idx = cost.idx
+            term_cost = cp.norm(zf[idx])
             TRUE += term_cost
 
-        if problem.costs.has("terminal_state"):
-            cost_obj = problem.costs.get("terminal_state")[0]
+        if problem.costs.has(type="terminal_state"):
+            cost_obj = problem.costs.get(type="terminal_state")[0]
 
             zf = self.z_ref[-1] + self.dz[-1]
 
-            x_idx = cost_obj.x_idx
-            TRUE += zf[x_idx]
+            idx = cost_obj.idx
+            TRUE += zf[idx]
 
         # === Trust-region penalties ===
         TR = self.flag_tr * (self.wtr_z * cp.sum_squares(self.dz[:, :self.n]) + self.wtr_u * cp.sum_squares(self.dnu))
@@ -738,7 +739,7 @@ class Subproblem:
         # compute linearized terminal and running costs
         cost, dcostdz, dcostdnu = discretize.compute_linearized_costs(inputs["t_ref"], inputs["z_ref"], inputs["nu_ref"], problem, method)
 
-        if problem.constraints.has("nodal", "nonconvex_inequality"):
+        if problem.constraints.has(ct=0, type="nonconvex_inequality"):
             g, dgdz, dgdnu = discretize.compute_nodal_inequality_constraints(inputs["t_ref"], inputs["z_ref"], inputs["nu_ref"], problem, method)
         else:
             g = None
@@ -765,9 +766,9 @@ class Subproblem:
         self.nu_ref.value  = inputs["nu_ref"]
         self.dt_ref.value = inputs["dt_ref"].reshape(self.N - 1, 1)
 
-        for constraint in problem.constraints.get("nodal", "equality_bc"):
+        for constraint in problem.constraints.get(ct=0, type="equality_bc"):
             if constraint.name in self.constraint_params:
-                self.constraint_params[constraint.name]["x"].value = constraint.x
+                self.constraint_params[constraint.name]["value"].value = constraint.value
 
         self.nu_ref_sq.value = np.sum(inputs["nu_ref"] * inputs["nu_ref"], axis=1)
 

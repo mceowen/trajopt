@@ -51,23 +51,23 @@ constraints.gimbal_limit:
   type: axis_angle_cone
   set: control
   axis: [1, 0, 0]
-  x_idx: [0, 1, 2]
+  idx: [0, 1, 2]
 
 constraints.glide_slope:
   type: axis_angle_cone
   set: state
   axis: [1, 0, 0]
-  x_idx: [1, 2, 3]
+  idx: [1, 2, 3]
 
 constraints.max_thrust:
   type: max_norm_cone
   set: control
-  x_idx: [0, 1, 2]
+  idx: [0, 1, 2]
 
 constraints.max_angular_velocity:
   type: max_norm_cone
   set: state
-  x_idx: [11, 12, 13]
+  idx: [11, 12, 13]
 
 constraints.tilt_limit:
   type: quaternion_cone
@@ -81,10 +81,10 @@ constraints.height_triggered_pitch:
   dimension: 1
   ct: 0
 
-constraints.min_thrust_norm:
+constraints.min_thrust:
   type: nonconvex_inequality
   group: path
-  fcn: trajopt/library/models/lander_6dof.py:min_thrust_norm
+  fcn: trajopt/library/models/lander_6dof.py:thrust
   units: [{"f": 1}]
   dimension: 1
   ct: 0
@@ -98,4 +98,4 @@ costs.min_time:
 
 costs.control_effort:
   type: control_effort
-  x_idx: [0, 1, 2]
+  idx: [0, 1, 2]

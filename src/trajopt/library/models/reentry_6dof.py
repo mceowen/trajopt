@@ -2,43 +2,6 @@ import numpy as np
 import jax 
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
-
-# Direction Cosine Matrix Function
-def DCM(q): 
-    return jnp.array(
-        [
-            [
-                1 - 2 * (q[2] ** 2 + q[3] ** 2),
-                2 * (q[1] * q[2] + q[0] * q[3]),
-                2 * (q[1] * q[3] - q[0] * q[2]),
-            ],
-            [
-                2 * (q[1] * q[2] - q[0] * q[3]),
-                1 - 2 * (q[1] ** 2 + q[3] ** 2),
-                2 * (q[2] * q[3] + q[0] * q[1]),
-            ],
-            [
-                2 * (q[1] * q[3] + q[0] * q[2]),
-                2 * (q[2] * q[3] - q[0] * q[1]),
-                1 - 2 * (q[1] ** 2 + q[2] ** 2),
-            ],
-        ]
-    )
-
-# skew symmetric quaternion matrix
-def omega(w):
-    return jnp.array(
-    [
-        [0, -w[0], -w[1], -w[2]],
-        [w[0], 0, w[2], -w[1]],
-        [w[1], -w[2], 0, w[0]],
-        [w[2], w[1], -w[0], 0],
-    ]
-)
-
-# skew symmetric cross product matrix function
-def cr(v):
-    return jnp.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
     
 def dynamics(t, z, nu, params, fcns):
     """
@@ -93,17 +56,6 @@ def dynamics(t, z, nu, params, fcns):
     moment = -Kp * q_err - Kd * w
     # ==========================================================
     
-    # controller:
-    # - real 6-dof sytems need feedback to be stable
-    # - real physics, include feedback OR simplified physics and feedforward
-    # can we optimize kp, kd as a state
-    # can we come up with a rule from breannas paper for tuning gains (or just get from breanna, use and cite, dont need to worry about reviewers)
-
-
-    # simplified model / forward
-    # - 
-    # - 
-
     r_norm = jnp.linalg.norm(r)
     a_grav = -mu * r / r_norm ** 3
 
@@ -195,3 +147,40 @@ def sideslip(t, z, nu, params):
 
 def altitude(t, z, nu, params):
     return jnp.array([(jnp.linalg.norm(z[0:3]) - params['planet']['r'])])
+
+# Direction Cosine Matrix Function
+def DCM(q): 
+    return jnp.array(
+        [
+            [
+                1 - 2 * (q[2] ** 2 + q[3] ** 2),
+                2 * (q[1] * q[2] + q[0] * q[3]),
+                2 * (q[1] * q[3] - q[0] * q[2]),
+            ],
+            [
+                2 * (q[1] * q[2] - q[0] * q[3]),
+                1 - 2 * (q[1] ** 2 + q[3] ** 2),
+                2 * (q[2] * q[3] + q[0] * q[1]),
+            ],
+            [
+                2 * (q[1] * q[3] + q[0] * q[2]),
+                2 * (q[2] * q[3] - q[0] * q[1]),
+                1 - 2 * (q[1] ** 2 + q[2] ** 2),
+            ],
+        ]
+    )
+
+# skew symmetric quaternion matrix
+def omega(w):
+    return jnp.array(
+    [
+        [0, -w[0], -w[1], -w[2]],
+        [w[0], 0, w[2], -w[1]],
+        [w[1], -w[2], 0, w[0]],
+        [w[2], w[1], -w[0], 0],
+    ]
+)
+
+# skew symmetric cross product matrix function
+def cr(v):
+    return jnp.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])

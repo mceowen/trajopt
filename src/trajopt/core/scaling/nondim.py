@@ -146,7 +146,7 @@ class Nondim:
         
         idx = 0
         # TODO: change 'nonconvex_inequality' to 'inequality' once we add general buffering
-        for constraint in problem.constraints.get('nodal', 'nonconvex_inequality'):
+        for constraint in problem.constraints.get(ct=0, type="nonconvex_inequality"):
             if getattr(constraint, 'units', None) is not None:
                 for unit in constraint.units:
                     scale_list = [self.scales[unit_type]**exponent for unit_type, exponent in unit.items()]
@@ -161,7 +161,7 @@ class Nondim:
         self.nd_ctcs = np.ones(problem.n_ctcs)
         idx = 0
         # TODO: change 'nonconvex_inequality' to 'inequality' once we add general buffering
-        for constraint in problem.constraints.get('ct', 'nonconvex_inequality'):
+        for constraint in problem.constraints.get(ct=1, type="nonconvex_inequality"):
             if getattr(constraint, 'units', None) is not None:
                 for unit in constraint.units:
                     scale_list = [self.scales[unit_type]**exponent for unit_type, exponent in unit.items()]
@@ -172,10 +172,10 @@ class Nondim:
         self.M["ineq_ct"]["d2nd"] = np.diag(1 / self.nd_ctcs).copy()
         self.M["ineq_ct"]["nd2d"] = np.diag(self.nd_ctcs).copy()
 
-        terminal_constraint = problem.constraints.get('name', 'final_state')[0]
-        x_idx = terminal_constraint.x_idx
+        terminal_constraint = problem.constraints.get(name="final_state")[0]
+        idx = terminal_constraint.idx
 
-        self.nd_term_total = np.hstack([self.nd_state[x_idx], np.ones(problem.n_term_ineq), np.ones(problem.n_ctcs)])
+        self.nd_term_total = np.hstack([self.nd_state[idx], np.ones(problem.n_term_ineq), np.ones(problem.n_ctcs)])
 
 
         self.M["term_total"]["d2nd"] = np.diag(1 / self.nd_term_total).copy()

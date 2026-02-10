@@ -74,5 +74,5 @@ def height_triggered_pitch(t, z, nu, params):
 
     return jnp.array([jnp.maximum(f, 0.0) * jnp.maximum(-g, 0.0)])
 
-def min_thrust_norm(t, z, nu, params):
-    return jnp.array([1.0 - jnp.linalg.norm(nu[:3]) / params["min_thrust"]])
+def thrust(t, z, nu, params):
+    return jnp.array([jnp.linalg.norm(nu[:3])])

@@ -22,3 +22,8 @@ def dynamics_jax(t, z, nu, params, fcns):
 
 def thrust_norm(t, z, nu, params, fcns):
     return jnp.array([jnp.linalg.norm(nu)])
+
+def obstacle(t, z, nu, params, fcns):
+    r = z[0:2]
+    pos_obs = jnp.array([5, 5])
+    return jnp.array([jnp.linalg.norm(r - pos_obs)])

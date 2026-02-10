@@ -12,7 +12,6 @@ params.vehicle.inherit: trajopt/library/missions/shared/vehicle/quadrotor.yaml
 # ===============================
 # CONSTRAINT/COST PARAMS
 # ===============================
-
 constraints:
   dynamics:
     type: dynamics
@@ -22,60 +21,70 @@ constraints:
     type: equality_bc
     set: state
     boundary: init
-    x: [0.0, 0.0, 5.0, 0, 0.5, 0.0]
-    x_idx: [0, 1, 2, 3, 4, 5]
+    value: [0.0, 0.0, 5.0, 0, 0.5, 0.0]
+    idx: [0, 1, 2, 3, 4, 5]
   
   state_limits:
     type: box
     set: state
-    x_min: [-0.5, -0.5, 0.25]
-    x_min_idx: [0, 1, 2]
-    x_max: [12.0, 12.0, 10.0]
-    x_max_idx: [0, 1, 2]
+    min_value: [-0.5, -0.5, 0.25]
+    min_value_idx: [0, 1, 2]
+    max_value: [12.0, 12.0, 10.0]
+    max_value_idx: [0, 1, 2]
 
   final_state:
     type: equality_bc
     set: state
     boundary: final
-    x: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
-    x_idx: [0, 1, 2, 3, 4, 5]
-    x_guess: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
+    value: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
+    idx: [0, 1, 2, 3, 4, 5]
+    value_guess: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
     eps: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
   
   initial_control:
     type: equality_bc
     set: control
     boundary: init
-    x: [0.0, 0.0, "${params.planet.g * params.vehicle.mass}"]
-    x_idx: [0, 1, 2]
+    value: [0.0, 0.0, "${params.planet.g * params.vehicle.mass}"]
+    idx: [0, 1, 2]
 
   final_control:
     type: equality_bc
     set: control
     boundary: final
-    x: [0.0, 0.0, "${params.planet.g * params.vehicle.mass}"]
-    x_idx: [0, 1, 2]
+    value: [0.0, 0.0, "${params.planet.g * params.vehicle.mass}"]
+    idx: [0, 1, 2]
   
   control_rate_limit:
     type: control_rate_limit
-    udot_max: [5.0, 5.0, 5.0]
-    udot_max_idx: [0, 1, 2]
+    value: [5.0, 5.0, 5.0]
+    idx: [0, 1, 2]
 
   max_thrust:
     type: max_norm_cone
     set: control
-    x_idx: [0, 1, 2]
-    max_val: 8.12
+    idx: [0, 1, 2]
+    max_value: 8.12
 
   min_thrust:
     type: nonconvex_inequality
     group: path
     fcn: trajopt/library/models/quadrotor_3dof.py:thrust_norm
-    min_val: 0.21
+    min_value: 0.21
     eps: [0.01]
     units: [{f: 1}]
     dimension: 1
     ct: 0
+
+  obstacle:
+    type: nonconvex_inequality
+    group: path
+    fcn: trajopt/library/models/quadrotor_3dof.py:obstacle
+    min_value: 2.0
+    eps: [0.1]
+    units: [{d: 1}]
+    dimension: 1
+    # ct: 1
 
 costs:
   min_time:
@@ -95,6 +104,7 @@ constraint_list:
   - control_rate_limit
   - max_thrust
   - min_thrust
+  - obstacle
 
 cost_list:
   - min_time

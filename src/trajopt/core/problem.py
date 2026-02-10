@@ -67,24 +67,24 @@ class Problem:
         # ------------------------------------------------------------
 
         # constraint book keeping
-        self.n_ineq = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality'))
+        self.n_ineq = sum(constraint.dimension for constraint in self.constraints.get(ct=0, type="nonconvex_inequality"))
 
         # TODO: should the algorithm need to distinguish between path, nfz, and custom, can we collapse into n_ineq?
         # TODO: ADD this to constraints class lol, ideally, shouldn't need any loops
-        self.n_path   = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "path")
-        self.n_nfz    = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "nfz")
-        self.n_custom = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "custom")
+        self.n_path   = sum(constraint.dimension for constraint in self.constraints.get(ct=0, type="nonconvex_inequality", group="path"))
+        self.n_nfz    = sum(constraint.dimension for constraint in self.constraints.get(ct=0, type="nonconvex_inequality", group="nfz"))
+        self.n_custom = sum(constraint.dimension for constraint in self.constraints.get(ct=0, type="nonconvex_inequality", group="custom"))
 
-        if self.constraints.has('ct'):
-            self.n_ctcs = sum(constraint.dimension for constraint in self.constraints.get('ct', 'all'))
+        if self.constraints.has(ct=1):
+            self.n_ctcs = sum(constraint.dimension for constraint in self.constraints.get(ct=1))
         else:
             self.n_ctcs = 0
 
         self.nz = self.n + self.n_ctcs
 
         # TODO: same here
-        self.n_term       = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'equality_bc') if constraint.boundary == "final" and constraint.set == "state")
-        self.n_term_ineq  = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'inequality_bc') if constraint.boundary == "final" and constraint.set == "state")
+        self.n_term       = sum(constraint.dimension for constraint in self.constraints.get(ct=0, type="equality_bc", boundary="final", set="state"))
+        self.n_term_ineq  = sum(constraint.dimension for constraint in self.constraints.get(ct=0, type='inequality_bc', boundary="final", set="state"))
         self.n_term_ctcs  = self.n_ctcs
         self.n_term_total = self.n_term + self.n_term_ineq + self.n_ctcs
 
@@ -96,7 +96,7 @@ class Problem:
                 name, field = parts[1], parts[2]
                 val = mission_config.get('constraints', {}).get(name, {}).get(field)
                 if val is not None:
-                    for c in self.constraints.get('all'):
+                    for c in self.constraints.get():
                         if c.name == name:
                             setattr(c, field, np.atleast_1d(val))
                             c.nondim_constraint(nondim)

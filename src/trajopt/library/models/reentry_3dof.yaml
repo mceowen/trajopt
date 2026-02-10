@@ -25,51 +25,51 @@ constraints.final_state:
 constraints.final_bank_angle:
   type: equality_bc
   set: control
-  x: null
-  x_idx: null
+  value: null
+  idx: null
   boundary: final
 
 constraints.state_limits:
   type: box
   set: state
-  x_min: []
-  x_min_idx: []
-  x_max: []
-  x_max_idx: []
+  min_value: []
+  min_value_idx: []
+  max_value: []
+  max_value_idx: []
 
 constraints.control_limits:
   type: box
   set: control
-  x_min: null
-  x_min_idx: null
-  x_max: null
-  x_max_idx: null
+  min_value: null
+  min_value_idx: null
+  max_value: null
+  max_value_idx: null
 
 constraints.bank_angle_limit:
   type: box
   set: control
-  x_min: null
-  x_min_idx: null
-  x_max: null
-  x_max_idx: null
+  min_value: null
+  min_value_idx: null
+  max_value: null
+  max_value_idx: null
 
 constraints.bank_aoa_angle_limits:
   type: box
   set: control
-  x_min: null
-  x_min_idx: null
-  x_max: null
-  x_max_idx: null
+  min_value: null
+  min_value_idx: null
+  max_value: null
+  max_value_idx: null
 
 constraints.bank_angle_rate_limit:
   type: control_rate_limit
-  udot_max: null
-  udot_max_idx: null
+  value: null
+  idx: null
 
 constraints.bank_aoa_rate_limit:
   type: control_rate_limit
-  udot_max: null
-  udot_max_idx: null
+  value: null
+  idx: null
 
 constraints.max_Q:
   type: nonconvex_inequality
@@ -110,7 +110,8 @@ costs.min_time:
 
 costs.min_terminal_velocity:
   type: terminal_state
-  x_idx: [3]
+  value: null
+  idx: [3]
 
 # TODO (carlos): add back minimax heating cost 
 # costs.min_max_heat_rate:

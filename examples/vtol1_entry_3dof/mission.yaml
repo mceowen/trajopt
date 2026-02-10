@@ -16,33 +16,42 @@ params.vehicle.inherit: trajopt/library/missions/shared/vehicle/vtol.yaml
 # CONSTRAINT/COST PARAMS
 # ===============================
 
-constraints.initial_state.x: ["${params.planet.r + 100e3}", 0.0, 0.0, 7450, -0.5, 0.0]
-constraints.initial_state.x_idx: [0, 1, 2, 3, 4, 5]
+constraints:
+  initial_state:
+    value: ["${params.planet.r + 100e3}", 0.0, 0.0, 7450, -0.5, 0.0]
+    idx: [0, 1, 2, 3, 4, 5]
 
-constraints.final_state.x: ["${params.planet.r + 15e3}", 12, 70, -10, 90]
-constraints.final_state.x_idx: [0, 1, 2, 4, 5]
-constraints.final_state.eps: [300, 0.1, 0.1, 0.1, 0.1]
+  final_state:
+    value: ["${params.planet.r + 15e3}", 12, 70, -10, 90]
+    idx: [0, 1, 2, 4, 5]
+    eps: [300, 0.1, 0.1, 0.1, 0.1]
 
-constraints.state_limits.x_min: ["${params.planet.r}", 100.0]
-constraints.state_limits.x_min_idx: [0, 3]
+  state_limits:
+    min_value: ["${params.planet.r}", 100.0]
+    min_value_idx: [0, 3]
 
-constraints.bank_angle_limit.x_min: [-80.0]
-constraints.bank_angle_limit.x_min_idx: [0]
-constraints.bank_angle_limit.x_max: [80.0]
-constraints.bank_angle_limit.x_max_idx: [0]
+  bank_angle_limit:
+    min_value: [-80.0]
+    min_value_idx: [0]
+    max_value: [80.0]
+    max_value_idx: [0]
 
-constraints.bank_angle_rate_limit.udot_max: [10]
-constraints.bank_angle_rate_limit.udot_max_idx: [0]
-
-constraints.max_Q.max_val: 33300
-constraints.max_Q.eps: [0.01]
-
-constraints.max_q.max_val: 18000
-constraints.max_q.min_val: 100
-constraints.max_q.eps: [0.01]
-
-constraints.max_load.max_val: 24.525
-constraints.max_load.eps: [0.01]
+  bank_angle_rate_limit:
+    value: [10]
+    idx: [0]
+  
+  max_Q:
+    max_value: 33300
+    eps: [0.01]
+  
+  max_q:
+    max_value: 18000
+    min_value: 100
+    eps: [0.01]
+  
+  max_load:
+    max_value: 24.525
+    eps: [0.01]
 
 # ===============================
 # ACTIVE CONSTRAINTS AND COSTS

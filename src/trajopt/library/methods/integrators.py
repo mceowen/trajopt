@@ -4,7 +4,7 @@ import jax.numpy as jnp
 
 def compile_dense_jax_propagator(problem, method, params):
 
-    dynamics = problem.constraints.get('name', 'dynamics')[0].fcn
+    dynamics = problem.constraints.get(type="dynamics")[0].fcn
     
     def rk4_step(zi, ti, dt, nu_ref, t_ref, params):
         k1 = z_dot(zi, ti, nu_ref, t_ref, params)

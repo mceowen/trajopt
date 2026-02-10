@@ -1,10 +1,21 @@
+# INHERIT THE AUTOSCVX METHOD CONFIGS
 inherit: trajopt/library/methods/configs/autoscvx.yaml
 
+# ===============================
+# GRID SETTINGS
+# ==============================
 N: 50
 
+# ===============================
+# METHOD FLAGS
+# ==============================
 flags:
   buff_dyn: "term"    # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
+  flag_conv: 1
 
+# ===============================
+# INITIAL GUESS SETTINGS
+# ==============================
 guess:
   T_init: 300.0
   T_min: 180.0
@@ -14,6 +25,9 @@ guess:
   nl_guess_u_start: [5.0, 0.0]
   nl_guess_u_stop: [5.0, 0.0]
 
+# ===============================
+# CONVERGENCE TOLERANCES
+# ==============================
 conv:
   eps_state: [500, 1, 1, 50, 1, 1]
   eps_cost: 1

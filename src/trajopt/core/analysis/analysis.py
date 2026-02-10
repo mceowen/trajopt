@@ -62,7 +62,7 @@ def perform_default_analysis(trajopt_obj, trim=True):
         t_nl = np.linspace(t_opt[0], t_opt[-1], 1000)
 
         # nonlinear propagation
-        t_nl, z_nl, nu_nl = integrators.propagate_jax_rk4_dense(z_opt[0], nu_opt, t_opt, t_nl, problem, method)
+        t_nl, z_nl, nu_nl = integrators.propagate_jax_rk4_dense(z_opt[0, :n], nu_opt[:, :n], t_opt, t_nl, problem, method)
 
         t_init = method.t_init
         z_init = method.z_init
@@ -71,10 +71,10 @@ def perform_default_analysis(trajopt_obj, trim=True):
         # compute constraints for z_nl, z_opt, name = SUBPLOT , TYPE, group = FIGURE, units
         constraint_data = {}
 
-        for constraint in problem.constraints.get("all"):
+        for constraint in problem.constraints.get():
             if hasattr(constraint, "compute_constraint_values"):
                 name  = constraint.name
-                type  = constraint.implement_type
+                type  = constraint.type
                 group = constraint.group
 
                 if group == None:

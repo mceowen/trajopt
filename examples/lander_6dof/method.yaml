@@ -1,5 +1,7 @@
 inherit: trajopt/library/methods/configs/autoscvx.yaml
 
+N: 20
+
 guess:
   type: straight_line
   # time initialization
@@ -26,7 +28,7 @@ conv:
   iter_max: 50
 
 flags:
-  ignore_dpp: 1
+  ignore_dpp: 0
   flag_conv: 1
 
 solver_opts:

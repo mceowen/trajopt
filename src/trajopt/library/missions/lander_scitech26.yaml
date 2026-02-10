@@ -8,25 +8,38 @@ params.zi: [4, 4, 0, 0.0, -4.0, 4.0, 0, 0, 0]
 params.min_thrust: 0.3
 
 # initial state constraint config
-constraints.initial_state.x: ${params.zi}
-constraints.initial_state.x_idx: [1, 2, 3, 4, 5, 6, 11, 12, 13]
-constraints.initial_state.x_guess: [2.0, 4, 4, 0, 0, -4.0, 4.0, 1.0, 0, 0, 0, 0, 0, 0]
+constraints:
+  initial_state:
+    value: ${params.zi}
+    idx: [1, 2, 3, 4, 5, 6, 11, 12, 13]
+    value_guess: [2.0, 4, 4, 0, 0, -4.0, 4.0, 1.0, 0, 0, 0, 0, 0, 0]
 
 # final state constraint config
-constraints.final_state.x: [0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
-constraints.final_state.x_idx: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
-constraints.final_state.eps: [0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001]
-constraints.final_state.x_guess: [1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
+  final_state:
+    value: [0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
+    idx: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+    eps: [0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001]
+    value_guess: [1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
 
 # gimbal limit constraint config
-constraints.gimbal_limit.theta_max: 20
+  gimbal_limit:
+    theta_max: 20
 
 # max thrust constraint config
-constraints.max_thrust.max_val: 5
+  max_thrust:
+    max_value: 5
 
 # min thrust norm constraint config
-constraints.min_thrust_norm.params: ["${params.min_thrust}"]
-constraints.min_thrust_norm.eps: [0.001]
+  min_thrust:
+    min_value: [0.3]
+    eps: [0.001]
 
-constraint_list: [initial_state, final_state, gimbal_limit, max_thrust, min_thrust_norm]
-cost_list: [min_time]
+constraint_list:
+- initial_state
+- final_state
+- gimbal_limit
+- max_thrust
+- min_thrust
+
+cost_list:
+- min_time

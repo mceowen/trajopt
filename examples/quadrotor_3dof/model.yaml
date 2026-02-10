@@ -4,7 +4,9 @@ dimensions.m: 3
 nondim.z_types: ["d", "d", "d", "v", "v", "v"]
 nondim.u_types: ["f", "f", "f"]
 
-# anchor types are the unit types of the anchor scales used to determine all other nondim scales
-# same options as z_types and u_types, three independent scales are needed to fully determine the rest
 nondim.anchor_types : ["d", "v", "m"]
 nondim.anchor_scales: [10.0, 10.0, 1.0]
+
+plotting.state_traj_groups:
+  "xyz": [0, 1, 2]
+  "xy": [0, 1]

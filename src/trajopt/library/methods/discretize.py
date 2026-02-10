@@ -69,7 +69,7 @@ def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, problem, method):
         uk = nu_jax[k]
         
         col_start = 0
-        for constraint in problem.constraints.get("nodal", "nonconvex_inequality"):
+        for constraint in problem.constraints.get(ct=0, type="nonconvex_inequality"):
             col_end = col_start + constraint.dimension
             
             f, dfcn_dz, dfcn_du            = constraint.g_aff(tk, zk, uk, params)
@@ -97,7 +97,7 @@ def compute_linearized_costs(t_ref, z_ref, u_ref, problem, method):
     dcostdnu = np.zeros((N, 1, m))
 
     # evaluate costs at each timestep
-    for cost in problem.costs.get("nonconvex"):
+    for cost in problem.costs.get(type="nonconvex"):
         if cost.type.term == 0:
             for k in range(N-1):
                 tk = t_jax[k]
@@ -109,7 +109,7 @@ def compute_linearized_costs(t_ref, z_ref, u_ref, problem, method):
                 dcostdz[k, 0, :] += np.asarray(dfcn_dz).flatten()
                 dcostdnu[k, 0, :] += np.asarray(dfcn_du).flatten()
             
-    for cost_fn in problem.costs.get("nonconvex_terminal"):
+    for cost_fn in problem.costs.get(type="nonconvex_terminal"):
         tk = t_jax[-1]
         zk = z_jax[-1]
         uk = nu_jax[-1]
@@ -171,9 +171,10 @@ def discretize_inv_foh(z_ref, nu_ref, dt_ref, problem, method):
 
     return Ak, Bk, Bkp, Sk, z_minus
 
-
 # Integrate linear system
 def RHS_ltv(tau, lds, nu_ref, dt_ref, problem, method):
+
+
 
     # Initialize
     lds_dot         = np.zeros_like(lds)
@@ -230,7 +231,6 @@ def RHS_ltv(tau, lds, nu_ref, dt_ref, problem, method):
     return lds_dot
 
 def compile_jax_discretization(problem, method):
-    
     n = problem.n
     nz = problem.nz
     m = problem.m
@@ -245,7 +245,7 @@ def compile_jax_discretization(problem, method):
     params = problem.params
 
     # pull ltv dynamics
-    lin_dyn = problem.constraints.get('name', 'dynamics')[0].lin_dyn
+    lin_dyn = problem.constraints.get(type='dynamics')[0].lin_dyn
 
     # nsub defines the number of sub *nodes* between knot points
     nsub_nodes = 20
