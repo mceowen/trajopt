@@ -155,7 +155,7 @@ class control_rate_limit:
 class axis_angle_cone:
     def __init__(self, cnstr_config, config=None):
 
-        self.name = cnstr_config["name"]
+        self.name  = cnstr_config["name"]
         self.group = cnstr_config.get("group", None)
         self.set = cnstr_config["set"]
         self.axis = cnstr_config["axis"] / np.linalg.norm(cnstr_config["axis"])

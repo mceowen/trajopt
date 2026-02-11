@@ -29,11 +29,16 @@ class SolutionMethod:
         self.index_map = IndexMap(self)
         self.nondim = Nondim(problem)
 
+        # nondimensionalize and convexfiy constraints
         self.problem.constraints.nondim_constraints(self.nondim)
         self.problem.constraints.convexify_constraints()
-        self.problem.constraints.augment_ctcs_dynamics(self.problem.n)
+
+        # nondimensionalize and convexify costs
         self.problem.costs.nondim_costs(self.nondim)
         self.problem.costs.convexify_costs()
+
+        # augment dynamics with ct constraints and costs
+        self.problem.constraints.augment_ctcs_dynamics(self.problem.n)
 
         # ---- Time grid initialization ----
         self.dt_init  = (self.guess["T_init"] / (self.N - 1)) * np.ones(self.N - 1)
@@ -129,6 +134,6 @@ class SolutionMethod:
         if problem.constraints.has(ct=1):
             self.z_init = guess.ctcs_initial_guess(problem, self)
 
-        self.cost_init = discretize.compute_linearized_costs(self.t_init, self.z_init, self.nu_init, problem, self)[0].sum().item()
+        self.cost_init = discretize.compute_nonconvex_costs(self.t_init, self.z_init, self.nu_init, problem, self)
 
-        print(f"Cost initial: {self.cost_init}")
+        # print(f"Cost initial: {self.cost_init}")

@@ -70,9 +70,8 @@ class Costs:
                 sig = inspect.signature(cost.fcn_dim)
                 param_names = sig.parameters.keys()
 
-                kwargs_to_bind = {}
                 if 'fcns' in param_names:
-                    kwargs_to_bind['fcns'] = fcns
+                    kwargs_to_bind = {"fcns": fcns}
 
                 if kwargs_to_bind:
                     cost.fcn_dim = partial(cost.fcn_dim, **kwargs_to_bind)
@@ -101,5 +100,5 @@ class Costs:
             None.
         """
         for cost in self.costs_list:
-            if getattr(cost, 'fcn', None) is not None:
-                cost.fcn_compiled, cost.dfcn_dz_compiled, cost.dfcn_du_compiled = convexify.linearize_jax(cost.fcn)
+            if getattr(cost, 'convexify_cost', None) is not None:
+                cost.convexify_cost()

@@ -80,7 +80,7 @@ constraints:
     type: nonconvex_inequality
     group: path
     fcn: trajopt/library/models/quadrotor_3dof.py:obstacle
-    min_value: 2.0
+    min_value: 4.0
     eps: [0.1]
     units: [{d: 1}]
     dimension: 1

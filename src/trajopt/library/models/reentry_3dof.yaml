@@ -17,6 +17,11 @@ constraints.initial_state:
   set: state
   boundary: init
 
+constraints.initial_control:
+  type: equality_bc
+  set: control
+  boundary: init
+
 constraints.final_state:
   type: equality_bc
   set: state
@@ -112,6 +117,13 @@ costs.min_terminal_velocity:
   type: terminal_state
   value: null
   idx: [3]
+
+costs.min_max_heat_rate:
+    type: nonconvex
+    minimax: 1
+    fcn: trajopt/library/models/reentry_3dof.py:heat_rate
+    units: [{none: 1}]
+    ct: 0
 
 # TODO (carlos): add back minimax heating cost 
 # costs.min_max_heat_rate:

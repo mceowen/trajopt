@@ -273,6 +273,9 @@ class Subproblem:
         self.vb_plus_ctcs  = cp.Variable((self.Npm_ctcs, self.n_plus_ctcs),  name="vb_plus_ctcs")  if self.n_plus_ctcs  > 0 else None
         self.vb_minus_ctcs = cp.Variable((self.Npm_ctcs, self.n_minus_ctcs), name="vb_minus_ctcs") if self.n_minus_ctcs > 0 else None
 
+        if problem.costs.has(type="nonconvex", minimax=1):
+            self.minimax_epigraph_upperbound = cp.Variable((1,), name="minimax_epigraph_upperbound")
+
     def _create_parameters(self) -> None:
         problem, method = self.problem, self.method
         N, n, m, nz = self.N, self.n, self.m, self.nz
@@ -284,9 +287,9 @@ class Subproblem:
         self.Sk     = cp.Parameter((N - 1, nz),    name="Sk")
         self.z_m   = cp.Parameter((N, nz),        name="z_minus")
 
-        self.w_cost_times_dcostdz = cp.Parameter((N, n), name="dcostdz")
-        self.w_cost_times_dcostdnu = cp.Parameter((N, m), name="dcostdnu")
-        self.w_cost_times_cost0   = cp.Parameter(N,      name="cost0")
+        self.w_cost_times_dcostdz = cp.Parameter((N, 1, n), name="dcostdz")
+        self.w_cost_times_dcostdnu = cp.Parameter((N, 1, m), name="dcostdnu")
+        self.w_cost_times_cost0   = cp.Parameter((N, 1),      name="cost0")
 
         self.z_ref  = cp.Parameter((N, nz),    name="z_ref")
         self.nu_ref  = cp.Parameter((N, m),    name="nu_ref")
@@ -534,8 +537,8 @@ class Subproblem:
                         C.append(self.dgdz[k,idx:idx+c.dimension] @ self.dz[k, :n] + self.dgdnu[k,idx:idx+c.dimension] @ self.dnu[k, :m] + self.g0[k,idx:idx+c.dimension] <= 0)
                     idx += c.dimension
 
-            if problem.costs.has(ct=0, type="nonconvex_inequality"):
-                C.append(self.dcdz[k] @ self.dz[k, :n] + self.dgdnu[k] @ self.dnu[k, :m] + self.g0[k] - self.vb_ineq[k] <= 0)
+            for cost in problem.costs.get(type="nonconvex", minimax=1):
+                C.append(self.w_cost_times_dcostdz[k] @ self.dz[k, :n] + self.w_cost_times_dcostdnu[k] @ self.dnu[k, :m] + self.w_cost_times_cost0[k] <= self.minimax_epigraph_upperbound)
 
             # convex constraints
             for constraint in problem.constraints.get(ct=0, type="axis_angle_cone"):
@@ -640,14 +643,18 @@ class Subproblem:
         problem, method = self.problem, self.method
         """Full baseline cost: TRUE + TR + 0.5*VIRTUAL + DUAL; gated via flags & autotune."""
 
-        # === TRUE cost (linearized objective) ===
-        TRUE = self.flag_true * (
-            cp.sum(cp.multiply(self.w_cost_times_dcostdz, self.dz[:,:self.n]))
-          + cp.sum(cp.multiply(self.w_cost_times_dcostdnu, self.dnu))
-          + cp.sum(self.w_cost_times_cost0)
-        )
+        TRUE = 0.0
 
-        if problem.costs.has(type="min_time"):
+        for cost in problem.costs.get(ct=0, type="nonconvex", minimax=0):
+            TRUE = (cp.sum(self.w_cost_times_cost0)
+                    + cp.sum(cp.multiply(self.w_cost_times_dcostdz, self.dz[:,:self.n])
+                    + cp.sum(cp.multiply(self.w_cost_times_dcostdnu, self.dnu)))
+                    )
+            
+        for cost in problem.costs.get(type="nonconvex", minimax=1):
+            TRUE += self.minimax_epigraph_upperbound
+
+        for cost in problem.costs.get(type="min_time"):
             dt = self.dt_ref + self.dt
             time_cost = cp.sum(dt) / (self.N - 1)
             
@@ -659,12 +666,10 @@ class Subproblem:
             term_cost = cp.norm(zf[idx])
             TRUE += term_cost
 
-        if problem.costs.has(type="terminal_state"):
-            cost_obj = problem.costs.get(type="terminal_state")[0]
-
+        for cost in problem.costs.get(type="terminal_state"):
             zf = self.z_ref[-1] + self.dz[-1]
 
-            idx = cost_obj.idx
+            idx = cost.idx
             TRUE += zf[idx]
 
         # === Trust-region penalties ===
@@ -737,10 +742,10 @@ class Subproblem:
         prop_time_ms = (time.time() - start) * 1000.0
 
         # compute linearized terminal and running costs
-        cost, dcostdz, dcostdnu = discretize.compute_linearized_costs(inputs["t_ref"], inputs["z_ref"], inputs["nu_ref"], problem, method)
+        cost, dcostdz, dcostdnu = discretize.compute_nonconvex_costs(inputs["t_ref"], inputs["z_ref"], inputs["nu_ref"], problem, method)
 
         if problem.constraints.has(ct=0, type="nonconvex_inequality"):
-            g, dgdz, dgdnu = discretize.compute_nodal_inequality_constraints(inputs["t_ref"], inputs["z_ref"], inputs["nu_ref"], problem, method)
+            g, dgdz, dgdnu = discretize.compute_nonconvex_constraints(inputs["t_ref"], inputs["z_ref"], inputs["nu_ref"], problem, method)
         else:
             g = None
             dgdz = None
@@ -759,9 +764,9 @@ class Subproblem:
         self.wtr_z.value  = W.get("wtr_z", 1e-2)
         self.wtr_u.value  = W.get("wtr_u", 1e-2)
 
-        self.w_cost_times_dcostdz.value = self.w_cost * dcostdz[:, 0, :]
-        self.w_cost_times_dcostdnu.value = self.w_cost * dcostdnu[:, 0, :]
-        self.w_cost_times_cost0.value   = self.w_cost * cost[:, 0, 0]
+        self.w_cost_times_dcostdz.value = self.w_cost * dcostdz
+        self.w_cost_times_dcostdnu.value = self.w_cost * dcostdnu
+        self.w_cost_times_cost0.value   = self.w_cost * cost
         self.z_ref.value  = inputs["z_ref"]
         self.nu_ref.value  = inputs["nu_ref"]
         self.dt_ref.value = inputs["dt_ref"].reshape(self.N - 1, 1)
@@ -904,10 +909,11 @@ class Subproblem:
         rec["Sk"]  = self.Sk.value if Sk is None else Sk
 
         # Path residuals and reference cost
-        g, _, _ = discretize.compute_nodal_inequality_constraints(rec["t_opt"], rec["z_opt"], rec["nu_opt"], self.problem, self.method)
+        g, _, _ = discretize.compute_nonconvex_constraints(rec["t_opt"], rec["z_opt"], rec["nu_opt"], self.problem, self.method)
+        cost, _, _ = discretize.compute_nonconvex_costs(rec["t_opt"], rec["z_opt"], rec["nu_opt"], self.problem, self.method)
 
         rec["cnst_path"] = g
-        rec["cost"]      = discretize.compute_linearized_costs(rec["t_opt"], rec["z_opt"], rec["nu_opt"], self.problem, self.method)[0].sum().item()
+        rec["cost"]      = cost.sum()
  
         # Convergence data (buffers, defects, TR cost, ref cost)
         conv = {}
@@ -922,7 +928,7 @@ class Subproblem:
         conv["defect"]  = tools.safe_val(self.dz, rows=N, cols=n) + input_for_iter["z_ref"] - self.z_m.value
         conv["Jtr"]     = ( float(self.wtr_z.value) * np.sum(tools.safe_val(self.dz, rows=N, cols=n)**2)
                           + float(self.wtr_u.value) * np.sum(tools.safe_val(self.dnu, rows=N, cols=m)**2) )
-        ref_cost = discretize.compute_linearized_costs(input_for_iter["t_ref"], input_for_iter["z_ref"], input_for_iter["nu_ref"], self.problem, self.method)[0].sum().item()
+        ref_cost = discretize.compute_nonconvex_costs(input_for_iter["t_ref"], input_for_iter["z_ref"], input_for_iter["nu_ref"], self.problem, self.method)[0].sum().item()
         conv["cost_ref"] = ref_cost
 
         rec["conv_data"]  = conv

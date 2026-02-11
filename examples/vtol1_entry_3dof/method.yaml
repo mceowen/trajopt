@@ -3,6 +3,7 @@ inherit: trajopt/library/methods/configs/autoscvx.yaml
 N: 40
 
 flags:
+  equal_dt: true
   buff_dyn: "term"
 
 # initial guess configuration
@@ -20,4 +21,8 @@ conv:
   eps_cost: 1
   eps_defect: [0.01]
   eps_dyn: [100.0, 0.1, 0.1, 30.0, 0.1, 0.1]
-  iter_max: 100
+  iter_max: 200
+
+weights:
+  alpha_z: 0.5
+  alpha_u: 0.5

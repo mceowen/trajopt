@@ -7,7 +7,7 @@ from trajopt.utils.config_loader import resolve_function
 
 class min_time:
     def __init__(self, cost_config, config=None):
-        self.type = __name__
+        self.type = "min_time"
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
     
@@ -16,7 +16,7 @@ class min_time:
 
 class terminal_state:
     def __init__(self, cost_config, config=None):
-        self.type = __name__
+        self.type = "terminal_state"
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
         self.idx = cost_config["idx"]
@@ -25,7 +25,7 @@ class terminal_state:
 
 class min_norm_terminal:
     def __init__(self, cost_config, config=None):
-        self.type = __name__
+        self.type = "min_norm_terminal"
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
         self.idx = cost_config["idx"]
@@ -36,17 +36,17 @@ class min_norm_terminal:
 class nonconvex:
     def __init__(self, cnstr_config, config=None):
         # required config
-        self.type = __name__
-        self.name            = cnstr_config["name"]
-        self.group           = cnstr_config["group"]
-        self.units           = cnstr_config["units"]
+        self.type       = "nonconvex"
+        self.name       = cnstr_config["name"]
+        self.group      = cnstr_config.get("group", None)
+        self.units      = cnstr_config["units"]
 
-        self.fcn_string      = cnstr_config["fcn"]
-        self.eps             = cnstr_config["eps"]
+        self.fcn_string = cnstr_config["fcn"]
+        self.minimax     = cnstr_config.get("minimax", 0)
 
         # optional configs
-        self.ct              = cnstr_config.get("ct", 0)
-        self.backend         = cnstr_config.get("backend", "jax")
+        self.ct         = cnstr_config.get("ct", 0)
+        self.backend    = cnstr_config.get("backend", "jax")
 
         self.config     = config
 

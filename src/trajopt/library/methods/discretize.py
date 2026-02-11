@@ -35,7 +35,6 @@ def set_ltv_indices(problem, method):
     method.lds0      = np.zeros( method.lds0_size )
 
     method.lds0[method.Ak_ind] = np.reshape(np.eye(nz), -1)
-    method.N_dens    = 20
 
     # convert indeces to jax arrays for jax discretize option
     method.lds0_size_jax = int(method.lds0_size)
@@ -45,7 +44,7 @@ def set_ltv_indices(problem, method):
     method.Bkp_ind_jax   = jnp.asarray(method.Bkp_ind)
     method.Sk_ind_jax    = jnp.asarray(method.Sk_ind)
 
-def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, problem, method):
+def compute_nonconvex_constraints(t_ref, z_ref, u_ref, problem, method):
     n_ineq = problem.n_ineq
     n = problem.n
     m = problem.m
@@ -81,7 +80,7 @@ def compute_nodal_inequality_constraints(t_ref, z_ref, u_ref, problem, method):
     
     return g, dgdz, dgdnu
 
-def compute_linearized_costs(t_ref, z_ref, u_ref, problem, method):
+def compute_nonconvex_costs(t_ref, z_ref, u_ref, problem, method):
 
     n = problem.n
     m = problem.m
@@ -90,145 +89,37 @@ def compute_linearized_costs(t_ref, z_ref, u_ref, problem, method):
     t_jax = jnp.asarray(t_ref)
     z_jax = jnp.asarray(z_ref)
     nu_jax = jnp.asarray(u_ref)
+
+    params = problem.params
     
     # preallocate stacked arrays (cost per timestep)
-    cost = np.zeros((N, 1, 1))
+    cost = np.zeros((N, 1))
     dcostdz = np.zeros((N, 1, n))
     dcostdnu = np.zeros((N, 1, m))
 
     # evaluate costs at each timestep
-    for cost in problem.costs.get(type="nonconvex"):
-        if cost.type.term == 0:
-            for k in range(N-1):
-                tk = t_jax[k]
-                zk = z_jax[k]
-                uk = nu_jax[k]
-                
-                f, dfcn_dz, dfcn_du = cost_fn.affine_approximation(tk, zk, uk)
-                cost[k, 0, 0] += np.asarray(f)
-                dcostdz[k, 0, :] += np.asarray(dfcn_dz).flatten()
-                dcostdnu[k, 0, :] += np.asarray(dfcn_du).flatten()
+    for cost_object in problem.costs.get(ct=0, type="nonconvex"):
+        for k in range(N-1):
+            tk = t_jax[k]
+            zk = z_jax[k]
+            uk = nu_jax[k]
             
-    for cost_fn in problem.costs.get(type="nonconvex_terminal"):
+            f, dfcn_dz, dfcn_du = cost_object.g_aff(tk, zk, uk, params)
+            cost[k, 0] += f[0]
+            dcostdz[k, 0, :] += np.asarray(dfcn_dz).flatten()
+            dcostdnu[k, 0, :] += np.asarray(dfcn_du).flatten()
+            
+    for cost_object in problem.costs.get(type="nonconvex_terminal"):
         tk = t_jax[-1]
         zk = z_jax[-1]
         uk = nu_jax[-1]
         
-        f, dfcn_dz, dfcn_du = cost_fn.g_aff(tk, zk, uk)
-        cost[-1, 0, 0] += np.asarray(f)
-        dcostdz[-1, 0, :] += np.asarray(dfcn_dz).flatten()
+        f, dfcn_dz, dfcn_du = cost_object.g_aff(tk, zk, uk, params)
+        cost[-1, 0]        += np.asarray(f)
+        dcostdz[-1, 0, :]  += np.asarray(dfcn_dz).flatten()
         dcostdnu[-1, 0, :] += np.asarray(dfcn_du).flatten()
     
     return cost, dcostdz, dcostdnu
-
-# Compute exact discretize for linear dynamic system
-def discretize_inv_foh(z_ref, nu_ref, dt_ref, problem, method):
-    N = method.N
-
-    traj_minus_data = {"z_minus": [z_ref[0]]}
-
-    # Precompute
-    eye_flat = np.eye(problem.n).ravel()
-
-    # Stack dynamics
-    lds0_stack = []
-    for k in range(N - 1):
-        method.lds0[method.z_ind] = z_ref[k]
-        method.lds0[method.Ak_ind] = eye_flat
-        lds0_stack.append(method.lds0.copy())
-
-    lds0_stack = np.concatenate(lds0_stack)
-
-    def derivs_step(tau, lds):
-        return RHS_ltv(tau, lds, nu_ref, dt_ref, problem, method)
-
-    sol = solve_ivp(derivs_step, [0, 1], lds0_stack, method="RK45", atol=1e-6, rtol=1e-6)
-
-    lds_end = sol.y[:, -1]  # shape: (total_state_size,)
-
-    assert lds_end.shape[0] == (N - 1) * method.lds0_size
-
-    Ak  = np.zeros((N - 1, problem.n, problem.n))
-    Bk  = np.zeros((N - 1, problem.n, problem.m))
-    Bkp = np.zeros((N - 1, problem.n, problem.m))
-    Sk  = np.zeros((N - 1, problem.n))
-
-    for k in range(N - 1):
-        base    = k * method.lds0_size
-        traj_minus_data["z_minus"].append(lds_end[base + method.z_ind])
-
-        Ak_bar  = lds_end[base + method.Ak_ind].reshape(problem.n, problem.n)
-        Bk_bar  = lds_end[base + method.Bk_ind].reshape(problem.n, problem.m)
-        Bkp_bar = lds_end[base + method.Bkp_ind].reshape(problem.n, problem.m)
-        Sk_bar  = lds_end[base + method.Sk_ind].reshape(problem.n)
-
-        Ak[k]   = Ak_bar
-        Bk[k]   = Ak_bar @ Bk_bar
-        Bkp[k]  = Ak_bar @ Bkp_bar
-        Sk[k]   = Ak_bar @ Sk_bar
-
-    z_minus    = np.array(traj_minus_data["z_minus"])
-
-    return Ak, Bk, Bkp, Sk, z_minus
-
-# Integrate linear system
-def RHS_ltv(tau, lds, nu_ref, dt_ref, problem, method):
-
-
-
-    # Initialize
-    lds_dot         = np.zeros_like(lds)
-    N               = method.N
-
-    # Extract times and FOH control input
-    Om_k            = 1 - tau
-    Om_kp           = tau
-
-    nrows, ncols    = nu_ref.shape
-    rows            = nrows if nrows > ncols else ncols
-
-    v_1             = Om_k * np.ones((rows, 1))
-    v_2             = Om_kp * np.ones((rows - 1, 1))
-    Om              = np.diagflat(v_1) + np.diagflat(v_2, 1)
-
-    u               = Om @ nu_ref
-
-    for k in range(N - 1):
-        dt_k       = dt_ref[k]
-
-        # Extract state info
-        x           = lds[ k * method.lds0_size + method.z_ind ]
-
-        # Extract continuous time Jacobians
-        fc, Ac, Bc = problem.lin_dyn(tau, x, u[k])
-
-        # Extract STM
-        Phi_tau     = lds[ k * method.lds0_size + method.Ak_ind ].reshape(model.n, model.n)
-
-        # Construct Jacobians w.r.t. tau
-        f_tau       = dt_k * fc
-        A_tau       = dt_k * Ac
-        B_tau       = dt_k * Om_k * Bc
-        Bp_tau      = dt_k * Om_kp * Bc
-        S_tau       = fc
-
-        Phi_tau_inv = np.linalg.pinv(Phi_tau)
-
-        # Construct derivatives
-        x_dot       = f_tau
-        A_tau_dot   = A_tau @ Phi_tau
-        B_tau_dot   = Phi_tau_inv @ B_tau
-        Bp_tau_dot  = Phi_tau_inv @ Bp_tau
-        S_tau_dot   = Phi_tau_inv @ S_tau
-
-        # Setup linear system properly
-        lds_dot[ k * method.lds0_size + method.z_ind  ] = x_dot
-        lds_dot[ k * method.lds0_size + method.Ak_ind ] = A_tau_dot.flatten()
-        lds_dot[ k * method.lds0_size + method.Bk_ind ] = B_tau_dot.flatten()
-        lds_dot[ k * method.lds0_size + method.Bkp_ind] = Bp_tau_dot.flatten()
-        lds_dot[ k * method.lds0_size + method.Sk_ind ] = S_tau_dot
-
-    return lds_dot
 
 def compile_jax_discretization(problem, method):
     n = problem.n
@@ -372,6 +263,117 @@ def compute_linsys_discrete(z_ref, nu_ref, dt_ref, problem, method):
             Ak, Bk, Bkp, Sk, z_minus = discretize_inv_foh(z_ref, nu_ref, dt_ref, problem, method)
     
     return Ak, Bk, Bkp, Sk, z_minus
+
+# other discretization methods
+
+# Compute exact discretize for linear dynamic system
+def discretize_inv_foh(z_ref, nu_ref, dt_ref, problem, method):
+    N = method.N
+
+    traj_minus_data = {"z_minus": [z_ref[0]]}
+
+    # Precompute
+    eye_flat = np.eye(problem.n).ravel()
+
+    # Stack dynamics
+    lds0_stack = []
+    for k in range(N - 1):
+        method.lds0[method.z_ind] = z_ref[k]
+        method.lds0[method.Ak_ind] = eye_flat
+        lds0_stack.append(method.lds0.copy())
+
+    lds0_stack = np.concatenate(lds0_stack)
+
+    def derivs_step(tau, lds):
+        return RHS_ltv(tau, lds, nu_ref, dt_ref, problem, method)
+
+    sol = solve_ivp(derivs_step, [0, 1], lds0_stack, method="RK45", atol=1e-6, rtol=1e-6)
+
+    lds_end = sol.y[:, -1]  # shape: (total_state_size,)
+
+    assert lds_end.shape[0] == (N - 1) * method.lds0_size
+
+    Ak  = np.zeros((N - 1, problem.n, problem.n))
+    Bk  = np.zeros((N - 1, problem.n, problem.m))
+    Bkp = np.zeros((N - 1, problem.n, problem.m))
+    Sk  = np.zeros((N - 1, problem.n))
+
+    for k in range(N - 1):
+        base    = k * method.lds0_size
+        traj_minus_data["z_minus"].append(lds_end[base + method.z_ind])
+
+        Ak_bar  = lds_end[base + method.Ak_ind].reshape(problem.n, problem.n)
+        Bk_bar  = lds_end[base + method.Bk_ind].reshape(problem.n, problem.m)
+        Bkp_bar = lds_end[base + method.Bkp_ind].reshape(problem.n, problem.m)
+        Sk_bar  = lds_end[base + method.Sk_ind].reshape(problem.n)
+
+        Ak[k]   = Ak_bar
+        Bk[k]   = Ak_bar @ Bk_bar
+        Bkp[k]  = Ak_bar @ Bkp_bar
+        Sk[k]   = Ak_bar @ Sk_bar
+
+    z_minus    = np.array(traj_minus_data["z_minus"])
+
+    return Ak, Bk, Bkp, Sk, z_minus
+
+# Integrate linear system
+def RHS_ltv(tau, lds, nu_ref, dt_ref, problem, method):
+
+
+
+    # Initialize
+    lds_dot         = np.zeros_like(lds)
+    N               = method.N
+
+    # Extract times and FOH control input
+    Om_k            = 1 - tau
+    Om_kp           = tau
+
+    nrows, ncols    = nu_ref.shape
+    rows            = nrows if nrows > ncols else ncols
+
+    v_1             = Om_k * np.ones((rows, 1))
+    v_2             = Om_kp * np.ones((rows - 1, 1))
+    Om              = np.diagflat(v_1) + np.diagflat(v_2, 1)
+
+    u               = Om @ nu_ref
+
+    for k in range(N - 1):
+        dt_k       = dt_ref[k]
+
+        # Extract state info
+        x           = lds[ k * method.lds0_size + method.z_ind ]
+
+        # Extract continuous time Jacobians
+        fc, Ac, Bc = problem.lin_dyn(tau, x, u[k])
+
+        # Extract STM
+        Phi_tau     = lds[ k * method.lds0_size + method.Ak_ind ].reshape(model.n, model.n)
+
+        # Construct Jacobians w.r.t. tau
+        f_tau       = dt_k * fc
+        A_tau       = dt_k * Ac
+        B_tau       = dt_k * Om_k * Bc
+        Bp_tau      = dt_k * Om_kp * Bc
+        S_tau       = fc
+
+        Phi_tau_inv = np.linalg.pinv(Phi_tau)
+
+        # Construct derivatives
+        x_dot       = f_tau
+        A_tau_dot   = A_tau @ Phi_tau
+        B_tau_dot   = Phi_tau_inv @ B_tau
+        Bp_tau_dot  = Phi_tau_inv @ Bp_tau
+        S_tau_dot   = Phi_tau_inv @ S_tau
+
+        # Setup linear system properly
+        lds_dot[ k * method.lds0_size + method.z_ind  ] = x_dot
+        lds_dot[ k * method.lds0_size + method.Ak_ind ] = A_tau_dot.flatten()
+        lds_dot[ k * method.lds0_size + method.Bk_ind ] = B_tau_dot.flatten()
+        lds_dot[ k * method.lds0_size + method.Bkp_ind] = Bp_tau_dot.flatten()
+        lds_dot[ k * method.lds0_size + method.Sk_ind ] = S_tau_dot
+
+    return lds_dot
 
 
 def discretize_ctcs(z_ref, nu_ref, dt_ref, problem, method):

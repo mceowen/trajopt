@@ -57,5 +57,15 @@ constraints:
 # ACTIVE CONSTRAINTS AND COSTS
 # ===============================
 
-constraint_list: [initial_state, final_state, state_limits, bank_angle_limit, bank_angle_rate_limit, max_Q, max_q, max_load]
-cost_list: [min_terminal_velocity]
+constraint_list: 
+  - initial_state
+  - final_state
+  - state_limits
+  - bank_angle_limit
+  - bank_angle_rate_limit
+  - max_Q
+  - max_q
+  - max_load
+
+cost_list: 
+  - min_terminal_velocity
