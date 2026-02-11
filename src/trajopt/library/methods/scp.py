@@ -643,34 +643,34 @@ class Subproblem:
         problem, method = self.problem, self.method
         """Full baseline cost: TRUE + TR + 0.5*VIRTUAL + DUAL; gated via flags & autotune."""
 
-        TRUE = 0.0
+        self.TRUE = 0.0
 
         for cost in problem.costs.get(ct=0, type="nonconvex", minimax=0):
-            TRUE = (cp.sum(self.w_cost_times_cost0)
+            self.TRUE = (cp.sum(self.w_cost_times_cost0)
                     + cp.sum(cp.multiply(self.w_cost_times_dcostdz, self.dz[:,:self.n])
                     + cp.sum(cp.multiply(self.w_cost_times_dcostdnu, self.dnu)))
                     )
             
         for cost in problem.costs.get(type="nonconvex", minimax=1):
-            TRUE += self.minimax_epigraph_upperbound
+            self.TRUE += self.minimax_epigraph_upperbound
 
         for cost in problem.costs.get(type="min_time"):
             dt = self.dt_ref + self.dt
             time_cost = cp.sum(dt) / (self.N - 1)
             
-            TRUE += time_cost
+            self.TRUE += time_cost
 
         for cost in problem.costs.get(type="min_norm_terminal"):
             zf = self.z_ref[-1] + self.dz[-1]
             idx = cost.idx
             term_cost = cp.norm(zf[idx])
-            TRUE += term_cost
+            self.TRUE += term_cost
 
         for cost in problem.costs.get(type="terminal_state"):
             zf = self.z_ref[-1] + self.dz[-1]
 
             idx = cost.idx
-            TRUE += zf[idx]
+            self.TRUE += zf[idx]
 
         # === Trust-region penalties ===
         TR = self.flag_tr * (self.wtr_z * cp.sum_squares(self.dz[:, :self.n]) + self.wtr_u * cp.sum_squares(self.dnu))
@@ -687,7 +687,7 @@ class Subproblem:
         if self.flag_autotune in {"1", "3", "al-scvx"}:
             DUAL = hp.build_dual_buffer_cost(self)
 
-        return TRUE + TR + VB + DUAL
+        return self.TRUE + TR + VB + DUAL
 
     # ============================================================
     # PARAMETER UPDATES AND SOLVE (UNIFIED HISTORY)
@@ -913,13 +913,13 @@ class Subproblem:
         cost, _, _ = discretize.compute_nonconvex_costs(rec["t_opt"], rec["z_opt"], rec["nu_opt"], self.problem, self.method)
 
         rec["cnst_path"] = g
-        rec["cost"]      = cost.sum()
+        rec["cost"]      = self.TRUE.value.item() / self.w_cost
  
         # Convergence data (buffers, defects, TR cost, ref cost)
         conv = {}
-        conv["vb_ineq"] = tools.get_val(self.vb_ineq,  rows=self.N, cols=self.n_ineq) if self.vb_ineq  is not None else np.zeros((self.N,self.n_ineq))
-        conv["vb_term"] = tools.get_val(self.vb_term,  rows=1, cols=self.n_term_total) if self.vb_term  is not None else np.zeros((1, self.n_term_total))
-        conv["vb_dyn"]  = tools.get_val(self.vb_dyn_p, rows=self.N-1,  cols=self.n_dyn) - tools.get_val(self.vb_dyn_m, rows=self.N-1, cols=self.n_dyn)
+        conv["vb_ineq"]      = tools.get_val(self.vb_ineq,  rows=self.N, cols=self.n_ineq) if self.vb_ineq  is not None else np.zeros((self.N,self.n_ineq))
+        conv["vb_term"]      = tools.get_val(self.vb_term,  rows=1, cols=self.n_term_total) if self.vb_term  is not None else np.zeros((1, self.n_term_total))
+        conv["vb_dyn"]       = tools.get_val(self.vb_dyn_p, rows=self.N-1,  cols=self.n_dyn) - tools.get_val(self.vb_dyn_m, rows=self.N-1, cols=self.n_dyn)
         conv["vb_plus_real"] = tools.get_val(self.vb_plus_real, rows=self.Npm_real, cols=self.n_plus_real) if self.vb_plus_real  is not None else np.zeros((self.Npm_real, self.n_plus_real))
         conv["vb_minus_real"] = tools.get_val(self.vb_minus_real, rows=self.Npm_real, cols=self.n_minus_real) if self.vb_minus_real  is not None else np.zeros((self.Npm_real, self.n_minus_real))
         conv["vb_plus_ctcs"] = tools.get_val(self.vb_plus_ctcs, rows=self.Npm_ctcs, cols=self.n_plus_ctcs) if self.vb_plus_ctcs  is not None else np.zeros((self.Npm_ctcs, self.n_plus_ctcs))
@@ -995,6 +995,6 @@ def display_subprob_status(method, rec: Dict[str, Any]) -> None:
             log_vb_dyn,
             str(solve_stat),
             Ts * nt,
-            cost * ncost
+            cost
         )
     )

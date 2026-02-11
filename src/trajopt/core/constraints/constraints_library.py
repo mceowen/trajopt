@@ -31,8 +31,6 @@ class equality_bc:
         else:
             self.boundary_idx = None
 
-        print(f"loading {self.name} constraint")
-
         self.eps = cnstr_config.get("eps", np.zeros(len(self.idx)))
         self.dimension = len(self.idx)
         

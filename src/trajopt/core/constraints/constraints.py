@@ -71,6 +71,7 @@ class Constraints:
                 sig = inspect.signature(constraint.fcn_dim)
                 param_names = sig.parameters.keys()
 
+                kwargs_to_bind = {}
                 if 'fcns' in param_names:
                     kwargs_to_bind = {"fcns": fcns}
 
