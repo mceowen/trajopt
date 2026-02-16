@@ -112,7 +112,7 @@ class AFFINE: ## IMPLEMENTED
         self.b_dim = ins['b'];
         self.A_dim = ins['A'];
         self.n = self.A.shape[1];
-        self.m = self.A.shape[0];
+        self.n_nu = self.A.shape[0];
         #############################################
         self.type = 'AFFINE'
         self.implement_type = 'AFFINE'
@@ -129,6 +129,9 @@ class AFFINE: ## IMPLEMENTED
         self.A = self.A_dim.copy()
         self.b = self.b_dim.copy();        
         self.nondimmed = False;
+        
+        # Set dimension from matrix size
+        self.dimension = int(self.A_dim.shape[0]);
     ### non dimensionalized version... 
     def nondim_constraint(self,nondim):
         ### update something with nondim...
@@ -181,7 +184,7 @@ class POLYTOPE: ## IMPLEMENTED
         self.A_dim = ins['A'];
         self.version = ins['version'];
         self.n = self.A_dim.shape[1];
-        self.m = self.A_dim.shape[0];
+        self.n_nu = self.A_dim.shape[0];
         
         self.type = 'POLYTOPE';
         #############################################
@@ -351,7 +354,7 @@ class SOC: ## IMPLEMENTED
         self.version = version; 
 
         self.n = self.A_dim.shape[1];
-        self.m = self.A_dim.shape[0];
+        self.n_nu = self.A_dim.shape[0];
         self.type = 'SOC';
         #############################################
         if version == 'in':  self.subtype = 'SOC_IN';  self.convex = True;
@@ -375,7 +378,10 @@ class SOC: ## IMPLEMENTED
         self.b = self.b_dim.copy()
         self.C = self.C_dim.copy()
         self.d = self.d_dim.copy()
-        self.nondimmed = False; 
+        self.nondimmed = False;
+        
+        # Set dimension for SOC constraint (single scalar output)
+        self.dimension = 1 
 
 
 
@@ -700,7 +706,7 @@ class dan_equality_bc(AFFINE):
 #         self.b = b;
 #         self.A = A;
 #         self.n = self.A.shape[1];
-#         self.m = self.A.shape[0];
+#         self.n_nu = self.A.shape[0];
 #         #############################################
 #         self.type = 'AFFINE'
 #         self.subtype = 'AFFINE'

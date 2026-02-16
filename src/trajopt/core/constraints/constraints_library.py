@@ -307,6 +307,9 @@ class nonconvex_inequality:
             pass
 
     def g_aff(self, t, z, nu, params):
+        from trajopt.utils.tools import AttrDict
+        if isinstance(params, AttrDict):
+            params = dict(params)
         return (
             self.fcn_compiled(t, z, nu, params),
             self.dfcn_dz_compiled(t, z, nu, params),
@@ -343,6 +346,9 @@ class dynamics:
         self.dfcn_du_compiled = None
 
     def lin_dyn(self, t, z, nu, params):
+        from trajopt.utils.tools import AttrDict
+        if isinstance(params, AttrDict):
+            params = dict(params)
         return (
             self.fcn_compiled(t, z, nu, params),
             self.dfcn_dz_compiled(t, z, nu, params),

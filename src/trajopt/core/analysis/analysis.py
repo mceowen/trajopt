@@ -5,6 +5,7 @@ import jax
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 import trajopt.library.methods.integrators as integrators
+from trajopt.core.indexing.index_map import IndexMap
 from trajopt.core.problem import Problem
 from trajopt.core.solution_method import SolutionMethod
 
@@ -39,13 +40,14 @@ def _trim_iter_record(rec):
     return {k: rec[k] for k in ITER_DATA_KEYS_KEEP if k in rec}
 
 def perform_default_analysis(trajopt_obj, trim=True):
-    problem = trajopt_obj.problem
-    method = trajopt_obj.method
+    problem     = trajopt_obj.problem
+    method      = trajopt_obj.method
 
-    n = problem.n
-    params = problem.params
-    iter_data = method.subprob.iter_data
-    nondim = method.nondim
+    n_x         = problem.index_map.n['state']
+    n_nu        = problem.index_map.n['control']
+    params      = problem.params
+    iter_data   = method.subprob.iter_data
+    nondim      = method.nondim
 
     problem_config = problem.config
     method_data = tools.extract_attributes(method, METHOD_DATA_KEYS_KEEP)
@@ -62,7 +64,7 @@ def perform_default_analysis(trajopt_obj, trim=True):
         t_nl = np.linspace(t_opt[0], t_opt[-1], 1000)
 
         # nonlinear propagation
-        t_nl, z_nl, nu_nl = integrators.propagate_jax_rk4_dense(z_opt[0, :n], nu_opt[:, :n], t_opt, t_nl, problem, method)
+        t_nl, z_nl, nu_nl = integrators.propagate_jax_rk4_dense(z_opt[0, :n_x], nu_opt[:, :n_nu], t_opt, t_nl, problem, method)
 
         t_init = method.t_init
         z_init = method.z_init
@@ -80,9 +82,9 @@ def perform_default_analysis(trajopt_obj, trim=True):
                 if group == None:
                     group = name
                 
-                opt_vals  = constraint.compute_constraint_values(t_opt, z_opt[:, :n], nu_opt, params)
-                nl_vals   = constraint.compute_constraint_values(t_nl, z_nl[:, :n], nu_nl, params)
-                init_vals = constraint.compute_constraint_values(t_init, z_init[:, :n], nu_init, params)
+                opt_vals  = constraint.compute_constraint_values(t_opt, z_opt[:, :n_x], nu_opt, params)
+                nl_vals   = constraint.compute_constraint_values(t_nl, z_nl[:, :n_x], nu_nl, params)
+                init_vals = constraint.compute_constraint_values(t_init, z_init[:, :n_x], nu_init, params)
 
                 output = {
                     "name": name,
@@ -104,11 +106,11 @@ def perform_default_analysis(trajopt_obj, trim=True):
         data['nu_nl'] = nu_nl @ nondim.M["ctrl"]["nd2d"]
 
         data['t_init']  = t_init * nondim.nt
-        data['z_init']  = z_init[:, :n] @ nondim.M["state"]["nd2d"]
+        data['z_init']  = z_init[:, :n_x] @ nondim.M["state"]["nd2d"]
         data['nu_init'] = nu_init @ nondim.M["ctrl"]["nd2d"]
 
         data['t_opt']  = t_opt * nondim.nt
-        data['z_opt']  = z_opt[:, :n] @ nondim.M["state"]["nd2d"]
+        data['z_opt']  = z_opt[:, :n_x] @ nondim.M["state"]["nd2d"]
         data['nu_opt'] = nu_opt @ nondim.M["ctrl"]["nd2d"]
         data['constraint_data'] = constraint_data
 
@@ -185,8 +187,13 @@ def run_mc_analysis(trajopt_obj):
 
     def _run_mc_for_method(name):
         merged = _merge_method_config(base_config, method_vars, name)
-        problem = Problem(copy.deepcopy(problem_config))
-        method = SolutionMethod(problem, merged)
+        index_map = IndexMap(
+            model_config=problem_config['model'],
+            mission_config=problem_config['mission'],
+            method_config=merged,
+        )
+        problem = Problem(copy.deepcopy(problem_config), index_map=index_map)
+        method = SolutionMethod(problem, merged, index_map=index_map)
         method.get_initial_guess(problem)
         
         trajopt_obj.problem = problem
@@ -210,7 +217,7 @@ def run_mc_analysis(trajopt_obj):
                 "nu_ref": m.nu_init,
                 "dt_ref": m.dt_init,
                 "t_ref": m.t_init,
-                "conv_data": {"vb_ineq": np.zeros((subprob.N, problem.n_ineq)), "vb_dyn": np.zeros((subprob.N - 1, subprob.n_dyn)), "vb_term": np.zeros((problem.n_term_total, 1))},
+                "conv_data": {"vb_ineq": np.zeros((subprob.N, problem.index_map.n['ineq'])), "vb_dyn": np.zeros((subprob.N - 1, subprob.index_map.n['dyn'])), "vb_term": np.zeros((problem.index_map.n['term_total'], 1))},
                 "weights": copy.deepcopy(m.weights),
             }]
 

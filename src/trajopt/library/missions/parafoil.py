@@ -22,7 +22,7 @@ def analytical_cost(t, z, nu, trajopt_obj):
 
     # Preallocate outputs
     dcostdz         = np.zeros((N, 1, n))
-    dcostdnu         = np.zeros((N, 1, m))
+    dcostdnu         = np.zeros((N, 1, n_nu))
     cost            = np.zeros((N, 1, 1))
 
     for k in range(N - 1):
@@ -34,7 +34,7 @@ def analytical_cost(t, z, nu, trajopt_obj):
         zkp         = z[k + 1]
         ukp         = nu[k + 1]
 
-        dcostdnu[k]  = 2 * dt[k] * ((uk + ukp) / 2).reshape(1, m)
+        dcostdnu[k]  = 2 * dt[k] * ((uk + ukp) / 2).reshape(1, n_nu)
         avg_cost    = 0.5 * (mission.cost(tk, zk, uk) + mission.cost(tkp, zkp, ukp))
         cost[k]     = avg_cost * dt[k]
 

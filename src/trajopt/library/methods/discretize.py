@@ -4,6 +4,7 @@ import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 from scipy.integrate import solve_ivp
 import trajopt.library.methods.convexify as convexify
+from trajopt.utils.tools import AttrDict
 
 def set_ltv_indices(problem, method):
     """
@@ -16,20 +17,20 @@ def set_ltv_indices(problem, method):
     dict: Updated params with LTV indices and initialized arrays.
     """
 
-    nz = problem.nz
-    m = problem.m
-    N = method.N
+    nz = problem.index_map.n['z']
+    n_nu = problem.index_map.n['control']
+    N = method.index_map.N['N']
 
     method.z_ind     = np.arange(0, nz)
     method.Ak_ind    = np.arange(method.z_ind[-1] + 1, method.z_ind[-1] + 1 + nz**2 )
-    method.Bk_ind    = np.arange(method.Ak_ind[-1] + 1, method.Ak_ind[-1] + 1 + nz * m )
-    method.Bkp_ind   = np.arange(method.Bk_ind[-1] + 1, method.Bk_ind[-1] + 1 + nz * m )
+    method.Bk_ind    = np.arange(method.Ak_ind[-1] + 1, method.Ak_ind[-1] + 1 + nz*n_nu )
+    method.Bkp_ind   = np.arange(method.Bk_ind[-1] + 1, method.Bk_ind[-1] + 1 + nz*n_nu )
     method.Sk_ind    = np.arange(method.Bkp_ind[-1] + 1, method.Bkp_ind[-1] + 1 + nz )
 
-    method.Ak        = np.zeros((method.N - 1, nz, nz))
-    method.Bk        = np.zeros((method.N - 1, nz, m))
-    method.Bkp       = np.zeros((method.N - 1, nz, m))
-    method.Sk        = np.zeros((method.N - 1, nz, 1))
+    method.Ak        = np.zeros((method.index_map.N['N'] - 1, nz, nz))
+    method.Bk        = np.zeros((method.index_map.N['N'] - 1, nz, n_nu))
+    method.Bkp       = np.zeros((method.index_map.N['N'] - 1, nz, n_nu))
+    method.Sk        = np.zeros((method.index_map.N['N'] - 1, nz, 1))
 
     method.lds0_size = method.Sk_ind[-1] + 1
     method.lds0      = np.zeros( method.lds0_size )
@@ -45,10 +46,10 @@ def set_ltv_indices(problem, method):
     method.Sk_ind_jax    = jnp.asarray(method.Sk_ind)
 
 def compute_nonconvex_constraints(t_ref, z_ref, u_ref, problem, method):
-    n_ineq = problem.n_ineq
-    n = problem.n
-    m = problem.m
-    N = method.N
+    n_ineq  = problem.index_map.n['ineq']
+    n_x     = problem.index_map.n['state']
+    n_nu    = problem.index_map.n['control']
+    N       = method.index_map.N['N']
         
     t_jax = jnp.asarray(t_ref)
     z_jax = jnp.asarray(z_ref)
@@ -58,13 +59,13 @@ def compute_nonconvex_constraints(t_ref, z_ref, u_ref, problem, method):
     
     # Preallocate stacked arrays
     g    = np.zeros((N, n_ineq))
-    dgdz = np.zeros((N, n_ineq, n))
-    dgdnu = np.zeros((N, n_ineq, m))
+    dgdz = np.zeros((N, n_ineq, n_x))
+    dgdnu = np.zeros((N, n_ineq, n_nu))
     
     # Evaluate constraints at each timestep
     for k in range(N):
         tk = t_jax[k]
-        zk = z_jax[k, :n]
+        zk = z_jax[k, :n_x]
         uk = nu_jax[k]
         
         col_start = 0
@@ -82,9 +83,9 @@ def compute_nonconvex_constraints(t_ref, z_ref, u_ref, problem, method):
 
 def compute_nonconvex_costs(t_ref, z_ref, u_ref, problem, method):
 
-    n = problem.n
-    m = problem.m
-    N = method.N
+    n_x = problem.index_map.n['state']
+    n_nu = problem.index_map.n['control']
+    N = method.index_map.N['N']
     
     t_jax = jnp.asarray(t_ref)
     z_jax = jnp.asarray(z_ref)
@@ -94,8 +95,8 @@ def compute_nonconvex_costs(t_ref, z_ref, u_ref, problem, method):
     
     # preallocate stacked arrays (cost per timestep)
     cost = np.zeros((N, 1))
-    dcostdz = np.zeros((N, 1, n))
-    dcostdnu = np.zeros((N, 1, m))
+    dcostdz = np.zeros((N, 1, n_x))
+    dcostdnu = np.zeros((N, 1, n_nu))
 
     # evaluate costs at each timestep
     for cost_object in problem.costs.get(ct=0, type="nonconvex"):
@@ -122,16 +123,14 @@ def compute_nonconvex_costs(t_ref, z_ref, u_ref, problem, method):
     return cost, dcostdz, dcostdnu
 
 def compile_jax_discretization(problem, method):
-    n = problem.n
-    nz = problem.nz
-    m = problem.m
-    N = method.N
+    nz = problem.index_map.n['z']
+    n_nu = problem.index_map.n['control']
 
     # define static indices for stacked RHS vector 
     Ak_ind0   = nz
     Bk_ind0   = Ak_ind0  + nz*nz
-    Bkp_ind0  = Bk_ind0  + nz*m
-    Sk_ind0   = Bkp_ind0 + nz*m
+    Bkp_ind0  = Bk_ind0  + nz*n_nu
+    Sk_ind0   = Bkp_ind0 + nz*n_nu
 
     params = problem.params
 
@@ -146,10 +145,13 @@ def compile_jax_discretization(problem, method):
     # packs the derivative of stacked RHS vector for node k
     def pack_lds_dot(tau, lds_k, nu_k, nu_kp, dt_k, params):
 
+        if isinstance(params, AttrDict):
+            params = dict(params)
+
         x       = lds_k[         : Ak_ind0]
         phi_a   = lds_k[Ak_ind0  : Bk_ind0].reshape((nz, nz))
-        phi_b_m = lds_k[Bk_ind0  : Bkp_ind0].reshape((nz, m))
-        phi_b_p = lds_k[Bkp_ind0 : Sk_ind0].reshape((nz, m))
+        phi_b_m = lds_k[Bk_ind0  : Bkp_ind0].reshape((nz, n_nu))
+        phi_b_p = lds_k[Bkp_ind0 : Sk_ind0].reshape((nz, n_nu))
         phi_s   = lds_k[Sk_ind0  : ]
 
         a = 1 - tau
@@ -161,14 +163,18 @@ def compile_jax_discretization(problem, method):
 
         P1_dot = (sigma * fc)
         P2_dot = (sigma * Ac @ phi_a).reshape((nz*nz,))
-        P3_dot = (sigma * Ac @ phi_b_m + sigma * Bc * a).reshape((nz*m,))
-        P4_dot = (sigma * Ac @ phi_b_p + sigma * Bc * b).reshape((nz*m,))
+        P3_dot = (sigma * Ac @ phi_b_m + sigma * Bc * a).reshape((nz*n_nu,))
+        P4_dot = (sigma * Ac @ phi_b_p + sigma * Bc * b).reshape((nz*n_nu,))
         P5_dot = (sigma * Ac @ phi_s   + fc)
 
         return jnp.concatenate([P1_dot, P2_dot, P3_dot, P4_dot, P5_dot])
 
     # rk4 single step function for jax integration
     def rk4_step_jax(tau, lds, nu_k, nu_kp, dt_k, params):
+
+        if isinstance(params, AttrDict):
+            params = dict(params)
+        
         k1 = pack_lds_dot(tau, lds, nu_k, nu_kp, dt_k, params)
         k2 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k1, nu_k, nu_kp, dt_k, params)
         k3 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k2, nu_k, nu_kp, dt_k, params)
@@ -183,8 +189,8 @@ def compile_jax_discretization(problem, method):
     def pack_lds0(z_k):
         P1 = z_k
         P2 = jnp.eye(nz).reshape(nz*nz)
-        P3 = jnp.zeros(nz*m)
-        P4 = jnp.zeros(nz*m)
+        P3 = jnp.zeros(nz*n_nu)
+        P4 = jnp.zeros(nz*n_nu)
         P5 = jnp.zeros(nz)
 
         return jnp.concatenate([P1, P2, P3, P4, P5])
@@ -193,14 +199,18 @@ def compile_jax_discretization(problem, method):
     def unpack_ldsf(ldsf_k):
         z_minus_k = ldsf_k[ : Ak_ind0]
         A_jax_k    = ldsf_k[Ak_ind0  : Bk_ind0].reshape((nz, nz))
-        B_jax_k    = ldsf_k[Bk_ind0  : Bkp_ind0].reshape((nz, m))
-        Bp_jax_k   = ldsf_k[Bkp_ind0 : Sk_ind0].reshape((nz, m))
+        B_jax_k    = ldsf_k[Bk_ind0  : Bkp_ind0].reshape((nz, n_nu))
+        Bp_jax_k   = ldsf_k[Bkp_ind0 : Sk_ind0].reshape((nz, n_nu))
         S_jax_k    = ldsf_k[Sk_ind0  : ]
 
         return (A_jax_k, B_jax_k, Bp_jax_k, S_jax_k, z_minus_k)
 
     # propagation function for node k
     def propagate_k(k, z_ref, nu_ref, dt_ref, params):
+        
+        if isinstance(params, AttrDict):
+            params = dict(params)
+
         z_k  = z_ref[k]
         nu_k  = nu_ref[k]
         nu_kp = nu_ref[k+1]
@@ -231,9 +241,11 @@ def discretize_inv_free_jax(z_ref_np, nu_ref_np, dt_ref_np, problem, method):
     dt_ref = jnp.asarray(dt_ref_np)
 
     params = problem.params
+    if isinstance(params, AttrDict):
+        params = dict(params)
 
     # call jitted propagator for each node
-    ks = jnp.arange(method.N - 1)
+    ks = jnp.arange(method.index_map.N['N'] - 1)
     A_jax, B_jax, Bp_jax, S_jax, z_minus = method.propagate_discretization_jax(ks, z_ref, nu_ref, dt_ref, params)
 
     z_ref_0 = z_ref[[0], :]
@@ -254,7 +266,7 @@ def compute_linsys_discrete(z_ref, nu_ref, dt_ref, problem, method):
     tuple: Ak, Bk, Bkp, Sk, z_minus
     """
 
-    if method.flags.get("jax_dyn", 0):
+    if method.flags["jax_dyn"]:
         Ak, Bk, Bkp, Sk, z_minus = discretize_inv_free_jax(z_ref, nu_ref, dt_ref, problem, method)
     else:
         if method.flags["ctcs"] != "none":
@@ -268,12 +280,12 @@ def compute_linsys_discrete(z_ref, nu_ref, dt_ref, problem, method):
 
 # Compute exact discretize for linear dynamic system
 def discretize_inv_foh(z_ref, nu_ref, dt_ref, problem, method):
-    N = method.N
+    N = method.index_map.N['N']
 
     traj_minus_data = {"z_minus": [z_ref[0]]}
 
     # Precompute
-    eye_flat = np.eye(problem.n).ravel()
+    eye_flat = np.eye(problem.index_map.n['state']).ravel()
 
     # Stack dynamics
     lds0_stack = []
@@ -293,19 +305,19 @@ def discretize_inv_foh(z_ref, nu_ref, dt_ref, problem, method):
 
     assert lds_end.shape[0] == (N - 1) * method.lds0_size
 
-    Ak  = np.zeros((N - 1, problem.n, problem.n))
-    Bk  = np.zeros((N - 1, problem.n, problem.m))
-    Bkp = np.zeros((N - 1, problem.n, problem.m))
-    Sk  = np.zeros((N - 1, problem.n))
+    Ak  = np.zeros((N - 1, problem.index_map.n['state'], problem.index_map.n['state']))
+    Bk  = np.zeros((N - 1, problem.index_map.n['state'], problem.index_map.n['control']))
+    Bkp = np.zeros((N - 1, problem.index_map.n['state'], problem.index_map.n['control']))
+    Sk  = np.zeros((N - 1, problem.index_map.n['state']))
 
     for k in range(N - 1):
         base    = k * method.lds0_size
         traj_minus_data["z_minus"].append(lds_end[base + method.z_ind])
 
-        Ak_bar  = lds_end[base + method.Ak_ind].reshape(problem.n, problem.n)
-        Bk_bar  = lds_end[base + method.Bk_ind].reshape(problem.n, problem.m)
-        Bkp_bar = lds_end[base + method.Bkp_ind].reshape(problem.n, problem.m)
-        Sk_bar  = lds_end[base + method.Sk_ind].reshape(problem.n)
+        Ak_bar  = lds_end[base + method.Ak_ind].reshape(problem.index_map.n['state'], problem.index_map.n['state'])
+        Bk_bar  = lds_end[base + method.Bk_ind].reshape(problem.index_map.n['state'], problem.index_map.n['control'])
+        Bkp_bar = lds_end[base + method.Bkp_ind].reshape(problem.index_map.n['state'], problem.index_map.n['control'])
+        Sk_bar  = lds_end[base + method.Sk_ind].reshape(problem.index_map.n['state'])
 
         Ak[k]   = Ak_bar
         Bk[k]   = Ak_bar @ Bk_bar
@@ -323,7 +335,7 @@ def RHS_ltv(tau, lds, nu_ref, dt_ref, problem, method):
 
     # Initialize
     lds_dot         = np.zeros_like(lds)
-    N               = method.N
+    N               = method.index_map.N['N']
 
     # Extract times and FOH control input
     Om_k            = 1 - tau
@@ -390,7 +402,7 @@ def discretize_ctcs(z_ref, nu_ref, dt_ref, problem, method):
     tuple: Ak, Bk, Bkp, Sk, z_minus
     """
 
-    N = method.N
+    N = method.index_map.N['N']
 
     traj_minus_data = {"z_minus": [z_ref[0]]}
 
@@ -398,7 +410,7 @@ def discretize_ctcs(z_ref, nu_ref, dt_ref, problem, method):
     lds0_stack = []
     for k in range(N - 1):
         method.lds0[method.z_ind] = z_ref[k]
-        method.lds0[method.Ak_ind] = np.reshape(np.eye(problem.nz), -1)
+        method.lds0[method.Ak_ind] = np.reshape(np.eye(problem.index_map.n['z']), -1)
         lds0_stack.append(method.lds0.copy())
 
     lds0_stack = np.hstack(lds0_stack)
@@ -409,10 +421,10 @@ def discretize_ctcs(z_ref, nu_ref, dt_ref, problem, method):
     sol = solve_ivp(derivs_step, [0, 1], lds0_stack, atol=1E-12, rtol=1E-12)
     lds_out_stack = sol.y
 
-    Ak = np.zeros((N-1, problem.nz, problem.nz))
-    Bk = np.zeros((N-1, problem.nz, problem.m))
-    Bkp = np.zeros((N-1,problem.nz, problem.m))
-    Sk = np.zeros((N-1, problem.nz))
+    Ak = np.zeros((N-1, problem.index_map.n['z'], problem.index_map.n['z']))
+    Bk = np.zeros((N-1, problem.index_map.n['z'], problem.index_map.n['control']))
+    Bkp = np.zeros((N-1, problem.index_map.n['z'], problem.index_map.n['control']))
+    Sk = np.zeros((N-1, problem.index_map.n['z']))
 
     # Extract dense values
     for k in range(N - 1):
@@ -422,11 +434,11 @@ def discretize_ctcs(z_ref, nu_ref, dt_ref, problem, method):
 
         # Reshape matrices
         Ak_bar = np.reshape(lds_end[k * method.lds0_size + method.Ak_ind],
-                            (problem.nz, problem.nz))
+                            (problem.index_map.n['z'], problem.index_map.n['z']))
         Bk_bar = np.reshape(lds_end[k * method.lds0_size + method.Bk_ind],
-                            (problem.nz, problem.m))
+                            (problem.index_map.n['z'], problem.index_map.n['control']))
         Bkp_bar = np.reshape(lds_end[k * method.lds0_size + method.Bkp_ind],
-                             (problem.nz, problem.m))
+                             (problem.index_map.n['z'], problem.index_map.n['control']))
         Sk_bar = lds_end[k * method.lds0_size + method.Sk_ind]
 
         # Fill in the next STM
@@ -457,7 +469,7 @@ def RHS_ltv_ctcs(tau, lds, nu_ref, dt_ref, problem, method):
     """
 
     lds_dot = np.zeros_like(lds)
-    N = method.N
+    N = method.index_map.N['N']
 
     Om_k = 1 - tau
     Om_kp = tau
@@ -473,7 +485,7 @@ def RHS_ltv_ctcs(tau, lds, nu_ref, dt_ref, problem, method):
         Ac, Bc, fc = convexify.compute_ctcs_jacobians(tau, x, u[k, :], problem, method)
 
         Phi_tau = np.reshape(lds[k * method.lds0_size + method.Ak_ind],
-                             (problem.nz, problem.nz))
+                             (problem.index_map.n['z'], problem.index_map.n['z']))
 
         f_tau = dt_k * fc
         A_tau = dt_k * Ac

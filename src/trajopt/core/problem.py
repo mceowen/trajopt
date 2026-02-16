@@ -13,23 +13,22 @@ from trajopt.utils.config_loader import resolve_function
 
 class Problem:
 
-    def __init__(self, problem_config):
+    def __init__(self, problem_config, index_map=None):
 
         # ------------------------------------------------------------
         # Config
         # ------------------------------------------------------------
 
-        self.config = problem_config['config']
-        self.n = self.config['model']['dimensions']['n']
-        self.m = self.config['model']['dimensions']['m']
+        from trajopt.utils.tools import AttrDict
+        self.config = AttrDict(problem_config['config'])
+        self.index_map = index_map
 
         # ------------------------------------------------------------
         # Functions
         # ------------------------------------------------------------
         
-        fcns_config = self.config['mission'].pop('fcns', {})
-        
-        self.fcns = {}
+        fcns_config = self.config.mission.pop('fcns', {})
+        self.fcns = AttrDict()
         for name, path in fcns_config.items():
             self.fcns[name] = resolve_function(path)
 
@@ -37,7 +36,7 @@ class Problem:
         # Parameters
         # ------------------------------------------------------------
 
-        self.params = problem_config['params']
+        self.params = AttrDict(problem_config['params'])
 
         # ------------------------------------------------------------
         # Constraints
@@ -61,34 +60,7 @@ class Problem:
         self.costs.resolve_functions(self.fcns)
         # self.costs.make_epigraph_constraints()
 
-        # ------------------------------------------------------------
-        # CONSTRAINT BOOK KEEPING
-        # TODO: MOVE THIS TO INDEX_MAP AND DONT HARDCODE GROUPS
-        # ------------------------------------------------------------
-
-        # constraint book keeping
-        self.n_ineq = sum(constraint.dimension for constraint in self.constraints.get(ct=0, type="nonconvex_inequality"))
-
-        # TODO: stop hardcoding specific groups/types. loop through keys and merge somehow with index_map class
-        # e.g. indices.constraints.group.n['path'] = ....
-        self.n_path = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "path")
-        self.n_nfz = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "nfz")
-        self.n_custom = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "custom")
-
-        if self.constraints.has(ct=1):
-            self.n_ctcs = sum(constraint.dimension for constraint in self.constraints.get(ct=1))
-        else:
-            self.n_ctcs = 0
-
-
-        self.nz = self.n + self.n_ctcs
-
-        # TODO: same here
-        self.n_term       = sum(constraint.dimension for constraint in self.constraints.get(ct=0, type="equality_bc", boundary="final", set="state"))
-        self.n_term_ineq  = sum(constraint.dimension for constraint in self.constraints.get(ct=0, type='inequality_bc', boundary="final", set="state"))
-        self.n_term_ctcs  = self.n_ctcs
-        self.n_term_total = self.n_term + self.n_term_ineq + self.n_ctcs
-
+        
     def update_from_config(self, varied_paths, nondim):
         mission_config = self.config['mission']
         for path in varied_paths:

@@ -27,7 +27,7 @@ def system_dynamics(t, z, nu, trajopt_obj, t_vec=None):
     if t_vec is None:
         us2 = nu
     else:
-        us2 = np.array([np.interp(t, t_vec, nu[:, i]) for i in range(m)])
+        us2 = np.array([np.interp(t, t_vec, nu[:, i]) for i in range(n_nu)])
             
     # extract control
     T = nu2
@@ -73,7 +73,7 @@ def analytical_linsys(t, z, nu, trajopt_obj):
 
     # Compute B matrix (Jacobian w.r.t. control)
     Bc = np.vstack([
-        np.zeros((n2, m)),
+        np.zeros((n2, n_nu)),
         np.eye(m)
     ]) * (1.0 / mass)
 

@@ -5,9 +5,7 @@ import trajopt.library.methods.convexify as convexify
 import trajopt.utils.tools as tools
 
 class Constraints:
-    def __init__(self, constraint_config_list, params):
-
-        self.config_list = constraint_config_list
+    def __init__(self, cnstr_config_list, config):
 
         self.constraints_list = []
 
@@ -132,3 +130,5 @@ class Constraints:
             )
             
             dynamics_obj.lin_dyn = lin_dyn_ctcs
+
+            #TODO(Skye): Add new CTCS dimension here!

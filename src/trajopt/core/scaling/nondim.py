@@ -11,8 +11,8 @@ class Nondim:
         Initializes all nondimensional parameters
         """
 
-        n = problem.n
-        m = problem.m
+        n_x = problem.index_map.n['state']
+        n_nu = problem.index_map.n['control']
 
         # this solves the following linear system to backout base scales for
         # distance, time, and mass:
@@ -90,8 +90,8 @@ class Nondim:
         self.z_types = problem.config['model']['nondim']['z_types']
         self.u_types = problem.config['model']['nondim']['u_types']
 
-        self.nd_state = np.array([self.scales[self.z_types[i]] for i in range(n)])
-        self.nd_ctrl  = np.array([self.scales[self.u_types[i]] for i in range(m)])
+        self.nd_state = np.array([self.scales[self.z_types[i]] for i in range(n_x)])
+        self.nd_ctrl  = np.array([self.scales[self.u_types[i]] for i in range(n_nu)])
 
         if problem.config['model']['nondim'].get('z_scales', None) is not None:
             self.nd_state = np.array(problem.config['model']['nondim']['z_scales'])
@@ -130,8 +130,8 @@ class Nondim:
         self.nf = self.scales["f"]
         self.nang = self.scales["ang"]
         self.nangv = self.nang / self.nt
-        self.labels["state"] = [self.scale_labels[self.z_types[i]] for i in range(n)]
-        self.labels["ctrl"]  = [self.scale_labels[self.u_types[i]] for i in range(m)]
+        self.labels["state"] = [self.scale_labels[self.z_types[i]] for i in range(n_x)]
+        self.labels["ctrl"]  = [self.scale_labels[self.u_types[i]] for i in range(n_nu)]
 
         # set nondim for cost and constraints
         
@@ -142,7 +142,7 @@ class Nondim:
         self.nd_cost = nd_cost
 
         # nodal inequality nondim
-        self.nd_ineq = np.ones(problem.n_ineq)
+        self.nd_ineq = np.ones(problem.index_map.n['ineq'])
         
         idx = 0
         # TODO: change 'nonconvex_inequality' to 'inequality' once we add general buffering
@@ -158,7 +158,7 @@ class Nondim:
         self.M["ineq_nodal"]["nd2d"] = np.diag(self.nd_ineq).copy()
 
         # ct inequality nondim
-        self.nd_ctcs = np.ones(problem.n_ctcs)
+        self.nd_ctcs = np.ones(problem.index_map.n['ctcs'])
         idx = 0
         # TODO: change 'nonconvex_inequality' to 'inequality' once we add general buffering
         for constraint in problem.constraints.get(ct=1, type="nonconvex_inequality"):
@@ -175,7 +175,11 @@ class Nondim:
         terminal_constraint = problem.constraints.get(name="final_state")[0]
         idx = terminal_constraint.idx
 
-        self.nd_term_total = np.hstack([self.nd_state[idx], np.ones(problem.n_term_ineq), np.ones(problem.n_ctcs)])
+        self.nd_term_total = np.hstack([
+            self.nd_state[idx],
+            np.ones(problem.index_map.n['term_ineq']),
+            np.ones(problem.index_map.n['ctcs'])
+        ])
 
 
         self.M["term_total"]["d2nd"] = np.diag(1 / self.nd_term_total).copy()

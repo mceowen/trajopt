@@ -71,7 +71,7 @@ def _plot_states(PLTS, trajopt_obj, show_iters, iters, lgnd, opt_pen):
     state_groups = plotting_config.get('state_groups', None)
     final_data = _get_final_iter_data(trajopt_obj)
     if state_groups is None:
-        state_groups = {f'State {i}': [i] for i in range(trajopt_obj.problem.n)}
+        state_groups = {f'State {i}': [i] for i in range(trajopt_obj.problem.index_map.n['state'])}
     num_plots = len(state_groups)
     fig = plt.figure(figsize=(20, 10), dpi=300)
     fig.suptitle('States')
@@ -95,7 +95,7 @@ def _plot_states(PLTS, trajopt_obj, show_iters, iters, lgnd, opt_pen):
 
 def _plot_controls(PLTS, trajopt_obj, show_iters, iters, lgnd, opt_pen):
     """Plot control trajectories."""
-    num_controls = trajopt_obj.problem.m
+    num_controls = trajopt_obj.problem.index_map.n['control']
     final_data = _get_final_iter_data(trajopt_obj)
     fig = plt.figure(figsize=(20, 10), dpi=300)
     fig.suptitle('Controls')
@@ -213,7 +213,7 @@ def plot_animated(trajopt_obj, interval=200):
 
     key = _method_key(trajopt_obj)
     iters = trajopt_obj.scenario_data[key]['mc_data'][0]['iters'][1:]
-    n_iters, n_states, n_ctrl = len(iters), trajopt_obj.problem.n, trajopt_obj.problem.m  # use original state dimension
+    n_iters, n_states, n_ctrl = len(iters), trajopt_obj.problem.index_map.n['state'], trajopt_obj.problem.index_map.n['control']  # use unified index_map
     
     t_all = np.concatenate([it['t_nl'] for it in iters])
     t_lim = [t_all.min() * 0.95, t_all.max() * 1.05]
@@ -222,9 +222,9 @@ def plot_animated(trajopt_obj, interval=200):
         nc = int(np.ceil(np.sqrt(n)))
         return int(np.ceil(n / nc)), nc
 
-    def setup_axes(fig, axs, n, data_key, ylabel_prefix):
+    def setup_axes(fig, axs, n_x, data_key, ylabel_prefix):
         lines_nl, lines_opt = [], []
-        for j in range(n):
+        for j in range(n_x):
             ax = axs.flatten()[j]
             y_all = np.concatenate([it[data_key][:, j] for it in iters])
             margin = (y_all.max() - y_all.min()) * 0.1 + 1

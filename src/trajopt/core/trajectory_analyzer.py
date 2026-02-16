@@ -1,4 +1,9 @@
 import copy
+
+from jaxtyping import config
+from trajopt.core import problem
+from trajopt.core.indexing import index_map
+from trajopt.core.indexing.index_map import IndexMap
 from trajopt.core.problem import Problem
 from trajopt.core.solution_method import SolutionMethod
 import trajopt.utils.config_loader as cfg
@@ -15,10 +20,17 @@ class TrajectoryAnalyzer:
         problem_config = config['problem']
         method_config = config['method']
 
-        self.problem = Problem(copy.deepcopy(problem_config))
-        self.method = SolutionMethod(self.problem, copy.deepcopy(method_config))
         self.problem_config = copy.deepcopy(problem_config)
-        self.method_config = copy.deepcopy(method_config)
+        self.method_config  = copy.deepcopy(method_config)
+
+        index_map = IndexMap(
+            model_config=problem_config['model'],
+            mission_config=problem_config['mission'],
+            method_config=config['method'],
+        )
+
+        self.problem = Problem(copy.deepcopy(problem_config), index_map=index_map)
+        self.method = SolutionMethod(self.problem, copy.deepcopy(method_config), index_map=index_map)
 
         self.solution   = None
         self.scenario_data = None

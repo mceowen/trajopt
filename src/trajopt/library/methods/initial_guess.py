@@ -46,8 +46,8 @@ def nonlinear_initial_guess(problem, method):
     z0 = problem.constraints.get(type="equality_bc", boundary="init")[0].value
 
     # ---- Control initialization ----
-    m = problem.m
-    N = method.N
+    n_nu = problem.index_map.n['control']
+    N = method.index_map.N['N']
 
     nl_guess_u_start = method.nondim.M["ctrl"]["d2nd"] @ method.guess["nl_guess_u_start"]
     nl_guess_u_stop  = method.nondim.M["ctrl"]["d2nd"] @ method.guess["nl_guess_u_stop"]
@@ -88,7 +88,7 @@ def ctcs_initial_guess(problem, method):
     
     # Extend z_init with zeros for the inequality constraints
 
-    ctcs_init = np.zeros((method.z_init.shape[0], problem.n_ctcs))
+    ctcs_init = np.zeros((method.z_init.shape[0], problem.index_map.n['ctcs']))
 
     return np.hstack([method.z_init, ctcs_init])
 
@@ -104,38 +104,38 @@ def waypoint_initial_guess(problem, method):
     """
 
     # Initialization trajectory
-    method.dt_init   = (method.T_init / (method.N - 1)) * np.ones(method.N - 1)
+    method.dt_init   = (method.T_init / (method.index_map.N['N'] - 1)) * np.ones(method.index_map.N['N'] - 1)
     method.Ts_init   = method.T_init / method.nondim.nt
     method.dt_init  = method.dt_init / method.nondim.nt
     t_init             = np.cumsum(np.concatenate(([0], method.dt_init)))
 
     # Waypoint
     if "z_waypt" not in params:
-        method.z_waypt = np.zeros(problem.n)
+        method.z_waypt = np.zeros(problem.index_map.n['state'])
         
         # Loop through initial conditions
-        for i_zi in range(problem.n_init):
+        for i_zi in range(problem.index_map.n['init']):
             i_state = problem.zi_idx[i_zi]
 
             # Loop through terminal conditions
-            for i_zf in range(problem.n_term):
+            for i_zf in range(problem.index_map.n['term']):
                 if problem.zi_idx[i_zi] == problem.zf_idx[i_zf]:
                     if problem.zi[i_zi] != problem.zf[i_zf]:
                         method.z_waypt[i_state] = (problem.zf[i_zf] - problem.zi[i_zi]) / 2
                     else:
                         method.z_waypt[i_state] = problem.zi[i_zi]
 
-    N1 = method.N // 2
+    N1 = method.index_map.N['N'] // 2
     idx1 = np.arange(1, N1 + 1)
 
-    N2 = method.N - N1
-    idx2 = np.arange(N1, method.N)
+    N2 = method.index_map.N['N'] - N1
+    idx2 = np.arange(N1, method.index_map.N['N'])
 
     # Initialize
-    z_init = np.zeros((method.N,problem.n))
+    z_init = np.zeros((method.index_map.N['N'],problem.index_map.n['state']))
 
     # Initial state
-    for i_state in range(min(problem.n, len(method.z_waypt))):
+    for i_state in range(min(problem.index_map.n['state'], len(method.z_waypt))):
         if i_state in problem.zi_idx and i_state in problem.zf_idx:
             i_init = np.where(problem.zi_idx == i_state)[0][0]
             i_term = np.where(problem.zf_idx == i_state)[0][0]

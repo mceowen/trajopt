@@ -177,13 +177,13 @@ def plot_default(trajopt_obj, show_iters=True):
     PLTS.setCurrent({'scenarios': ['scenario1'], 'methods': ['autotune'], 'runs': list(range(1000)), 'iters': iters})
 
     # states plots
-    num_states = trajopt_obj.problem.n
+    num_states = trajopt_obj.problem.index_map.n['state']
     fig = plt.figure(figsize=(20, 10))
     fig.suptitle('States')
     axs = PLTS.createGrid(fig, grid=makeGridSpecs(num_states))
     PLTS.dumpLegend(lgnd)
 
-    state_groups = trajopt_obj.problem.config['model']['plotting'].get('state_traj_groups', range(trajopt_obj.problem.n))
+    state_groups = trajopt_obj.problem.config['model']['plotting'].get('state_traj_groups', range(trajopt_obj.problem.index_map.n['state']))
 
     for j, group in enumerate(state_groups):
         ax = axs[j]
@@ -194,7 +194,7 @@ def plot_default(trajopt_obj, show_iters=True):
         PLTS.addPlot2D(ax, pen=PENS['opt'],     ins={'label': 'Optimal Solution', 'x': 't_opt', 'y': ['z_opt', group], 'iters': [-1],      'legend': lgnd})
 
     # controls plots
-    num_controls = trajopt_obj.problem.m
+    num_controls = trajopt_obj.problem.index_map.n['control']
     fig_ctrl = plt.figure(figsize=(20, 10))
     fig_ctrl.suptitle('Controls')
     axs_ctrl = PLTS.createGrid(fig_ctrl, grid=makeGridSpecs(num_controls))
@@ -290,7 +290,7 @@ def plot_animated(trajopt_obj, interval=200):
     from IPython.display import display, HTML
     
     iters = trajopt_obj.scenario_data['autotune']['mc_data'][0]['iters'][1:]
-    n_iters, n_states, n_ctrl = len(iters), trajopt_obj.problem.n, trajopt_obj.problem.m  # use original state dimension
+    n_iters, n_states, n_ctrl = len(iters), trajopt_obj.problem.index_map.n['state'], trajopt_obj.problem.index_map.n['control']  # use unified index_map
     
     t_all = np.concatenate([it['t_nl'] for it in iters])
     t_lim = [t_all.min() * 0.95, t_all.max() * 1.05]
@@ -299,9 +299,9 @@ def plot_animated(trajopt_obj, interval=200):
         nc = int(np.ceil(np.sqrt(n)))
         return int(np.ceil(n / nc)), nc
 
-    def setup_axes(fig, axs, n, data_key, ylabel_prefix):
+    def setup_axes(fig, axs, n_x, data_key, ylabel_prefix):
         lines_nl, lines_opt = [], []
-        for j in range(n):
+        for j in range(n_x):
             ax = axs.flatten()[j]
             y_all = np.concatenate([it[data_key][:, j] for it in iters])
             margin = (y_all.max() - y_all.min()) * 0.1 + 1

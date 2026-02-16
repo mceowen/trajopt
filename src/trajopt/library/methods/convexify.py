@@ -30,7 +30,7 @@ def linearize_jax_ctcs(fcn, constraints, n):
 def linearize_sympy(fcn, trajopt_obj):
     z, nu = trajopt_obj.method.z_init, trajopt_obj.method.nu_init
     n = trajopt_obj.model.n
-    m = trajopt_obj.model.m
+    n_nutrajopt_obj.model.m
 
     z_sym = sp.symbols(f"z0:{n}")
     nu_sym = sp.symbols(f"u0:{m}")

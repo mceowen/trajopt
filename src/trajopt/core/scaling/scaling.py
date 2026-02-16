@@ -76,9 +76,9 @@ def subprob_variable_scaling(trajopt_obj, local_vars):
     I               = local_vars["I"]
 
     # Extract params
-    n               = model.nz
-    m               = model.m
-    N               = method.N
+    n_z             = model.n_z
+    n_nu            = model.m
+    N               = method.index_map.N['N']
     bool_dev_var    = method.flags["dev_var"]
     var_scl_flag    = method.flags["var_scl_flag"]
 
@@ -91,13 +91,13 @@ def subprob_variable_scaling(trajopt_obj, local_vars):
 
     # DEVIATION VARIABLES
     if bool_dev_var:
-        dzhat = cp.Variable((N, n))
-        duhat = cp.Variable((N, m))
+        dzhat = cp.Variable((N, n_z))
+        duhat = cp.Variable((N, n_nu))
 
-        M_x = np.zeros((N, n, n))
-        b_x = np.zeros((N, n))
-        M_u = np.zeros((N, m, m))
-        b_u = np.zeros((N, m))
+        M_x = np.zeros((N, n_z, n_z))
+        b_x = np.zeros((N, n_z))
+        M_u = np.zeros((N, n_nu, n_nu))
+        b_u = np.zeros((N, n_nu))
 
         if var_scl_flag == 1:  # affine scaling
             for k in range(N):
@@ -140,17 +140,17 @@ def subprob_variable_scaling(trajopt_obj, local_vars):
 
         dz = cp.vstack(cp.reshape(M_x[k] @ dzhat[k] + b_x[k], (1, n), order="C") for k in range(N))
         
-        du = cp.vstack(cp.reshape(M_u[k] @ duhat[k] + b_u[k], (1, m), order="C") for k in range(N))
+        du = cp.vstack(cp.reshape(M_u[k] @ duhat[k] + b_u[k], (1, n_nu), order="C") for k in range(N))
 
     # FULL STATE VARIABLES
     else:
         xhat = cp.Variable((N, n))
-        uhat = cp.Variable((N, m))
+        uhat = cp.Variable((N, n_nu))
 
         M_x = np.zeros((N, n, n))
         b_x = np.zeros((N, n))
-        M_u = np.zeros((N, m, m))
-        b_u = np.zeros((N, m))
+        M_u = np.zeros((N, m, n_nu))
+        b_u = np.zeros((N, n_nu))
 
         if var_scl_flag == 1:  # affine scaling
             for k in range(N):
@@ -180,7 +180,7 @@ def subprob_variable_scaling(trajopt_obj, local_vars):
             raise ValueError("Undefined var_scl_flag!")
 
         x = np.zeros((N, n))
-        u = np.zeros((N, m))
+        u = np.zeros((N, n_nu))
         for k in range(N):
             x[k] = M_x[k] @ xhat[k].value + b_x[k]
             u[k] = M_u[k] @ uhat[k].value + b_u[k]

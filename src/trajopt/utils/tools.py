@@ -3,6 +3,29 @@ import cvxpy as cp
 
 # TODO: just condense into a single function (not both get_val, safe_val)
 
+class AttrDict(dict):
+    """Dictionary that allows attribute access to keys.
+
+    Example: d = AttrDict({'a':1}); d.a == 1; d['a'] == 1
+    """
+    def __getattr__(self, name):
+        try:
+            return self[name]
+        except KeyError:
+            raise AttributeError(name)
+
+    def __setattr__(self, name, value):
+        self[name] = value
+
+
+def recursive_attrdict(d):
+            if isinstance(d, dict):
+                return AttrDict({k: recursive_attrdict(v) for k, v in d.items()})
+            elif isinstance(d, list):
+                return [recursive_attrdict(i) for i in d]
+            else:
+                return d
+
 def safe_val(var, rows=1, cols=1, fallback=0.0):
     """
     Safely extract the numeric value from a cvxpy expression or return a fallback.

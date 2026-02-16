@@ -91,7 +91,7 @@ class SubproblemConstraints(Constraints):
         weights dictionary (e.g., `method.weights`).
         """
         # sizes
-        N = int(method.N)
+        N = int(method.index_map.N['N'])
         n_ineq = getattr(problem, "n_ineq", 0)
         n_term_total = getattr(problem, "n_term_total", 0)
         nz = getattr(problem, "nz", getattr(problem, "n", 0))
@@ -204,7 +204,7 @@ def build_subproblem_constraints(problem, method):
     subp_c.constraint_ids   = deepcopy(problem.constraints.constraint_ids)
 
     # sizes
-    N               = int(method.N)
+    N               = int(method.index_map.N['N'])
     n_ineq          = getattr(problem, "n_ineq", 0)
     n_term_total    = getattr(problem, "n_term_total", 0)
     nz              = getattr(problem, "nz", getattr(problem, "n", 0))
