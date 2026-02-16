@@ -28,8 +28,8 @@ class Nondim:
             "f": np.array([1, -2,  1]),
         }
 
-        A = np.vstack([exponents[key] for key in problem.params['model']['nondim']['anchor_types']])
-        b = np.log(np.array([val for val in problem.params['model']['nondim']['anchor_scales']]))
+        A = np.vstack([exponents[key] for key in problem.config['model']['nondim']['anchor_types']])
+        b = np.log(np.array([val for val in problem.config['model']['nondim']['anchor_scales']]))
 
         log_base_scales = np.linalg.solve(A, b)
         base_scales = np.exp(log_base_scales)
@@ -46,10 +46,24 @@ class Nondim:
             "v"    : nd / nt,
             "a"    : nd / (nt**2),
             "f"    : nm * nd / (nt**2),
+            "fdot" : nm * nd / (nt**3),
+            "mom"  : nm * (nd**2) / (nt**2),
+            "momdot"  : nm * (nd**2) / (nt**3),
             "ang"  : 180 / np.pi,
             "angv" : (180 / np.pi) / nt,
             "none": 1.0 
         }
+
+        scale_overrides = problem.config['model']['nondim'].get('scale_overrides', {})
+        if scale_overrides:
+            print("Applying scale overrides:")
+            for key, value in scale_overrides.items():
+                if key in self.scales:
+                    old_val = self.scales[key]
+                    self.scales[key] = float(value)  # Convert to float in case YAML parsed as string
+                    print(f"  {key}: {old_val:.4e} -> {float(value):.4e}")
+                else:
+                    print(f"  Warning: unknown scale type '{key}', ignoring")
 
         d_lbl = "m"
         t_lbl = "s"
@@ -62,6 +76,9 @@ class Nondim:
             "v"    : f"{d_lbl} / {t_lbl}" ,
             "a"    : f"{d_lbl} / ({t_lbl}^2)",
             "f"    : f"{m_lbl} * {d_lbl} / ({t_lbl}^2)",
+            "fdot" : f"{m_lbl} * {d_lbl} / ({t_lbl}^3)",
+            "mom"  : f"{m_lbl} * ({d_lbl}^2) / ({t_lbl}^2)",
+            "momdot"  : f"{m_lbl} * ({d_lbl}^2) / ({t_lbl}^3)",
             "ang"  : "deg",
             "angv" : f"deg / {t_lbl}",
             "none": ""
@@ -70,11 +87,23 @@ class Nondim:
         print("scales: ")
         print(", ".join(f"{k}: {v:.4f}" for k, v in self.scales.items()))
 
-        self.z_types = problem.params['model']['nondim']['z_types']
-        self.u_types = problem.params['model']['nondim']['u_types']
+        self.z_types = problem.config['model']['nondim']['z_types']
+        self.u_types = problem.config['model']['nondim']['u_types']
 
         self.nd_state = np.array([self.scales[self.z_types[i]] for i in range(n)])
         self.nd_ctrl  = np.array([self.scales[self.u_types[i]] for i in range(m)])
+
+        if problem.config['model']['nondim'].get('z_scales', None) is not None:
+            self.nd_state = np.array(problem.config['model']['nondim']['z_scales'])
+
+        if problem.config['model']['nondim'].get('u_scales', None) is not None:
+            self.nd_ctrl  = np.array(problem.config['model']['nondim']['u_scales'])
+
+        if problem.config['model']['nondim'].get('t_scale', None) is not None:
+            self.nd_time = problem.config['model']['nondim']['t_scale']
+
+        else:
+            self.nd_time = self.scales['t']
 
         self.M          = {}
         self.M["state"] = {}
@@ -93,7 +122,7 @@ class Nondim:
         # add scalar nondim variables to nondim substruct
         self.nd = self.scales["d"]
         self.na = self.scales["a"]
-        self.nt = self.scales["t"]
+        self.nt = self.nd_time
         self.nt_inv = 1 / self.nt
         self.nv = self.scales["v"]
         self.nm = self.scales["m"]
@@ -117,7 +146,7 @@ class Nondim:
         
         idx = 0
         # TODO: change 'nonconvex_inequality' to 'inequality' once we add general buffering
-        for constraint in problem.constraints.get('nodal', 'nonconvex_inequality'):
+        for constraint in problem.constraints.get(ct=0, type="nonconvex_inequality"):
             if getattr(constraint, 'units', None) is not None:
                 for unit in constraint.units:
                     scale_list = [self.scales[unit_type]**exponent for unit_type, exponent in unit.items()]
@@ -132,7 +161,7 @@ class Nondim:
         self.nd_ctcs = np.ones(problem.n_ctcs)
         idx = 0
         # TODO: change 'nonconvex_inequality' to 'inequality' once we add general buffering
-        for constraint in problem.constraints.get('ct', 'nonconvex_inequality'):
+        for constraint in problem.constraints.get(ct=1, type="nonconvex_inequality"):
             if getattr(constraint, 'units', None) is not None:
                 for unit in constraint.units:
                     scale_list = [self.scales[unit_type]**exponent for unit_type, exponent in unit.items()]
@@ -143,14 +172,10 @@ class Nondim:
         self.M["ineq_ct"]["d2nd"] = np.diag(1 / self.nd_ctcs).copy()
         self.M["ineq_ct"]["nd2d"] = np.diag(self.nd_ctcs).copy()
 
-        # TODO (CARLOS): fix this pls, set to all ones so i can run it
-        # the problem is vb_term mixes different constraint types 
-        # together so indexing into is a bit tricky
+        terminal_constraint = problem.constraints.get(name="final_state")[0]
+        idx = terminal_constraint.idx
 
-        terminal_constraint = problem.constraints.get('name', 'final_state')[0]
-        x_idx = terminal_constraint.x_idx
-
-        self.nd_term_total = np.hstack([self.nd_state[x_idx], np.ones(problem.n_term_ineq), np.ones(problem.n_ctcs)])
+        self.nd_term_total = np.hstack([self.nd_state[idx], np.ones(problem.n_term_ineq), np.ones(problem.n_ctcs)])
 
 
         self.M["term_total"]["d2nd"] = np.diag(1 / self.nd_term_total).copy()
@@ -201,8 +226,7 @@ class Nondim:
         return M_d2nd, M_nd2d
 
     def nondim_function(self, fcn, M_state_nd2d, M_ctrl_nd2d, M_out_d2nd):
-        
-        def wrapped_fcn(t, z, nu, *args, **kwargs):
-            return M_out_d2nd @ fcn(t, M_state_nd2d @ z, M_ctrl_nd2d @ nu, *args, **kwargs)
+        def wrapped_fcn(t, z, nu, params, *args, **kwargs):
+            return M_out_d2nd @ fcn(t, M_state_nd2d @ z, M_ctrl_nd2d @ nu, params, *args, **kwargs)
         
         return wrapped_fcn

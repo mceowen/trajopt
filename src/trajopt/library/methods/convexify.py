@@ -6,22 +6,22 @@ import cvxpy as cp
 
 # jax autodiff for affine approximations
 def linearize_jax(fcn):
-    def wrapped_fcn(z, nu):
-        return fcn(0, z, nu)
 
-    dfcn_dz = jax.jit(jax.jacrev(wrapped_fcn, argnums=0))
-    dfcn_du = jax.jit(jax.jacrev(wrapped_fcn, argnums=1))
-    f = jax.jit(wrapped_fcn)
+    dfcn_dz = jax.jit(jax.jacrev(fcn, argnums=1))
+    dfcn_du = jax.jit(jax.jacrev(fcn, argnums=2))
+    f = jax.jit(fcn)
 
     return f, dfcn_dz, dfcn_du
 
 def linearize_jax_ctcs(fcn, constraints, n):
-    def wrapped_fcn(z, nu):
-        constr = jnp.concatenate([constraint.fcn(0, z[:n], nu) for constraint in constraints.get("ct")])
-        f_val = jnp.concatenate([fcn(0, z[:n], nu), jnp.square(jnp.maximum(constr, 0.0))])
+
+    def wrapped_fcn(t, z, nu, params):
+        constr = jnp.concatenate([constraint.fcn(t, z[:n], nu, params) for constraint in constraints.get(ct=1)])
+        f_val = jnp.concatenate([fcn(t, z[:n], nu, params), jnp.square(jnp.maximum(constr, 0.0))])
         return f_val
-    dfcn_dz = jax.jacrev(wrapped_fcn, argnums=0)
-    dfcn_du = jax.jacrev(wrapped_fcn, argnums=1)
+
+    dfcn_dz = jax.jacrev(wrapped_fcn, argnums=1)
+    dfcn_du = jax.jacrev(wrapped_fcn, argnums=2)
     f = jax.jit(wrapped_fcn)
     
     return f, dfcn_dz, dfcn_du

@@ -1,13 +1,13 @@
+import numpy as np
 from trajopt.core.constraints.constraints import Constraints
 from trajopt.core.costs.costs import Costs
 from trajopt.utils.config_loader import resolve_function
-from pprint import pprint
 
 # ████████████████████████████████████████████████████████████████████████████
 
-# TODO: STILL UNDER CONSTRUCTION, RUNS for:
-# examples/lander_6dof/main_standalone.ipynb
-# examples/vtol1_entry_3dof/main_standalone.ipynb
+# TODO:
+# need to remove constriant bookkeeping section (54-79)
+# i kept it there for compatibility with the rest of the code
 
 # ████████████████████████████████████████████████████████████████████████████
 
@@ -15,48 +15,51 @@ class Problem:
 
     def __init__(self, problem_config):
 
-        # params already built by load_trajopt (includes model, mission, constraint params)
-        self.params = problem_config['params']
+        # ------------------------------------------------------------
+        # Config
+        # ------------------------------------------------------------
+
+        self.config = problem_config['config']
+        self.n = self.config['model']['dimensions']['n']
+        self.m = self.config['model']['dimensions']['m']
+
+        # ------------------------------------------------------------
+        # Functions
+        # ------------------------------------------------------------
         
-        # Extract fcns config from mission and load actual functions
-        fcns_config = self.params['mission'].pop('fcns', {})
+        fcns_config = self.config['mission'].pop('fcns', {})
         
         self.fcns = {}
         for name, path in fcns_config.items():
             self.fcns[name] = resolve_function(path)
 
-        self.n = self.params['model']['dimensions']['n']
-        self.m = self.params['model']['dimensions']['m']
+        # ------------------------------------------------------------
+        # Parameters
+        # ------------------------------------------------------------
 
-        # ████████████████████████████████████████████████████████████████████████████
-        # █                                                                          █
-        # █                         O C P   D E F I N I T I O N                      █
-        # █                                                                          █
-        # ████████████████████████████████████████████████████████████████████████████
+        self.params = problem_config['params']
 
         # ------------------------------------------------------------
         # Constraints
         # ------------------------------------------------------------
 
         constraint_config_list = problem_config["constraints"]
-        self.constraints = Constraints(constraint_config_list, self.params)
+        self.constraints = Constraints(constraint_config_list, self.config)
 
         # ------------------------------------------------------------
         # Cost
         # ------------------------------------------------------------
 
         cost_config_list = problem_config["costs"]
-        self.costs = Costs(cost_config_list, self.params)
+        self.costs = Costs(cost_config_list, self.config)
 
         # ------------------------------------------------------------
-        # Add constraint/cost params to problem params and resolve functions
+        # Add constraint/cost config and resolve functions
         # ------------------------------------------------------------
-        
-        self.constraints.add_params(self.params)
-        self.costs.add_params(self.params)
 
-        self.constraints.resolve_functions(self.params, self.fcns)
-        self.costs.resolve_functions(self.params, self.fcns)
+        self.constraints.resolve_functions(self.fcns)
+        self.costs.resolve_functions(self.fcns)
+        # self.costs.make_epigraph_constraints()
 
         # ------------------------------------------------------------
         # CONSTRAINT BOOK KEEPING
@@ -64,7 +67,7 @@ class Problem:
         # ------------------------------------------------------------
 
         # constraint book keeping
-        self.n_ineq = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality'))
+        self.n_ineq = sum(constraint.dimension for constraint in self.constraints.get(ct=0, type="nonconvex_inequality"))
 
         # TODO: stop hardcoding specific groups/types. loop through keys and merge somehow with index_map class
         # e.g. indices.constraints.group.n['path'] = ....
@@ -72,8 +75,8 @@ class Problem:
         self.n_nfz = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "nfz")
         self.n_custom = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'nonconvex_inequality') if constraint.group == "custom")
 
-        if self.constraints.has('ct'):
-            self.n_ctcs = sum(constraint.dimension for constraint in self.constraints.get('ct', 'all'))
+        if self.constraints.has(ct=1):
+            self.n_ctcs = sum(constraint.dimension for constraint in self.constraints.get(ct=1))
         else:
             self.n_ctcs = 0
 
@@ -81,11 +84,30 @@ class Problem:
         self.nz = self.n + self.n_ctcs
 
         # TODO: same here
-        self.n_term = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'equality_bc') if constraint.boundary == "final" and constraint.set == "state")
-        self.n_term_ineq = sum(constraint.dimension for constraint in self.constraints.get('nodal', 'inequality_bc') if constraint.boundary == "final" and constraint.set == "state")
-        self.n_term_ctcs = self.n_ctcs
+        self.n_term       = sum(constraint.dimension for constraint in self.constraints.get(ct=0, type="equality_bc", boundary="final", set="state"))
+        self.n_term_ineq  = sum(constraint.dimension for constraint in self.constraints.get(ct=0, type='inequality_bc', boundary="final", set="state"))
+        self.n_term_ctcs  = self.n_ctcs
         self.n_term_total = self.n_term + self.n_term_ineq + self.n_ctcs
 
-
-        # pprint(constraint_config_list)
-        
+    def update_from_config(self, varied_paths, nondim):
+        mission_config = self.config['mission']
+        for path in varied_paths:
+            parts = path.split('.')
+            if parts[0] == 'constraints' and len(parts) >= 3:
+                name, field = parts[1], parts[2]
+                val = mission_config.get('constraints', {}).get(name, {}).get(field)
+                if val is not None:
+                    for c in self.constraints.get():
+                        if c.name == name:
+                            setattr(c, field, np.atleast_1d(val))
+                            c.nondim_constraint(nondim)
+                            break
+            
+            elif parts[0] == 'params' and len(parts) >= 2:
+                target = self.params
+                source = mission_config.get('params', {})
+                for part in parts[1:-1]:
+                    target = target.setdefault(part, {})
+                    source = source.get(part, {})
+                if parts[-1] in source:
+                    target[parts[-1]] = source[parts[-1]]

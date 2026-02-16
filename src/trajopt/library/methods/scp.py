@@ -126,6 +126,6 @@ def display_subprob_status(method, rec: Dict[str, Any]) -> None:
             log_vb_dyn,
             str(solve_stat),
             Ts * nt,
-            cost * ncost
+            cost
         )
     )

@@ -1,44 +1,40 @@
 # ===============================
-# MISSION PARAMS
+# FUNCTIONS
 # ===============================
+fcns.density_model: trajopt/library/missions/msl.py:exp_density_jax
+fcns.nonlinear_aero: trajopt/library/missions/msl.py:nonlinear_aero_jax
 
-planet: 
-  inherit: trajopt/library/missions/shared/planet/mars.yaml
-vehicle:
-  inherit: trajopt/library/missions/shared/vehicle/msl.yaml
+# ===============================
+# FUNCTION PARAMETERS
+# ===============================
+params.planet.inherit: trajopt/library/missions/shared/planet/mars.yaml
+params.vehicle.inherit: trajopt/library/missions/shared/vehicle/msl.yaml
 
-flags:
-  aero_type: 'exponential'  # 'exponential', 'jax_lookup', 'spline', 'none'
+# ===============================
+# CONSTRAINT/COST PARAMS
+# ==============================
+constraints:
+  initial_state:
+    value: ["${params.planet.r + 126e3}", 0.0, 0.0, 5845, -15.47, 0.0]
+    idx: [0, 1, 2, 3, 4, 5]
 
-fcns:
-  atmosphere_model_jax: trajopt/library/missions/msl.py:atmosphere_model_jax
-  nonlinear_aero_jax: trajopt/library/missions/msl.py:nonlinear_aero_jax
+  final_state:
+    value: ["${params.planet.r + 10e3}", 0.0, 10.5768]
+    idx: [0, 1, 2]
+    eps: [100, 0.01, 0.01]
 
-constraints: 
-- name: dynamics
+  state_limits:
+    min_value: ["${params.planet.r + 5e3}", 100.0]
+    min_value_idx: [0, 3]
 
-- name: initial_state
-  x: "eval: np.array([(params['mission']['planet']['r'] + 126e3), 0.0, 0.0, 5845, -15.47, 0.0])"
-  x_idx: [0, 1, 2, 3, 4, 5]
+  bank_aoa_angle_limits:
+    min_value: [-170.0, -5.0]
+    min_value_idx: [0, 1]
+    max_value: [170.0, 5.0]
+    max_value_idx: [0, 1]
 
-- name: final_state
-  x: "eval: np.array([(params['mission']['planet']['r'] + 10e3), 0.0, 10.5768])"
-  x_idx: [0, 1, 2]
-  eps: [100, 0.1, 0.1]
-
-- name: state_limits
-  x_min: "eval: np.array([params['mission']['planet']['r'], 100.0])"
-  x_min_idx: [0, 3]
-
-- name: bank_aoa_angle_limits
-  x_min: [-170.0, -5.0]
-  x_min_idx: [0, 1]
-  x_max: [170.0, 5.0]
-  x_max_idx: [0, 1]
-
-costs:
-- name: min_terminal_velocity
-
-path_limits:
-  max_q: 1000
-  max_Q: 2000
+# ===============================
+# ACTIVE CONSTRAINTS AND COSTS
+# ===============================
+constraint_list: [initial_state, final_state, state_limits, bank_aoa_angle_limits]
+cost_list: [min_terminal_velocity]

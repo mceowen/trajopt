@@ -1,70 +1,107 @@
 import trajopt.core.costs.costs_library as costs_library
-from pprint import pprint
 import inspect
 from functools import partial
 import trajopt.library.methods.convexify as convexify
-import trajopt.utils.tools as tools
 
 class Costs:
-    def __init__(self, cost_config_list, params):
+    def __init__(self, cost_config_list, config):
 
         self.config_list = cost_config_list
 
         self.costs_list = []
-        self.cost_ids = {'all': []}
 
         print(f"costs:")
 
-        # build constraint_ids mapping
+        # build cost_ids mapping
         for i, cost_config in enumerate(cost_config_list):
-            cost_type = cost_config["type"]
-            cost_name = cost_config["name"]
+            print(f"  {i}: {cost_config['name']}: {cost_config['type']}")
+            self.register_cost(cost_config, config)
 
-            print(f"  {i}: {cost_name}: {cost_type}")
-            cost_params = {k:v for k, v in cost_config.items() if k != "type"}
-            costClass = getattr(costs_library, cost_type)
-            self.costs_list.append(costClass(**cost_params, params=params))
+    def register_cost(self, cost_config, config):
+        """
+        Register a cost object in the costs list given a cost configuration.
 
-            if cost_type not in self.cost_ids:
-                self.cost_ids[cost_type] = []
+        Args:
+            cost_config: Cost configuration dictionary.
+            config: Problem configuration dictionary.
 
-            
-            self.cost_ids[cost_type].append(i)
-            self.cost_ids['all'].append(i)
+        Returns:
+            None.
+        """
+        cost_type = cost_config["type"]
+        costClass = getattr(costs_library, cost_type)
+        self.costs_list.append(costClass(cost_config, config=config))
 
-        # print("cost_ids: \n")
-        # pprint(self.cost_ids)
+    def get(self, **kwargs):
+        """
+        Get all costs that match given keyword arguments.
 
-    def get(self, cost_type):
-        
-        cost_ids = self.cost_ids.get(cost_type, [])
-        costs = [self.costs_list[i] for i in cost_ids]
+        Args:
+            **kwargs: Keyword arguments to match against cost attributes.
 
-        return costs
+        Returns:
+            List of costs that match the given keyword arguments.
+        """
+        selected_costs = [cost for cost in self.costs_list if all(getattr(cost, k, None) == v for k, v in kwargs.items())]
+        return selected_costs
 
-    def has(self, cost_type):
+    def has(self, **kwargs):
+        """
+        Check if any costs match given keyword arguments.
 
-        return cost_type in self.cost_ids.keys()
+        Args:
+            **kwargs: Keyword arguments to match against cost attributes.
 
-    def add_params(self, problem_params):
+        Returns:
+            True if any costs match all given keyword arguments, False otherwise.
+        """
+        return any(all(getattr(cost, k, None) == v for k, v in kwargs.items()) for cost in self.costs_list)
 
+    def resolve_functions(self, fcns):
+        """
+        Bind user-provided functions to cost objects and wrap 'fcns' dictionary.
+
+        Args:
+            fcns: Dictionary of user-provided functions.
+
+        Returns:
+            None.
+        """
         for cost in self.costs_list:
-            if "params" in cost.__dict__:
-                if cost.params is not None:
-                    problem_params = tools.deep_update(problem_params, cost.params)
-
-    def resolve_functions(self, params, fcns):
-        for cost in self.costs_list:
-            if getattr(cost, 'fcn', None) is not None:
-                sig = inspect.signature(cost.fcn)
+            if getattr(cost, 'fcn_dim', None) is not None:
+                sig = inspect.signature(cost.fcn_dim)
                 param_names = sig.parameters.keys()
 
                 kwargs_to_bind = {}
-                if 'params' in param_names:
-                    kwargs_to_bind['params'] = params
                 if 'fcns' in param_names:
-                    kwargs_to_bind['fcns'] = fcns
+                    kwargs_to_bind = {"fcns": fcns}
 
-                cost.fcn = partial(cost.fcn, **kwargs_to_bind)
+                if kwargs_to_bind:
+                    cost.fcn_dim = partial(cost.fcn_dim, **kwargs_to_bind)
 
-                cost.fcn_jit, cost.dfcn_dz_jit, cost.dfcn_du_jit = convexify.linearize_jax(cost.fcn)
+    def nondim_costs(self, nondim):
+        """
+        Non-dimensionalize all costs.
+
+        Args:
+            nondim: Non-dimensionalization object.
+
+        Returns:
+            None.
+        """
+        for cost in self.costs_list:
+            cost.nondim_cost(nondim)
+
+    def convexify_costs(self):
+        """
+        Convexify all costs. If a cost has a 'convexify_cost' method, call it.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        for cost in self.costs_list:
+            if getattr(cost, 'convexify_cost', None) is not None:
+                cost.convexify_cost()

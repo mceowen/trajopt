@@ -1,8 +1,5 @@
 import numpy as np
 import cvxpy as cp
-import importlib 
-import yaml
-import types
 
 # TODO: just condense into a single function (not both get_val, safe_val)
 
@@ -104,17 +101,6 @@ def deep_update(dst, src):
         else:
             dst[k] = v
     return dst
-
-def eval_expressions(dictionary, context=None):
-    """recursively evaluate 'eval:' prefixed strings in a dictionary."""
-    for key, value in dictionary.items():
-        
-        if isinstance(value, str):
-            if value.startswith("eval:"):
-                eval_str = value.split(":", 1)[1].strip()
-                dictionary[key] = eval(eval_str, {"np": np}, context)
-        elif isinstance(value, dict):
-            eval_expressions(value, context)
 
 def extract_attributes(obj, names):
     return {k: getattr(obj, k) for k in names if hasattr(obj, k)}

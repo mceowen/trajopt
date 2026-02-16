@@ -45,17 +45,17 @@ def cr(v):
 
 def dynamics(t, z, nu, params):
 
-        veh = params['mission']["vehicle"]
+        veh = params["vehicle"]
 
-        x_dot = jnp.zeros(params['model']['dimensions']['n'])
+        x_dot = jnp.zeros(len(z))
 
-        g = jnp.array([-params['mission']["planet"]["g"], 0, 0])
+        g = jnp.array([-params["planet"]["g"], 0, 0])
 
         Jb = jnp.diag(jnp.array([veh["Jb11"], veh["Jb22"], veh["Jb33"]]))
         Jbinv = jnp.diag(jnp.array([veh["Jbinv11"], veh["Jbinv22"], veh["Jbinv33"]]))
         rt = jnp.array([veh["rt1"], veh["rt2"], veh["rt3"]])
         
-        x_dot = x_dot.at[0].set(-params['mission']["vehicle"]["alpha"] * jnp.linalg.norm(nu))
+        x_dot = x_dot.at[0].set(-veh["alpha"] * jnp.linalg.norm(nu))
         x_dot = x_dot.at[1:4].set(z[4:7])
         x_dot = x_dot.at[4:7].set((1/z[0]) * DCM(z[7:11]).T @ nu[:3] + g)
         x_dot = x_dot.at[7:11].set((1/2) * omega(z[11:14]) @ z[7:11])
@@ -69,13 +69,10 @@ def dynamics(t, z, nu, params):
 # =============================================================================
 
 def height_triggered_pitch(t, z, nu, params):
-    # f > 0 ==> g >= 0
-
     f = 2.0 - z[1]
-    g = 1.0 - (params["mission"]["cos_theta_max"] + 2 * jnp.sum(z[9:11] ** 2))
+    g = 1.0 - (params["cos_theta_max"] + 2 * jnp.sum(z[9:11] ** 2))
 
     return jnp.array([jnp.maximum(f, 0.0) * jnp.maximum(-g, 0.0)])
 
-def min_thrust_norm(t, z, nu, params):
-    
-    return jnp.array([1.0 - jnp.linalg.norm(nu[:3]) / params["mission"]["min_thrust"]])
+def thrust(t, z, nu, params):
+    return jnp.array([jnp.linalg.norm(nu[:3])])

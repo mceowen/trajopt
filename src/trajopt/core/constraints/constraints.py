@@ -4,155 +4,131 @@ from functools import partial
 import trajopt.library.methods.convexify as convexify
 import trajopt.utils.tools as tools
 
-# ------------------------------------------------------------
-# constraints class contains a list of constraint objects with 
-# a mapping of constraint type to a list of constraint ids for
-# fast lookup
-#
-# example usage of constraints class:
-# nonconvex_inequality_constraints = self.constraints.get('nodal', 'nonconvex_inequality')
-# ctcs_constraints = self.constraints.get('ct', 'all')
-#
-# each constraint object is an instantiation from the constraints_library module
-#
-# example structure of constaint_ids
-# (type: dict[str, dict[str, list[int]]]) 
-# 
-#
-# constraints = [axis_angle_cone, axis_angle_cone,  quaternion_cone, quaternion_cone, max_norm_cone]
-# constraint_ids = {
-#   "ct": {"control_axis_angle_cone": [0, 1], "state_max_norm_cone": [4], "all": [0, 1, 4]},
-#   "nodal": {"quaternion_cone": [2, 3], "all": [2, 3]},
-#   "type": {"axis_angle_cone": [0, 1], "quaternion_cone": [2, 3], "max_norm_cone": [4] "all": [0, 1, 2, 3, 4]},
-#   "name": {"initial_state": [0], "final_state": [1], "all": [0, 1]}
-# }
-# ------------------------------------------------------------
-
-
-# input type -- in the config file
-# class type -- building constraint
-# 'AFFINE','POLYTOPE','SOC',
-# POLYTOPE - 'BOX','UPPER','LOWER', 
-# SOC - SPHERE, ELLIPSOID, CYLINDER,...
-
-# implementation type -- how to implement in the subproblem
-# --- POLYTOPE_IN, POLYTOPE_OUT, SOC_IN, SOC_OUT, AFFINE_IN, AFFINE_OUT
-
-
-GCONST_TYPES = ['AFFINE','POLYTOPE','SOC'];
-GCONST_TYPES = GCONST_TYPES + ['BOX','UPPER','LOWER'];
-GCONST_TYPES = GCONST_TYPES + ['ZONOTOPE'];
-GCONST_TYPES = GCONST_TYPES + ['SPHERE','ELLIPSOID','CYLINDER','CONE','PROXIMITY'];
-
-
 class Constraints:
     def __init__(self, constraint_config_list, params):
 
         self.config_list = constraint_config_list
 
         self.constraints_list = []
-        self.constraint_ids = {
-            'ct':{'all':[]},
-            'nodal':{'all':[]},
-            'type':{'all':[]},
-            'name':{'all':[]}
-        }
 
-        print(f"constraints:")
+        for i, cnstr_config in enumerate(cnstr_config_list):
+            print(f"  {i}: {cnstr_config['name']}: {cnstr_config['type']}")
+            self.register_constraint(cnstr_config, config)
 
-        # build constraint_ids mapping
-        for i, constraint_config in enumerate(constraint_config_list):
+    def register_constraint(self, cnstr_config, config):
+        """"
+        Regsiter a constraint object in the constraints list given a constraint configuration.
 
-            # pull out constraint type and name
-            constraint_type = constraint_config["type"]
-            constraint_name = constraint_config["name"]
+        Args:
+            cnstr_config: Constraint configuration dictionary.
+            config: Problem configuration dictionary.
 
+        Returns:
+            None.
+        """
+        cnstr_type = cnstr_config["type"]
+        constraintClass = getattr(constraints_library, cnstr_type)
 
-            print(f"  {i}: {constraint_name}: {constraint_type}")
-            # get the params
-            constraint_params = {k:v for k, v in constraint_config.items() if k != "type"}
-            constraintClass = getattr(constraints_library,constraint_type)
-
-            if constraint_type in GCONST_TYPES:
-                self.constraints_list.append(constraintClass(ins = constraint_params,params=params))
-            else: self.constraints_list.append(constraintClass(**constraint_params, params=params))
-
-            implement_type = self.constraints_list[-1].implement_type;
-
-            # add constraint to constraint_id map for indexing into list
-            ct_type = "ct" if constraint_config.get('ct', 0) else "nodal"
-
-            if implement_type not in self.constraint_ids[ct_type]:
-                self.constraint_ids[ct_type][implement_type] = []
-            if constraint_name not in self.constraint_ids['name']:
-                self.constraint_ids['name'][constraint_name] = []
-            
-            self.constraint_ids[ct_type][implement_type].append(i)
-            self.constraint_ids[ct_type]['all'].append(i)
-            self.constraint_ids['name'][constraint_name].append(i)
+        cnstr_object = constraintClass(cnstr_config=cnstr_config, config=config)
+        self.constraints_list.append(cnstr_object)
         
-    def get(self, level1, level2=None):
-        
-        if level2 is not None:
-            ids = self.constraint_ids.get(level1, {}).get(level2, [])
-        else:
-            ids = self.constraint_ids.get(level1, {}).get("all", [])
+    def get(self, **kwargs):
+        """"
+        Get all constraints that match given keyword arguments.
 
-        selected_constraints = [self.constraints_list[i] for i in ids]
+        Args:
+            **kwargs: Keyword arguments to match against constraint attributes.
 
+        Returns:
+            List of constraints that match the given keyword arguments.
+        """
+        selected_constraints = [constraint for constraint in self.constraints_list if all(getattr(constraint, k, None) == v for k, v in kwargs.items())]
         return selected_constraints
 
-    def has(self, level1, level2=None):
+    def has(self, **kwargs):
+        """"
+        Check if any constraints match given keyword arguments.
 
-        if level2 is not None:
-            return level2 in self.constraint_ids.get(level1, {})
-        else: return len(self.constraint_ids[level1]['all'])>0
+        Args:
+            **kwargs: Keyword arguments to match against constraint attributes.
 
-    def add_params(self, problem_params):
+        Returns:
+            True if any constraints match all given keyword arguments, False otherwise.
+        """
+        
+        return any(all(getattr(constraint, k, None) == v for k, v in kwargs.items()) for constraint in self.constraints_list)
 
+    def resolve_functions(self, fcns):
+        """
+        Bind user-provided functions to constraint objects and wrap 'fcns' dictionary.
+
+        Args:
+            fcns: Dictionary of user-provided functions.
+
+        Returns:
+            None.
+        """
+        
         for constraint in self.constraints_list:
-            if "params" in constraint.__dict__:
-                if constraint.params is not None:
-                    problem_params = tools.deep_update(problem_params, constraint.params)
-
-    def resolve_functions(self, params, fcns):
-        for constraint in self.constraints_list:
-            # Check fcn_dim (the raw function) since fcn may be None until nondim wrapping
             if getattr(constraint, 'fcn_dim', None) is not None:
                 sig = inspect.signature(constraint.fcn_dim)
                 param_names = sig.parameters.keys()
 
                 kwargs_to_bind = {}
-                if 'params' in param_names:
-                    kwargs_to_bind['params'] = params
                 if 'fcns' in param_names:
-                    kwargs_to_bind['fcns'] = fcns
+                    kwargs_to_bind = {"fcns": fcns}
 
                 if kwargs_to_bind:
                     constraint.fcn_dim = partial(constraint.fcn_dim, **kwargs_to_bind)
-
+    
     def nondim_constraints(self, nondim):
-        # apply scaling to each constraint so that they are nondim
-        # by the time it gets to the discretization and solver
+        """
+        Non-dimensionalize all constraints.
+
+        Args:
+            nondim: Non-dimensionalization object.
+
+        Returns:
+            None.
+        """
+        
         for constraint in self.constraints_list:
             constraint.nondim_constraint(nondim)
 
-        print("constraints nondimmed!")
-
     def convexify_constraints(self):
-        for constraint in self.constraints_list:
-            if getattr(constraint, 'fcn', None) is not None:
-                constraint.fcn_jit, constraint.dfcn_dz_jit, constraint.dfcn_du_jit = convexify.linearize_jax(constraint.fcn)
+        """
+        Convexify all constraints. If a constriant has a 'convexify_constraint' method, call it.
+        Args:
+            None.
 
-        print("constraints convexified!")
+        Returns:
+            None.
+        """
+        
+        for constraint in self.constraints_list:
+            if getattr(constraint, 'convexify_constraint', None) is not None:
+                constraint.convexify_constraint()
 
     def augment_ctcs_dynamics(self, n):
-        if self.has('ct'):
-            dynamics_obj = self.get('name', 'dynamics')[0]
+        """
+        Augment CTCS dynamics with CTCS constraints.
+
+        Args:
+            n: Number of states.
+
+        Returns:
+            None.
+        """
+        
+        if self.has(ct=1):
+            dynamics_obj = self.get(type="dynamics")[0]
+
             f_ctcs, dfcn_dz_ctcs, dfcn_du_ctcs = convexify.linearize_jax_ctcs(dynamics_obj.fcn, self, n)
-
-            lin_dyn_ctcs = lambda t, z, nu: (f_ctcs(z, nu), dfcn_dz_ctcs(z, nu), dfcn_du_ctcs(z, nu))
-
+            
+            lin_dyn_ctcs = lambda t, z, nu, params: (
+                f_ctcs(t, z, nu, params),
+                dfcn_dz_ctcs(t, z, nu, params),
+                dfcn_du_ctcs(t, z, nu, params)
+            )
+            
             dynamics_obj.lin_dyn = lin_dyn_ctcs
-
-            print("ctcs dynamics augmented!")

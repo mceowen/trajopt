@@ -5,9 +5,8 @@ jax.config.update("jax_enable_x64", True)
     
 def dynamics(t, z, nu, params, fcns):
 
-    # Extract constant param values from struct
-    Om = jnp.deg2rad(params['mission']['planet']['omega'])
-    mu = params['mission']['planet']['mu']
+    Om = jnp.deg2rad(params['planet']['omega'])
+    mu = params['planet']['mu']
 
     # Extract states
     r, theta, phi, v, gamma, psi = z
@@ -24,7 +23,7 @@ def dynamics(t, z, nu, params, fcns):
     alpha_rad = jnp.deg2rad(alpha)
 
     # Determine lift and drag coefficients from velocity
-    aero = fcns['nonlinear_aero_jax'](t, z, nu, params)
+    aero = fcns['nonlinear_aero'](t, z, nu, params, fcns)
     L    = aero["L"]
     D    = aero["D"]
 
@@ -42,7 +41,7 @@ def dynamics(t, z, nu, params, fcns):
     ss  = jnp.sin(sigma_rad)
     
     # state derivative function
-    xDot = jnp.array([
+    x_dot = jnp.array([
         v * sg,
         jnp.rad2deg(v * cg * sps / (r * cp)),
         jnp.rad2deg(v * cg * cps / r), 
@@ -51,58 +50,31 @@ def dynamics(t, z, nu, params, fcns):
         jnp.rad2deg((1 / v) * ( L * ss / cg + v**2 * cg * sps * tp / r ) - 2 * Om * (tg * cps * cp - sp) + Om**2 * r * (1 / (v * cg)) * sps * sp * cp)
     ])
 
-    return xDot
+    return x_dot
 
-def heat_rate(t, z, nu, params, fcns): # heat rate
+def heat_rate(t, z, nu, params, fcns):
 
     r = z[0]
     v = z[3]
 
-    rho = fcns['atmosphere_model_jax'](t, z, nu, params)
+    rho = fcns['density_model'](t, z, nu, params)
 
-    return jnp.array([params['mission']['vehicle']['kQ'] * rho ** 0.5 * v ** 3])
+    return jnp.array([params['vehicle']['kQ'] * rho ** 0.5 * v ** 3])
 
-def dynamic_pressure(t, z, nu, params, fcns):  #dynamic pressure
+def dynamic_pressure(t, z, nu, params, fcns):
     
     r = z[0]
     v = z[3]
 
-    rho = fcns['atmosphere_model_jax'](t, z, nu, params)
+    rho = fcns['density_model'](t, z, nu, params)
 
     return jnp.array([0.5 * rho * (v) ** 2])
 
-def aero_load(t, z, nu, params, fcns): # normal load
+def aero_load(t, z, nu, params, fcns):
 
-    aero = fcns['nonlinear_aero_jax'](t, z, nu, params)
+    aero = fcns['nonlinear_aero'](t, z, nu, params, fcns)
 
     L = aero["L"]
     D = aero["D"]
 
     return jnp.array([jnp.sqrt(L ** 2 + D ** 2)])
-
-def dynamic_pressure_nonjax(t, z, nu, params, fcns):
-    r = z[0]
-    v = z[3]
-
-    rho = fcns['atmosphere_model_nonjax'](t, z, nu, params)
-
-    return 0.5 * rho * v ** 2
-
-def heat_rate_nonjax(t, z, nu, params, fcns):
-    r = z[0]
-    v = z[3]
-
-    rho = fcns['atmosphere_model_nonjax'](t, z, nu, params)
-
-    return params['mission']['vehicle']['kQ'] * rho ** 0.5 * v ** 3
-
-def aero_load_nonjax(t, z, nu, params, fcns):
-    r = z[0]
-    v = z[3]
-
-    aero = fcns['nonlinear_aero_nonjax'](t, z, nu, params)
-
-    L = aero["L"]
-    D = aero["D"]
-
-    return (L ** 2 + D ** 2) ** 0.5

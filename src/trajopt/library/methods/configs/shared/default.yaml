@@ -19,6 +19,16 @@ flags:
   aoa_vb: 0
   jax_dyn: 0
 
+  flag_path:    1.0
+  flag_nfz:     1.0
+  flag_custom:  1.0
+  flag_term:    1.0
+  flag_dyn:     1.0
+  flag_tr:      1.0
+  flag_true:    1.0
+  flag_dual:    1.0
+  flag_vb:      1.0
+
 # Convergence settings
 conv:
   eps_cost:   []
@@ -50,3 +60,6 @@ weights:
   w_term_scale: 100.0
 
 N: 40
+
+solver_opts:
+  solver: "CLARABEL"

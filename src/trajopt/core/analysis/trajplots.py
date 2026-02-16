@@ -9,8 +9,10 @@ import scipy.linalg as smat
 class SCVXPLOTS:
     def __init__(self,data):
         self.data = data;
-        self.scenarios = list(self.data); self.methods = {};
-        for tag in self.scenarios: self.methods[tag] = list(self.data[tag]);
+        self.scenarios = list(self.data); 
+        self.methods = {};
+        for tag in self.scenarios: 
+            self.methods[tag] = list(self.data[tag]);
         self.base_pen = {'frgba':[0,0,0,0.1],'lrgba':[0,0,0,0.1]}
         self.base_pen = {**self.base_pen,'lw':2,'ls':'-'}
         self.base_pen = {**self.base_pen,'msty':'','msz':1}
@@ -159,18 +161,29 @@ class SCVXPLOTS:
                                     data = DAT[i];
                                     if not(ytag == None):
                                         data_with_y = DAT[i]; 
-                                        if dataloc == 'weights': data_with_y = DAT[i]['weights']
+                                        # Handle nested dataloc paths (e.g., ('constraint_data', group, name, 'nl_vals'))
+                                        if isinstance(dataloc, (tuple, list)):
+                                            for key in dataloc:
+                                                data_with_y = data_with_y[key]
+                                        elif dataloc == 'weights': 
+                                            data_with_y = DAT[i]['weights']
                                         if isinstance(ytag,(tuple,list)):
                                             ydata = data_with_y[ytag[0]][:,ytag[1]];
                                         else: ydata = data_with_y[ytag];
-                                        if xtag == None: xdata = list(range(len(ydata)));
+                                        
+                                        if xtag == None: 
+                                            xdata = list(range(len(ydata)));
+                                        
                                         else:
                                             if isinstance(xtag,(tuple,list)):
                                             	xdata = DAT[i][xtag[0]];
                                             	shp = xdata.shape;
-                                            	if len(shp)==2: xdata = xdata[:,xtag[1]];
-                                            	if len(shp)==1: xdata = xdata[xtag[1]];
-                                            else: xdata = DAT[i][xtag];
+                                            	if len(shp) == 2:
+                                                    xdata = xdata[:,xtag[1]];
+                                            	if len(shp) == 1:
+                                                    xdata = xdata[xtag[1]];
+                                            else: 
+                                                xdata = DAT[i][xtag];
 
                                         penn2 = {};
                                         ########################################
@@ -448,14 +461,17 @@ class SCVXPLOTS:
                                                         linewidth=lw,linestyle = ls,marker=msty,markersize=msz)[0]
 
 
-    def setParams(self,ax,ins={}):
-        if 'ticks' in ins: ax.tick_params(**ins['ticks'])
-        if 'xticks' in ins: ax.tick_params(**ins['xticks'])
-        if 'yticks' in ins: ax.tick_params(**ins['yticks'])
-        if 'xlabel' in ins: temp = ins['xlabel']; label = temp['label']; temp.pop('label'); ax.set_xlabel(label,**temp)
-        if 'ylabel' in ins: temp = ins['ylabel']; label = temp['label']; temp.pop('label'); ax.set_ylabel(label,**temp)
-        if 'zlabel' in ins: temp = ins['zlabel']; label = temp['label']; temp.pop('label'); ax.set_zlabel(label,**temp)
-        if 'title' in ins: temp = ins['title']; title = temp['text']; temp.pop('text'); ax.set_title(title,**temp);
+    def setParams(self,axs,ins={}):
+        if not isinstance(axs, (tuple, list)): axs = [axs]
+        for ax in axs:
+            if 'ticks' in ins: ax.tick_params(**ins['ticks'])
+            if 'xticks' in ins: ax.tick_params(**ins['xticks'])
+            if 'yticks' in ins: ax.tick_params(**ins['yticks'])
+            if 'xlabel' in ins: temp = ins['xlabel']; label = temp['label']; temp.pop('label'); ax.set_xlabel(label,**temp)
+            if 'ylabel' in ins: temp = ins['ylabel']; label = temp['label']; temp.pop('label'); ax.set_ylabel(label,**temp)
+            if 'zlabel' in ins: temp = ins['zlabel']; label = temp['label']; temp.pop('label'); ax.set_zlabel(label,**temp)
+            if 'title' in ins: temp = ins['title']; title = temp['text']; temp.pop('text'); ax.set_title(title,**temp);
+            
 
 
     ######## LABELS AND LEGENDS ############
@@ -496,6 +512,20 @@ class SCVXPLOTS:
             for tag in grid:
                 if plt_typ == '3d': axs[tag] = fig.add_axes(grid[tag],projection='3d')
                 else: axs[tag] = fig.add_axes(grid[tag])
+        return axs;
+
+    def createGrid2(self,fig,typ='manual',grid={},ins={}):
+        plttyps = {};
+        if 'plt_typs' in ins: 
+            plttyps = ins['plt_typs'];
+        
+        if typ=='manual':
+            axs = {};
+            for tag in grid:
+                if tag in plttyps and plttyps[tag] == '3D':
+                    axs[tag] = fig.add_axes(grid[tag],projection='3d')
+                else:
+                    axs[tag] = fig.add_axes(grid[tag])
         return axs;
 
             

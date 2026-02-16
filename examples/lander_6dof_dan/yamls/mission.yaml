@@ -1,11 +1,7 @@
-# mission yaml for lander mission
-
 inherit: trajopt/library/missions/lander_scitech26.yaml
 
-planet:
-  inherit: trajopt/library/missions/shared/planet/nondim_planet.yaml
-vehicle:
-  inherit: trajopt/library/missions/shared/vehicle/mikilander.yaml
+params.planet.inherit: trajopt/library/missions/shared/planet/nondim_planet.yaml
+params.vehicle.inherit: trajopt/library/missions/shared/vehicle/mikilander.yaml
 
 constraints:
 - name: dynamics
@@ -31,7 +27,6 @@ constraints:
   max_val: 5
 
 - name: min_thrust_norm
-  mission_params: {"min_thrust": 0.3}
   eps: [0.001]
 
 # - name: state_limits
@@ -47,7 +42,6 @@ constraints:
 #   theta_max: 90
 
 # - name: height_triggered_pitch
-#   mission_params: {"cos_theta_max": 0.9, "trigger_height": 2.0}
 #   eps: [0.001]
 
 costs:

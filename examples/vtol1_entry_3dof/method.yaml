@@ -1,33 +1,12 @@
-inherit: trajopt/library/methods/configs/shared/default.yaml
+inherit: trajopt/library/methods/configs/autoscvx.yaml
 
-'N': 40
+N: 40
 
 flags:
-  free_final_time:    1         # 0, 1
-  dynamics_nonconvex: 1         # 0, 1
-  equal_dt:           1         # 0, 1
-  flag_autotune:      "3"       # '0', '1', '2
-  buff_dyn:           "term"    # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
-  buff_dyn_dual:      "none"    # 'l1', 'none'
-  ctcs:               'none'    # 0, 1
-  ctcs_dual:          "none"    # 'l1', 'none'
-  ode_fixed_dt:       0         # 0, 1
-  nondim:             1         # 0, 1
-  jax_dyn:            1         # 0, 1
+  equal_dt: true
+  buff_dyn: "term"
 
-  flag_path:    1.0
-  flag_nfz:     1.0
-  flag_custom:  1.0
-  flag_term:    1.0
-  flag_dyn:     1.0
-  flag_tr:      1.0
-  flag_true:    1.0
-  flag_dual:    1.0
-  flag_vb:      1.0
-
-solver_opts:
-  solver: "CLARABEL"
-
+# initial guess configuration
 guess: 
   T_init: 1700
   T_min: 550.0
@@ -36,31 +15,14 @@ guess:
   nl_guess_u_start: [0.0, 0.0]
   nl_guess_u_stop: [0.0, 0.0]
 
-  line_guess_u_init: "eval: np.tile([5.0, 0.0], (method['N'], 1))"
-
+# SCP convergence configuration
 conv:
-  ctcs_mult_state: 1.0
-  ctcs_mult_cnst: 1.0
-  ctcs_fac_cnst: 1.0
-  eps_ctcs: 1e-16
   eps_state: [500, 1, 1, 50, 1, 1]
   eps_cost: 1
   eps_defect: [0.01]
-  eps_dyn: [10.0, 0.1, 0.1, 30.0, 0.1, 0.1]
-  iter_max: 1000
+  eps_dyn: [100.0, 0.1, 0.1, 30.0, 0.1, 0.1]
+  iter_max: 200
 
 weights:
-  w_cost:         1.0
-  alpha_z:        0.5
-  alpha_u:        0.5
-  beta:           0.1
-  gamma:          0.1
-  eps_nonzero1:   0.0000000001
-  eps_nonzero2:   0.001
-  wbuff:          100.0
-  w_nfz_scale:    10.0
-  w_path_scale:   10.0
-  w_custom_scale: 0.0
-  w_dyn_scale:    10000.0
-  w_term_scale:   100.0
-  w_ctcs:         1.0
+  alpha_z: 0.5
+  alpha_u: 0.5

@@ -1,104 +1,101 @@
-# model yaml for lander_6dof model
+# ===============================
+# MODEL CONFIGURATION
+# ===============================
 
-dimensions:
-  n: 14
-  m: 3
+dimensions.n: 14
+dimensions.m: 3
 
-nondim:
-  z_types: ["m", "d", "d", "d", "v", "v", "v", "none", "none", "none", "none", "none", "none", "none"]
-  u_types: ["f", "f", "f"]
+nondim.z_types: ["m", "d", "d", "d", "v", "v", "v", "none", "none", "none", "none", "none", "none", "none"]
+nondim.u_types: ["f", "f", "f"]
+nondim.anchor_types: ["d", "t", "m"]
+nondim.anchor_scales: [1.0, 1.0, 1.0]
 
-  anchor_types : ["d", "t", "m"]
-  anchor_scales: [1.0, 1.0, 1.0]
+plotting.state_groups: 
+  "Mass": [0]
+  "Position": [1, 2, 3]
+  "Velocity": [4, 5, 6]
+  "Attitude": [7, 8, 9, 10]
+  "Angular Velocity": [11, 12, 13]
 
-constraint_models:
-- type: dynamics
-  name: dynamics
+plotting.control_groups:
+  "Thrust": [0, 1, 2]
+
+# ===============================
+# CONSTRAINT MODELS
+# ===============================
+
+constraints.dynamics:
+  type: dynamics
   fcn: trajopt/library/models/lander_6dof.py:dynamics
 
-- type: equality_bc
-  name: initial_state
+constraints.initial_state:
+  type: equality_bc
   set: state
   boundary: init
 
-- type: equality_bc
-  name: final_state
+constraints.final_state:
+  type: equality_bc
   set: state
-  x: null
-  x_idx: null
   boundary: final
 
-- type: equality_bc
-  name: final_control
+constraints.final_control:
+  type: equality_bc
   set: control
-  x: null
-  x_idx: null
   boundary: final
 
-- type: box
-  name: state_limits
+constraints.state_limits:
+  type: box
   set: state
-  x_min: null
-  x_min_idx: null
-  x_max: null
-  x_max_idx: null
 
-- type: axis_angle_cone
-  name: gimbal_limit
+constraints.gimbal_limit:
+  type: axis_angle_cone
   set: control
   axis: [1, 0, 0]
-  theta_max: null
-  x_idx: [0, 1, 2]
+  idx: [0, 1, 2]
 
-- type: axis_angle_cone
-  name: glide_slope
+constraints.glide_slope:
+  type: axis_angle_cone
   set: state
   axis: [1, 0, 0]
-  theta_max: null
-  x_idx: [1, 2, 3]
+  idx: [1, 2, 3]
 
-- type: max_norm_cone
-  name: max_thrust
+constraints.max_thrust:
+  type: max_norm_cone
   set: control
-  max_val: null
-  x_idx: [0, 1, 2]
+  idx: [0, 1, 2]
 
-- type: max_norm_cone
-  name: max_angular_velocity
+constraints.max_angular_velocity:
+  type: max_norm_cone
   set: state
-  max_val: null
-  x_idx: [11, 12, 13]
+  idx: [11, 12, 13]
 
-- type: quaternion_cone
-  name: tilt_limit
-  theta_max: null
+constraints.tilt_limit:
+  type: quaternion_cone
   axis_num: 1
   quat_start_idx: 7
 
-- type: nonconvex_inequality
-  name: height_triggered_pitch
+constraints.height_triggered_pitch:
+  type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/lander_6dof.py:height_triggered_pitch
-  mission_params: {"cos_theta_max": null, "trigger_height": null}
-  eps: null
-  units: null
   dimension: 1
   ct: 0
 
-- type: nonconvex_inequality
-  name: min_thrust_norm
+constraints.min_thrust:
+  type: nonconvex_inequality
   group: path
-  fcn: trajopt/library/models/lander_6dof.py:min_thrust_norm
-  mission_params: {"min_thrust": null}
-  eps: null
+  fcn: trajopt/library/models/lander_6dof.py:thrust
   units: [{"f": 1}]
   dimension: 1
   ct: 0
 
-cost_models:
-- type: min_time
-  name: min_time
+# ===============================
+# COST MODELS
+# ===============================
 
-- type: control_effort
-  name: control_effort
-  x_idx: [0, 1, 2]
+costs.min_time:
+  type: min_time
+
+costs.control_effort:
+  type: control_effort
+  idx: [0, 1, 2]

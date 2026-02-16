@@ -140,7 +140,6 @@ constraint_models:
   name: height_triggered_pitch
   group: path
   fcn: trajopt/library/models/lander_6dof.py:height_triggered_pitch
-  mission_params: {"cos_theta_max": null, "trigger_height": null}
   eps: null
   units: null
   dimension: 1
@@ -150,7 +149,6 @@ constraint_models:
   name: min_thrust_norm
   group: path
   fcn: trajopt/library/models/lander_6dof.py:min_thrust_norm
-  mission_params: {"min_thrust": null}
   eps: null
   units: [{"f": 1}]
   dimension: 1

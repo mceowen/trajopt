@@ -1,89 +1,110 @@
-# Dimensional mission configuration (no nondim)
-module_path: "trajopt.core.mission.quadrotor"
+# ===============================
+# FUNCTIONS
+# ===============================
+# no shared functions for this example
 
-planet_name: "earth"
-vehicle_name: "quadrotor"
+# ===============================
+# FUNCTION PARAMETERS
+# ===============================
+params.planet.inherit: trajopt/library/missions/shared/planet/earth.yaml
+params.vehicle.inherit: trajopt/library/missions/shared/vehicle/quadrotor.yaml
 
-flags:
-  flag_nfz: 2           # 0, 1, 2
-  init_ctrl: 1
-  final_ctrl: 1
-  aero_type: "none"  # "exponential", "jax_lookup", "spline", "none"
+# ===============================
+# CONSTRAINT/COST PARAMS
+# ===============================
+constraints:
+  dynamics:
+    type: dynamics
+    fcn: trajopt/library/models/quadrotor_3dof.py:dynamics_jax
+  
+  initial_state:
+    type: equality_bc
+    set: state
+    boundary: init
+    value: [0.0, 0.0, 5.0, 0, 0.5, 0.0]
+    idx: [0, 1, 2, 3, 4, 5]
+  
+  state_limits:
+    type: box
+    set: state
+    min_value: [-0.5, -0.5, 0.25]
+    min_value_idx: [0, 1, 2]
+    max_value: [12.0, 12.0, 10.0]
+    max_value_idx: [0, 1, 2]
 
-# no fly zones positions and radii
-obs:
-  xc: [2.5, 5.0, 2.5, 5.5, 8.0, 5.5]
-  yc: [2.0, 2.5, 5.0, 5.25, 5.5, 8.0]
-  rc: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+  final_state:
+    type: equality_bc
+    set: state
+    boundary: final
+    value: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
+    idx: [0, 1, 2, 3, 4, 5]
+    value_guess: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
+    eps: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
+  
+  initial_control:
+    type: equality_bc
+    set: control
+    boundary: init
+    value: [0.0, 0.0, "${params.planet.g * params.vehicle.mass}"]
+    idx: [0, 1, 2]
 
-# state min/max constraints
-z_min: [-0.5, -0.5, 0.25]
-z_min_idx: [0, 1, 2]
-z_max: [12.0, 12.0, 10.0]
-z_max_idx: [0, 1, 2]
+  final_control:
+    type: equality_bc
+    set: control
+    boundary: final
+    value: [0.0, 0.0, "${params.planet.g * params.vehicle.mass}"]
+    idx: [0, 1, 2]
+  
+  control_rate_limit:
+    type: control_rate_limit
+    value: [5.0, 5.0, 5.0]
+    idx: [0, 1, 2]
 
-# initial state constraints
-zi: [0.0, 0.0, 5.0, 0, 0.5, 0.0]
-zi_idx: [0, 1, 2, 3, 4, 5]
-zi_min: []
-zi_min_idx: []
-zi_max: []
-zi_max_idx: []
+  max_thrust:
+    type: max_norm_cone
+    set: control
+    idx: [0, 1, 2]
+    max_value: 8.12
 
-# final state constraints
-zf: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
-zf_idx: [0, 1, 2, 3, 4, 5]
-zf_min: []
-zf_min_idx: []
-zf_max: []
-zf_max_idx: []
+  min_thrust:
+    type: nonconvex_inequality
+    group: path
+    fcn: trajopt/library/models/quadrotor_3dof.py:thrust_norm
+    min_value: 0.21
+    eps: [0.01]
+    units: [{f: 1}]
+    dimension: 1
+    ct: 0
 
-# final state guess for straight line initialization (not used with nonlinear initial guess)
-zf_guess: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
-
-# control boundary conditions
-ui: "eval: np.array([0, 0, mission['planet']['g']]) * mission['vehicle']['mass']"
-uf: "eval: np.array([0, 0, mission['planet']['g']]) * mission['vehicle']['mass']"
-ui_idx: [0, 1, 2]
-uf_idx: [0, 1, 2]
-
-# control min/max constraints
-u_min: []
-u_max: []
-
-# control rate constraints
-udot_max: [5.0, 5.0, 5.0]
-udot_max_idx: [0, 1, 2]
-
-# control min/max indices
-u_min_idx: []
-u_max_idx: []
-
-# path limits
-path_limits: {}
-
-# customiliary limits
-custom_limits: {}
-
-# custom input dictionary
-custom_input_dict:
-  u_norm_min: 0.21
-  u_norm_max: 8.12
-  theta_max : 100.0
-
-# custom modules
-custom_modules:
-  cost: trajopt.examples.quadrotor_3dof.custom.cost2
+  obstacle:
+    type: nonconvex_inequality
+    group: path
+    fcn: trajopt/library/models/quadrotor_3dof.py:obstacle
+    min_value: 4.0
+    eps: [0.1]
+    units: [{d: 1}]
+    dimension: 1
+    # ct: 1
 
 costs:
-- fcn: "trajopt.core.mission.quadrotor.terminal_cost"
-  analytical_affine_approximation: "trajopt.core.mission.quadrotor.analytical_affine_approximation_terminal_cost"
-  convex: 1
-  auto_diff: 0
-  category: "terminal"
+  min_time:
+    type: min_time
 
-- fcn: "trajopt.core.mission.quadrotor.running_cost"
-  analytical_affine_approximation: "trajopt.core.mission.quadrotor.analytical_affine_approximation_running_cost"
-  convex: 1
-  auto_diff: 0
-  category: "running"
+# ===============================
+# ACTIVE CONSTRAINTS AND COSTS
+# ===============================
+
+constraint_list:
+  - dynamics
+  - initial_state
+  - state_limits
+  - final_state
+  - initial_control
+  - final_control
+  - control_rate_limit
+  - max_thrust
+  - min_thrust
+  - obstacle
+
+cost_list:
+  - min_time

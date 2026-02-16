@@ -1,6 +1,9 @@
 inherit: trajopt/library/methods/configs/autoscvx.yaml
 
+N: 20
+
 guess:
+  type: straight_line
   # time initialization
   T_init: 5
   T_min: 1
@@ -11,12 +14,8 @@ guess:
   nl_guess_u_start: [2.0, 0, 0]
   nl_guess_u_stop: [2.0, 0, 0]
 
-  # final state guess for straight line initial guess
-  zi_guess: [2.0, 4, 4, 0, 0, -4.0, 4.0, 1.0, 0, 0, 0, 0, 0, 0]
-  zf_guess: [1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
-
   # control initialization for straight line initial guess
-  line_guess_u_init: "eval: np.tile([2.0, 0.5, 0], (method['N'], 1))"
+  line_guess_u_init: "${np.tile([2.0, 0.5, 0], (N, 1))}"
 
 conv:
   #ctcs_mult_state: 1.0
@@ -28,6 +27,9 @@ conv:
   eps_dyn: [0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001]
   iter_max: 50
 
-weights:
-  beta:           0
-  gamma:          0
+flags:
+  ignore_dpp: 0
+  flag_conv: 1
+
+solver_opts:
+  solver: "QOCO"

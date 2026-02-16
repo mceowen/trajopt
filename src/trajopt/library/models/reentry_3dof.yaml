@@ -1,96 +1,102 @@
-dimensions:
-  n: 6
-  m: 2
-
-nondim:
-  z_types: ["d", "ang", "ang", "v", "ang", "ang"]
-  u_types: ["ang", "ang"]
-
-  anchor_types : ["t", "v", "m"]
-  anchor_scales: "eval: np.array([(params['mission']['planet']['r']/params['mission']['planet']['g'])**0.5, (params['mission']['planet']['r']*params['mission']['planet']['g'])**0.5, params['mission']['vehicle']['mass']])"
-
-flags:
-  ctrl_type: "bank_only"
+# ===============================
+# MODEL CONFIGURATION
+# ===============================
+dimensions.n: 6
+dimensions.m: 2
 
 # ===============================
 # CONSTRAINT MODELS
 # ===============================
 
-constraint_models:
-- name: dynamics
+constraints.dynamics:
   type: dynamics
   fcn: trajopt/library/models/reentry_3dof.py:dynamics
-  mission_params: null
 
-- name: initial_state
+constraints.initial_state:
   type: equality_bc
   set: state
   boundary: init
 
-- name: final_state
+constraints.initial_control:
+  type: equality_bc
+  set: control
+  boundary: init
+
+constraints.final_state:
   type: equality_bc
   set: state
   boundary: final
 
-- name: final_bank_angle
+constraints.final_bank_angle:
   type: equality_bc
   set: control
-  x: null
-  x_idx: null
+  value: null
+  idx: null
   boundary: final
 
-- name: state_limits
+constraints.state_limits:
   type: box
   set: state
-  x_min: []
-  x_min_idx: []
-  x_max: []
-  x_max_idx: []
+  min_value: []
+  min_value_idx: []
+  max_value: []
+  max_value_idx: []
 
-- name: bank_angle_limit
+constraints.control_limits:
   type: box
   set: control
-  x_min: null
-  x_min_idx: null
-  x_max: null
-  x_max_idx: null
+  min_value: null
+  min_value_idx: null
+  max_value: null
+  max_value_idx: null
 
-- name: bank_aoa_angle_limits
+constraints.bank_angle_limit:
   type: box
   set: control
-  x_min: null
-  x_min_idx: null
-  x_max: null
-  x_max_idx: null
+  min_value: null
+  min_value_idx: null
+  max_value: null
+  max_value_idx: null
 
-- name: bank_angle_rate_limit
+constraints.bank_aoa_angle_limits:
+  type: box
+  set: control
+  min_value: null
+  min_value_idx: null
+  max_value: null
+  max_value_idx: null
+
+constraints.bank_angle_rate_limit:
   type: control_rate_limit
-  udot_max: null
-  udot_max_idx: null
+  value: null
+  idx: null
 
-- name: max_Q
+constraints.bank_aoa_rate_limit:
+  type: control_rate_limit
+  value: null
+  idx: null
+
+constraints.max_Q:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/reentry_3dof.py:heat_rate
-  mission_params: {"cos_theta_max": null, "trigger_height": null}
   max_val: null
   eps: null
   units: [{none: 1}]
   dimension: 1
   ct: 0
 
-- name: max_q
+constraints.max_q:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/reentry_3dof.py:dynamic_pressure
-  mission_params: {"cos_theta_max": null, "trigger_height": null}
   max_val: null
   eps: null
   units: [{none: 1}]
   dimension: 1
   ct: 0
 
-- name: max_load
+constraints.max_load:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/reentry_3dof.py:aero_load
@@ -104,10 +110,48 @@ constraint_models:
 # COST MODELS
 # ===============================
 
-cost_models:
-- type: min_time
-  name: min_time
+costs.min_time:
+  type: min_time
 
-- name: min_terminal_velocity
+costs.min_terminal_velocity:
   type: terminal_state
-  x_idx: [3]
+  value: null
+  idx: [3]
+
+costs.min_max_heat_rate:
+    type: nonconvex
+    minimax: 1
+    fcn: trajopt/library/models/reentry_3dof.py:heat_rate
+    units: [{none: 1}]
+    ct: 0
+
+# TODO (carlos): add back minimax heating cost 
+# costs.min_max_heat_rate:
+#   type: nonconvex_minmax
+
+# ===============================
+# MISC CONFIG
+# ===============================
+
+nondim.z_types: ["d", "ang", "ang", "v", "ang", "ang"]
+nondim.u_types: ["ang", "ang"]
+
+params.planet.inherit: trajopt/library/missions/shared/planet/mars.yaml
+params.vehicle.inherit: trajopt/library/missions/shared/vehicle/msl.yaml
+
+nondim.anchor_types : ["t", "v", "m"]
+nondim.anchor_scales: ["${(params.planet.r / params.planet.g)**0.5}", "${(params.planet.r * params.planet.g)**0.5}", "${params.vehicle.mass}"]
+
+flags.ctrl_type: "bank_only"
+
+plotting.state_groups:
+  "Radius": [0]
+  "Theta": [1]
+  "Phi": [2]
+  "Velocity": [3]
+  "Gamma": [4]
+  "Psi": [5]
+
+plotting.state_traj_groups:
+  "long_lat_alt": [1, 2, 0]
+  "long_lat": [1, 2]

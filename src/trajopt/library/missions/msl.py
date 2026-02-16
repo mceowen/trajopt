@@ -3,45 +3,25 @@ import jax
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 
-def atmosphere_model_jax(t, z, nu, params):
-    '''
-    Returns density as a function of orbital radius
-
-    TODO: (carlos)
-    expand 'lookup' option to be higher dimensional
-    remember LUT grow exponenetiall in size!
-    '''
+def exp_density_jax(t, z, nu, params):
 
     r = z[0]
 
-    # Compute altitude
-    h = r - params['mission']['planet']["r"]
-    
-    # TODO (carlos): add the remaining options for atmosphere model
-    if params['mission']['flags']["aero_type"] == "lookup":
-        rho = jnp.interp(h/1e3, dens.h_grid, dens.rho_vals)
+    h = r - params['planet']["r"]
 
-    elif params['mission']['flags']["aero_type"] == "exponential":
-        rho = params['mission']['planet']["rho"] * jnp.exp(-h / params['mission']['planet']["H"])
+    rho = params['planet']["rho"] * jnp.exp(-h / params['planet']["H"])
 
-    return rho  
+    return rho
 
-def nonlinear_aero_jax(t, z, nu, params):
-    '''
-    returns all aero data as a function of full state
-    
-    TODO: (carlos)
-    this function currently only accepts a single time step!
-    handle the general case? or make seperate function?
-    '''
+def nonlinear_aero_jax(t, z, nu, params, fcns):
 
     r = z[0]
     v = z[3]
 
-    rho = atmosphere_model_jax(t, z, nu, params)
+    rho = fcns['density_model'](t, z, nu, params)
 
-    D    = 0.5 * (1 / params['mission']['vehicle']["bc"]) * rho * v**2
-    L    = D * params['mission']['vehicle']["LD"]
+    D    = 0.5 * (1 / params['vehicle']["bc"]) * rho * v**2
+    L    = D * params['vehicle']["LD"]
 
     alpha = 0
 

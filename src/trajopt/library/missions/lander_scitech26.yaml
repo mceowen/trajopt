@@ -1,47 +1,45 @@
-# mission yaml for lander mission
+# ===============================
+# PARAMETERS
+# ===============================
+params.planet.inherit: trajopt/library/missions/shared/planet/nondim_planet.yaml
+params.vehicle.inherit: trajopt/library/missions/shared/vehicle/mikilander.yaml
 
-planet:
-  inherit: trajopt/library/missions/shared/planet/nondim_planet.yaml
-vehicle:
-  inherit: trajopt/library/missions/shared/vehicle/mikilander.yaml
+params.zi: [4, 4, 0, 0.0, -4.0, 4.0, 0, 0, 0]
+params.min_thrust: 0.3
 
+# initial state constraint config
 constraints:
-- name: dynamics
+  initial_state:
+    value: ${params.zi}
+    idx: [1, 2, 3, 4, 5, 6, 11, 12, 13]
+    value_guess: [2.0, 4, 4, 0, 0, -4.0, 4.0, 1.0, 0, 0, 0, 0, 0, 0]
 
-- name: initial_state
-  x: [4, 4, 0, 0.0 , -4.0, 4.0, 0, 0, 0]
-  x_idx: [1, 2, 3, 4, 5, 6, 11, 12, 13]
+# final state constraint config
+  final_state:
+    value: [0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
+    idx: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+    eps: [0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001]
+    value_guess: [1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
 
-- name: final_state
-  x: [0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
-  x_idx: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
-  eps: [0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001]
+# gimbal limit constraint config
+  gimbal_limit:
+    theta_max: 20
 
-- name: gimbal_limit
-  theta_max: 20
+# max thrust constraint config
+  max_thrust:
+    max_value: 5
 
-- name: max_thrust
-  max_val: 5
+# min thrust norm constraint config
+  min_thrust:
+    min_value: [0.3]
+    eps: [0.001]
 
-- name: min_thrust_norm
-  mission_params: {"min_thrust": 0.3}
-  eps: [0.001]
+constraint_list:
+- initial_state
+- final_state
+- gimbal_limit
+- max_thrust
+- min_thrust
 
-# - name: state_limits
-#   x_min: [1.0]
-#   x_min_idx: [0]
-#   x_max: []
-#   x_max_idx: []
-
-# - name: glide_slope
-#   theta_max: 45
-
-# - name: tilt_limit
-#   theta_max: 90
-
-# - name: height_triggered_pitch
-#   mission_params: {"cos_theta_max": 0.9, "trigger_height": 2.0}
-#   eps: [0.001]
-
-costs:
-- name: min_time
+cost_list:
+- min_time

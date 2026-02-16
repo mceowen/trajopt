@@ -1,0 +1,85 @@
+dimensions.n: 6
+dimensions.m: 2
+
+params.planet.inherit: trajopt/library/missions/shared/planet/mars.yaml
+params.vehicle.inherit: trajopt/library/missions/shared/vehicle/msl.yaml
+
+nondim.z_types: ["d", "d", "d", "v", "v", "v"]
+nondim.u_types: ["ang", "ang"]
+nondim.anchor_types: ["t", "v", "m"]
+nondim.anchor_scales: ["${(params.planet.r / params.planet.g)**0.5}", "${(params.planet.r * params.planet.g)**0.5}", "${params.vehicle.mass}"]
+
+flags.ctrl_type: bank_only
+
+constraints.dynamics:
+  type: dynamics
+  fcn: trajopt/library/models/reentry_3dof_cartesian.py:dynamics
+
+constraints.initial_state:
+  type: equality_bc
+  set: state
+  boundary: init
+
+constraints.final_state:
+  type: equality_bc
+  set: state
+  boundary: final
+
+constraints.final_bank_angle:
+  type: equality_bc
+  set: control
+  boundary: final
+
+constraints.initial_control:
+  type: equality_bc
+  set: control
+  boundary: init
+
+constraints.state_limits:
+  type: box
+  set: state
+
+constraints.bank_angle_limit:
+  type: box
+  set: control
+
+constraints.bank_aoa_angle_limits:
+  type: box
+  set: control
+
+constraints.bank_angle_rate_limit:
+  type: control_rate_limit
+
+constraints.bank_aoa_rate_limit:
+  type: control_rate_limit
+
+constraints.max_Q:
+  type: nonconvex_inequality
+  group: path
+  fcn: trajopt/library/models/reentry_3dof_cartesian.py:heat_rate
+  units: [{none: 1}]
+  dimension: 1
+  ct: 0
+
+constraints.max_q:
+  type: nonconvex_inequality
+  group: path
+  fcn: trajopt/library/models/reentry_3dof_cartesian.py:dynamic_pressure
+  units: [{none: 1}]
+  dimension: 1
+  ct: 0
+
+constraints.max_load:
+  type: nonconvex_inequality
+  group: path
+  fcn: trajopt/library/models/reentry_3dof_cartesian.py:aero_load
+  units: [{none: 1}]
+  dimension: 1
+  ct: 0
+
+costs.min_time:
+  type: min_time
+
+costs.min_terminal_velocity:
+  type: min_norm_terminal
+  x_idx: [3, 4, 5]

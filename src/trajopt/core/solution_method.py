@@ -29,12 +29,24 @@ class SolutionMethod:
         self.index_map = IndexMap(self)
         self.nondim = Nondim(problem)
 
+        # nondimensionalize and convexfiy constraints
         self.problem.constraints.nondim_constraints(self.nondim)
         self.problem.constraints.convexify_constraints()
+
+        # nondimensionalize and convexify costs
+        self.problem.costs.nondim_costs(self.nondim)
+        self.problem.costs.convexify_costs()
+
+        # augment dynamics with ct constraints and costs
         self.problem.constraints.augment_ctcs_dynamics(self.problem.n)
 
-        discretize.jit_jax_discretize(problem, self)
-        integrators.jit_rk4_jax_dense(problem, self)
+        # ---- Time grid initialization ----
+        self.dt_init  = (self.guess["T_init"] / (self.N - 1)) * np.ones(self.N - 1)
+        self.Ts_init  = self.guess["T_init"] / self.nondim.nt
+        self.dt_init  = self.dt_init / self.nondim.nt
+
+        discretize.compile_jax_discretization(problem, self)
+        integrators.compile_dense_jax_propagator(problem, self, problem.params)
 
         buff_dyn = str(self.flags.get("buff_dyn", "term"))
 
@@ -92,9 +104,9 @@ class SolutionMethod:
         hyperparameters.configure_penalty_weights(problem, self)
 
         # Extract only those terminal constraints used
-        term_eq_constraints   = [constraint for constraint in problem.constraints.get('nodal', 'equality_bc')   if constraint.boundary == "final" and constraint.set == "state"]
-        term_ineq_constraints = [constraint for constraint in problem.constraints.get('nodal', 'inequality_bc') if constraint.boundary == "final" and constraint.set == "state"]
-        term_ctcs_constraints = [constraint for constraint in problem.constraints.get('ct', 'all')]
+        term_eq_constraints   = problem.constraints.get(ct=0, type='equality_bc', boundary="final", set="state")
+        term_ineq_constraints = problem.constraints.get(ct=0, type='inequality_bc', boundary="final", set="state")
+        term_ctcs_constraints = problem.constraints.get(ct=1)
 
         term_constraints = term_eq_constraints + term_ineq_constraints + term_ctcs_constraints
 
@@ -117,21 +129,14 @@ class SolutionMethod:
 
     def get_initial_guess(self, problem):
 
-        self.nl_guess_u_start = self.nondim.M["ctrl"]["d2nd"] @ self.guess["nl_guess_u_start"]
-        self.nl_guess_u_stop  = self.nondim.M["ctrl"]["d2nd"] @ self.guess["nl_guess_u_stop"]
-
-        self.line_guess_u_init = self.guess["line_guess_u_init"] @ self.nondim.M["ctrl"]["d2nd"]
-
-        if self.flags["dynamics_nonconvex"] and (self.flags.get("buff_dyn")=="term"):
-            nu_range = np.vstack([self.nl_guess_u_start, self.nl_guess_u_stop])
-            guess.nonlinear_initial_guess(nu_range, problem, self)
+        if (self.guess.get("type", "propagation") == "propagation") or self.flags.get("buff_dyn") == "term":
+            self.t_init, self.z_init, self.nu_init = guess.nonlinear_initial_guess(problem, self)
         else:
-            guess.straight_line_initial_guess(problem, self)
-            self.nu_init = self.guess["line_guess_u_init"]
+            self.t_init, self.z_init, self.nu_init = guess.straight_line_initial_guess(problem, self)
 
-        if problem.constraints.has('ct'):
-            guess.ctcs_initial_guess(problem, self)
+        if problem.constraints.has(ct=1):
+            self.z_init = guess.ctcs_initial_guess(problem, self)
 
-        self.cost_init = discretize.compute_linearized_costs(self.t_init, self.z_init, self.nu_init, problem, self)[0].sum().item()
+        self.cost_init = discretize.compute_nonconvex_costs(self.t_init, self.z_init, self.nu_init, problem, self)
 
-        print(f"Cost initial: {self.cost_init}")
+        # print(f"Cost initial: {self.cost_init}")
