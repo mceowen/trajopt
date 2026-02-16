@@ -48,6 +48,8 @@ GCONST_TYPES = GCONST_TYPES + ['SPHERE','ELLIPSOID','CYLINDER','CONE','PROXIMITY
 class Constraints:
     def __init__(self, constraint_config_list, params):
 
+        self.config_list = constraint_config_list
+
         self.constraints_list = []
         self.constraint_ids = {
             'ct':{'all':[]},

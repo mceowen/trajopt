@@ -8,6 +8,8 @@ import trajopt.utils.tools as tools
 class Costs:
     def __init__(self, cost_config_list, params):
 
+        self.config_list = cost_config_list
+
         self.costs_list = []
         self.cost_ids = {'all': []}
 

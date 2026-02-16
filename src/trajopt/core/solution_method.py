@@ -112,6 +112,9 @@ class SolutionMethod:
 
         self.get_initial_guess(problem)
 
+        # TODO(Skye/Carlos): Potentially move the method=specific constraint modeling here 
+        # (instead of the subproblem)
+
     def get_initial_guess(self, problem):
 
         self.nl_guess_u_start = self.nondim.M["ctrl"]["d2nd"] @ self.guess["nl_guess_u_start"]

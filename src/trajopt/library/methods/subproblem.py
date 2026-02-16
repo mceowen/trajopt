@@ -5,6 +5,7 @@ import cvxpy as cp
 import jax.numpy as jnp
 import copy
 
+from trajopt.library.methods.subproblem_constraints import SubproblemConstraints
 from trajopt.library.methods import discretize
 from trajopt.library.methods import convergence
 from trajopt.library.methods import hyperparameters as hp
@@ -19,6 +20,9 @@ class Subproblem:
     def __init__(self, problem, method) -> None:
         self.problem = problem
         self.method  = method
+
+        # subproblem constraints
+        self.constraints = SubproblemConstraints(problem, method)
 
         # derive canonical sizes for quick reuse
         self.N                  = int(method.N)
@@ -62,7 +66,7 @@ class Subproblem:
         # Build the DPP graph once
         self._create_variables()
         self._create_parameters()
-        self.constraints: List[cp.constraints.constraint.Constraint] = []
+        self.cp_constraints: List[cp.constraints.constraint.Constraint] = []
         self._build_constraints_once()
         self.cost_expr = self._build_cost_once()
 
@@ -71,7 +75,7 @@ class Subproblem:
         # mission.custom_cost(self)
 
         # Compile CVXPY problem once
-        self.subproblem = cp.Problem(cp.Minimize(self.cost_expr), self.constraints)
+        self.subproblem = cp.Problem(cp.Minimize(self.cost_expr), self.cp_constraints)
 
         total_param_scalars = sum(p.size for p in self.subproblem.parameters())
         print(f"total number of parameters: {total_param_scalars}")
@@ -297,9 +301,9 @@ class Subproblem:
     # CONSTRAINTS (build-once)
     # ============================================================
     def _build_constraints_once(self) -> None:
-        problem = self.problem
-        method = self.method
-        index_map = method.index_map
+        problem     = self.problem
+        method      = self.method
+        index_map   = method.index_map
 
         N, n, m, nz, n_ctcs     = self.N, self.n, self.m, self.nz, self.n_ctcs
 
@@ -533,7 +537,7 @@ class Subproblem:
             one = np.ones((self.N - 1, 1)) / (self.N - 1)
             C.append(self.dt == one * self.dT)
 
-        self.constraints += C
+        self.cp_constraints += C
 
     # ============================================================
     # COST FUNCTION (DCP-safe)
