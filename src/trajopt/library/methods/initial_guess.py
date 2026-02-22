@@ -11,7 +11,7 @@ def straight_line_initial_guess(problem, method):
     init_state_constraint = problem.constraints.get(type="equality_bc", boundary="init")[0]
     terminal_state_constraint = problem.constraints.get(type="equality_bc", boundary="final")[0]
 
-    if len(init_state_constraint.idx) == problem.n:
+    if len(init_state_constraint.idx) == problem.index_map.n.state:
         zi_full = init_state_constraint.x
     else:
         zi_guess = getattr(init_state_constraint, 'value_guess', None)
@@ -20,7 +20,7 @@ def straight_line_initial_guess(problem, method):
         else:
             raise ValueError("Initial_state.zi_guess must be provided for straight_line_initial_guess if initial_state is not fully defined")
 
-    if len(terminal_state_constraint.idx) == problem.n:
+    if len(terminal_state_constraint.idx) == problem.index_map.n.state:
         zf_full = terminal_state_constraint.value
     else:
         zf_guess = getattr(terminal_state_constraint, 'value_guess', None)
