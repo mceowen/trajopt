@@ -298,7 +298,7 @@ class Subproblem:
         
         # CTCS terminal equalities
         if problem.index_map.n['term_ctcs']>0:
-            ctcs_state_idx = idx.indices.z["ctcs"]  
+            ctcs_state_idx = self.indices.z["ctcs"]  
             vbN_ctcs = self.vb_term[term_idx["ctcs"]] if self.vb_term is not None else 0.0
             C.append(
                 self.dz[-1, ctcs_state_idx] + self.z_ref[-1, ctcs_state_idx] - vbN_ctcs == 0.0
@@ -313,20 +313,20 @@ class Subproblem:
             C.append(cp.sum(self.vb_dyn_m) == self.vb_minus_ctcs)
 
         if self.flags["buff_dyn"] == "quad-2":
-            C.append(cp.sum(self.vb_dyn_p[:, idx.indices.z["state"]], axis=1) == self.vb_plus_real[:, 0])
-            C.append(cp.sum(self.vb_dyn_m[:, idx.indices.z["state"]], axis=1) == self.vb_minus_real[:, 0])
+            C.append(cp.sum(self.vb_dyn_p[:, self.indices.z["state"]], axis=1) == self.vb_plus_real[:, 0])
+            C.append(cp.sum(self.vb_dyn_m[:, self.indices.z["state"]], axis=1) == self.vb_minus_real[:, 0])
 
         if self.flags["ctcs"] == "quad-2":
-            C.append(cp.sum(self.vb_dyn_p[:, idx.indices.z["ctcs"]], axis=1) == self.vb_plus_ctcs[:, 0])
-            C.append(cp.sum(self.vb_dyn_m[:, idx.indices.z["ctcs"]], axis=1) == self.vb_minus_ctcs[:, 0])
+            C.append(cp.sum(self.vb_dyn_p[:, self.indices.z["ctcs"]], axis=1) == self.vb_plus_ctcs[:, 0])
+            C.append(cp.sum(self.vb_dyn_m[:, self.indices.z["ctcs"]], axis=1) == self.vb_minus_ctcs[:, 0])
 
         if self.flags["buff_dyn"] == "quad-3":
-            C.append(cp.sum(self.vb_dyn_p[:, idx.indices.z["state"]], axis=0) == self.vb_plus_real[0, :])
-            C.append(cp.sum(self.vb_dyn_m[:, idx.indices.z["state"]], axis=0) == self.vb_minus_real[0, :])
+            C.append(cp.sum(self.vb_dyn_p[:, self.indices.z["state"]], axis=0) == self.vb_plus_real[0, :])
+            C.append(cp.sum(self.vb_dyn_m[:, self.indices.z["state"]], axis=0) == self.vb_minus_real[0, :])
         
         if self.flags["ctcs"] == "quad-3":
-            C.append(cp.sum(self.vb_dyn_p[:, idx.indices.z["ctcs"]], axis=0) == self.vb_plus_ctcs[0, :])
-            C.append(cp.sum(self.vb_dyn_m[:, idx.indices.z["ctcs"]], axis=0) == self.vb_minus_ctcs[0, :])
+            C.append(cp.sum(self.vb_dyn_p[:, self.indices.z["ctcs"]], axis=0) == self.vb_plus_ctcs[0, :])
+            C.append(cp.sum(self.vb_dyn_m[:, self.indices.z["ctcs"]], axis=0) == self.vb_minus_ctcs[0, :])
 
         # Per-stage constraints
         for k in range(N):
@@ -342,12 +342,12 @@ class Subproblem:
                 C.append(self.dz[k + 1] + self.z_ref[k + 1] - self.z_m[k + 1] == rhs)
 
                 if self.flags["buff_dyn"] != "term":
-                    C.append(self.vb_dyn_p[k, idx.indices.z["state"]] >= 0)
-                    C.append(self.vb_dyn_m[k, idx.indices.z["state"]] >= 0)
+                    C.append(self.vb_dyn_p[k, self.indices.z["state"]] >= 0)
+                    C.append(self.vb_dyn_m[k, self.indices.z["state"]] >= 0)
 
                 if self.flags["ctcs"] != "term" and n_ctcs > 0:
-                    C.append(self.vb_dyn_p[k, idx.indices.z["ctcs"]] >= 0)
-                    C.append(self.vb_dyn_m[k, idx.indices.z["ctcs"]] >= 0)
+                    C.append(self.vb_dyn_p[k, self.indices.z["ctcs"]] >= 0)
+                    C.append(self.vb_dyn_m[k, self.indices.z["ctcs"]] >= 0)
                 
                 # CTCS coupling on extra components
                 if method.flags["ctcs"] != "none" and n_ctcs>0:
