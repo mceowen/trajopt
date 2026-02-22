@@ -25,7 +25,7 @@ def set_convergence_tolerance(problem, method):
 
     if problem.constraints.has(ct=1):
         eps_list = np.concatenate([constraint.eps for constraint in problem.constraints.get(ct=1)])
-        ctcs_eps_list = ctcs_mult_cnst * (method.weights.w_ctcs * eps_list)**2
+        ctcs_eps_list = ctcs_mult_cnst * (method.penalty.w_ctcs * eps_list)**2
 
         eps_state = np.concatenate([eps_state, ctcs_eps_list])
         M_state_d2nd = np.diag(np.concatenate([np.diag(M_state_d2nd), np.diag(method.nondim.M["ineq_ct"]["d2nd"])**2 / method.nondim.nt]))
@@ -132,7 +132,7 @@ def set_convergence_tolerance(problem, method):
     if problem.constraints.has(ct=1):
         eps_dyn = np.concatenate([
             ctcs_mult_state * eps_dyn,
-            ctcs_mult_cnst  * (method.weights.w_ctcs * eps_ct_list)**2
+            ctcs_mult_cnst  * (method.penalty.w_ctcs * eps_ct_list)**2
         ])
         M_dyn_d2nd = np.diag(np.concatenate([
             np.diag(M_dyn_d2nd),

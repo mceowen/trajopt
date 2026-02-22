@@ -165,8 +165,8 @@ class SCVXPLOTS:
                                         if isinstance(dataloc, (tuple, list)):
                                             for key in dataloc:
                                                 data_with_y = data_with_y[key]
-                                        elif dataloc == 'weights': 
-                                            data_with_y = DAT[i]['weights']
+                                        elif dataloc == 'weights':
+                                            data_with_y = DAT[i]['W']
                                         if isinstance(ytag,(tuple,list)):
                                             ydata = data_with_y[ytag[0]][:,ytag[1]];
                                         else: ydata = data_with_y[ytag];
@@ -421,7 +421,7 @@ class SCVXPLOTS:
                                     if i < len(RUN['iters']):
                                         xdata.append(i);
                                         data = DAT[i];
-                                        if dataloc == 'weights': data = DAT[i]['weights']
+                                        if dataloc == 'weights': data = DAT[i]['W']
                                         if dataloc == 'conv_data': data = DAT[i]['conv_data']
                                         if tind == None: 
                                             if isinstance(ytag,(tuple,list)): ydata.append(data[ytag[0]][ytag[1]]);

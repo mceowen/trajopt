@@ -16,9 +16,9 @@ import yaml
 class TrajectoryAnalyzer:
 
     def __init__(self, mission_path, model_path, method_path, variations=None):
-        config = cfg.load_trajopt_config(mission_path, model_path, method_path)
-        problem_config = config['problem']
-        method_config = config['method']
+        config          = cfg.load_trajopt_config(mission_path, model_path, method_path)
+        problem_config  = config['problem']
+        method_config   = config['method']
 
         self.problem_config = copy.deepcopy(problem_config)
         self.method_config  = copy.deepcopy(method_config)

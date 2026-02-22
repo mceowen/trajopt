@@ -24,7 +24,7 @@ class SolutionMethod:
         self.flags       = recursive_attrdict(method_config['flags'])
         self.guess       = recursive_attrdict(method_config["guess"])
         self.conv        = recursive_attrdict(method_config["conv"])
-        self.weights     = recursive_attrdict(method_config["weights"])
+        self.penalty     = recursive_attrdict(method_config["weights"])
         self.solver_opts = recursive_attrdict(method_config["solver_opts"])
 
         self.conv_data   = AttrDict()

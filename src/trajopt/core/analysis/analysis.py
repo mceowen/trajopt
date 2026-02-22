@@ -26,14 +26,14 @@ ITER_DATA_KEYS_KEEP = {
     "iter_num", "converged", "cost", "solve_time", "prop_time", "parse_time", "t_full",
     "t_opt", "z_opt", "nu_opt", "dt_opt", "T_opt",
     "t_nl", "z_nl", "nu_nl", "t_init", "z_init", "nu_init",
-    "constraint_data", "conv_data", "weights",
+    "constraint_data", "conv_data", "W", "dual", "penalty",
 }
 
 METHOD_DATA_KEYS_KEEP = {
     'N', 'N_dens', 'Npm', 'T_init', 'T_max', 'T_min', 'Ts_init', 'conv', 'conv_data', 'cost_init', 
     'dT_max', 'ddt_max', 'dt_init', 'dt_init', 'dt_max', 'dt_min', 'flags', 'line_guess_u_init',
     'name', 'n_minus', 'n_plus', 'nl_guess_u_start', 'nl_guess_u_stop', 'solver_opts',
-    'nondim', 't_init', 'nu_init', 'weights', 'z_ind', 'z_init'
+    'nondim', 't_init', 'nu_init', 'penalty', 'z_ind', 'z_init'
 }
 
 def _trim_iter_record(rec):
@@ -211,6 +211,7 @@ def run_mc_analysis(trajopt_obj):
             problem.update_from_config(mission_vars.keys(), m.nondim)
             m.get_initial_guess(problem)
             
+            W_stack, dual_stack = subprob.constraints.stack_W_and_dual(problem, m)
             subprob.iter_data = [{
                 "iter_num": 0,
                 "z_ref": m.z_init,
@@ -218,7 +219,9 @@ def run_mc_analysis(trajopt_obj):
                 "dt_ref": m.dt_init,
                 "t_ref": m.t_init,
                 "conv_data": {"vb_ineq": np.zeros((subprob.N, problem.index_map.n['ineq'])), "vb_dyn": np.zeros((subprob.N - 1, subprob.index_map.n['dyn'])), "vb_term": np.zeros((problem.index_map.n['term_total'], 1))},
-                "weights": copy.deepcopy(m.weights),
+                "W": copy.deepcopy(W_stack),
+                "dual": copy.deepcopy(dual_stack),
+                "penalty": copy.deepcopy(m.penalty),
             }]
 
             trajopt_obj.solve()

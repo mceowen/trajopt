@@ -37,43 +37,162 @@ class SubproblemConstraints(Constraints):
             d = int(getattr(c, "dimension"))
             Nk = int(time_grid.get(getattr(c, "type", None), N_default))
 
-            c.W    = np.zeros((Nk, d))
-            c.dual = np.zeros((Nk, d))   # leave for later
-            c.vb   = np.zeros((Nk, d))   # leave for later
+            if Nk == 1:
+                c.W    = np.zeros(d)
+                c.dual = np.zeros(d)
+                c.vb   = np.zeros(d)
+            else:
+                c.W    = np.zeros((Nk, d))
+                c.dual = np.zeros((Nk, d))
+                c.vb   = np.zeros((Nk, d))
+
+        # Aggregate plus/minus buffers (not tied to a single constraint)
+        idx = method.index_map
 
 
     def stack_W_and_dual(self, problem, method):
         """
-        Build organized W and dual attribute dictionaries from method.weights.
-        Returns (W, dual) where each is an AttrDict containing constraint type → array mappings.
-        
-        Dimensions come from method.index_map.n and method.index_map.N.
+        Build organized W and dual attribute dictionaries from per-constraint arrays.
+        Returns (W_stack, dual_stack) where each is an AttrDict containing aggregate arrays.
         """
-        idx     = method.index_map
-        
-        # Initialize AttrDicts
-        W      = tools.AttrDict()
-        dual   = tools.AttrDict()
-        
-        # Initialize from method.weights, using index_map dimensions
-        W.ineq          = method.weights.get("W_ineq", np.zeros((idx.N.N, idx.n.ineq)))
-        W.term          = method.weights.get("W_term", np.zeros(idx.n.term_total))
-        W.dyn           = method.weights.get("W_dyn", np.zeros((idx.N.N - 1, idx.n.z)))
-        W.plus_real     = method.weights.get("W_plus_real", np.zeros((idx.N.pm_real, idx.n.plus_real)))
-        W.minus_real    = method.weights.get("W_minus_real", np.zeros((idx.N.pm_real, idx.n.minus_real)))
-        W.plus_ctcs     = method.weights.get("W_plus_ctcs", np.zeros((idx.N.pm_ctcs, idx.n.plus_ctcs)))
-        W.minus_ctcs    = method.weights.get("W_minus_ctcs", np.zeros((idx.N.pm_ctcs, idx.n.minus_ctcs)))
-        
-        # Dual dictionary
-        dual.ineq       = method.weights.get("dual_ineq", np.zeros((idx.N.N, idx.n.ineq)))
-        dual.term       = method.weights.get("dual_term", np.zeros(idx.n.term_total))
-        dual.dyn        = method.weights.get("dual_dyn", np.zeros((idx.N.N - 1, idx.n.z)))
-        dual.plus_real  = method.weights.get("dual_plus_real", np.zeros((idx.N.pm_real, idx.n.plus_real)))
-        dual.minus_real = method.weights.get("dual_minus_real", np.zeros((idx.N.pm_real, idx.n.minus_real)))
-        dual.plus_ctcs  = method.weights.get("dual_plus_ctcs", np.zeros((idx.N.pm_ctcs, idx.n.plus_ctcs)))
-        dual.minus_ctcs = method.weights.get("dual_minus_ctcs", np.zeros((idx.N.pm_ctcs, idx.n.minus_ctcs)))
-        
-        return W, dual
+        idx = method.index_map
+
+        W_stack = tools.AttrDict()
+        dual_stack = tools.AttrDict()
+
+        ineq_constraints = [
+            c for c in self.constraints_list
+            if getattr(c, "type", None) == "nonconvex_inequality"
+        ]
+        term_constraints = [
+            c for c in self.constraints_list
+            if getattr(c, "type", None) in {"equality_bc", "inequality_bc"}
+            and getattr(c, "boundary", None) == "final"
+            and getattr(c, "set", None) == "state"
+        ]
+        ctcs_constraints = [c for c in self.constraints_list if getattr(c, "ct", None) == 1]
+        dyn_constraints = [c for c in self.constraints_list if getattr(c, "type", None) == "dynamics"]
+
+        W_stack.ineq          = self._stack_constraint_attr(ineq_constraints, "W", (idx.N.N, idx.n.ineq))
+        dual_stack.ineq       = self._stack_constraint_attr(ineq_constraints, "dual", (idx.N.N, idx.n.ineq))
+
+        W_stack.term          = self._stack_constraint_attr(term_constraints + ctcs_constraints, "W", (max(idx.n.term_total, 1),))
+        dual_stack.term       = self._stack_constraint_attr(term_constraints + ctcs_constraints, "dual", (max(idx.n.term_total, 1),))
+
+        W_stack.dyn           = self._stack_constraint_attr(dyn_constraints, "W", (max(idx.N.N - 1, 1), max(idx.n.z, 1)))
+        dual_stack.dyn        = self._stack_constraint_attr(dyn_constraints, "dual", (max(idx.N.N - 1, 1), max(idx.n.z, 1)))
+
+        # Initialize plus/minus buffers as zeros (will be populated by configure_penalty_weights)
+        W_stack.plus_real     = np.zeros((idx.N.pm_real, idx.n.plus_real))
+        W_stack.minus_real    = np.zeros((idx.N.pm_real, idx.n.minus_real))
+        W_stack.plus_ctcs     = np.zeros((idx.N.pm_ctcs, idx.n.plus_ctcs))
+        W_stack.minus_ctcs    = np.zeros((idx.N.pm_ctcs, idx.n.minus_ctcs))
+
+        dual_stack.plus_real  = np.zeros((idx.N.pm_real, idx.n.plus_real))
+        dual_stack.minus_real = np.zeros((idx.N.pm_real, idx.n.minus_real))
+        dual_stack.plus_ctcs  = np.zeros((idx.N.pm_ctcs, idx.n.plus_ctcs))
+        dual_stack.minus_ctcs = np.zeros((idx.N.pm_ctcs, idx.n.minus_ctcs))
+
+        return W_stack, dual_stack
+
+    def apply_stacked_W_and_dual(self, W_stack, dual_stack, method):
+        """
+        Initialize each constraint's W and dual from stacked arrays.
+        """
+        idx = method.index_map
+        N = idx.N.N
+
+        W_ineq      = tools.ensure_shape(W_stack.get("ineq", 0.0), (N, max(idx.n.ineq, 1))) if idx.n.ineq > 0 else np.zeros((N, 0))
+        dual_ineq   = tools.ensure_shape(dual_stack.get("ineq", 0.0), (N, max(idx.n.ineq, 1))) if idx.n.ineq > 0 else np.zeros((N, 0))
+
+        W_term      = tools.ensure_shape(W_stack.get("term", 0.0), (max(idx.n.term_total, 1),)) if idx.n.term_total > 0 else np.zeros((0,))
+        dual_term   = tools.ensure_shape(dual_stack.get("term", 0.0), (max(idx.n.term_total, 1),)) if idx.n.term_total > 0 else np.zeros((0,))
+
+        W_dyn       = tools.ensure_shape(W_stack.get("dyn", 0.0), (max(N - 1, 1), max(idx.n.z, 1))) if idx.n.z > 0 else np.zeros((max(N - 1, 0), 0))
+        dual_dyn    = tools.ensure_shape(dual_stack.get("dyn", 0.0), (max(N - 1, 1), max(idx.n.z, 1))) if idx.n.z > 0 else np.zeros((max(N - 1, 0), 0))
+
+        offsets = {
+            "path": 0,
+            "nfz": idx.n.path,
+            "custom": idx.n.path + idx.n.nfz,
+        }
+
+        term_offset = 0
+
+        for c in self.constraints_list:
+            c_type = getattr(c, "type", None)
+            c_group = getattr(c, "group", None)
+            dim = int(getattr(c, "dimension", 0))
+
+            if c_type == "nonconvex_inequality":
+                start = offsets.get(c_group, offsets["custom"])
+                end = start + dim
+                c.W = W_ineq[:, start:end] if dim > 0 else np.zeros((N, 0))
+                c.dual = dual_ineq[:, start:end] if dim > 0 else np.zeros((N, 0))
+                offsets[c_group] = end
+
+            elif c_type in {"equality_bc", "inequality_bc"} and getattr(c, "boundary", None) == "final" and getattr(c, "set", None) == "state":
+                sl = slice(term_offset, term_offset + dim)
+                c.W = W_term[sl] if dim > 0 else np.zeros((0,))
+                c.dual = dual_term[sl] if dim > 0 else np.zeros((0,))
+                term_offset += dim
+
+            elif c_type == "dynamics":
+                c.W = W_dyn[:, :dim] if dim > 0 else np.zeros((max(N - 1, 0), 0))
+                c.dual = dual_dyn[:, :dim] if dim > 0 else np.zeros((max(N - 1, 0), 0))
+
+        # Note: plus_real/minus_real/plus_ctcs/minus_ctcs are not per-constraint,
+        # so they are not distributed here. They remain in the W_stack/dual_stack objects.
+
+    def stack_W_and_dual_by(self, key):
+        """
+        Stack W and dual arrays by a constraint attribute (type, group, or name).
+        Returns (W_stack, dual_stack) AttrDicts keyed by attribute value.
+        """
+        W_stack = tools.AttrDict()
+        dual_stack = tools.AttrDict()
+
+        groups = {}
+        for c in self.constraints_list:
+            val = getattr(c, key, None)
+            if val is None:
+                continue
+            groups.setdefault(val, []).append(c)
+
+        for val, lst in groups.items():
+            W_stack[val] = self._stack_constraint_attr(lst, "W")
+            dual_stack[val] = self._stack_constraint_attr(lst, "dual")
+
+        return W_stack, dual_stack
+
+    def _stack_constraint_attr(self, constraints, attr, fallback_shape=None):
+        if not constraints:
+            if fallback_shape is None:
+                return np.zeros((1, 1))
+            # If fallback_shape is 1D tuple, return 1D array
+            if len(fallback_shape) == 1:
+                return np.zeros(fallback_shape[0])
+            return np.zeros(fallback_shape)
+
+        raw_arrays = [np.asarray(getattr(c, attr)) for c in constraints]
+        arrays = [a.reshape(1, -1) if a.ndim == 1 else a for a in raw_arrays]
+
+        Nk = arrays[0].shape[0]
+        total_dim = sum(a.shape[1] for a in arrays)
+        stacked = np.zeros((Nk, total_dim))
+
+        j = 0
+        for a in arrays:
+            if a.shape[0] != Nk:
+                raise ValueError("Inconsistent time index rows when stacking constraints.")
+            d = a.shape[1]
+            stacked[:, j:j + d] = a
+            j += d
+
+        if all(a.ndim == 1 for a in raw_arrays) and Nk == 1:
+            return stacked.reshape(-1)
+
+        return stacked
 
     def stack_W(self, constraint_type: str) -> np.ndarray:
         """
@@ -115,9 +234,9 @@ class SubproblemConstraints(Constraints):
 
 
 
-def configure_penalty_weights(problem, method):
+def configure_penalty_weights(problem, method, subconstraints=None):
     """
     Wrapper to configure penalty weights using existing hyperparameters logic.
-    This ensures `method.weights` is populated consistently.
+    This ensures subproblem constraint weights are populated consistently.
     """
-    hp.configure_penalty_weights(problem, method)
+    hp.configure_penalty_weights(problem, method, subconstraints=subconstraints)

@@ -29,7 +29,7 @@ class Subproblem:
 
         # Reference constraint data
         self.constraints = SubproblemConstraints(problem=problem, method=method)
-        self.W, self.dual = self.constraints.stack_W_and_dual(problem, method)
+        self.W_stack, self.dual_stack = self.constraints.stack_W_and_dual(problem, method)
         self.w = tools.AttrDict()
 
         # Build the DPP graph once
@@ -59,7 +59,10 @@ class Subproblem:
                 "vb_dyn":  np.zeros((self.N.N - 1, self.n.dyn)),
                 "vb_term": np.zeros((self.n.term_total, 1)),
             },
-            "weights": copy.deepcopy(method.weights),
+            # W and dual are None initially - will be initialized by configure_penalty_weights on first iteration
+            "W": None,
+            "dual": None,
+            "penalty": copy.deepcopy(method.penalty),
         }]
 
     # ============================================================
@@ -571,7 +574,9 @@ class Subproblem:
                 "dt_ref": last_rec["dt_opt"],
                 "t_ref": last_rec["t_opt"],
             }
-            weights = copy.deepcopy(last_rec.get("weights", self.method.weights))
+            W = copy.deepcopy(last_rec.get("W"))
+            dual = copy.deepcopy(last_rec.get("dual"))
+            penalty = copy.deepcopy(last_rec.get("penalty", self.method.penalty))
             conv_data = last_rec.get("conv_data", {})
         else:
             refs = {
@@ -580,13 +585,17 @@ class Subproblem:
                 "dt_ref": last_rec["dt_ref"],
                 "t_ref": last_rec["t_ref"],
             }
-            weights = last_rec.get("weights", self.method.weights)
+            W = last_rec.get("W")
+            dual = last_rec.get("dual")
+            penalty = last_rec.get("penalty", self.method.penalty)
             conv_data = last_rec.get("conv_data", {})
 
         next_inputs = {
             "iter_num": k_prev + 1,
             **refs,
-            "weights": weights,
+            "W": W,
+            "dual": dual,
+            "penalty": penalty,
             "conv_data": conv_data,
         }
         return next_inputs
@@ -620,15 +629,25 @@ class Subproblem:
 
         # configure penalty weights (wrapper in subproblem_constraints)
         from trajopt.library.methods.subproblem_constraints import configure_penalty_weights
-        configure_penalty_weights(self.problem, self.method)
-
-        # update weights
-        weights = inputs["weights"]
+        if inputs.get("W") is None or inputs.get("dual") is None:
+            W_stack, dual_stack = configure_penalty_weights(self.problem, self.method, subconstraints=self.constraints)
+        else:
+            # Use the already-stacked values from previous iteration (already updated by autotune)
+            W_stack = inputs["W"]
+            dual_stack = inputs["dual"]
+        
+        # Update subproblem state
+        self.W_stack = W_stack
+        self.dual_stack = dual_stack
+        inputs["W"] = W_stack
+        inputs["dual"] = dual_stack
 
         # update scalar weights in-subproblem
-        self.w.cost.value   = weights.get("w_cost", 1.0)
-        self.w.tr_z.value   = weights.get("wtr_z", 1e-2)
-        self.w.tr_u.value   = weights.get("wtr_u", 1e-2)
+        penalty_to_use = inputs.get("penalty", tools.AttrDict(self.method.penalty))
+        self.w.cost.value   = penalty_to_use.get("w_cost", 1.0)
+        self.w.tr_z.value   = penalty_to_use.get("wtr_z", 1e-2)
+        self.w.tr_u.value   = penalty_to_use.get("wtr_u", 1e-2)
+        inputs["penalty"] = copy.deepcopy(penalty_to_use)
         
         self.w_cost_times_dcostdz.value     = self.w.cost.value * dcostdz
         self.w_cost_times_dcostdnu.value    = self.w.cost.value * dcostdnu
@@ -655,32 +674,23 @@ class Subproblem:
             self.dt_max.value  = float(method.dt_max)
             self.ddt_max.value = float(method.ddt_max)
 
-        # 1. Update W fields (numpy arrays used for W_sqrt computation)
-        self.W.ineq                 = weights["W_ineq"]
-        self.W.term                 = weights["W_term"]
-        self.W.dyn                  = weights["W_dyn"]
-        self.W.plus_real            = weights["W_plus_real"]
-        self.W.minus_real           = weights["W_minus_real"]
-        self.W.plus_ctcs            = weights["W_plus_ctcs"]
-        self.W.minus_ctcs           = weights["W_minus_ctcs"]
+        # 1. Refresh W_sqrt CVXPY parameter values from stacked constraint weights
+        self.W_sqrt.ineq.value       = tools.ensure_shape(np.sqrt(W_stack.ineq),         self.W_sqrt.ineq.shape)
+        self.W_sqrt.term.value       = tools.ensure_shape(np.sqrt(W_stack.term),         self.W_sqrt.term.shape)
+        self.W_sqrt.dyn.value        = tools.ensure_shape(np.sqrt(W_stack.dyn),          self.W_sqrt.dyn.shape)
+        self.W_sqrt.plus_real.value  = tools.ensure_shape(np.sqrt(W_stack.plus_real),    self.W_sqrt.plus_real.shape)
+        self.W_sqrt.minus_real.value = tools.ensure_shape(np.sqrt(W_stack.minus_real),   self.W_sqrt.minus_real.shape)
+        self.W_sqrt.plus_ctcs.value  = tools.ensure_shape(np.sqrt(W_stack.plus_ctcs),    self.W_sqrt.plus_ctcs.shape)
+        self.W_sqrt.minus_ctcs.value = tools.ensure_shape(np.sqrt(W_stack.minus_ctcs),   self.W_sqrt.minus_ctcs.shape)
 
-        # 2. Refresh W_sqrt CVXPY parameter values from updated self.W
-        self.W_sqrt.ineq.value       = tools.ensure_shape(np.sqrt(self.W.ineq),         self.W_sqrt.ineq.shape)
-        self.W_sqrt.term.value       = tools.ensure_shape(np.sqrt(self.W.term),         self.W_sqrt.term.shape)
-        self.W_sqrt.dyn.value        = tools.ensure_shape(np.sqrt(self.W.dyn),          self.W_sqrt.dyn.shape)
-        self.W_sqrt.plus_real.value  = tools.ensure_shape(np.sqrt(self.W.plus_real),    self.W_sqrt.plus_real.shape)
-        self.W_sqrt.minus_real.value = tools.ensure_shape(np.sqrt(self.W.minus_real),   self.W_sqrt.minus_real.shape)
-        self.W_sqrt.plus_ctcs.value  = tools.ensure_shape(np.sqrt(self.W.plus_ctcs),    self.W_sqrt.plus_ctcs.shape)
-        self.W_sqrt.minus_ctcs.value = tools.ensure_shape(np.sqrt(self.W.minus_ctcs),   self.W_sqrt.minus_ctcs.shape)
-
-        # 3. Update dual CVXPY parameter values from autotune output (ensure shape)
-        self.dual.ineq.value        = tools.ensure_shape(weights["dual_ineq"],        self.dual.ineq.shape)
-        self.dual.term.value        = tools.ensure_shape(weights["dual_term"],        self.dual.term.shape)
-        self.dual.dyn.value         = tools.ensure_shape(weights["dual_dyn"],         self.dual.dyn.shape)
-        self.dual.plus_real.value   = tools.ensure_shape(weights["dual_plus_real"],   self.dual.plus_real.shape)
-        self.dual.minus_real.value  = tools.ensure_shape(weights["dual_minus_real"],  self.dual.minus_real.shape)
-        self.dual.plus_ctcs.value   = tools.ensure_shape(weights["dual_plus_ctcs"],   self.dual.plus_ctcs.shape)
-        self.dual.minus_ctcs.value  = tools.ensure_shape(weights["dual_minus_ctcs"],  self.dual.minus_ctcs.shape)
+        # 2. Update dual CVXPY parameter values from stacked constraint duals
+        self.dual.ineq.value        = tools.ensure_shape(dual_stack.ineq,        self.dual.ineq.shape)
+        self.dual.term.value        = tools.ensure_shape(dual_stack.term,        self.dual.term.shape)
+        self.dual.dyn.value         = tools.ensure_shape(dual_stack.dyn,         self.dual.dyn.shape)
+        self.dual.plus_real.value   = tools.ensure_shape(dual_stack.plus_real,   self.dual.plus_real.shape)
+        self.dual.minus_real.value  = tools.ensure_shape(dual_stack.minus_real,  self.dual.minus_real.shape)
+        self.dual.plus_ctcs.value   = tools.ensure_shape(dual_stack.plus_ctcs,   self.dual.plus_ctcs.shape)
+        self.dual.minus_ctcs.value  = tools.ensure_shape(dual_stack.minus_ctcs,  self.dual.minus_ctcs.shape)
 
 
         # ctcs eps
@@ -792,12 +802,39 @@ class Subproblem:
     # Baseline autotune wrapper
     # ===========================
     def _baseline_autotune(self, problem, method, rec: Dict[str, Any]) -> Dict[str, Any]:
+        """Autotune updates W_stack and dual_stack on the subproblem directly."""
         flag = method.flags["flag_autotune"]
+        conv_data = rec["conv_data"]
+        iter_num = rec["iter_num"]
+        
         if flag == "1":
-            rec = hp.autotune1(problem, method, rec)
+            dual_update_info = hp.autotune1(self, conv_data, iter_num)
+            rec["dual_update"] = dual_update_info
         elif flag == "2":
-            rec = hp.autotune2(problem, method, rec)
+            weight_update_info = hp.autotune2(self, conv_data, iter_num)
+            rec["weight_update"] = weight_update_info
         elif flag == "3":
-            rec = hp.autotune3(problem, method, rec)
+            update_info = hp.autotune3(self, conv_data, iter_num)
+            rec["autotune_update"] = update_info
+
+        # Copy updated W_stack and dual_stack to iter_record for history
+        rec["W"] = tools.AttrDict({
+            "ineq": self.W_stack.ineq.copy(),
+            "term": self.W_stack.term.copy(),
+            "dyn": self.W_stack.dyn.copy(),
+            "plus_real": self.W_stack.plus_real.copy(),
+            "minus_real": self.W_stack.minus_real.copy(),
+            "plus_ctcs": self.W_stack.plus_ctcs.copy(),
+            "minus_ctcs": self.W_stack.minus_ctcs.copy(),
+        })
+        rec["dual"] = tools.AttrDict({
+            "ineq": self.dual_stack.ineq.copy(),
+            "term": self.dual_stack.term.copy(),
+            "dyn": self.dual_stack.dyn.copy(),
+            "plus_real": self.dual_stack.plus_real.copy(),
+            "minus_real": self.dual_stack.minus_real.copy(),
+            "plus_ctcs": self.dual_stack.plus_ctcs.copy(),
+            "minus_ctcs": self.dual_stack.minus_ctcs.copy(),
+        })
 
         return rec

@@ -70,8 +70,8 @@ def compute_ctcs_jacobians(t, z, nu, trajopt_obj):
         col_start = col_end
     
     # Apply CTCS weight
-    g_xu = g_xu * method.weights["w_ctcs"]
-    dgdx = dgdx * method.weights["w_ctcs"]
+    g_xu = g_xu * method.penalty["w_ctcs"]
+    dgdx = dgdx * method.penalty["w_ctcs"]
 
     # Conditional constraint smoothing
     beta_dot = np.maximum(g_xu, 0.0) ** 2
