@@ -40,8 +40,8 @@ class IndexMap:
     def _build_indices(self):
         # Priority: use configs if provided, else fall back to objects
         if self.model_config is not None:
-            nx = self.model_config['dimensions']['n']
-            n_nu = self.model_config['dimensions']['m']
+            nx      = self.model_config['dimensions']['n']
+            n_nu    = self.model_config['dimensions']['m']
         else:
             nx = n_nu = None
 
@@ -61,36 +61,36 @@ class IndexMap:
             else:
                 n_ctcs = 0
 
-            nz = nx + n_ctcs
+            nz          = nx + n_ctcs
 
-            n_term = sum(constraint.dimension for constraint in self.problem.constraints.get(ct=0, type="equality_bc", boundary="final", set="state"))
+            n_term      = sum(constraint.dimension for constraint in self.problem.constraints.get(ct=0, type="equality_bc", boundary="final", set="state"))
             n_term_ineq = sum(constraint.dimension for constraint in self.problem.constraints.get(ct=0, type='inequality_bc', boundary="final", set="state"))
             n_term_ctcs = n_ctcs
-            n_term_total = n_term + n_term_ineq + n_ctcs
+            n_term_total= n_term + n_term_ineq + n_ctcs
         else:
-            n_ineq = n_path = n_nfz = n_custom = n_ctcs = n_term = n_term_ineq = n_term_ctcs = n_term_total = 0
+            n_ineq      = n_path = n_nfz = n_custom = n_ctcs = n_term = n_term_ineq = n_term_ctcs = n_term_total = 0
 
-        z_idx_all = np.arange(0, nz)
+        z_idx_all   = np.arange(0, nz)
         z_idx_state = np.arange(0, nx)
-        z_idx_ctcs = np.arange(nx, nx + n_ctcs) if n_ctcs > 0 else np.array([], dtype=int)
-        u_idx_all = np.arange(0, n_nu)
+        z_idx_ctcs  = np.arange(nx, nx + n_ctcs) if n_ctcs > 0 else np.array([], dtype=int)
+        u_idx_all   = np.arange(0, n_nu)
 
         i0 = 0
-        path_idx = np.arange(i0, i0 + n_path)
+        path_idx    = np.arange(i0, i0 + n_path)
         i0 += n_path
-        nfz_idx = np.arange(i0, i0 + n_nfz)
+        nfz_idx     = np.arange(i0, i0 + n_nfz)
         i0 += n_nfz
-        custom_idx = np.arange(i0, i0 + n_custom)
+        custom_idx  = np.arange(i0, i0 + n_custom)
 
-        n_term_eq = n_term
-        eq_idx = np.arange(0, n_term_eq)
-        ineq_idx = np.arange(n_term_eq, n_term_eq + n_term_ineq)
-        ctcs_idx = np.arange(n_term_eq + n_term_ineq, n_term_eq + n_term_ineq + n_term_ctcs)
+        n_term_eq   = n_term
+        eq_idx      = np.arange(0, n_term_eq)
+        ineq_idx    = np.arange(n_term_eq, n_term_eq + n_term_ineq)
+        ctcs_idx    = np.arange(n_term_eq + n_term_ineq, n_term_eq + n_term_ineq + n_term_ctcs)
 
-        Ak_ind = np.arange(0, nz * nz)
-        Bk_ind = np.arange(Ak_ind[-1] + 1, Ak_ind[-1] + 1 + nz * n_nu)
-        Bkp_ind = np.arange(Bk_ind[-1] + 1, Bk_ind[-1] + 1 + nz * n_nu)
-        Sk_ind = np.arange(Bkp_ind[-1] + 1, Bkp_ind[-1] + 1 + nz)
+        Ak_ind      = np.arange(0, nz * nz)
+        Bk_ind      = np.arange(Ak_ind[-1] + 1, Ak_ind[-1] + 1 + nz * n_nu)
+        Bkp_ind     = np.arange(Bk_ind[-1] + 1, Bk_ind[-1] + 1 + nz * n_nu)
+        Sk_ind      = np.arange(Bkp_ind[-1] + 1, Bkp_ind[-1] + 1 + nz)
 
         N_val = self.method_config['N'] if self.method_config is not None else 0
         buff_dyn = str(self.method.flags.buff_dyn) if self.method is not None else "term"
