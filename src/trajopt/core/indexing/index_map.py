@@ -14,16 +14,16 @@ class IndexMap:
         self.model_config   = model_config
         self.mission_config = mission_config
         self.method_config  = method_config
-        self.problem = None
-        self.method = None
+        self.problem        = None
+        self.method         = None
 
         self.n = AttrDict({
             # core model dims
-            "state":      model_config['dimensions']['n'],
-            "control":    model_config['dimensions']['m'],
+            "state":        model_config['dimensions']['n'],
+            "control":      model_config['dimensions']['m'],
         })
         self.N = AttrDict({
-            "N": method_config["N"]
+            "N":            method_config["N"]
         })
 
 
@@ -40,8 +40,8 @@ class IndexMap:
     def _build_indices(self):
         # Priority: use configs if provided, else fall back to objects
         if self.model_config is not None:
-            nx = self.model_config['dimensions']['n']
-            n_nu = self.model_config['dimensions']['m']
+            nx      = self.model_config['dimensions']['n']
+            n_nu    = self.model_config['dimensions']['m']
         else:
             nx = n_nu = None
 
@@ -235,7 +235,7 @@ class IndexMap:
             for k, v in obj.items():
                 print(f"    {k:25s}: {v.shape if hasattr(v,'shape') else len(v)}")
 
-        print("\n  CONSTRAINTS:")
+        print("\nCONSTRAINTS:")
         for constraint_type in ['nonlinear_inequality', 'terminal', 'dynamics']:
             constraint_obj = getattr(self.indices.constraints, constraint_type)
             print(f"    {constraint_type.upper()}:")

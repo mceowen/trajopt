@@ -30,8 +30,7 @@ class SolutionMethod:
         self.conv_data   = AttrDict()
 
         # update index_map
-        if self.index_map is not None:
-            self.index_map.update_index_map(problem=self.problem, method=self)
+        self.index_map.update_index_map(problem=self.problem, method=self)
 
 
         # Use the same index_map as problem, but update with method config
@@ -49,7 +48,7 @@ class SolutionMethod:
         self.problem.constraints.augment_ctcs_dynamics(self.index_map.n['state'])
 
         # ---- Time grid initialization ----
-        self.dt_init  = (self.guess.T_init / (self.index_map.N['N'] - 1)) * np.ones(self.index_map.N['N'] - 1)
+        self.dt_init  = (self.guess.T_init / (self.index_map.N.N - 1)) * np.ones(self.index_map.N.N - 1)
         self.Ts_init  = self.guess.T_init / self.nondim.nt
         self.dt_init  = self.dt_init / self.nondim.nt
 
@@ -59,9 +58,9 @@ class SolutionMethod:
         ### Time of flight constraints ###
         Ts_min       = self.guess.T_min / self.nondim.nt
         Ts_max       = self.guess.T_max / self.nondim.nt
-        self.ddt_max = self.guess.dT_max / ((self.index_map.N['N'] - 1) * self.nondim.nt)
-        self.dt_min  = Ts_min / (self.index_map.N['N'] - 1)
-        self.dt_max  = Ts_max / (self.index_map.N['N'] - 1)
+        self.ddt_max = self.guess.dT_max / ((self.index_map.N.N - 1) * self.nondim.nt)
+        self.dt_min  = Ts_min / (self.index_map.N.N - 1)
+        self.dt_max  = Ts_max / (self.index_map.N.N - 1)
 
         # --- LTV indexing ---
         discretize.set_ltv_indices(problem, self)
@@ -77,10 +76,10 @@ class SolutionMethod:
         self.conv.eps_term = np.concatenate([constraint.eps for constraint in term_constraints])
 
         # --- Initialize virtual buffers ---
-        self.conv_data.vb_path = np.zeros((self.index_map.N.N,   problem.index_map.n.path))
-        self.conv_data.vb_nfz  = np.zeros((self.index_map.N.N,   problem.index_map.n.nfz))
+        self.conv_data.vb_path = np.zeros((self.index_map.N.N,      problem.index_map.n.path))
+        self.conv_data.vb_nfz  = np.zeros((self.index_map.N.N,      problem.index_map.n.nfz))
         self.conv_data.vb_custom  = np.zeros((self.index_map.N.N,   problem.index_map.n.custom))
-        self.conv_data.vb_dyn  = np.zeros((self.index_map.N.N-1, problem.index_map.n.z))
+        self.conv_data.vb_dyn  = np.zeros((self.index_map.N.N-1,    problem.index_map.n.z))
         self.conv_data.vb_term = np.zeros(problem.index_map.n.z)
 
         ### Configure generic convergence criterion and max iterations ###
