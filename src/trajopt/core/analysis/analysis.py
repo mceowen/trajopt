@@ -49,6 +49,14 @@ def perform_default_analysis(trajopt_obj, trim=True):
     iter_data   = method.subprob.iter_data
     nondim      = method.nondim
 
+    def to_dict_if_attrdict(x):
+        from trajopt.utils.tools import AttrDict
+        if isinstance(x, AttrDict):
+            return dict(x)
+        return x
+    
+    params = to_dict_if_attrdict(params)
+
     problem_config = problem.config
     method_data = tools.extract_attributes(method, METHOD_DATA_KEYS_KEEP)
     
@@ -217,7 +225,7 @@ def run_mc_analysis(trajopt_obj):
                 "nu_ref": m.nu_init,
                 "dt_ref": m.dt_init,
                 "t_ref": m.t_init,
-                "conv_data": {"vb_ineq": np.zeros((subprob.N, problem.index_map.n['ineq'])), "vb_dyn": np.zeros((subprob.N - 1, subprob.index_map.n['dyn'])), "vb_term": np.zeros((problem.index_map.n['term_total'], 1))},
+                "conv_data": {"vb_ineq": np.zeros((problem.index_map.N.N, problem.index_map.n['ineq'])), "vb_dyn": np.zeros((problem.index_map.N.N - 1, problem.index_map.n['dyn'])), "vb_term": np.zeros((problem.index_map.n['term_total'], 1))},
                 "weights": copy.deepcopy(m.weights),
             }]
 

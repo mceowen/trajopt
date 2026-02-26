@@ -97,7 +97,7 @@ class Subproblem:
         # ------------ Real terminal constraints (size = n_term_real) ------------
         self.vb_term_real = (
             cp.Variable(n_term_real, name="vb_term_real")
-            if (method.flags["buff_dyn"] == "term"
+            if (method.flags["buff_dyn"] in {"term", "l2", "quad-2"}
                 and method.flags["dynamics_nonconvex"] != 0
                 and n_term_real > 0)
             else (cp.Constant(np.zeros(n_term_real)) if n_term_real > 0 else None)
@@ -177,6 +177,12 @@ class Subproblem:
         self.Bkp                   = cp.Parameter((N - 1, nz, n_nu), name="Bkp")
         self.Sk                    = cp.Parameter((N - 1, nz),    name="Sk")
         self.z_m                   = cp.Parameter((N, nz),        name="z_minus")
+
+        self.Ak_bwd                    = cp.Parameter((N - 1, nz, nz), name="Ak_bwd")
+        self.Bk_bwd                    = cp.Parameter((N - 1, nz, n_nu), name="Bk_bwd")
+        self.Bkp_bwd                   = cp.Parameter((N - 1, nz, n_nu), name="Bkp_bwd")
+        self.Sk_bwd                    = cp.Parameter((N - 1, nz),    name="Sk_bwd")
+        self.z_m_bwd                   = cp.Parameter((N, nz),        name="z_minus_bwd")
 
         self.z_ref                 = cp.Parameter((N, nz),    name="z_ref")
         self.nu_ref                = cp.Parameter((N, n_nu),    name="nu_ref")
@@ -337,6 +343,16 @@ class Subproblem:
                     + (self.vb_dyn_p[k] - self.vb_dyn_m[k])
                 )
                 C.append(self.dz[k + 1] + self.z_ref[k + 1] - self.z_m[k + 1] == rhs)
+                
+                # #backwards shooting dynamics constraints:
+                # rhs = (
+                #     self.Ak_bwd[k] @ self.dz[k+1]
+                #     + self.Bk_bwd[k] @ self.dnu[k]
+                #     + self.Bkp_bwd[k] @ self.dnu[k + 1]
+                #     + cp.multiply(self.Sk_bwd[k], self.dt[k])
+                #     # + (self.vb_dyn_p[k] - self.vb_dyn_m[k])
+                # )
+                # C.append(self.dz[k] + self.z_ref[k] - self.z_m_bwd[k] == rhs)
 
                 if self.flags["buff_dyn"] != "term":
                     C.append(self.vb_dyn_p[k, self.indices.z["state"]] >= 0)
@@ -535,6 +551,8 @@ class Subproblem:
         # === Trust-region penalties ===
         TR = self.flags["flag_tr"] * (self.w.tr_z * cp.sum_squares(self.dz[:, :self.n.state]) + self.w.tr_u * cp.sum_squares(self.dnu))
 
+        # for k in range(self.N.N):
+        #     TR += cp.norm(self.nu_ref[k] + self.dnu[k])
         # === Virtual buffer penalties ===
         VB = 0.0
         DUAL = 0.0
@@ -599,6 +617,10 @@ class Subproblem:
         Ak, Bk, Bkp, Sk, z_minus = discretize.compute_linsys_discrete(
             inputs["z_ref"], inputs["nu_ref"], inputs["dt_ref"], problem, method
         )
+
+        # Ak_bwd, Bk_bwd, Bkp_bwd, Sk_bwd, z_minus_bwd = discretize.compute_linsys_discrete_bwd(
+            # inputs["z_ref"], inputs["nu_ref"], inputs["dt_ref"], problem, method
+        # )
         prop_time_ms = (time.time() - start) * 1000.0
 
         # compute linearized terminal and running costs
@@ -617,6 +639,13 @@ class Subproblem:
         self._set_param(self.Bkp,  Bkp)
         self._set_param(self.Sk,   Sk)
         self._set_param(self.z_m, z_minus)
+
+        # # backwards shooting dynamics
+        # self._set_param(self.Ak_bwd,   Ak_bwd)
+        # self._set_param(self.Bk_bwd,   Bk_bwd)
+        # self._set_param(self.Bkp_bwd,  Bkp_bwd)
+        # self._set_param(self.Sk_bwd,   Sk_bwd)
+        # self._set_param(self.z_m_bwd, z_minus_bwd)
 
         # configure penalty weights (wrapper in subproblem_constraints)
         from trajopt.library.methods.subproblem_constraints import configure_penalty_weights
@@ -688,6 +717,7 @@ class Subproblem:
 
         # cache for optional debug
         inputs["_linsys_cache"] = (Ak, Bk, Bkp, Sk, z_minus)
+        # inputs["_linsys_cache_bwd"] = (Ak_bwd, Bk_bwd, Bkp_bwd, Sk_bwd, z_minus_bwd)
         return prop_time_ms
 
     def solve_iteration(self) -> None:
@@ -709,6 +739,7 @@ class Subproblem:
         ignore_dpp = self.method.flags["ignore_dpp"]
         self.cp_subproblem.solve(solver=solver_name, warm_start=True, ignore_dpp=ignore_dpp)  # ignore_dpp=True if desired
 
+        print("solve status: " + self.cp_subproblem.status)
         # Create unified record for this iteration and append
         iter_record = self._load_outputs(input_for_iter, prop_time_ms)
         iter_record = convergence.check_convergence_tolerance(self.problem, self.method, iter_record)
@@ -747,7 +778,7 @@ class Subproblem:
 
         # outputs (absolute trajectories)
         rec.z_opt  = tools.safe_val(dz_val, rows=N, cols=n_x) + input_for_iter["z_ref"]
-        rec.nu_opt  = tools.safe_val(dnu_val, rows=N, cols=n_nu) + input_for_iter["nu_ref"]
+        rec.nu_opt = tools.safe_val(dnu_val, rows=N, cols=n_nu) + input_for_iter["nu_ref"]
         rec.dt_opt = tools.safe_val(dt_val).squeeze() + input_for_iter["dt_ref"].squeeze()
         rec.t_opt  = np.concatenate(([0], np.cumsum(rec.dt_opt)))
         rec.T_opt  = float(np.sum(rec.dt_opt))
@@ -760,12 +791,19 @@ class Subproblem:
         rec.Bkp = self.Bkp.value if Bkp is None else Bkp
         rec.Sk  = self.Sk.value if Sk is None else Sk
 
+        # Ak_bwd, Bk_bwd, Bkp_bwd, Sk_bwd, z_minus_bwd = input_for_iter.get("_linsys_cache_bwd", (None, None, None, None, None))
+        # rec.z_minus_bwd = self.z_m_bwd.value if z_minus_bwd is None else z_minus_bwd
+        # rec.Ak_bwd = self.Ak_bwd.value if Ak_bwd is None else Ak_bwd
+        # rec.Bk_bwd = self.Bk_bwd.value if Bk_bwd is None else Bk_bwd
+        # rec.Bkp_bwd = self.Bkp_bwd.value if Bkp_bwd is None else Bkp_bwd
+        # rec.Sk_bwd  = self.Sk_bwd.value if Sk_bwd is None else Sk_bwd
+
         # Path residuals and reference cost
         g, _, _     = discretize.compute_nonconvex_constraints(rec.t_opt, rec.z_opt, rec.nu_opt, self.problem, self.method)
         cost, _, _  = discretize.compute_nonconvex_costs(rec.t_opt, rec.z_opt, rec.nu_opt, self.problem, self.method)
 
         rec.cnst_path = g
-        rec.cost      = self.TRUE.value.item() / self.w.cost.value
+        rec.cost      = 1 #self.TRUE.value.item() / self.w.cost
 
         # Convergence data (buffers, defects, TR cost, ref cost)
         conv = tools.AttrDict()

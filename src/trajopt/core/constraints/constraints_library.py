@@ -226,8 +226,8 @@ class nonconvex_inequality:
 
         # required config
         self.name            = cnstr_config["name"]
-        self.group           = cnstr_config["group"]
-        self.units           = cnstr_config["units"]
+        self.group           = cnstr_config.get("group", None)
+        self.units           = cnstr_config.get("units", None)
 
         self.fcn_string      = cnstr_config["fcn"]
         self.eps             = cnstr_config["eps"]
@@ -247,7 +247,9 @@ class nonconvex_inequality:
             # g = [-g(x).T + lower  g(x).T - upper].T <= 0
             self.dimension = 2 * self.dimension
             self.eps = jnp.concatenate((self.eps, self.eps))
-            self.units = [*self.units, *self.units]
+
+            if self.units is not None:
+                self.units = [*self.units, *self.units]
 
         self.config     = config
         self.type = 'nonconvex_inequality'
@@ -271,19 +273,21 @@ class nonconvex_inequality:
         if self.backend == "jax":
             if self.max_value is not None:
                 self.max_value = jnp.asarray(jnp.atleast_1d(self.max_value))
-                M_out_d2nd = np.diag(1 / np.abs(self.max_value))
-                self.max_value = M_out_d2nd @ self.max_value
+                self.M_out_d2nd = jnp.diag(1 / jnp.abs(self.max_value))
+                self.max_value = self.M_out_d2nd @ self.max_value
             else:
-                M_out_d2nd, _ = nondim.build_nondim_matrix(self.units)
+                self.M_out_d2nd, _ = nondim.build_nondim_matrix(self.units)
 
             if self.min_value is not None:
                 self.min_value = jnp.asarray(jnp.atleast_1d(self.min_value))
-                self.min_value = M_out_d2nd @ self.min_value
+                self.min_value = self.M_out_d2nd @ self.min_value
 
             M_state_nd2d = nondim.M["state"]["nd2d"]
             M_ctrl_nd2d  = nondim.M["ctrl"]["nd2d"]
 
-            self.fcn_nd = nondim.nondim_function(self.fcn_dim, M_state_nd2d, M_ctrl_nd2d, M_out_d2nd)
+            self.M_out_nd2d = jnp.diag(1 / jnp.diag(self.M_out_d2nd))
+
+            self.fcn_nd = nondim.nondim_function(self.fcn_dim, M_state_nd2d, M_ctrl_nd2d, self.M_out_d2nd)
 
     def convexify_constraint(self):
         if self.backend == "jax":
@@ -292,24 +296,28 @@ class nonconvex_inequality:
                 fcn_ub   = lambda t, z, nu, params: self.fcn_nd(t, z, nu, params) - self.max_value
                 
                 self.fcn = lambda t, z, nu, params: jnp.concatenate([fcn_lb(t, z, nu, params), fcn_ub(t, z, nu, params)])
+                
             
             elif (self.max_value is not None):
                 self.fcn = lambda t, z, nu, params: self.fcn_nd(t, z, nu, params) - self.max_value
+
             
             elif (self.min_value is not None):
                 self.fcn = lambda t, z, nu, params: -self.fcn_nd(t, z, nu, params) + self.min_value
+                
             else:
                 self.fcn = self.fcn_nd
 
+            vals_function = lambda t, z, nu, params: self.M_out_nd2d @ (self.fcn_nd(t, z, nu, params))
+
             self.fcn_compiled, self.dfcn_dz_compiled, self.dfcn_du_compiled = convexify.linearize_jax(self.fcn)
+
+            self.f_batched = jax.jit(jax.vmap(vals_function, in_axes=(0,0,0, None)))
         
         elif self.backend == "sympy":
             pass
 
     def g_aff(self, t, z, nu, params):
-        from trajopt.utils.tools import AttrDict
-        if isinstance(params, AttrDict):
-            params = dict(params)
         return (
             self.fcn_compiled(t, z, nu, params),
             self.dfcn_dz_compiled(t, z, nu, params),
@@ -321,8 +329,7 @@ class nonconvex_inequality:
             t_jax = jnp.asarray(t)
             z_jax = jnp.asarray(z)
             nu_jax = jnp.asarray(nu)
-            f_batched = jax.vmap(self.fcn, in_axes=(0,0,0, None))
-            values = np.asarray(f_batched(t_jax, z_jax, nu_jax, params))
+            values = np.asarray(self.f_batched(t_jax, z_jax, nu_jax, params))
         elif self.backend == "sympy":
             pass
         return {"values": values, 'limits': None}
@@ -346,9 +353,6 @@ class dynamics:
         self.dfcn_du_compiled = None
 
     def lin_dyn(self, t, z, nu, params):
-        from trajopt.utils.tools import AttrDict
-        if isinstance(params, AttrDict):
-            params = dict(params)
         return (
             self.fcn_compiled(t, z, nu, params),
             self.dfcn_dz_compiled(t, z, nu, params),
