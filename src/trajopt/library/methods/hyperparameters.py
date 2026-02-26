@@ -46,9 +46,6 @@ def configure_penalty_weights(problem, method, subconstraints=None):
     # w_path: weight for path constraint buffer cost
     # w_nfz:  weight for nfz constraint buffer cost
 
-    penalty.w_fac_N      = method.index_map.N.N
-    penalty.w_fac_Nm1    = method.index_map.N.N - 1
-
     penalty.wtr_z = 1 / (2 * penalty.alpha_z)
     penalty.wtr_u = 0 if np.isinf(penalty.alpha_u) else 1 / (2 * penalty.alpha_u)
 
@@ -59,25 +56,25 @@ def configure_penalty_weights(problem, method, subconstraints=None):
         if str(method.flags["flag_autotune"]) in {"0", "al-scvx"}:
             if str(method.flags["flag_autotune"]) == "0":
 
-                w_path      = penalty["w_path_scale"] * penalty["wbuff"] / penalty["w_fac_N"]
-                w_nfz       = penalty["w_nfz_scale"]  * penalty["wbuff"] / penalty["w_fac_N"]
-                w_custom    = penalty["w_custom_scale"]  * penalty["wbuff"] / penalty["w_fac_N"]
-                w_dyn       = penalty["w_dyn_scale"]  * penalty["wbuff"] / penalty["w_fac_Nm1"]
-                w_term      = penalty["w_term_scale"] * penalty["wbuff"]
+                w_path      = penalty.config.scale_w.path   * penalty.config.scale_w.default / method.index_map.N.N
+                w_nfz       = penalty.config.scale_w.nfz    * penalty.config.scale_w.default / method.index_map.N.N
+                w_custom    = penalty.config.scale_w.custom * penalty.config.scale_w.default / method.index_map.N.N
+                w_dyn       = penalty.config.scale_w.dyn    * penalty.config.scale_w.default / (method.index_map.N.N - 1)
+                w_term      = penalty.config.scale_w.term   * penalty.config.scale_w.default
 
             else:
-                w_path      = penalty["wbuff"] / penalty["w_fac_N"]
-                w_nfz       = penalty["wbuff"] / penalty["w_fac_N"]
-                w_custom    = penalty["wbuff"] / penalty["w_fac_N"]
-                w_dyn       = penalty["wbuff"] / penalty["w_fac_Nm1"]
-                w_term      = penalty["wbuff"]
+                w_path      = penalty.config.scale_w.default / method.index_map.N.N
+                w_nfz       = penalty.config.scale_w.default / method.index_map.N.N
+                w_custom    = penalty.config.scale_w.default / method.index_map.N.N
+                w_dyn       = penalty.config.scale_w.default / (method.index_map.N.N - 1)
+                w_term      = penalty.config.scale_w.default
         else:
-            penalty["wbuff"] = 1
-            w_path          = penalty["wbuff"] / penalty["w_fac_N"]
-            w_nfz           = penalty["wbuff"] / penalty["w_fac_N"]
-            w_custom        = penalty["wbuff"] / penalty["w_fac_N"]
-            w_dyn           = penalty["wbuff"] / penalty["w_fac_Nm1"]
-            w_term          = penalty["wbuff"]
+            penalty.config.scale_w.default = 1
+            w_path          = penalty.config.scale_w.default / method.index_map.N.N
+            w_nfz           = penalty.config.scale_w.default / method.index_map.N.N
+            w_custom        = penalty.config.scale_w.default / method.index_map.N.N
+            w_dyn           = penalty.config.scale_w.default / (method.index_map.N.N - 1)
+            w_term          = penalty.config.scale_w.default
 
         W_path += w_path
         W_nfz  += w_nfz

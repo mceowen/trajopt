@@ -46,10 +46,12 @@ weights:
   gamma:          10.0
   eps_nonzero1:   0.0000000001
   eps_nonzero2:   0.0000000001
-  wbuff:          100.0
-  w_nfz_scale:    10.0
-  w_path_scale:   10.0
-  w_custom_scale: 0.0
-  w_dyn_scale:    10000.0
-  w_term_scale:   1000.0
-  w_ctcs:         100.0 # 10.0, 20.0
+  config:
+    scale_w:
+      default:    100.0
+      nfz:        10.0
+      path:       10.0
+      custom:     0.0
+      dyn:        10000.0
+      term:       1000.0
+  w_ctcs:         100.0

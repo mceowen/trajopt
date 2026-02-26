@@ -205,6 +205,12 @@ class IndexMap:
         })
 
         self.N = AttrDict({
+            "ineq": N_val,
+            "path": N_val,
+            "nfz": N_val,
+            "custom": N_val,
+            "dyn": N_val,
+            "term": N_val,
             "nonconvex_inequality": N_val,
             "box": N_val,
             "control_rate_limit": N_val - 1,
