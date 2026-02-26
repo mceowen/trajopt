@@ -572,9 +572,9 @@ def autotune2(problem, method, iter_record):
     eps_feas_term = method.conv["eps_term_nd"]
     eps_feas_dyn  = method.conv["eps_dyn_nd"]
 
-    eps_target_term =  np.maximum(eps_feas_term, 0.707 * np.abs(iter_record["conv_data"]["vb_term"]))#np.maximum(eps_feas_term, method.eps_init_term + (iter_num / method.target_iters) * (eps_feas_term - method.eps_init_term))
-    eps_target_ineq =  np.maximum(eps_feas_ineq, 0.707 * np.abs(iter_record["conv_data"]["vb_ineq"]))#np.maximum(eps_feas_ineq, method.eps_init_ineq + (iter_num / method.target_iters) * (eps_feas_ineq - method.eps_init_ineq))
-    eps_target_dyn  =  np.maximum(eps_feas_dyn , 0.707 * np.abs(iter_record["conv_data"]["vb_dyn"]))#np.maximum(eps_feas_dyn,  method.eps_init_dyn  + (iter_num / method.target_iters) * (eps_feas_dyn  - method.eps_init_dyn))
+    eps_target_term =  np.maximum(eps_feas_term, method.conv.fac_eps * np.abs(iter_record["conv_data"]["vb_term"])) #np.maximum(eps_feas_term, method.eps_init_term + (iter_num / method.target_iters) * (eps_feas_term - method.eps_init_term))
+    eps_target_ineq =  np.maximum(eps_feas_ineq, method.conv.fac_eps * np.abs(iter_record["conv_data"]["vb_ineq"])) #np.maximum(eps_feas_ineq, method.eps_init_ineq + (iter_num / method.target_iters) * (eps_feas_ineq - method.eps_init_ineq))
+    eps_target_dyn  =  np.maximum(eps_feas_dyn , method.conv.fac_eps * np.abs(iter_record["conv_data"]["vb_dyn"])) #np.maximum(eps_feas_dyn,  method.eps_init_dyn  + (iter_num / method.target_iters) * (eps_feas_dyn  - method.eps_init_dyn))
 
     iter_record["conv_data"]["eps_target_term"] = eps_target_term.copy()
     iter_record["conv_data"]["eps_target_ineq"] = eps_target_ineq.copy()
