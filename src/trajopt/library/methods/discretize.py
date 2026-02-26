@@ -46,7 +46,7 @@ def set_ltv_indices(problem, method):
     method.Sk_ind_jax    = jnp.asarray(method.Sk_ind)
 
 def compute_nonconvex_constraints(t_ref, z_ref, u_ref, problem, method):
-    n_ineq  = problem.index_map.n['ineq']
+    n_ineq  = problem.index_map.n['nonconvex_inequality']
     n_x     = problem.index_map.n['state']
     n_nu    = problem.index_map.n['control']
     N       = method.index_map.N['N']

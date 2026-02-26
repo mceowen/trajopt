@@ -20,7 +20,7 @@ class SubproblemConstraints(Constraints):
             # Set dynamics constraint dimension from indexmap
             dyn_constraint = next((c for c in self.constraints_list if getattr(c, "type", None) == "dynamics"), None)
             if dyn_constraint is not None:
-                dyn_constraint.dimension = int(method.index_map.n.dyn)
+                dyn_constraint.dimension = int(method.index_map.n.dynamics)
 
         # Mode 2: rebuild like Constraints
         elif cnstr_config_list is not None and config is not None and method is not None:
@@ -73,14 +73,14 @@ class SubproblemConstraints(Constraints):
         ctcs_constraints = [c for c in self.constraints_list if getattr(c, "ct", None) == 1]
         dyn_constraints = [c for c in self.constraints_list if getattr(c, "type", None) == "dynamics"]
 
-        W_stack.ineq          = self._stack_constraint_attr(ineq_constraints, "W", (idx.N.N, idx.n.ineq))
-        dual_stack.ineq       = self._stack_constraint_attr(ineq_constraints, "dual", (idx.N.N, idx.n.ineq))
+        W_stack.nonconvex_inequality  = self._stack_constraint_attr(ineq_constraints, "W", (idx.N.N, idx.n.nonconvex_inequality))
+        dual_stack.nonconvex_inequality = self._stack_constraint_attr(ineq_constraints, "dual", (idx.N.N, idx.n.nonconvex_inequality))
 
-        W_stack.term          = self._stack_constraint_attr(term_constraints + ctcs_constraints, "W", (max(idx.n.term_total, 1),))
-        dual_stack.term       = self._stack_constraint_attr(term_constraints + ctcs_constraints, "dual", (max(idx.n.term_total, 1),))
+        W_stack.terminal              = self._stack_constraint_attr(term_constraints + ctcs_constraints, "W", (max(idx.n.term_total, 1),))
+        dual_stack.terminal           = self._stack_constraint_attr(term_constraints + ctcs_constraints, "dual", (max(idx.n.term_total, 1),))
 
-        W_stack.dyn           = self._stack_constraint_attr(dyn_constraints, "W", (max(idx.N.N - 1, 1), max(idx.n.z, 1)))
-        dual_stack.dyn        = self._stack_constraint_attr(dyn_constraints, "dual", (max(idx.N.N - 1, 1), max(idx.n.z, 1)))
+        W_stack.dynamics              = self._stack_constraint_attr(dyn_constraints, "W", (max(idx.N.N - 1, 1), max(idx.n.z, 1)))
+        dual_stack.dynamics           = self._stack_constraint_attr(dyn_constraints, "dual", (max(idx.N.N - 1, 1), max(idx.n.z, 1)))
 
         # Initialize plus/minus buffers as zeros (will be populated by configure_penalty_weights)
         W_stack.plus_real     = np.zeros((idx.N.pm_real, idx.n.plus_real))
@@ -102,14 +102,14 @@ class SubproblemConstraints(Constraints):
         idx = method.index_map
         N = idx.N.N
 
-        W_ineq      = tools.ensure_shape(W_stack.get("ineq", 0.0), (N, max(idx.n.ineq, 1))) if idx.n.ineq > 0 else np.zeros((N, 0))
-        dual_ineq   = tools.ensure_shape(dual_stack.get("ineq", 0.0), (N, max(idx.n.ineq, 1))) if idx.n.ineq > 0 else np.zeros((N, 0))
+        W_ineq      = tools.ensure_shape(W_stack.get("nonconvex_inequality", 0.0), (N, max(idx.n.nonconvex_inequality, 1))) if idx.n.nonconvex_inequality > 0 else np.zeros((N, 0))
+        dual_ineq   = tools.ensure_shape(dual_stack.get("nonconvex_inequality", 0.0), (N, max(idx.n.nonconvex_inequality, 1))) if idx.n.nonconvex_inequality > 0 else np.zeros((N, 0))
 
-        W_term      = tools.ensure_shape(W_stack.get("term", 0.0), (max(idx.n.term_total, 1),)) if idx.n.term_total > 0 else np.zeros((0,))
-        dual_term   = tools.ensure_shape(dual_stack.get("term", 0.0), (max(idx.n.term_total, 1),)) if idx.n.term_total > 0 else np.zeros((0,))
+        W_term      = tools.ensure_shape(W_stack.get("terminal", 0.0), (max(idx.n.term_total, 1),)) if idx.n.term_total > 0 else np.zeros((0,))
+        dual_term   = tools.ensure_shape(dual_stack.get("terminal", 0.0), (max(idx.n.term_total, 1),)) if idx.n.term_total > 0 else np.zeros((0,))
 
-        W_dyn       = tools.ensure_shape(W_stack.get("dyn", 0.0), (max(N - 1, 1), max(idx.n.z, 1))) if idx.n.z > 0 else np.zeros((max(N - 1, 0), 0))
-        dual_dyn    = tools.ensure_shape(dual_stack.get("dyn", 0.0), (max(N - 1, 1), max(idx.n.z, 1))) if idx.n.z > 0 else np.zeros((max(N - 1, 0), 0))
+        W_dyn       = tools.ensure_shape(W_stack.get("dynamics", 0.0), (max(N - 1, 1), max(idx.n.z, 1))) if idx.n.z > 0 else np.zeros((max(N - 1, 0), 0))
+        dual_dyn    = tools.ensure_shape(dual_stack.get("dynamics", 0.0), (max(N - 1, 1), max(idx.n.z, 1))) if idx.n.z > 0 else np.zeros((max(N - 1, 0), 0))
 
         offsets = {
             "path": 0,

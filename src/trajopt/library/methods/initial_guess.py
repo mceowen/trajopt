@@ -118,7 +118,7 @@ def waypoint_initial_guess(problem, method):
             i_state = problem.zi_idx[i_zi]
 
             # Loop through terminal conditions
-            for i_zf in range(problem.index_map.n['term']):
+            for i_zf in range(problem.index_map.n['terminal']):
                 if problem.zi_idx[i_zi] == problem.zf_idx[i_zf]:
                     if problem.zi[i_zi] != problem.zf[i_zf]:
                         method.z_waypt[i_state] = (problem.zf[i_zf] - problem.zi[i_zi]) / 2

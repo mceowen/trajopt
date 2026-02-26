@@ -218,7 +218,7 @@ def run_mc_analysis(trajopt_obj):
                 "nu_ref": m.nu_init,
                 "dt_ref": m.dt_init,
                 "t_ref": m.t_init,
-                "conv_data": {"vb_ineq": np.zeros((subprob.N, problem.index_map.n['ineq'])), "vb_dyn": np.zeros((subprob.N - 1, subprob.index_map.n['dyn'])), "vb_term": np.zeros((problem.index_map.n['term_total'], 1))},
+                "conv_data": {"vb_ineq": np.zeros((subprob.N, problem.index_map.n['nonconvex_inequality'])), "vb_dyn": np.zeros((subprob.N - 1, subprob.index_map.n['dynamics'])), "vb_terminal": np.zeros((problem.index_map.n['term_total'], 1))},
                 "W": copy.deepcopy(W_stack),
                 "dual": copy.deepcopy(dual_stack),
                 "penalty": copy.deepcopy(m.penalty),

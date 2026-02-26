@@ -171,7 +171,7 @@ def check_convergence_tolerance(problem, method, iter_record):
     defect  = conv_data.defect
     vb_dyn  = conv_data.vb_dyn
     vb_ineq = conv_data.vb_ineq      # unified inequality VB
-    vb_term = conv_data.vb_term
+    vb_term = conv_data.vb_terminal
 
     # --- Extract convergence criteria
     eps_state  = method.conv.eps_state

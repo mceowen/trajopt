@@ -55,9 +55,9 @@ class Subproblem:
             "dt_ref": method.dt_init,
             "t_ref": method.t_init,
             "conv_data": {
-                "vb_ineq": np.zeros((self.N.N, self.n.ineq)),
-                "vb_dyn":  np.zeros((self.N.N - 1, self.n.dyn)),
-                "vb_term": np.zeros((self.n.term_total, 1)),
+                "vb_ineq": np.zeros((self.N.N, self.n.nonconvex_inequality)),
+                "vb_dyn":  np.zeros((self.N.N - 1, self.n.dynamics)),
+                "vb_terminal": np.zeros((self.n.term_total, 1)),
             },
             # W and dual are None initially - will be initialized by configure_penalty_weights on first iteration
             "W": None,
@@ -90,12 +90,12 @@ class Subproblem:
 
 
         # Virtual buffers (None if zero-sized)
-        self.vb_ineq    = cp.Variable((N, self.n.ineq), name="vb_ineq")   if self.n.ineq  > 0 else None 
+        self.vb_ineq    = cp.Variable((N, self.n.nonconvex_inequality), name="vb_ineq")   if self.n.nonconvex_inequality  > 0 else None 
         
         # ---------------------------------------------
         # TERMINAL CONDITION BUFFERS (REAL + CTCS)
         # --- ------------------------------------------
-        n_term_real = self.n.term + self.n.term_ineq
+        n_term_real = self.n.terminal + self.n.term_ineq
         n_term_ctcs  = self.n.term_ctcs
         # ------------ Real terminal constraints (size = n_term_real) ------------
         self.vb_term_real = (
@@ -189,9 +189,9 @@ class Subproblem:
 
         # Path/NFZ/AUX linearized constraints
         if problem.constraints.get(ct=0, type="nonconvex_inequality"):
-            self.dgdz   = cp.Parameter((N, problem.index_map.n['ineq'], n_x), name="dgdz")
-            self.dgdnu  = cp.Parameter((N, problem.index_map.n['ineq'], n_nu), name="dgdnu")
-            self.g0     = cp.Parameter((N, problem.index_map.n['ineq']),    name="g0")
+            self.dgdz   = cp.Parameter((N, problem.index_map.n['nonconvex_inequality'], n_x), name="dgdz")
+            self.dgdnu  = cp.Parameter((N, problem.index_map.n['nonconvex_inequality'], n_nu), name="dgdnu")
+            self.g0     = cp.Parameter((N, problem.index_map.n['nonconvex_inequality']),    name="g0")
         else:
             self.dgdz = self.dgdnu = self.g0 = None
 
@@ -214,23 +214,23 @@ class Subproblem:
 
         # Build W_sqrt as attribute dictionary with CVXPY parameters, initialized to zeros
         self.W_sqrt = tools.AttrDict()
-        self.W_sqrt.ineq       = cp.Parameter((N, max(self.n.ineq, 1)),                             nonneg=True, name="W_ineq_sqrt",        value=np.zeros((N, max(self.n.ineq, 1))))
-        self.W_sqrt.term       = cp.Parameter((max(self.n.term_total, 1),),                         nonneg=True, name="W_term_sqrt",        value=np.zeros((max(self.n.term_total, 1),)))
-        self.W_sqrt.dyn        = cp.Parameter((N - 1, max(nz, 1)),                                  nonneg=True, name="W_dyn_sqrt",         value=np.zeros((N - 1, max(nz, 1))))
-        self.W_sqrt.plus_real  = cp.Parameter((max(self.N.pm_real, 1), max(self.n.plus_real, 1)),   nonneg=True, name="W_plus_real_sqrt",   value=np.zeros((max(self.N.pm_real, 1), max(self.n.plus_real, 1))))
-        self.W_sqrt.minus_real = cp.Parameter((max(self.N.pm_real, 1), max(self.n.minus_real, 1)),  nonneg=True, name="W_minus_real_sqrt",  value=np.zeros((max(self.N.pm_real, 1), max(self.n.minus_real, 1))))
-        self.W_sqrt.plus_ctcs  = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.plus_ctcs, 1)),   nonneg=True, name="W_plus_ctcs_sqrt",   value=np.zeros((max(self.N.pm_ctcs, 1), max(self.n.plus_ctcs, 1))))
-        self.W_sqrt.minus_ctcs = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.minus_ctcs, 1)),  nonneg=True, name="W_minus_ctcs_sqrt",  value=np.zeros((max(self.N.pm_ctcs, 1), max(self.n.minus_ctcs, 1))))
+        self.W_sqrt.nonconvex_inequality = cp.Parameter((N, max(self.n.nonconvex_inequality, 1)),  nonneg=True, name="W_ineq_sqrt",        value=np.zeros((N, max(self.n.nonconvex_inequality, 1))))
+        self.W_sqrt.terminal            = cp.Parameter((max(self.n.term_total, 1),),                         nonneg=True, name="W_term_sqrt",        value=np.zeros((max(self.n.term_total, 1),)))
+        self.W_sqrt.dynamics            = cp.Parameter((N - 1, max(nz, 1)),                                  nonneg=True, name="W_dyn_sqrt",         value=np.zeros((N - 1, max(nz, 1))))
+        self.W_sqrt.plus_real           = cp.Parameter((max(self.N.pm_real, 1), max(self.n.plus_real, 1)),   nonneg=True, name="W_plus_real_sqrt",   value=np.zeros((max(self.N.pm_real, 1), max(self.n.plus_real, 1))))
+        self.W_sqrt.minus_real          = cp.Parameter((max(self.N.pm_real, 1), max(self.n.minus_real, 1)),  nonneg=True, name="W_minus_real_sqrt",  value=np.zeros((max(self.N.pm_real, 1), max(self.n.minus_real, 1))))
+        self.W_sqrt.plus_ctcs           = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.plus_ctcs, 1)),   nonneg=True, name="W_plus_ctcs_sqrt",   value=np.zeros((max(self.N.pm_ctcs, 1), max(self.n.plus_ctcs, 1))))
+        self.W_sqrt.minus_ctcs          = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.minus_ctcs, 1)),  nonneg=True, name="W_minus_ctcs_sqrt",  value=np.zeros((max(self.N.pm_ctcs, 1), max(self.n.minus_ctcs, 1))))
 
         # duals (same ≥1-column pattern, unified inequality structure)
         self.dual = tools.AttrDict()
-        self.dual.ineq       = cp.Parameter((N,  max(self.n.ineq, 1)), name="dual_ineq")
-        self.dual.dyn        = cp.Parameter((N - 1, max(nz, 1)),              name="dual_dyn")
-        self.dual.plus_real  = cp.Parameter((max(self.N.pm_real, 1), max(self.n.plus_real, 1)),     name="dual_plus_real")
-        self.dual.minus_real = cp.Parameter((max(self.N.pm_real, 1), max(self.n.minus_real, 1)),    name="dual_minus_real")
-        self.dual.plus_ctcs  = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.plus_ctcs, 1)),     name="dual_plus_ctcs")
-        self.dual.minus_ctcs = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.minus_ctcs, 1)),    name="dual_minus_ctcs")
-        self.dual.term       = cp.Parameter((max(self.n.term_total, 1),),                           name="dual_term")
+        self.dual.nonconvex_inequality = cp.Parameter((N,  max(self.n.nonconvex_inequality, 1)), name="dual_ineq")
+        self.dual.dynamics            = cp.Parameter((N - 1, max(nz, 1)),              name="dual_dyn")
+        self.dual.plus_real           = cp.Parameter((max(self.N.pm_real, 1), max(self.n.plus_real, 1)),     name="dual_plus_real")
+        self.dual.minus_real          = cp.Parameter((max(self.N.pm_real, 1), max(self.n.minus_real, 1)),    name="dual_minus_real")
+        self.dual.plus_ctcs           = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.plus_ctcs, 1)),     name="dual_plus_ctcs")
+        self.dual.minus_ctcs          = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.minus_ctcs, 1)),    name="dual_minus_ctcs")
+        self.dual.terminal            = cp.Parameter((max(self.n.term_total, 1),),                           name="dual_term")
 
         # CTCS epsilon (scalar)
         self.eps_ctcs         = cp.Parameter(nonneg=True, name="eps_ctcs")
@@ -675,22 +675,22 @@ class Subproblem:
             self.ddt_max.value = float(method.ddt_max)
 
         # 1. Refresh W_sqrt CVXPY parameter values from stacked constraint weights
-        self.W_sqrt.ineq.value       = tools.ensure_shape(np.sqrt(W_stack.ineq),         self.W_sqrt.ineq.shape)
-        self.W_sqrt.term.value       = tools.ensure_shape(np.sqrt(W_stack.term),         self.W_sqrt.term.shape)
-        self.W_sqrt.dyn.value        = tools.ensure_shape(np.sqrt(W_stack.dyn),          self.W_sqrt.dyn.shape)
-        self.W_sqrt.plus_real.value  = tools.ensure_shape(np.sqrt(W_stack.plus_real),    self.W_sqrt.plus_real.shape)
-        self.W_sqrt.minus_real.value = tools.ensure_shape(np.sqrt(W_stack.minus_real),   self.W_sqrt.minus_real.shape)
-        self.W_sqrt.plus_ctcs.value  = tools.ensure_shape(np.sqrt(W_stack.plus_ctcs),    self.W_sqrt.plus_ctcs.shape)
-        self.W_sqrt.minus_ctcs.value = tools.ensure_shape(np.sqrt(W_stack.minus_ctcs),   self.W_sqrt.minus_ctcs.shape)
+        self.W_sqrt.nonconvex_inequality.value = tools.ensure_shape(np.sqrt(W_stack.nonconvex_inequality), self.W_sqrt.nonconvex_inequality.shape)
+        self.W_sqrt.terminal.value             = tools.ensure_shape(np.sqrt(W_stack.terminal),             self.W_sqrt.terminal.shape)
+        self.W_sqrt.dynamics.value             = tools.ensure_shape(np.sqrt(W_stack.dynamics),             self.W_sqrt.dynamics.shape)
+        self.W_sqrt.plus_real.value            = tools.ensure_shape(np.sqrt(W_stack.plus_real),            self.W_sqrt.plus_real.shape)
+        self.W_sqrt.minus_real.value           = tools.ensure_shape(np.sqrt(W_stack.minus_real),           self.W_sqrt.minus_real.shape)
+        self.W_sqrt.plus_ctcs.value            = tools.ensure_shape(np.sqrt(W_stack.plus_ctcs),            self.W_sqrt.plus_ctcs.shape)
+        self.W_sqrt.minus_ctcs.value           = tools.ensure_shape(np.sqrt(W_stack.minus_ctcs),           self.W_sqrt.minus_ctcs.shape)
 
         # 2. Update dual CVXPY parameter values from stacked constraint duals
-        self.dual.ineq.value        = tools.ensure_shape(dual_stack.ineq,        self.dual.ineq.shape)
-        self.dual.term.value        = tools.ensure_shape(dual_stack.term,        self.dual.term.shape)
-        self.dual.dyn.value         = tools.ensure_shape(dual_stack.dyn,         self.dual.dyn.shape)
-        self.dual.plus_real.value   = tools.ensure_shape(dual_stack.plus_real,   self.dual.plus_real.shape)
-        self.dual.minus_real.value  = tools.ensure_shape(dual_stack.minus_real,  self.dual.minus_real.shape)
-        self.dual.plus_ctcs.value   = tools.ensure_shape(dual_stack.plus_ctcs,   self.dual.plus_ctcs.shape)
-        self.dual.minus_ctcs.value  = tools.ensure_shape(dual_stack.minus_ctcs,  self.dual.minus_ctcs.shape)
+        self.dual.nonconvex_inequality.value   = tools.ensure_shape(dual_stack.nonconvex_inequality, self.dual.nonconvex_inequality.shape)
+        self.dual.terminal.value               = tools.ensure_shape(dual_stack.terminal,               self.dual.terminal.shape)
+        self.dual.dynamics.value               = tools.ensure_shape(dual_stack.dynamics,               self.dual.dynamics.shape)
+        self.dual.plus_real.value              = tools.ensure_shape(dual_stack.plus_real,              self.dual.plus_real.shape)
+        self.dual.minus_real.value             = tools.ensure_shape(dual_stack.minus_real,             self.dual.minus_real.shape)
+        self.dual.plus_ctcs.value              = tools.ensure_shape(dual_stack.plus_ctcs,              self.dual.plus_ctcs.shape)
+        self.dual.minus_ctcs.value             = tools.ensure_shape(dual_stack.minus_ctcs,             self.dual.minus_ctcs.shape)
 
 
         # ctcs eps
@@ -779,9 +779,9 @@ class Subproblem:
 
         # Convergence data (buffers, defects, TR cost, ref cost)
         conv = tools.AttrDict()
-        conv.vb_ineq         = tools.get_val(self.vb_ineq,  rows=self.N.N, cols=self.n.ineq) if self.vb_ineq  is not None else np.zeros((self.N.N,self.n.ineq))
-        conv.vb_term         = tools.get_val(self.vb_term,  rows=1, cols=self.n.term_total) if self.vb_term  is not None else np.zeros((1, self.n.term_total))
-        conv.vb_dyn          = tools.get_val(self.vb_dyn_p, rows=self.N.N-1,  cols=self.n.dyn) - tools.get_val(self.vb_dyn_m, rows=self.N.N-1, cols=self.n.dyn)
+        conv.vb_ineq         = tools.get_val(self.vb_ineq,  rows=self.N.N, cols=self.n.nonconvex_inequality) if self.vb_ineq  is not None else np.zeros((self.N.N,self.n.nonconvex_inequality))
+        conv.vb_terminal     = tools.get_val(self.vb_term,  rows=1, cols=self.n.term_total) if self.vb_term  is not None else np.zeros((1, self.n.term_total))
+        conv.vb_dyn          = tools.get_val(self.vb_dyn_p, rows=self.N.N-1,  cols=self.n.dynamics) - tools.get_val(self.vb_dyn_m, rows=self.N.N-1, cols=self.n.dynamics)
         conv.vb_plus_real    = tools.get_val(self.vb_plus_real, rows=self.N.pm_real, cols=self.n.plus_real) if self.vb_plus_real  is not None else np.zeros((self.N.pm_real, self.n.plus_real))
         conv.vb_minus_real   = tools.get_val(self.vb_minus_real, rows=self.N.pm_real, cols=self.n.minus_real) if self.vb_minus_real  is not None else np.zeros((self.N.pm_real, self.n.minus_real))
         conv.vb_plus_ctcs    = tools.get_val(self.vb_plus_ctcs, rows=self.N.pm_ctcs, cols=self.n.plus_ctcs) if self.vb_plus_ctcs  is not None else np.zeros((self.N.pm_ctcs, self.n.plus_ctcs))
@@ -819,18 +819,18 @@ class Subproblem:
 
         # Copy updated W_stack and dual_stack to iter_record for history
         rec["W"] = tools.AttrDict({
-            "ineq": self.W_stack.ineq.copy(),
-            "term": self.W_stack.term.copy(),
-            "dyn": self.W_stack.dyn.copy(),
+            "nonconvex_inequality": self.W_stack.nonconvex_inequality.copy(),
+            "terminal": self.W_stack.terminal.copy(),
+            "dynamics": self.W_stack.dynamics.copy(),
             "plus_real": self.W_stack.plus_real.copy(),
             "minus_real": self.W_stack.minus_real.copy(),
             "plus_ctcs": self.W_stack.plus_ctcs.copy(),
             "minus_ctcs": self.W_stack.minus_ctcs.copy(),
         })
         rec["dual"] = tools.AttrDict({
-            "ineq": self.dual_stack.ineq.copy(),
-            "term": self.dual_stack.term.copy(),
-            "dyn": self.dual_stack.dyn.copy(),
+            "nonconvex_inequality": self.dual_stack.nonconvex_inequality.copy(),
+            "terminal": self.dual_stack.terminal.copy(),
+            "dynamics": self.dual_stack.dynamics.copy(),
             "plus_real": self.dual_stack.plus_real.copy(),
             "minus_real": self.dual_stack.minus_real.copy(),
             "plus_ctcs": self.dual_stack.plus_ctcs.copy(),

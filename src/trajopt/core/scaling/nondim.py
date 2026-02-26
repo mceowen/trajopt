@@ -142,7 +142,7 @@ class Nondim:
         self.nd_cost = nd_cost
 
         # nodal inequality nondim
-        self.nd_ineq = np.ones(problem.index_map.n['ineq'])
+        self.nd_ineq = np.ones(problem.index_map.n['nonconvex_inequality'])
         
         idx = 0
         # TODO: change 'nonconvex_inequality' to 'inequality' once we add general buffering
