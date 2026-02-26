@@ -239,4 +239,4 @@ def configure_penalty_weights(problem, method, subconstraints=None):
     Wrapper to configure penalty weights using existing hyperparameters logic.
     This ensures subproblem constraint weights are populated consistently.
     """
-    hp.configure_penalty_weights(problem, method, subconstraints=subconstraints)
+    return hp.configure_penalty_weights(problem, method, subconstraints=subconstraints)
