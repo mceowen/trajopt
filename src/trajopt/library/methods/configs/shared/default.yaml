@@ -42,6 +42,7 @@ conv:
   ctcs_mult_cnst: 1.0
   eps_ctcs: 1e-5
   iter_max: 20
+  fac_eps: 0.0
 
 # Weight structure
 weights:

@@ -49,6 +49,14 @@ def perform_default_analysis(trajopt_obj, trim=True):
     iter_data   = method.subprob.iter_data
     nondim      = method.nondim
 
+    def to_dict_if_attrdict(x):
+        from trajopt.utils.tools import AttrDict
+        if isinstance(x, AttrDict):
+            return dict(x)
+        return x
+    
+    params = to_dict_if_attrdict(params)
+
     problem_config = problem.config
     method_data = tools.extract_attributes(method, METHOD_DATA_KEYS_KEEP)
     

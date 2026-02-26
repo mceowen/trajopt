@@ -39,7 +39,8 @@ class nonconvex:
         self.type       = "nonconvex"
         self.name       = cnstr_config["name"]
         self.group      = cnstr_config.get("group", None)
-        self.units      = cnstr_config["units"]
+        self.units      = cnstr_config.get("units", None)
+        self.scale      = cnstr_config.get("scale", None)
 
         self.fcn_string = cnstr_config["fcn"]
         self.minimax     = cnstr_config.get("minimax", 0)
@@ -67,8 +68,16 @@ class nonconvex:
 
     def nondim_cost(self, nondim):
         if self.backend == "jax":
-            M_out_d2nd, _ = nondim.build_nondim_matrix(self.units)
 
+            if self.scale is not None:
+                M_out_d2nd = jnp.atleast_1d(1 / self.scale)
+
+            else:
+                if self.units is None:
+                    raise ValueError("Units must be provided if 'scale' is not provided.")
+                
+                M_out_d2nd = nondim.build_nondim_matrix(self.units)
+                
             M_state_nd2d = nondim.M["state"]["nd2d"]
             M_ctrl_nd2d  = nondim.M["ctrl"]["nd2d"]
 

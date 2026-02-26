@@ -10,7 +10,8 @@ N: 50
 # METHOD FLAGS
 # ==============================
 flags:
-  buff_dyn: "term"    # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
+  buff_dyn: term    # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
+  buff_dyn_dual: none 
   flag_conv: 1
 
 # ===============================
@@ -33,3 +34,4 @@ conv:
   eps_cost: 1
   eps_defect: [0.01]
   eps_dyn: [10.0, 0.1, 0.1, 30.0, 0.1, 0.1]
+  iter_max: 100
