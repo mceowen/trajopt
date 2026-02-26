@@ -467,8 +467,8 @@ def autotune1(subproblem, conv_data, iter_record):
     # terminal
     dual_term_plus = W_term * vb_term + dual_term
 
-    W_plus_real  = iter_record["weights"]["W_plus_real"]
-    W_minus_real = iter_record["weights"]["W_minus_real"]
+    W_plus_real  = subproblem.W_stack.plus_real
+    W_minus_real = subproblem.W_stack.minus_real
 
     # plus/minus (quadratic 1-norm decomposition)
     dual_plus_plus_real  = W_plus_real * vb_plus_real  + dual_plus_real
@@ -498,14 +498,14 @@ def autotune1(subproblem, conv_data, iter_record):
     subproblem.dual_stack.minus_ctcs           = dual_minus_plus_ctcs
 
     # Return dual update info for logging
-    # return {
-    #     "dmu_ineq": dual_ineq_plus - dual_ineq,
-    #     "dmu_eq":   dual_term_plus - dual_term,
-    #     "dmu_plus_real": dual_plus_plus_real  - dual_plus_real,
-    #     "dmu_minus_real": dual_minus_plus_real - dual_minus_real,
-    #     "dmu_plus_ctcs": dual_plus_plus_ctcs  - dual_plus_ctcs,
-    #     "dmu_minus_ctcs": dual_minus_plus_ctcs - dual_minus_ctcs,
-    # }
+    iter_record["dual_update"] = {
+        "dmu_ineq": dual_ineq_plus - dual_ineq,
+        "dmu_eq":   dual_term_plus - dual_term,
+        "dmu_plus_real": dual_plus_plus_real  - dual_plus_real,
+        "dmu_minus_real": dual_minus_plus_real - dual_minus_real,
+        "dmu_plus_ctcs": dual_plus_plus_ctcs  - dual_plus_ctcs,
+        "dmu_minus_ctcs": dual_minus_plus_ctcs - dual_minus_ctcs,
+    }
 
     return iter_record
 
@@ -547,15 +547,7 @@ def autotune2(subproblem, conv_data, iter_record):
     eps_feas_term = method.conv["eps_term_nd"]
     eps_feas_dyn  = method.conv["eps_dyn_nd"]
 
-    eps_target_term =  np.maximum(eps_feas_term, method.conv.fac_eps * np.abs(iter_record["conv_data"]["vb_term"])) #np.maximum(eps_feas_term, method.eps_init_term + (iter_num / method.target_iters) * (eps_feas_term - method.eps_init_term))
-    eps_target_ineq =  np.maximum(eps_feas_ineq, method.conv.fac_eps * np.abs(iter_record["conv_data"]["vb_ineq"])) #np.maximum(eps_feas_ineq, method.eps_init_ineq + (iter_num / method.target_iters) * (eps_feas_ineq - method.eps_init_ineq))
-    eps_target_dyn  =  np.maximum(eps_feas_dyn , method.conv.fac_eps * np.abs(iter_record["conv_data"]["vb_dyn"])) #np.maximum(eps_feas_dyn,  method.eps_init_dyn  + (iter_num / method.target_iters) * (eps_feas_dyn  - method.eps_init_dyn))
-
-    iter_record["conv_data"]["eps_target_term"] = eps_target_term.copy()
-    iter_record["conv_data"]["eps_target_ineq"] = eps_target_ineq.copy()
-    iter_record["conv_data"]["eps_target_dyn"]  = eps_target_dyn.copy()
-
-    eps_target_term =  np.maximum(eps_feas_term, method.conv.fac_eps * np.abs(iter_record["conv_data"]["vb_term"])) #np.maximum(eps_feas_term, method.eps_init_term + (iter_num / method.target_iters) * (eps_feas_term - method.eps_init_term))
+    eps_target_term =  np.maximum(eps_feas_term, method.conv.fac_eps * np.abs(iter_record["conv_data"]["vb_terminal"])) #np.maximum(eps_feas_term, method.eps_init_term + (iter_num / method.target_iters) * (eps_feas_term - method.eps_init_term))
     eps_target_ineq =  np.maximum(eps_feas_ineq, method.conv.fac_eps * np.abs(iter_record["conv_data"]["vb_ineq"])) #np.maximum(eps_feas_ineq, method.eps_init_ineq + (iter_num / method.target_iters) * (eps_feas_ineq - method.eps_init_ineq))
     eps_target_dyn  =  np.maximum(eps_feas_dyn , method.conv.fac_eps * np.abs(iter_record["conv_data"]["vb_dyn"])) #np.maximum(eps_feas_dyn,  method.eps_init_dyn  + (iter_num / method.target_iters) * (eps_feas_dyn  - method.eps_init_dyn))
 
@@ -664,20 +656,22 @@ def autotune2(subproblem, conv_data, iter_record):
     subproblem.W_stack.terminal = Wh_term
 
     # Return diagnostics for logging
-    # return {
-    #     "eps_feas": eps_feas_ineq,
-    #     "term": {
-    #         "Wxq": np.diag(W_term) @ vb_term if problem.index_map.n['term_total'] > 0 else None,
-    #         "dual": dual_term_buff if problem.index_map.n['term_total'] > 0 else None
-    #     }
-    # }
+    iter_record["weight_update"] = {
+        "eps_feas": eps_feas_ineq,
+        "term": {
+            "Wxq": np.diag(W_term) @ vb_term if problem.index_map.n['term_total'] > 0 else None,
+            "dual": dual_term_buff if problem.index_map.n['term_total'] > 0 else None
+        }
+    }
 
     return iter_record
 
 
-def autotune3(subproblem, conv_data, iter_num):
+def autotune3(subproblem, conv_data, iter_record):
     """Combined autotune1 and autotune2."""
-    dual_info = autotune1(subproblem, conv_data, iter_num)
-    weight_info = autotune2(subproblem, conv_data, iter_num)
+    dual_info = autotune1(subproblem, conv_data, iter_record)
+    weight_info = autotune2(subproblem, conv_data, iter_record)
 
-    return {"dual_update": dual_info, "weight_update": weight_info}
+    iter_record["autotune_update"] =  {"dual_update": dual_info, "weight_update": weight_info}
+
+    return iter_record

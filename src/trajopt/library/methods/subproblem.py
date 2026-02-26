@@ -846,14 +846,11 @@ class Subproblem:
         iter_num = rec["iter_num"]
         
         if flag == "1":
-            dual_update_info = hp.autotune1(self, conv_data, iter_num)
-            rec["dual_update"] = dual_update_info
+            rec = hp.autotune1(self, conv_data, rec)
         elif flag == "2":
-            weight_update_info = hp.autotune2(self, conv_data, iter_num)
-            rec["weight_update"] = weight_update_info
+            rec = hp.autotune2(self, conv_data, rec)
         elif flag == "3":
-            update_info = hp.autotune3(self, conv_data, iter_num)
-            rec["autotune_update"] = update_info
+            rec = hp.autotune3(self, conv_data, rec)
 
         # Copy updated W_stack and dual_stack to iter_record for history
         rec["W"] = tools.AttrDict({
