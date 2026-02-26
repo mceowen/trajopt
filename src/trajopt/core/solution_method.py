@@ -53,6 +53,7 @@ class SolutionMethod:
         self.dt_init  = self.dt_init / self.nondim.nt
 
         discretize.compile_jax_discretization(problem, self)
+        # discretize.compile_jax_discretization_bwd(problem, self)
         integrators.compile_dense_jax_propagator(problem, self, problem.params)
 
         ### Time of flight constraints ###

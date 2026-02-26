@@ -87,9 +87,7 @@ def _plot_states(PLTS, trajopt_obj, show_iters, iters, lgnd, opt_pen):
                 PLTS.addPlot2D(ax, pen=PENS['itr_opt'], ins={'label': 'Iterations', 'x': 't_opt', 'y': ('z_opt', state_idx), 'iters': iters[1:], 'legend': lgnd})
             PLTS.addPlot2D(ax, pen=PENS['nl'],  ins={'label': 'Propagated', 'x': 't_nl',  'y': ('z_nl', state_idx),  'iters': [-1], 'legend': lgnd})
             PLTS.addPlot2D(ax, pen=opt_pen,    ins={'label': 'Optimal Solution', 'x': 't_opt', 'y': ('z_opt', state_idx), 'iters': [-1], 'legend': lgnd})
-        y_data = np.concatenate(
-            [final_data['z_nl'][:, idx] for idx in indices] + [final_data['z_opt'][:, idx] for idx in indices]
-        )
+        y_data = np.concatenate([final_data['z_opt'][:, idx] for idx in indices])
         _set_axis_limits(ax, y_data)
 
 
@@ -109,7 +107,7 @@ def _plot_controls(PLTS, trajopt_obj, show_iters, iters, lgnd, opt_pen):
             PLTS.addPlot2D(ax, pen=PENS['itr_opt'], ins={'label': 'Iterations', 'x': 't_opt', 'y': ('nu_opt', j), 'iters': iters[1:], 'legend': lgnd})
         PLTS.addPlot2D(ax, pen=PENS['nl'],  ins={'label': 'Propagated', 'x': 't_nl',  'y': ('nu_nl', j),  'iters': [-1], 'legend': lgnd})
         PLTS.addPlot2D(ax, pen=opt_pen,    ins={'label': 'Optimal Solution', 'x': 't_opt', 'y': ('nu_opt', j), 'iters': [-1], 'legend': lgnd})
-        y_data = np.concatenate([final_data['nu_nl'][:, j], final_data['nu_opt'][:, j]])
+        y_data = final_data['nu_opt'][:, j]
         _set_axis_limits(ax, y_data)
 
 
@@ -166,7 +164,7 @@ def _plot_constraints(PLTS, data, show_iters, iters, lgnd, opt_pen):
                     PLTS.addPlot2D(ax, pen=PENS['itr_opt'], ins={'label': name, 'x': 't_opt', 'y': ('values', col), 'dataloc': opt_loc, 'iters': iters[1:], 'legend': lgnd})
                 PLTS.addPlot2D(ax, pen=PENS['nl'],  ins={'label': name, 'x': 't_nl',  'y': ('values', col), 'dataloc': nl_loc,  'iters': [-1], 'legend': lgnd})
                 PLTS.addPlot2D(ax, pen=opt_pen,    ins={'label': name, 'x': 't_opt', 'y': ('values', col), 'dataloc': opt_loc, 'iters': [-1], 'legend': lgnd})
-            y_data = np.concatenate([constraint['nl_vals']['values'].flatten(), constraint['opt_vals']['values'].flatten()])
+            y_data = constraint['opt_vals']['values'].flatten()
             _set_axis_limits(ax, y_data)
 
 # =============================================================================
@@ -215,8 +213,8 @@ def plot_animated(trajopt_obj, interval=200):
     iters = trajopt_obj.scenario_data[key]['mc_data'][0]['iters'][1:]
     n_iters, n_states, n_ctrl = len(iters), trajopt_obj.problem.index_map.n['state'], trajopt_obj.problem.index_map.n['control']  # use unified index_map
     
-    t_all = np.concatenate([it['t_nl'] for it in iters])
-    t_lim = [t_all.min() * 0.95, t_all.max() * 1.05]
+    t_all = np.concatenate([it['t_opt'] for it in iters])
+    t_lim = [np.nanmin(t_all) * 0.95, np.nanmax(t_all) * 1.05]
 
     def make_grid(n):
         nc = int(np.ceil(np.sqrt(n)))
@@ -224,12 +222,16 @@ def plot_animated(trajopt_obj, interval=200):
 
     def setup_axes(fig, axs, n_x, data_key, ylabel_prefix):
         lines_nl, lines_opt = [], []
+        opt_key = data_key.replace('_nl', '_opt')
         for j in range(n_x):
             ax = axs.flatten()[j]
-            y_all = np.concatenate([it[data_key][:, j] for it in iters])
-            margin = (y_all.max() - y_all.min()) * 0.1 + 1
+            y_all = np.concatenate([it[opt_key][:, j] for it in iters])
+            y_min, y_max = np.nanmin(y_all), np.nanmax(y_all)
+            if not np.isfinite(y_max - y_min):
+                y_min, y_max = 0, 1
+            margin = (y_max - y_min) * 0.1 + 1
             ax.set_xlim(t_lim)
-            ax.set_ylim(y_all.min() - margin, y_all.max() + margin)
+            ax.set_ylim(y_min - margin, y_max + margin)
             ax.set_xlabel('Time [s]')
             ax.set_ylabel(f'{ylabel_prefix} {j}')
             ax.grid(True, alpha=0.3)
@@ -296,13 +298,16 @@ def plot_animated(trajopt_obj, interval=200):
             ax.set_ylabel(name)
             ax.grid(True, alpha=0.3)
             
-            all_vals = [it['constraint_data'][group_name][name]['nl_vals']['values'] for it in iters]
-            y_all = np.concatenate(all_vals)
-            margin = (y_all.max() - y_all.min()) * 0.1 + 1
+            opt_vals = [it['constraint_data'][group_name][name]['opt_vals']['values'] for it in iters]
+            y_all = np.concatenate(opt_vals)
+            y_min, y_max = np.nanmin(y_all), np.nanmax(y_all)
+            if not np.isfinite(y_max - y_min):
+                y_min, y_max = 0, 1
+            margin = (y_max - y_min) * 0.1 + 1
             ax.set_xlim(t_lim)
-            ax.set_ylim(y_all.min() - margin, y_all.max() + margin)
+            ax.set_ylim(y_min - margin, y_max + margin)
             
-            n_cols = all_vals[0].shape[1]
+            n_cols = opt_vals[0].shape[1]
             ln_list, lo_list = [], []
             for _ in range(n_cols):
                 ln, = ax.plot([], [], color=PENS['nl']['lrgba'], lw=PENS['nl']['lw'])
