@@ -11,6 +11,10 @@ from trajopt.library.methods import convergence
 from trajopt.library.methods import hyperparameters as hp
 from trajopt.utils import tools
 
+# TODO(Skye): revisit this
+from trajopt.library.methods.subproblem_constraints import configure_penalty_weights
+
+
 # =========================
 # Subproblem (build-once)
 # =========================
@@ -100,7 +104,7 @@ class Subproblem:
         # ------------ Real terminal constraints (size = n_term_real) ------------
         self.vb_term_real = (
             cp.Variable(n_term_real, name="vb_term_real")
-            if (method.flags["buff_dyn"] in {"term", "l2", "quad-2"}
+            if (method.flags["buff_dyn"] == "term"
                 and method.flags["dynamics_nonconvex"] != 0
                 and n_term_real > 0)
             else (cp.Constant(np.zeros(n_term_real)) if n_term_real > 0 else None)
@@ -181,11 +185,11 @@ class Subproblem:
         self.Sk                    = cp.Parameter((N - 1, nz),    name="Sk")
         self.z_m                   = cp.Parameter((N, nz),        name="z_minus")
 
-        self.Ak_bwd                    = cp.Parameter((N - 1, nz, nz), name="Ak_bwd")
-        self.Bk_bwd                    = cp.Parameter((N - 1, nz, n_nu), name="Bk_bwd")
-        self.Bkp_bwd                   = cp.Parameter((N - 1, nz, n_nu), name="Bkp_bwd")
-        self.Sk_bwd                    = cp.Parameter((N - 1, nz),    name="Sk_bwd")
-        self.z_m_bwd                   = cp.Parameter((N, nz),        name="z_minus_bwd")
+        #self.Ak_bwd                = cp.Parameter((N - 1, nz, nz), name="Ak_bwd")
+        #self.Bk_bwd                = cp.Parameter((N - 1, nz, n_nu), name="Bk_bwd")
+        #self.Bkp_bwd               = cp.Parameter((N - 1, nz, n_nu), name="Bkp_bwd")
+        #self.Sk_bwd                = cp.Parameter((N - 1, nz),    name="Sk_bwd")
+        #self.z_m_bwd               = cp.Parameter((N, nz),        name="z_minus_bwd")
 
         self.z_ref                 = cp.Parameter((N, nz),    name="z_ref")
         self.nu_ref                = cp.Parameter((N, n_nu),    name="nu_ref")
@@ -346,7 +350,7 @@ class Subproblem:
                     + (self.vb_dyn_p[k] - self.vb_dyn_m[k])
                 )
                 C.append(self.dz[k + 1] + self.z_ref[k + 1] - self.z_m[k + 1] == rhs)
-                
+
                 # #backwards shooting dynamics constraints:
                 # rhs = (
                 #     self.Ak_bwd[k] @ self.dz[k+1]
@@ -554,8 +558,6 @@ class Subproblem:
         # === Trust-region penalties ===
         TR = self.flags["flag_tr"] * (self.w.tr_z * cp.sum_squares(self.dz[:, :self.n.state]) + self.w.tr_u * cp.sum_squares(self.dnu))
 
-        # for k in range(self.N.N):
-        #     TR += cp.norm(self.nu_ref[k] + self.dnu[k])
         # === Virtual buffer penalties ===
         VB = 0.0
         DUAL = 0.0
@@ -630,6 +632,7 @@ class Subproblem:
         # Ak_bwd, Bk_bwd, Bkp_bwd, Sk_bwd, z_minus_bwd = discretize.compute_linsys_discrete_bwd(
             # inputs["z_ref"], inputs["nu_ref"], inputs["dt_ref"], problem, method
         # )
+
         prop_time_ms = (time.time() - start) * 1000.0
 
         # compute linearized terminal and running costs
@@ -656,8 +659,6 @@ class Subproblem:
         # self._set_param(self.Sk_bwd,   Sk_bwd)
         # self._set_param(self.z_m_bwd, z_minus_bwd)
 
-        # configure penalty weights (wrapper in subproblem_constraints)
-        from trajopt.library.methods.subproblem_constraints import configure_penalty_weights
         if inputs.get("W") is None or inputs.get("dual") is None:
             W_stack, dual_stack = configure_penalty_weights(self.problem, self.method, subconstraints=self.constraints)
         else:
@@ -749,7 +750,6 @@ class Subproblem:
         ignore_dpp = self.method.flags["ignore_dpp"]
         self.cp_subproblem.solve(solver=solver_name, warm_start=True, ignore_dpp=ignore_dpp)  # ignore_dpp=True if desired
 
-        print("solve status: " + self.cp_subproblem.status)
         # Create unified record for this iteration and append
         iter_record = self._load_outputs(input_for_iter, prop_time_ms)
         iter_record = convergence.check_convergence_tolerance(self.problem, self.method, iter_record)
@@ -788,7 +788,7 @@ class Subproblem:
 
         # outputs (absolute trajectories)
         rec.z_opt  = tools.safe_val(dz_val, rows=N, cols=n_x) + input_for_iter["z_ref"]
-        rec.nu_opt = tools.safe_val(dnu_val, rows=N, cols=n_nu) + input_for_iter["nu_ref"]
+        rec.nu_opt  = tools.safe_val(dnu_val, rows=N, cols=n_nu) + input_for_iter["nu_ref"]
         rec.dt_opt = tools.safe_val(dt_val).squeeze() + input_for_iter["dt_ref"].squeeze()
         rec.t_opt  = np.concatenate(([0], np.cumsum(rec.dt_opt)))
         rec.T_opt  = float(np.sum(rec.dt_opt))
@@ -813,7 +813,10 @@ class Subproblem:
         cost, _, _  = discretize.compute_nonconvex_costs(rec.t_opt, rec.z_opt, rec.nu_opt, self.problem, self.method)
 
         rec.cnst_path = g
-        rec.cost      = 1 #self.TRUE.value.item() / self.w.cost
+        
+        # TODO(Carlos/Skye): revisit this
+        rec.cost      = self.TRUE.value.item() / self.w.cost.value
+        #rec.cost      = 1 
 
         # Convergence data (buffers, defects, TR cost, ref cost)
         conv = tools.AttrDict()
@@ -846,11 +849,14 @@ class Subproblem:
         iter_num = rec["iter_num"]
         
         if flag == "1":
-            rec = hp.autotune1(self, conv_data, rec)
+            dual_update_info = hp.autotune1(self, conv_data, iter_num)
+            rec["dual_update"] = dual_update_info
         elif flag == "2":
-            rec = hp.autotune2(self, conv_data, rec)
+            weight_update_info = hp.autotune2(self, conv_data, iter_num)
+            rec["weight_update"] = weight_update_info
         elif flag == "3":
-            rec = hp.autotune3(self, conv_data, rec)
+            update_info = hp.autotune3(self, conv_data, iter_num)
+            rec["autotune_update"] = update_info
 
         # Copy updated W_stack and dual_stack to iter_record for history
         rec["W"] = tools.AttrDict({
