@@ -1,6 +1,6 @@
 inherit: trajopt/library/methods/configs/autoscvx.yaml
 
-N: 40
+N: 20 
 
 guess:
   type: straight_line
@@ -28,10 +28,10 @@ conv:
   iter_max: 50
 
 flags:
-  ignore_dpp: 1
+  ignore_dpp: 0
   flag_conv: 1
   buff_dyn: "quad-2"
   buff_dyn_dual: l1
 
 solver_opts:
-  solver: "ECOS"
+  solver: "QOCO"
