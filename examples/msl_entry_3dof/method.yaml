@@ -40,18 +40,35 @@ conv:
 # CONSTRAINT CONFIGURATIONS
 # ==============================
 constraints:
-  final_state:
-    flag_buff: none
-    W: 1.0
-    dual: 0.0
-    vb: 0.0
-  nonlinear_inequality:
-    flag_buff: none
-    W: 1.0
-    dual: 0.0
-    vb: 0.0
-  dynamics:
-    flag_buff: none
-    W: 1.0
-    dual: 0.0
-    vb: 0.0
+  types: 
+    nonlinear_inequality:
+      W:
+        penalty: True
+        autotune: True
+        init: 1.0
+      dual: 
+        penalty: True
+        autotune: True
+        init: 0.0
+      vb: 'standard'
+    dynamics:
+      W:
+        penalty: True
+        autotune: True
+        init: 1.0
+      dual: 
+        penalty: True
+        autotune: True
+        init: 0.0
+      vb: 'standard'
+  names: 
+    final_state:
+      W:
+        penalty: True
+        autotune: True
+        init: 1.0
+      dual: 
+        penalty: True
+        autotune: True
+        init: 0.0
+      vb: 'standard'

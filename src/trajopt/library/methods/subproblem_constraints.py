@@ -37,13 +37,44 @@ class SubproblemConstraints(Constraints):
             d = int(getattr(c, "dimension"))
             Nk = int(time_grid.get(getattr(c, "type", None), N_default))
 
+            # Get constraint attributes
+            c_type = getattr(c, "type", None)
+            c_name = getattr(c, "name", None)
+            
+            W_init = 0.0
+            dual_init = 0.0
+            
+            # Map constraint type to config key (remap nonconvex_inequality -> nonlinear_inequality)
+            type_key = "nonlinear_inequality" if c_type == "nonconvex_inequality" else c_type
+            
+            # Load config values, trying type first then name (name can override)
+            for section, key in [("types", type_key), ("names", c_name)]:
+                if key and hasattr(method, "constraints") and section in method.constraints and key in method.constraints[section]:
+                    config = method.constraints[section][key]
+                    
+                    # For W: use init if exists, else use 1.0 if penalty is True
+                    W_config = config.get("W", {})
+                    if "init" in W_config:
+                        W_init = W_config["init"]
+                    elif W_config.get("penalty", True):
+                        W_init = 1.0
+                    else:
+                        W_init = 0.0
+                    
+                    # For dual: use init if exists, else use 0.0 if penalty is True
+                    dual_config = config.get("dual", {})
+                    if "init" in dual_config:
+                        dual_init = dual_config["init"]
+                    else:
+                        dual_init = 0.0
+
             if Nk == 1:
-                c.W    = np.zeros(d)
-                c.dual = np.zeros(d)
+                c.W    = np.full(d, W_init)
+                c.dual = np.full(d, dual_init)
                 c.vb   = np.zeros(d)
             else:
-                c.W    = np.zeros((Nk, d))
-                c.dual = np.zeros((Nk, d))
+                c.W    = np.full((Nk, d), W_init)
+                c.dual = np.full((Nk, d), dual_init)
                 c.vb   = np.zeros((Nk, d))
 
         # Aggregate plus/minus buffers (not tied to a single constraint)
@@ -105,8 +136,8 @@ class SubproblemConstraints(Constraints):
         W_ineq      = tools.ensure_shape(W_stack.get("nonconvex_inequality", 0.0), (N, max(idx.n.nonconvex_inequality, 1))) if idx.n.nonconvex_inequality > 0 else np.zeros((N, 0))
         dual_ineq   = tools.ensure_shape(dual_stack.get("nonconvex_inequality", 0.0), (N, max(idx.n.nonconvex_inequality, 1))) if idx.n.nonconvex_inequality > 0 else np.zeros((N, 0))
 
-        W_term      = tools.ensure_shape(W_stack.get("terminal", 0.0), (max(idx.n.term_total, 1),)) if idx.n.term_total > 0 else np.zeros((0,))
-        dual_term   = tools.ensure_shape(dual_stack.get("terminal", 0.0), (max(idx.n.term_total, 1),)) if idx.n.term_total > 0 else np.zeros((0,))
+        W_term      = tools.ensure_shape(W_stack.get("final_state", 0.0), (max(idx.n.term_total, 1),)) if idx.n.term_total > 0 else np.zeros((0,))
+        dual_term   = tools.ensure_shape(dual_stack.get("final_state", 0.0), (max(idx.n.term_total, 1),)) if idx.n.term_total > 0 else np.zeros((0,))
 
         W_dyn       = tools.ensure_shape(W_stack.get("dynamics", 0.0), (max(N - 1, 1), max(idx.n.z, 1))) if idx.n.z > 0 else np.zeros((max(N - 1, 0), 0))
         dual_dyn    = tools.ensure_shape(dual_stack.get("dynamics", 0.0), (max(N - 1, 1), max(idx.n.z, 1))) if idx.n.z > 0 else np.zeros((max(N - 1, 0), 0))
