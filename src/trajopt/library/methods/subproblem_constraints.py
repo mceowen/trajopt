@@ -76,8 +76,8 @@ class SubproblemConstraints(Constraints):
         W_stack.nonconvex_inequality  = self._stack_constraint_attr(ineq_constraints, "W", (idx.N.N, idx.n.nonconvex_inequality))
         dual_stack.nonconvex_inequality = self._stack_constraint_attr(ineq_constraints, "dual", (idx.N.N, idx.n.nonconvex_inequality))
 
-        W_stack.terminal              = self._stack_constraint_attr(term_constraints + ctcs_constraints, "W", (max(idx.n.term_total, 1),))
-        dual_stack.terminal           = self._stack_constraint_attr(term_constraints + ctcs_constraints, "dual", (max(idx.n.term_total, 1),))
+        W_stack.final_state              = self._stack_constraint_attr(term_constraints + ctcs_constraints, "W", (max(idx.n.term_total, 1),))
+        dual_stack.final_state           = self._stack_constraint_attr(term_constraints + ctcs_constraints, "dual", (max(idx.n.term_total, 1),))
 
         W_stack.dynamics              = self._stack_constraint_attr(dyn_constraints, "W", (max(idx.N.N - 1, 1), max(idx.n.z, 1)))
         dual_stack.dynamics           = self._stack_constraint_attr(dyn_constraints, "dual", (max(idx.N.N - 1, 1), max(idx.n.z, 1)))

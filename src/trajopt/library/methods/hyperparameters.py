@@ -17,7 +17,7 @@ def configure_penalty_weights(problem, method, subconstraints=None):
     dual_stack = tools.AttrDict()
 
     W_stack.nonconvex_inequality        = np.zeros((method.index_map.N.N, n_ineq))
-    W_stack.terminal                    = np.zeros(problem.index_map.n['terminal'] + problem.index_map.n['term_ineq'] + problem.index_map.n['term_ctcs'])
+    W_stack.final_state                    = np.zeros(problem.index_map.n['final_state'] + problem.index_map.n['term_ineq'] + problem.index_map.n['term_ctcs'])
     W_stack.dynamics                    = np.zeros((method.index_map.N.N - 1, problem.index_map.n['z']))
     W_stack.plus_real                   = np.zeros((method.index_map.N.pm_real, method.index_map.n.plus_real))
     W_stack.minus_real                  = np.zeros((method.index_map.N.pm_real, method.index_map.n.minus_real))
@@ -25,7 +25,7 @@ def configure_penalty_weights(problem, method, subconstraints=None):
     W_stack.minus_ctcs                  = np.zeros((method.index_map.N.pm_ctcs, method.index_map.n.minus_ctcs))
 
     dual_stack.nonconvex_inequality     = np.zeros((method.index_map.N.N, n_ineq))
-    dual_stack.terminal                 = np.zeros(problem.index_map.n['terminal'] + problem.index_map.n['term_ineq'] + problem.index_map.n['term_ctcs'])
+    dual_stack.final_state                 = np.zeros(problem.index_map.n['final_state'] + problem.index_map.n['term_ineq'] + problem.index_map.n['term_ctcs'])
     dual_stack.dynamics                 = np.zeros((method.index_map.N.N - 1, problem.index_map.n['z']))
     dual_stack.plus_real                = np.zeros((method.index_map.N.pm_real, method.index_map.n.plus_real))
     dual_stack.minus_real               = np.zeros((method.index_map.N.pm_real, method.index_map.n.minus_real))
@@ -87,7 +87,7 @@ def configure_penalty_weights(problem, method, subconstraints=None):
 
             z_state_idx = idx.indices.z["state"]
             z_ctcs_idx  = idx.indices.z["ctcs"]
-            term_idx    = idx.indices.constraints.terminal 
+            term_idx    = idx.indices.constraints.final_state 
             
             # real dynamics portion weights
             if method.flags["buff_dyn"] in {"l1", "l2"}:
@@ -99,10 +99,10 @@ def configure_penalty_weights(problem, method, subconstraints=None):
 
             else:
                 if len(term_idx["eq"]) > 0:
-                    W_stack.terminal[term_idx["eq"]] += w_term
+                    W_stack.final_state[term_idx["eq"]] += w_term
 
                 if len(term_idx["ineq"]) > 0:
-                    W_stack.terminal[term_idx["ineq"]] += w_term
+                    W_stack.final_state[term_idx["ineq"]] += w_term
 
             # ctcs portion weights
             if method.flags["ctcs"] in {"l1", "l2"}:
@@ -113,7 +113,7 @@ def configure_penalty_weights(problem, method, subconstraints=None):
                 W_stack.minus_ctcs += w_dyn
             
             else:
-                W_stack.terminal[term_idx["ctcs"]] += w_term
+                W_stack.final_state[term_idx["ctcs"]] += w_term
 
 
     # === Autotune mode: {1,3,al-scvx} ===
@@ -134,7 +134,7 @@ def configure_penalty_weights(problem, method, subconstraints=None):
 
             z_state_idx = idx.indices.z["state"]
             z_ctcs_idx  = idx.indices.z["ctcs"]
-            term_idx    = idx.indices.constraints.terminal
+            term_idx    = idx.indices.constraints.final_state
 
             eps = penalty["eps_nonzero1"]
 
@@ -151,9 +151,9 @@ def configure_penalty_weights(problem, method, subconstraints=None):
 
             else:
                 if len(term_idx["eq"]) > 0:
-                    dual_stack.terminal[term_idx["eq"]] += eps
+                    dual_stack.final_state[term_idx["eq"]] += eps
                 if len(term_idx["ineq"]) > 0:
-                    dual_stack.terminal[term_idx["ineq"]] += eps
+                    dual_stack.final_state[term_idx["ineq"]] += eps
 
             # ctcs duals
             if ctcs_flag in {"l1", "l2"}:
@@ -167,7 +167,7 @@ def configure_penalty_weights(problem, method, subconstraints=None):
                     dual_stack.dynamics[:, z_ctcs_idx] += eps
 
             else:
-                dual_stack.terminal[term_idx["ctcs"]] += eps
+                dual_stack.final_state[term_idx["ctcs"]] += eps
 
     method.penalty = penalty
 
@@ -198,7 +198,7 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
     # TERMINAL TERM (REAL + CTCS)
     # ------------------------------------------------------------
     if subprob.vb_term is not None and subprob.vb_term.size > 0:
-        VB += cp.sum_squares(cp.diag(subprob.W_sqrt.terminal) @ subprob.vb_term)
+        VB += cp.sum_squares(cp.diag(subprob.W_sqrt.final_state) @ subprob.vb_term)
 
     # ------------------------------------------------------------
     # STACKED NONLINEAR INEQUALITY BUFFERS
@@ -398,8 +398,8 @@ def build_dual_buffer_cost(subprob) -> cp.Expression:
     # ============================================================
     # Terminal dual cost
     # ============================================================
-    if subprob.vb_term is not None and subprob.n.terminal > 0:
-        DUAL += subprob.dual.terminal @ subprob.vb_term
+    if subprob.vb_term is not None and subprob.n.final_state > 0:
+        DUAL += subprob.dual.final_state @ subprob.vb_term
 
     return DUAL
 
@@ -428,7 +428,7 @@ def autotune1(subproblem, conv_data, iter_num):
     # Extract current duals from subproblem
     dual_ineq  = subproblem.dual_stack.nonconvex_inequality
     dual_dyn   = subproblem.dual_stack.dynamics
-    dual_term  = subproblem.dual_stack.terminal
+    dual_term  = subproblem.dual_stack.final_state
 
     dual_plus_real  = subproblem.dual_stack.plus_real
     dual_minus_real = subproblem.dual_stack.minus_real
@@ -458,7 +458,7 @@ def autotune1(subproblem, conv_data, iter_num):
     # NOTE: testing the augmented lagrangian update rule for duals
     dual_dyn_plus = W_dyn * vb_dyn + dual_dyn
 
-    W_term = subproblem.W_stack.terminal
+    W_term = subproblem.W_stack.final_state
 
     # terminal
     dual_term_plus = W_term * vb_term + dual_term
@@ -487,7 +487,7 @@ def autotune1(subproblem, conv_data, iter_num):
     # ========================================== 
     subproblem.dual_stack.nonconvex_inequality = dual_ineq_plus
     subproblem.dual_stack.dynamics             = dual_dyn_plus
-    subproblem.dual_stack.terminal             = dual_term_plus
+    subproblem.dual_stack.final_state             = dual_term_plus
     subproblem.dual_stack.plus_real            = dual_plus_plus_real
     subproblem.dual_stack.minus_real           = dual_minus_plus_real
     subproblem.dual_stack.plus_ctcs            = dual_plus_plus_ctcs
@@ -526,7 +526,7 @@ def autotune2(subproblem, conv_data, iter_num):
     # Get current weights from subproblem
     W_ineq = np.array(subproblem.W_stack.nonconvex_inequality)
     W_dyn  = np.array(subproblem.W_stack.dynamics)
-    W_term = np.array(subproblem.W_stack.terminal)
+    W_term = np.array(subproblem.W_stack.final_state)
 
     W_plus_real  = np.array(subproblem.W_stack.plus_real)
     W_minus_real = np.array(subproblem.W_stack.minus_real)
@@ -648,7 +648,7 @@ def autotune2(subproblem, conv_data, iter_num):
 
     subproblem.W_stack.nonconvex_inequality = Wh_ineq
     subproblem.W_stack.dynamics = Wh_dyn
-    subproblem.W_stack.terminal = Wh_term
+    subproblem.W_stack.final_state = Wh_term
 
     # Return diagnostics for logging
     return {

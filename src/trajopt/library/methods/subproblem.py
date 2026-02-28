@@ -99,7 +99,7 @@ class Subproblem:
         # ---------------------------------------------
         # TERMINAL CONDITION BUFFERS (REAL + CTCS)
         # --- ------------------------------------------
-        n_term_real = self.n.terminal + self.n.term_ineq
+        n_term_real = self.n.final_state + self.n.term_ineq
         n_term_ctcs  = self.n.term_ctcs
         # ------------ Real terminal constraints (size = n_term_real) ------------
         self.vb_term_real = (
@@ -225,7 +225,7 @@ class Subproblem:
         # Build W_sqrt as attribute dictionary with CVXPY parameters, initialized to zeros
         self.W_sqrt = tools.AttrDict()
         self.W_sqrt.nonconvex_inequality = cp.Parameter((N, max(self.n.nonconvex_inequality, 1)),  nonneg=True, name="W_ineq_sqrt",        value=np.zeros((N, max(self.n.nonconvex_inequality, 1))))
-        self.W_sqrt.terminal            = cp.Parameter((max(self.n.term_total, 1),),                         nonneg=True, name="W_term_sqrt",        value=np.zeros((max(self.n.term_total, 1),)))
+        self.W_sqrt.final_state            = cp.Parameter((max(self.n.term_total, 1),),                         nonneg=True, name="W_term_sqrt",        value=np.zeros((max(self.n.term_total, 1),)))
         self.W_sqrt.dynamics            = cp.Parameter((N - 1, max(nz, 1)),                                  nonneg=True, name="W_dyn_sqrt",         value=np.zeros((N - 1, max(nz, 1))))
         self.W_sqrt.plus_real           = cp.Parameter((max(self.N.pm_real, 1), max(self.n.plus_real, 1)),   nonneg=True, name="W_plus_real_sqrt",   value=np.zeros((max(self.N.pm_real, 1), max(self.n.plus_real, 1))))
         self.W_sqrt.minus_real          = cp.Parameter((max(self.N.pm_real, 1), max(self.n.minus_real, 1)),  nonneg=True, name="W_minus_real_sqrt",  value=np.zeros((max(self.N.pm_real, 1), max(self.n.minus_real, 1))))
@@ -240,7 +240,7 @@ class Subproblem:
         self.dual.minus_real          = cp.Parameter((max(self.N.pm_real, 1), max(self.n.minus_real, 1)),    name="dual_minus_real")
         self.dual.plus_ctcs           = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.plus_ctcs, 1)),     name="dual_plus_ctcs")
         self.dual.minus_ctcs          = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.minus_ctcs, 1)),    name="dual_minus_ctcs")
-        self.dual.terminal            = cp.Parameter((max(self.n.term_total, 1),),                           name="dual_term")
+        self.dual.final_state            = cp.Parameter((max(self.n.term_total, 1),),                           name="dual_term")
 
         # CTCS epsilon (scalar)
         self.eps_ctcs         = cp.Parameter(nonneg=True, name="eps_ctcs")
@@ -266,7 +266,7 @@ class Subproblem:
         C: List[cp.Constraint] = []
 
         # Terminal equalities / inequalities
-        term_idx  = self.indices.constraints.terminal  
+        term_idx  = self.indices.constraints.final_state  
 
         for constraint in problem.constraints.get(ct=0, type="equality_bc"):
             idx = constraint.idx
@@ -706,7 +706,7 @@ class Subproblem:
 
         # 1. Refresh W_sqrt CVXPY parameter values from stacked constraint weights
         self.W_sqrt.nonconvex_inequality.value = tools.ensure_shape(np.sqrt(W_stack.nonconvex_inequality), self.W_sqrt.nonconvex_inequality.shape)
-        self.W_sqrt.terminal.value             = tools.ensure_shape(np.sqrt(W_stack.terminal),             self.W_sqrt.terminal.shape)
+        self.W_sqrt.final_state.value             = tools.ensure_shape(np.sqrt(W_stack.final_state),             self.W_sqrt.final_state.shape)
         self.W_sqrt.dynamics.value             = tools.ensure_shape(np.sqrt(W_stack.dynamics),             self.W_sqrt.dynamics.shape)
         self.W_sqrt.plus_real.value            = tools.ensure_shape(np.sqrt(W_stack.plus_real),            self.W_sqrt.plus_real.shape)
         self.W_sqrt.minus_real.value           = tools.ensure_shape(np.sqrt(W_stack.minus_real),           self.W_sqrt.minus_real.shape)
@@ -715,7 +715,7 @@ class Subproblem:
 
         # 2. Update dual CVXPY parameter values from stacked constraint duals
         self.dual.nonconvex_inequality.value   = tools.ensure_shape(dual_stack.nonconvex_inequality, self.dual.nonconvex_inequality.shape)
-        self.dual.terminal.value               = tools.ensure_shape(dual_stack.terminal,               self.dual.terminal.shape)
+        self.dual.final_state.value               = tools.ensure_shape(dual_stack.final_state,               self.dual.final_state.shape)
         self.dual.dynamics.value               = tools.ensure_shape(dual_stack.dynamics,               self.dual.dynamics.shape)
         self.dual.plus_real.value              = tools.ensure_shape(dual_stack.plus_real,              self.dual.plus_real.shape)
         self.dual.minus_real.value             = tools.ensure_shape(dual_stack.minus_real,             self.dual.minus_real.shape)
@@ -861,7 +861,7 @@ class Subproblem:
         # Copy updated W_stack and dual_stack to iter_record for history
         rec["W"] = tools.AttrDict({
             "nonconvex_inequality": self.W_stack.nonconvex_inequality.copy(),
-            "terminal": self.W_stack.terminal.copy(),
+            "final_state": self.W_stack.final_state.copy(),
             "dynamics": self.W_stack.dynamics.copy(),
             "plus_real": self.W_stack.plus_real.copy(),
             "minus_real": self.W_stack.minus_real.copy(),
@@ -870,7 +870,7 @@ class Subproblem:
         })
         rec["dual"] = tools.AttrDict({
             "nonconvex_inequality": self.dual_stack.nonconvex_inequality.copy(),
-            "terminal": self.dual_stack.terminal.copy(),
+            "final_state": self.dual_stack.final_state.copy(),
             "dynamics": self.dual_stack.dynamics.copy(),
             "plus_real": self.dual_stack.plus_real.copy(),
             "minus_real": self.dual_stack.minus_real.copy(),

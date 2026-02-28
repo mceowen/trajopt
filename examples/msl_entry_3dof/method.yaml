@@ -35,3 +35,23 @@ conv:
   eps_defect: [0.01]
   eps_dyn: [10.0, 0.1, 0.1, 30.0, 0.1, 0.1]
   iter_max: 100
+
+# ===============================
+# CONSTRAINT CONFIGURATIONS
+# ==============================
+constraints:
+  final_state:
+    flag_buff: none
+    W: 1.0
+    dual: 0.0
+    vb: 0.0
+  nonlinear_inequality:
+    flag_buff: none
+    W: 1.0
+    dual: 0.0
+    vb: 0.0
+  dynamics:
+    flag_buff: none
+    W: 1.0
+    dual: 0.0
+    vb: 0.0

@@ -178,7 +178,7 @@ class IndexMap:
             "nu": nu_indices,
             "constraints": AttrDict({
                 "nonlinear_inequality": nonlinear_ineq,
-                "terminal": terminal,
+                "final_state": terminal,
                 "dynamics": dynamics_indices,
             }),
             "ctcs": ctcs_indices,
@@ -193,7 +193,7 @@ class IndexMap:
             "nfz": int(n_nfz),
             "custom": int(n_custom),
             "nonconvex_inequality": int(n_ineq),
-            "terminal": int(n_term),
+            "final_state": int(n_term),
             "term_ineq": int(n_term_ineq),
             "term_ctcs": int(n_term_ctcs),
             "term_total": int(n_term_total),
@@ -210,7 +210,7 @@ class IndexMap:
             "nfz": N_val,
             "custom": N_val,
             "dynamics": N_val - 1,
-            "terminal": 1,
+            "final_state": 1,
             "box": N_val,
             "control_rate_limit": N_val - 1,
             "axis_angle_cone": N_val,
@@ -240,7 +240,7 @@ class IndexMap:
                 print(f"    {k:25s}: {v.shape if hasattr(v,'shape') else len(v)}")
 
         print("\nCONSTRAINTS:")
-        for constraint_type in ['nonlinear_inequality', 'terminal', 'dynamics']:
+        for constraint_type in ['nonlinear_inequality', 'final_state', 'dynamics']:
             constraint_obj = getattr(self.indices.constraints, constraint_type)
             print(f"    {constraint_type.upper()}:")
             for k, v in constraint_obj.items():
