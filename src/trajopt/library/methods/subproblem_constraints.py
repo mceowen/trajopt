@@ -104,14 +104,38 @@ class SubproblemConstraints(Constraints):
         ctcs_constraints = [c for c in self.constraints_list if getattr(c, "ct", None) == 1]
         dyn_constraints = [c for c in self.constraints_list if getattr(c, "type", None) == "dynamics"]
 
-        W_stack.nonconvex_inequality  = self._stack_constraint_attr(ineq_constraints, "W", (idx.N.N, idx.n.nonconvex_inequality))
+        W_stack.nonconvex_inequality    = self._stack_constraint_attr(ineq_constraints, "W", (idx.N.N, idx.n.nonconvex_inequality))
         dual_stack.nonconvex_inequality = self._stack_constraint_attr(ineq_constraints, "dual", (idx.N.N, idx.n.nonconvex_inequality))
 
         W_stack.final_state              = self._stack_constraint_attr(term_constraints + ctcs_constraints, "W", (max(idx.n.term_total, 1),))
         dual_stack.final_state           = self._stack_constraint_attr(term_constraints + ctcs_constraints, "dual", (max(idx.n.term_total, 1),))
 
-        W_stack.dynamics              = self._stack_constraint_attr(dyn_constraints, "W", (max(idx.N.N - 1, 1), max(idx.n.z, 1)))
-        dual_stack.dynamics           = self._stack_constraint_attr(dyn_constraints, "dual", (max(idx.N.N - 1, 1), max(idx.n.z, 1)))
+        W_stack.dynamics                = self._stack_constraint_attr(dyn_constraints, "W", (max(idx.N.N - 1, 1), max(idx.n.z, 1)))
+        dual_stack.dynamics             = self._stack_constraint_attr(dyn_constraints, "dual", (max(idx.N.N - 1, 1), max(idx.n.z, 1)))
+
+        # Stack W and dual by constraint types defined in method.constraints.types
+        if hasattr(method, "constraints") and "types" in method.constraints:
+            W_stack.types = tools.AttrDict()
+            dual_stack.types = tools.AttrDict()
+            
+            for type_key in method.constraints.types.keys():
+                # Map config key back to actual constraint type
+                actual_type = "nonconvex_inequality" if type_key == "nonlinear_inequality" else type_key
+                constraints_of_type = [c for c in self.constraints_list if getattr(c, "type", None) == actual_type]
+                
+                W_stack.types[type_key] = self._stack_constraint_attr(constraints_of_type, "W")
+                dual_stack.types[type_key] = self._stack_constraint_attr(constraints_of_type, "dual")
+        
+        # Stack W and dual by constraint names defined in method.constraints.names
+        if hasattr(method, "constraints") and "names" in method.constraints:
+            W_stack.names = tools.AttrDict()
+            dual_stack.names = tools.AttrDict()
+            
+            for name_key in method.constraints.names.keys():
+                constraints_of_name = [c for c in self.constraints_list if getattr(c, "name", None) == name_key]
+                
+                W_stack.names[name_key] = self._stack_constraint_attr(constraints_of_name, "W")
+                dual_stack.names[name_key] = self._stack_constraint_attr(constraints_of_name, "dual")
 
         # Initialize plus/minus buffers as zeros (will be populated by configure_penalty_weights)
         W_stack.plus_real     = np.zeros((idx.N.pm_real, idx.n.plus_real))
