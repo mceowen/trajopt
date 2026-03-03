@@ -12,7 +12,7 @@ import pandas as pd
 # Main function
 # =============================================================================
 
-def analyze_quality_metrics(mc_data, config=None, filename=None):
+def analyze_quality_metrics(runs, config=None, filename=None):
     """
     Monte Carlo solution quality metrics computation.
     """
@@ -25,7 +25,7 @@ def analyze_quality_metrics(mc_data, config=None, filename=None):
         config      = load_configuration()
 
     # Pull out variables from each run
-    extracted   = extract_data(config, mc_data)
+    extracted   = extract_data(config, runs)
 
     # Calculated associated metrics for each variable for each method across runs
     stats       = generate_statistics(config, extracted)
@@ -38,7 +38,7 @@ def analyze_quality_metrics(mc_data, config=None, filename=None):
 
     return {
         "config": config,
-        "data": mc_data,
+        "data": runs,
         "extracted": extracted,
         "stats": stats,
         "table_cell": table,
@@ -109,7 +109,7 @@ def extract_data(config, data):
         }
 
         # Loop through all runs and store all variables as defined within config
-        for run_data in method_data['mc_data']:
+        for run_data in method_data['runs']:
             num_iters = len(run_data['iters']) - 1
             # Summation of all time series data across the iterations
             for iter_data in run_data['iters']:

@@ -2,20 +2,19 @@ import trajopt.core.costs.costs_library as costs_library
 import inspect
 from functools import partial
 import trajopt.library.methods.convexify as convexify
+from trajopt.utils.tools import AttrDict
 
 class Costs:
-    def __init__(self, cost_config_list, config):
-
-        self.config_list = cost_config_list
+    def __init__(self, config):
 
         self.costs_list = []
 
         print(f"costs:")
 
         # build cost_ids mapping
-        for i, cost_config in enumerate(cost_config_list):
-            print(f"  {i}: {cost_config['name']}: {cost_config['type']}")
-            self.register_cost(cost_config, config)
+        for i, (cost_name, cost_config_i) in enumerate(config.problem.costs.items()):
+            print(f"  {i}: {cost_name}: {cost_name}")
+            self.register_cost(cost_config_i, config)
 
     def register_cost(self, cost_config, config):
         """

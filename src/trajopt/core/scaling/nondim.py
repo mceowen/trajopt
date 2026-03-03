@@ -1,10 +1,10 @@
 import numpy as np
+from trajopt.utils.tools import AttrDict
 
 # example usage: set_nondim_params(["d", "d", "d", "v", "v", "v"], ["f", "f"], [("d", 10), ("v", 10), ("m", 1)], params)
 
 
 class Nondim:
-
     def __init__(self, problem):
 
         """
@@ -19,17 +19,17 @@ class Nondim:
         # A @ ln([d, t, m]^T) = ln([anchor0, anchor1, anchor2]^T)
         # then ([d, t, m]^T) = exp(log([d, t, m]^T))
 
-        exponents = {
+        exponents = AttrDict({
             "d": np.array([1,  0,  0]),
             "t": np.array([0,  1,  0]),
             "m": np.array([0,  0,  1]),
             "v": np.array([1, -1,  0]),
             "a": np.array([1, -2,  0]),
             "f": np.array([1, -2,  1]),
-        }
+        })
 
-        A = np.vstack([exponents[key] for key in problem.config['model']['nondim']['anchor_types']])
-        b = np.log(np.array([val for val in problem.config['model']['nondim']['anchor_scales']]))
+        A = np.vstack([exponents[key] for key in problem.config.problem.model.nondim.anchor_types])
+        b = np.log(np.array([val for val in problem.config.problem.model.nondim.anchor_scales]))
 
         log_base_scales = np.linalg.solve(A, b)
         base_scales = np.exp(log_base_scales)
@@ -39,7 +39,7 @@ class Nondim:
         nt = base_scales[1]
         nm = base_scales[2]
 
-        self.scales = {
+        self.scales = AttrDict({
             "d"    : nd,
             "t"    : nt,
             "m"    : nm,
@@ -52,9 +52,9 @@ class Nondim:
             "ang"  : 180 / np.pi,
             "angv" : (180 / np.pi) / nt,
             "none": 1.0 
-        }
+        })
 
-        scale_overrides = problem.config['model']['nondim'].get('scale_overrides', {})
+        scale_overrides = problem.config.problem.model.nondim.get('scale_overrides', {})
         if scale_overrides:
             print("Applying scale overrides:")
             for key, value in scale_overrides.items():
@@ -69,7 +69,7 @@ class Nondim:
         t_lbl = "s"
         m_lbl = "kg"
 
-        self.scale_labels = {
+        self.scale_labels = AttrDict({
             "d"    : d_lbl,
             "t"    : t_lbl,
             "m"    : m_lbl,
@@ -82,56 +82,56 @@ class Nondim:
             "ang"  : "deg",
             "angv" : f"deg / {t_lbl}",
             "none": ""
-        }
+        })
 
         print("scales: ")
         print(", ".join(f"{k}: {v:.4f}" for k, v in self.scales.items()))
 
-        self.z_types = problem.config['model']['nondim']['z_types']
-        self.u_types = problem.config['model']['nondim']['u_types']
+        self.z_types = problem.config.problem.model.nondim.z_types
+        self.u_types = problem.config.problem.model.nondim.u_types
 
         self.nd_state = np.array([self.scales[self.z_types[i]] for i in range(n_x)])
         self.nd_ctrl  = np.array([self.scales[self.u_types[i]] for i in range(n_nu)])
 
-        if problem.config['model']['nondim'].get('z_scales', None) is not None:
-            self.nd_state = np.array(problem.config['model']['nondim']['z_scales'])
+        if problem.config.problem.model.nondim.get('z_scales', None) is not None:
+            self.nd_state = np.array(problem.config.problem.model.nondim['z_scales'])
 
-        if problem.config['model']['nondim'].get('u_scales', None) is not None:
-            self.nd_ctrl  = np.array(problem.config['model']['nondim']['u_scales'])
+        if problem.config.problem.model.nondim.get('u_scales', None) is not None:
+            self.nd_ctrl  = np.array(problem.config.problem.model.nondim['u_scales'])
 
-        if problem.config['model']['nondim'].get('t_scale', None) is not None:
-            self.nd_time = problem.config['model']['nondim']['t_scale']
+        if problem.config.problem.model.nondim.get('t_scale', None) is not None:
+            self.nd_time = problem.config.problem.model.nondim['t_scale']
 
         else:
             self.nd_time = self.scales['t']
 
-        self.M          = {}
-        self.M["state"] = {}
-        self.M["ctrl"]  = {}
-        self.M["ineq_nodal"] = {}
-        self.M["ineq_ct"] = {}
-        self.M["term_total"] = {}
+        self.M          = AttrDict({})
+        self.M["state"] = AttrDict({})
+        self.M["ctrl"]  = AttrDict({})
+        self.M["ineq_nodal"] = AttrDict({})
+        self.M["ineq_ct"] = AttrDict({})
+        self.M["term_total"] = AttrDict({})
 
-        self.labels     = {}
+        self.labels     = AttrDict({})
 
-        self.M["state"]["d2nd"] = np.diag(1 / self.nd_state).copy()
-        self.M["state"]["nd2d"] = np.diag(self.nd_state).copy()
-        self.M["ctrl"]["d2nd"] = np.diag(1 / self.nd_ctrl).copy()
-        self.M["ctrl"]["nd2d"] = np.diag(self.nd_ctrl).copy()
+        self.M.state.d2nd = np.diag(1 / self.nd_state).copy()
+        self.M.state.nd2d = np.diag(self.nd_state).copy()
+        self.M.ctrl.d2nd = np.diag(1 / self.nd_ctrl).copy()
+        self.M.ctrl.nd2d = np.diag(self.nd_ctrl).copy()
 
         # add scalar nondim variables to nondim substruct
-        self.nd = self.scales["d"]
-        self.na = self.scales["a"]
+        self.nd = self.scales.d
+        self.na = self.scales.a
         self.nt = self.nd_time
         self.nt_inv = 1 / self.nt
-        self.nv = self.scales["v"]
-        self.nm = self.scales["m"]
+        self.nv = self.scales.v
+        self.nm = self.scales.m
         self.nm_dot = self.nm / self.nt
-        self.nf = self.scales["f"]
-        self.nang = self.scales["ang"]
+        self.nf = self.scales.f
+        self.nang = self.scales.ang
         self.nangv = self.nang / self.nt
-        self.labels["state"] = [self.scale_labels[self.z_types[i]] for i in range(n_x)]
-        self.labels["ctrl"]  = [self.scale_labels[self.u_types[i]] for i in range(n_nu)]
+        self.labels.state = [self.scale_labels[self.z_types[i]] for i in range(n_x)]
+        self.labels.ctrl = [self.scale_labels[self.u_types[i]] for i in range(n_nu)]
 
         # set nondim for cost and constraints
         
@@ -154,8 +154,8 @@ class Nondim:
                     self.nd_ineq[idx:idx + constraint.dimension] = scale
             idx += constraint.dimension
 
-        self.M["ineq_nodal"]["d2nd"] = np.diag(1 / self.nd_ineq).copy()
-        self.M["ineq_nodal"]["nd2d"] = np.diag(self.nd_ineq).copy()
+        self.M.ineq_nodal.d2nd = np.diag(1 / self.nd_ineq).copy()
+        self.M.ineq_nodal.nd2d = np.diag(self.nd_ineq).copy()
 
         # ct inequality nondim
         self.nd_ctcs = np.ones(problem.index_map.n['ctcs'])
@@ -169,8 +169,8 @@ class Nondim:
                     self.nd_ctcs[idx:idx + constraint.dimension] = scale
             idx += constraint.dimension
 
-        self.M["ineq_ct"]["d2nd"] = np.diag(1 / self.nd_ctcs).copy()
-        self.M["ineq_ct"]["nd2d"] = np.diag(self.nd_ctcs).copy()
+        self.M.ineq_ct.d2nd = np.diag(1 / self.nd_ctcs).copy()
+        self.M.ineq_ct.nd2d = np.diag(self.nd_ctcs).copy()
 
         terminal_constraint = problem.constraints.get(name="final_state")[0]
         idx = terminal_constraint.idx
@@ -182,8 +182,8 @@ class Nondim:
         ])
 
 
-        self.M["term_total"]["d2nd"] = np.diag(1 / self.nd_term_total).copy()
-        self.M["term_total"]["nd2d"] = np.diag(self.nd_term_total).copy()
+        self.M.term_total.d2nd = np.diag(1 / self.nd_term_total).copy()
+        self.M.term_total.nd2d = np.diag(self.nd_term_total).copy()
 
     def build_nondim_matrix(self, units_list):
         """

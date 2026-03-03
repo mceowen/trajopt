@@ -53,11 +53,18 @@ constraints:
     max_value: 24.525
     eps: [0.01]
 
+costs:
+  control_rate_regularization:
+    type: rate_regularization
+    set: control
+    w: 0.01
+
 # ===============================
 # ACTIVE CONSTRAINTS AND COSTS
 # ===============================
 
-constraint_list: 
+constraint_list:
+  - dynamics
   - initial_state
   - final_state
   - state_limits
@@ -69,3 +76,4 @@ constraint_list:
 
 cost_list: 
   - min_terminal_velocity
+  - control_rate_regularization

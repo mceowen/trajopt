@@ -4,7 +4,7 @@ import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 from scipy.integrate import solve_ivp
 import trajopt.library.methods.convexify as convexify
-from trajopt.utils.tools import AttrDict
+import trajopt.utils.tools as tools
 
 def set_ltv_indices(problem, method):
     """
@@ -56,14 +56,7 @@ def compute_nonconvex_constraints(t_ref, z_ref, u_ref, problem, method):
     nu_jax = jnp.asarray(u_ref)
 
     params = problem.params
-
-    def to_dict_if_attrdict(x):
-        from trajopt.utils.tools import AttrDict
-        if isinstance(x, AttrDict):
-            return dict(x)
-        return x
-    
-    params = to_dict_if_attrdict(params)
+    params_jax = tools.recursive_to_dict(params)
     
     # Preallocate stacked arrays
     g    = np.zeros((N, n_ineq))
@@ -80,10 +73,24 @@ def compute_nonconvex_constraints(t_ref, z_ref, u_ref, problem, method):
         for constraint in problem.constraints.get(ct=0, type="nonconvex_inequality"):
             col_end = col_start + constraint.dimension
             
-            f, dfcn_dz, dfcn_du            = constraint.g_aff(tk, zk, uk, params)
-            g[k, col_start:col_end]        = np.asarray(f)
-            dgdz[k, col_start:col_end, :]  = np.asarray(dfcn_dz)
-            dgdnu[k, col_start:col_end, :] = np.asarray(dfcn_du)
+            f, dfcn_dz, dfcn_du            = constraint.g_aff(tk, zk, uk, params_jax)
+
+            g_k = np.asarray(f)
+            dgdz_k = np.asarray(dfcn_dz)
+            dgdnu_k = np.asarray(dfcn_du)
+
+            g[k, col_start:col_end]        = g_k
+            dgdz[k, col_start:col_end, :]  = dgdz_k
+            dgdnu[k, col_start:col_end, :] = dgdnu_k
+
+            # # condition constraints by row norms
+            # row_norms = np.linalg.norm(np.hstack([dgdz_k, dgdnu_k]), axis=1)
+
+            # # avoid division by zero
+            # row_norms[row_norms == 0] = 1.0
+            # g[k, col_start:col_end] /= row_norms
+            # dgdz[k, col_start:col_end, :] /= row_norms[:, np.newaxis]
+            # dgdnu[k, col_start:col_end, :] /= row_norms[:, np.newaxis]
             
             col_start = col_end
     
@@ -100,14 +107,7 @@ def compute_nonconvex_costs(t_ref, z_ref, u_ref, problem, method):
     nu_jax = jnp.asarray(u_ref)
 
     params = problem.params
-
-    def to_dict_if_attrdict(x):
-        from trajopt.utils.tools import AttrDict
-        if isinstance(x, AttrDict):
-            return dict(x)
-        return x
-    
-    params = to_dict_if_attrdict(params)
+    params_jax = tools.recursive_to_dict(params)
     
     # preallocate stacked arrays (cost per timestep)
     cost = np.zeros((N, 1))
@@ -121,7 +121,7 @@ def compute_nonconvex_costs(t_ref, z_ref, u_ref, problem, method):
             zk = z_jax[k]
             uk = nu_jax[k]
             
-            f, dfcn_dz, dfcn_du = cost_object.g_aff(tk, zk, uk, params)
+            f, dfcn_dz, dfcn_du = cost_object.g_aff(tk, zk, uk, params_jax)
             cost[k, 0] += np.asarray(f)
             dcostdz[k, 0, :] += np.asarray(dfcn_dz).flatten()
             dcostdnu[k, 0, :] += np.asarray(dfcn_du).flatten()
@@ -131,7 +131,7 @@ def compute_nonconvex_costs(t_ref, z_ref, u_ref, problem, method):
         zk = z_jax[-1]
         uk = nu_jax[-1]
         
-        f, dfcn_dz, dfcn_du = cost_object.g_aff(tk, zk, uk, params)
+        f, dfcn_dz, dfcn_du = cost_object.g_aff(tk, zk, uk, params_jax)
         cost[-1, 0]        += np.asarray(f)
         dcostdz[-1, 0, :]  += np.asarray(dfcn_dz).flatten()
         dcostdnu[-1, 0, :] += np.asarray(dfcn_du).flatten()
@@ -149,20 +149,18 @@ def compile_jax_discretization(problem, method):
     Sk_ind0   = Bkp_ind0 + nz*n_nu
 
     params = problem.params
+    params_jax = tools.recursive_to_dict(params)
 
     # pull ltv dynamics
     lin_dyn = problem.constraints.get(type='dynamics')[0].lin_dyn
 
     # nsub defines the number of sub *nodes* between knot points
-    nsub_nodes = 20
+    nsub_nodes = 100
     dt_sub = 1.0 / (nsub_nodes + 1)
     t = jnp.linspace(0.0, 1.0, nsub_nodes + 2)
 
     # packs the derivative of stacked RHS vector for node k
-    def pack_lds_dot(tau, lds_k, nu_k, nu_kp, dt_k, params):
-
-        if isinstance(params, AttrDict):
-            params = dict(params)
+    def pack_lds_dot(tau, lds_k, nu_k, nu_kp, dt_k, params_jax):
 
         x       = lds_k[         : Ak_ind0]
         phi_a   = lds_k[Ak_ind0  : Bk_ind0].reshape((nz, nz))
@@ -175,7 +173,7 @@ def compile_jax_discretization(problem, method):
         u = a * nu_k + b * nu_kp
         sigma = dt_k
 
-        fc, Ac, Bc    = lin_dyn(tau, x, u, params)
+        fc, Ac, Bc    = lin_dyn(tau, x, u, params_jax)
 
         P1_dot = (sigma * fc)
         P2_dot = (sigma * Ac @ phi_a).reshape((nz*nz,))
@@ -186,15 +184,12 @@ def compile_jax_discretization(problem, method):
         return jnp.concatenate([P1_dot, P2_dot, P3_dot, P4_dot, P5_dot])
 
     # rk4 single step function for jax integration
-    def rk4_step_jax(tau, lds, nu_k, nu_kp, dt_k, params):
-
-        if isinstance(params, AttrDict):
-            params = dict(params)
+    def rk4_step_jax(tau, lds, nu_k, nu_kp, dt_k, params_jax):
         
-        k1 = pack_lds_dot(tau, lds, nu_k, nu_kp, dt_k, params)
-        k2 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k1, nu_k, nu_kp, dt_k, params)
-        k3 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k2, nu_k, nu_kp, dt_k, params)
-        k4 = pack_lds_dot(tau + dt_sub, lds + dt_sub * k3, nu_k, nu_kp, dt_k, params)
+        k1 = pack_lds_dot(tau, lds, nu_k, nu_kp, dt_k, params_jax)
+        k2 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k1, nu_k, nu_kp, dt_k, params_jax)
+        k3 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k2, nu_k, nu_kp, dt_k, params_jax)
+        k4 = pack_lds_dot(tau + dt_sub, lds + dt_sub * k3, nu_k, nu_kp, dt_k, params_jax)
         
         lds_next = lds + (dt_sub / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
         return lds_next, None
@@ -222,10 +217,7 @@ def compile_jax_discretization(problem, method):
         return (A_jax_k, B_jax_k, Bp_jax_k, S_jax_k, z_minus_k)
 
     # propagation function for node k
-    def propagate_k(k, z_ref, nu_ref, dt_ref, params):
-        
-        if isinstance(params, AttrDict):
-            params = dict(params)
+    def propagate_k(k, z_ref, nu_ref, dt_ref, params_jax):
 
         z_k  = z_ref[k]
         nu_k  = nu_ref[k]
@@ -237,7 +229,7 @@ def compile_jax_discretization(problem, method):
 
         # propagate stacked vector
         def rk4_step_jax_partial(lds, tau):
-            return rk4_step_jax_jit(tau, lds, nu_k, nu_kp, dt_k, params)
+            return rk4_step_jax_jit(tau, lds, nu_k, nu_kp, dt_k, params_jax)
 
         ldsf_k, _ = jax.lax.scan(rk4_step_jax_partial, lds0_k, t[:-1])
 
@@ -269,10 +261,7 @@ def compile_jax_discretization_bwd(problem, method):
     t = jnp.linspace(0.0, 1.0, nsub_nodes + 2)
 
     # packs the derivative of stacked RHS vector for node k
-    def pack_lds_dot(tau, lds_k, nu_k, nu_kp, dt_k, params):
-
-        if isinstance(params, AttrDict):
-            params = dict(params)
+    def pack_lds_dot(tau, lds_k, nu_k, nu_kp, dt_k, params_jax):
 
         x       = lds_k[         : Ak_ind0]
         phi_a   = lds_k[Ak_ind0  : Bk_ind0].reshape((nz, nz))
@@ -296,15 +285,12 @@ def compile_jax_discretization_bwd(problem, method):
         return jnp.concatenate([P1_dot, P2_dot, P3_dot, P4_dot, P5_dot])
 
     # rk4 single step function for jax integration
-    def rk4_step_jax_bwd(tau, lds, nu_k, nu_kp, dt_k, params):
-
-        if isinstance(params, AttrDict):
-            params = dict(params)
+    def rk4_step_jax_bwd(tau, lds, nu_k, nu_kp, dt_k, params_jax):
         
-        k1 = pack_lds_dot(tau, lds, nu_k, nu_kp, dt_k, params)
-        k2 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k1, nu_k, nu_kp, dt_k, params)
-        k3 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k2, nu_k, nu_kp, dt_k, params)
-        k4 = pack_lds_dot(tau + dt_sub, lds + dt_sub * k3, nu_k, nu_kp, dt_k, params)
+        k1 = pack_lds_dot(tau, lds, nu_k, nu_kp, dt_k, params_jax)
+        k2 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k1, nu_k, nu_kp, dt_k, params_jax)
+        k3 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k2, nu_k, nu_kp, dt_k, params_jax)
+        k4 = pack_lds_dot(tau + dt_sub, lds + dt_sub * k3, nu_k, nu_kp, dt_k, params_jax)
         
         lds_next = lds + (dt_sub / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
         return lds_next, None
@@ -332,10 +318,7 @@ def compile_jax_discretization_bwd(problem, method):
         return (A_jax_k, B_jax_k, Bp_jax_k, S_jax_k, z_minus_k)
 
     # propagation function for node k
-    def propagate_k_bwd(k, z_ref, nu_ref, dt_ref, params):
-        
-        if isinstance(params, AttrDict):
-            params = dict(params)
+    def propagate_k_bwd(k, z_ref, nu_ref, dt_ref, params_jax):
 
         z_kp  = z_ref[k+1]
         nu_k  = nu_ref[k]
@@ -347,7 +330,7 @@ def compile_jax_discretization_bwd(problem, method):
 
         # propagate stacked vector
         def rk4_step_jax_partial(lds, tau):
-            return rk4_step_jax_jit_bwd(tau, lds, nu_k, nu_kp, dt_k, params)
+            return rk4_step_jax_jit_bwd(tau, lds, nu_k, nu_kp, dt_k, params_jax)
 
         ldsf_k, _ = jax.lax.scan(rk4_step_jax_partial, lds0_k, jnp.flip(t)[:-1])
 
@@ -367,12 +350,11 @@ def discretize_inv_free_jax(z_ref_np, nu_ref_np, dt_ref_np, problem, method):
     dt_ref = jnp.asarray(dt_ref_np)
 
     params = problem.params
-    if isinstance(params, AttrDict):
-        params = dict(params)
+    params_jax = tools.recursive_to_dict(params)
 
     # call jitted propagator for each node
     ks = jnp.arange(method.index_map.N['N'] - 1)
-    A_jax, B_jax, Bp_jax, S_jax, z_minus = method.propagate_discretization_jax(ks, z_ref, nu_ref, dt_ref, params)
+    A_jax, B_jax, Bp_jax, S_jax, z_minus = method.propagate_discretization_jax(ks, z_ref, nu_ref, dt_ref, params_jax)
 
     z_ref_0 = z_ref[[0], :]
     
@@ -387,12 +369,11 @@ def discretize_inv_free_jax_bwd(z_ref_np, nu_ref_np, dt_ref_np, problem, method)
     dt_ref = jnp.asarray(dt_ref_np)
 
     params = problem.params
-    if isinstance(params, AttrDict):
-        params = dict(params)
+    params_jax = tools.recursive_to_dict(params)
 
     # call jitted propagator for each node
     ks = jnp.arange(method.index_map.N['N'] - 1)
-    A_jax, B_jax, Bp_jax, S_jax, z_minus = method.propagate_discretization_jax_bwd(ks, z_ref, nu_ref, dt_ref, params)
+    A_jax, B_jax, Bp_jax, S_jax, z_minus = method.propagate_discretization_jax_bwd(ks, z_ref, nu_ref, dt_ref, params_jax)
     
     z_ref_f = z_ref[[-1], :]
     

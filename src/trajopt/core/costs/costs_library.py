@@ -33,6 +33,19 @@ class min_norm_terminal:
     def nondim_cost(self, nondim):
         pass
 
+class rate_regularization:
+    def __init__(self, cost_config, config=None):
+        self.type  = "rate_regularization"
+        self.name  = cost_config["name"]
+        self.group = cost_config.get("group", None)
+        self.set   = cost_config["set"]
+        self.norm_type = cost_config.get("norm_type", "l2")
+        self.w     = cost_config["w"]
+    
+    def nondim_cost(self, nondim):
+        pass
+    
+
 class nonconvex:
     def __init__(self, cnstr_config, config=None):
         # required config

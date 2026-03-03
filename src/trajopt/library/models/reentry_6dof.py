@@ -5,11 +5,10 @@ jax.config.update("jax_enable_x64", True)
     
 def dynamics(t, z, nu, params, fcns):
     # extract states
-    r = z[0:3]
+    r      = z[0:3]
     v_body = z[3:6]
-    q = z[6:10]
-    w = jnp.deg2rad(z[10:13]) 
-    moment_coeffs = nu[:3]
+    q      = z[6:10]
+    w      = jnp.deg2rad(z[10:13]) 
 
     # extract parameters
     veh    = params['vehicle']
@@ -26,9 +25,7 @@ def dynamics(t, z, nu, params, fcns):
     # aero forces and moments
     aero = fcns['nonlinear_aero'](t, z, nu, params, fcns)
     a_aero_trans_body = (1 / mass) * aero["f_trans"]
-    
-    # not using for now
-    # m_aero_rot_body = aero["m_rot"]
+    m_aero_rot_body = aero["m_rot"]
 
     rho = fcns['density_model'](t, z, nu, params)
     v_inertial = DCM(q).T @ v_body
@@ -37,13 +34,15 @@ def dynamics(t, z, nu, params, fcns):
     sref = params["vehicle"]["sref"]
     lref = params["vehicle"]["lref"]
 
+    moment_coeffs = nu[:3]
+
     q_dyn_press = 0.5 * rho * v_norm**2
     # moment = q_dyn_press * sref * lref * moment_coeffs
-    moment = moment_coeffs
+    # moment = moment_coeffs
 
-    # rotational kinematics and dynamics
+    # rotational kinematics and dynamics (body sees control + aero moments)
     q_dot = (1/2) * omega(w) @ q
-    w_dot = jnp.rad2deg(Jbinv @ ( moment - cr(w) @ Jb @ w))
+    w_dot = jnp.rad2deg(Jbinv @ (moment_coeffs - cr(w) @ Jb @ w))
 
     # translational accelerations
     v_body_dot = a_aero_trans_body + DCM(q) @ a_grav_inertial - cr(w) @ v_body
@@ -122,23 +121,12 @@ def sideslip(t, z, nu, params):
 
 def control_torques(t, z, nu, params, fcns):
 
-    aero = fcns["nonlinear_aero"](t, z, nu, params, fcns)
+    aero = fcns["nonlinear_aero_flaps"](t, z, nu, params, fcns)
     m_rot = aero["m_rot"]
 
-    moment_coeffs = nu[:3]
-    v_body = z[3:6]
+    moment = nu[:3]
 
-    v_norm = jnp.linalg.norm(v_body)
-
-    sref = params["vehicle"]["sref"]
-    lref = params["vehicle"]["lref"]
-
-    rho = fcns['density_model'](t, z, nu, params)
-
-    q_dyn_press = 0.5 * rho * v_norm**2
-    moment = q_dyn_press * sref * lref * moment_coeffs
-
-    return moment
+    return moment - m_rot
 
 def altitude(t, z, nu, params):
     return jnp.array([(jnp.linalg.norm(z[0:3]) - params['planet']['r'])])
@@ -179,3 +167,71 @@ def omega(w):
 # skew symmetric cross product matrix function
 def cr(v):
     return jnp.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+
+def R_vec_theta(n, theta_deg):
+
+    theta_rad = jnp.deg2rad(theta_deg)
+    n_hat = n / jnp.linalg.norm(n)
+
+    # rotation matrix for rotation about vec_hat by theta
+    R = jnp.outer(n_hat, n_hat) + jnp.cos(theta_rad) * (jnp.eye(3) - jnp.outer(n_hat, n_hat)) + jnp.sin(theta_rad) * cr(n_hat)
+
+    return R
+
+def quat_from_dcm(C):
+
+    q_0 = 0.5 * jnp.sqrt(C[0, 0] + C[1, 1] + C[2, 2] + 1)
+    q_1 = (C[1, 2] - C[2, 1]) / (4*q_0)
+    q_2 = (C[2, 0] - C[0, 2]) / (4*q_0)
+    q_3 = (C[0, 1] - C[1, 0]) / (4*q_0)
+
+    return jnp.array([q_0, q_1, q_2, q_3])
+
+# converts from polar coordinates (r, theta, phi, v, gamma, psi, sigma, alpha, beta) to Cartesian 6-DoF
+def bank_aoa_to_quat(v_vec, r_vec, sigma_deg, alpha_deg):
+
+    # define the inertial frame unit vectors (resolved in inertial frame)
+    x_hat = np.array([1, 0, 0])
+    y_hat = np.array([0, 1, 0])
+    z_hat = np.array([0, 0, 1])
+
+    # always target zero sideslip angle
+    beta_deg = 0.0
+    r_hat = r_vec / jnp.linalg.norm(r_vec)
+
+    # unit vectors for velocity, right, down (velocity frame)
+    v_hat = v_vec / jnp.linalg.norm(v_vec)
+    v_right_hat = jnp.cross(v_hat, r_hat) / jnp.linalg.norm(jnp.cross(v_hat, r_hat))
+    v_down_hat = jnp.cross(v_hat, v_right_hat) / jnp.linalg.norm(jnp.cross(v_hat, v_right_hat))
+
+    # initialize B frame to be aligned with velocity frame
+    B_frame = jnp.column_stack((v_hat, v_right_hat, v_down_hat))
+    
+    # apply rotation for (beta, alpha, sigma) to get body frame from velocity frame
+    B_frame = R_vec_theta(v_down_hat, -beta_deg) @ B_frame
+    B_frame = R_vec_theta(B_frame[:, 1], alpha_deg) @ B_frame
+    B_frame = R_vec_theta(v_hat, sigma_deg) @ B_frame
+
+    # DCM_I2B 
+    DCM_I2B = B_frame.T
+
+    # quaternion from DCM
+    q = quat_from_dcm(DCM_I2B)
+
+    return q
+
+def quaternion_error(q_des, q):
+    q_conj = jnp.array([q[0], -q[1], -q[2], -q[3]])
+    q_error = quat_mult(q_conj, q_des)
+    return q_error
+
+def quat_mult(q1, q2):
+    w1, x1, y1, z1 = q1
+    w2, x2, y2, z2 = q2
+
+    w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
+    x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
+    y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
+    z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
+
+    return jnp.array([w, x, y, z])

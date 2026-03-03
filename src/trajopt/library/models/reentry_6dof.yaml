@@ -1,11 +1,11 @@
 dimensions.n: 13
-dimensions.m: 3
+dimensions.m: 5
 
 params.planet.inherit: trajopt/library/missions/shared/planet/mars.yaml
 params.vehicle.inherit: trajopt/local/vehicles/cobra.yaml
 
 nondim.z_types: ["d", "d", "d", "v", "v", "v", "none", "none", "none", "none", "angv", "angv", "angv"]
-nondim.u_types: ["none", "none", "none"]
+nondim.u_types: ["mom", "mom", "mom", "ang", "ang"]
 
 nondim.anchor_types: ["d", "a", "m"]
 nondim.anchor_scales: [250, "${(params.planet.r * params.planet.g)**0.5}", "${params.vehicle.mass}"]

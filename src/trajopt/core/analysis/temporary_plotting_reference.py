@@ -165,10 +165,10 @@ def plot_default(trajopt_obj, show_iters=True):
     Plot states, controls, and constraints.
     
     Args:
-        trajopt_obj: The trajectory optimization object with scenario_data
+        trajopt_obj: The trajectory optimization object with results
         show_iters: If True, overlay all iterations. If False, only show final solution.
     """
-    data = {"scenario1": trajopt_obj.scenario_data}
+    data = {"scenario1": trajopt_obj.results}
     PLTS = SCVXPLOTS(data)
     lgnd = 'legend1'
     iters = list(range(1000))
@@ -260,7 +260,7 @@ def plot_default(trajopt_obj, show_iters=True):
     PLTS.addPLot2DIter(ax,pen=PENS['basic_pen2'],ins=params2)
 
     # constraints plots 
-    constraint_data = data['scenario1']['autotune']['mc_data'][0]['iters'][-1]['constraint_data']
+    constraint_data = data['scenario1']['autotune']['runs'][0]['iters'][-1]['constraint_data']
     for constraint_group in constraint_data.keys():
         group_data = constraint_data[constraint_group]
         num_constraints = len(group_data)
@@ -289,7 +289,7 @@ def plot_default(trajopt_obj, show_iters=True):
 def plot_animated(trajopt_obj, interval=200):
     from IPython.display import display, HTML
     
-    iters = trajopt_obj.scenario_data['autotune']['mc_data'][0]['iters'][1:]
+    iters = trajopt_obj.results['autotune']['runs'][0]['iters'][1:]
     n_iters, n_states, n_ctrl = len(iters), trajopt_obj.problem.index_map.n['state'], trajopt_obj.problem.index_map.n['control']  # use unified index_map
     
     t_all = np.concatenate([it['t_nl'] for it in iters])

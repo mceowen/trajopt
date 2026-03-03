@@ -193,7 +193,7 @@ class Subproblem:
 
         self.z_ref                 = cp.Parameter((N, nz),    name="z_ref")
         self.nu_ref                = cp.Parameter((N, n_nu),    name="nu_ref")
-        self.dt_ref                = cp.Parameter((N - 1, 1),name="dt_ref", nonneg=True)
+        self.dt_ref                = cp.Parameter((N - 1, 1), name="dt_ref", nonneg=True)
 
         self.nu_ref_sq         = cp.Parameter((N,), name="nu_ref_sq")
 
@@ -555,9 +555,31 @@ class Subproblem:
             idx = cost.idx
             self.TRUE += zf[idx]
 
+        for cost in problem.costs.get(type="rate_regularization"):
+            if cost.set == "control":
+                nu = self.nu_ref + self.dnu
+                nu_minus = nu[:-1]
+                nu_plus = nu[1:]
+
+                if cost.norm_type == "l2":
+                    self.TRUE += cost.w * cp.sum_squares(nu_plus - nu_minus) * (1 / self.N.N)
+
+                if cost.norm_type == "l1":
+                    self.TRUE += cost.w * cp.norm1(nu_plus - nu_minus) * (1 / self.N.N)
+            
+            elif cost.set == "state":
+                z = self.z_ref + self.dz
+                z_minus = z[:-1]
+                z_plus = z[1:]
+                
+                if cost.norm_type == "l2":
+                    self.TRUE += cost.w * cp.sum_squares(z_plus - z_minus) * (1 / self.N.N)
+
+                if cost.norm_type == "l1":
+                    self.TRUE += cost.w * cp.norm1(z_plus - z_minus) * (1 / self.N.N)
+
         # === Trust-region penalties ===
         TR = self.flags["flag_tr"] * (self.w.tr_z * cp.sum_squares(self.dz[:, :self.n.state]) + self.w.tr_u * cp.sum_squares(self.dnu))
-
         # === Virtual buffer penalties ===
         VB = 0.0
         DUAL = 0.0
@@ -629,8 +651,10 @@ class Subproblem:
             inputs["z_ref"], inputs["nu_ref"], inputs["dt_ref"], problem, method
         )
 
+        # inputs["z_ref"] = z_minus
+
         # Ak_bwd, Bk_bwd, Bkp_bwd, Sk_bwd, z_minus_bwd = discretize.compute_linsys_discrete_bwd(
-            # inputs["z_ref"], inputs["nu_ref"], inputs["dt_ref"], problem, method
+        #     inputs["z_ref"], inputs["nu_ref"], inputs["dt_ref"], problem, method
         # )
 
         prop_time_ms = (time.time() - start) * 1000.0
@@ -685,8 +709,8 @@ class Subproblem:
 
         # assign cost-related CP parameters
         self.z_ref.value  = inputs["z_ref"]
-        self.nu_ref.value  = inputs["nu_ref"]
-        self.dt_ref.value = inputs["dt_ref"].reshape(self.N.N - 1, 1)
+        self.nu_ref.value = inputs["nu_ref"]
+        self.dt_ref.value = inputs["dt_ref"]
 
         for constraint in problem.constraints.get(ct=0, type="equality_bc"):
             if constraint.name in self.constraint_params:
@@ -748,7 +772,7 @@ class Subproblem:
         # Solve subproblem
         solver_name = self.method.solver_opts.get("solver", "ECOS")
         ignore_dpp = self.method.flags["ignore_dpp"]
-        self.cp_subproblem.solve(solver=solver_name, warm_start=True, ignore_dpp=ignore_dpp)  # ignore_dpp=True if desired
+        self.cp_subproblem.solve(solver=solver_name, warm_start=False, ignore_dpp=ignore_dpp)  # ignore_dpp=True if desired
 
         # Create unified record for this iteration and append
         iter_record = self._load_outputs(input_for_iter, prop_time_ms)
@@ -788,8 +812,8 @@ class Subproblem:
 
         # outputs (absolute trajectories)
         rec.z_opt  = tools.safe_val(dz_val, rows=N, cols=n_x) + input_for_iter["z_ref"]
-        rec.nu_opt  = tools.safe_val(dnu_val, rows=N, cols=n_nu) + input_for_iter["nu_ref"]
-        rec.dt_opt = tools.safe_val(dt_val).squeeze() + input_for_iter["dt_ref"].squeeze()
+        rec.nu_opt = tools.safe_val(dnu_val, rows=N, cols=n_nu) + input_for_iter["nu_ref"]
+        rec.dt_opt = tools.safe_val(dt_val) + input_for_iter["dt_ref"]
         rec.t_opt  = np.concatenate(([0], np.cumsum(rec.dt_opt)))
         rec.T_opt  = float(np.sum(rec.dt_opt))
 
@@ -814,9 +838,7 @@ class Subproblem:
 
         rec.cnst_path = g
         
-        # TODO(Carlos/Skye): revisit this
         rec.cost      = self.TRUE.value.item() / self.w.cost.value
-        #rec.cost      = 1 
 
         # Convergence data (buffers, defects, TR cost, ref cost)
         conv = tools.AttrDict()

@@ -1,8 +1,4 @@
 import copy
-
-from jaxtyping import config
-from trajopt.core import problem
-from trajopt.core.indexing import index_map
 from trajopt.core.indexing.index_map import IndexMap
 from trajopt.core.problem import Problem
 from trajopt.core.solution_method import SolutionMethod
@@ -11,34 +7,20 @@ import trajopt.library.methods.scp as scp
 import trajopt.core.analysis.analysis as analysis
 import trajopt.core.analysis.plotting as plotting
 from trajopt.core.analysis.trajplots import *
-import yaml
 
 class TrajectoryAnalyzer:
 
-    def __init__(self, mission_path, model_path, method_path, variations=None):
-        config          = cfg.load_trajopt_config(mission_path, model_path, method_path)
-        problem_config  = config['problem']
-        method_config   = config['method']
-
-        self.problem_config = copy.deepcopy(problem_config)
-        self.method_config  = copy.deepcopy(method_config)
-
-        index_map = IndexMap(
-            model_config=problem_config['model'],
-            mission_config=problem_config['mission'],
-            method_config=config['method'],
-        )
-
-        self.problem = Problem(copy.deepcopy(problem_config), index_map=index_map)
-        self.method = SolutionMethod(self.problem, copy.deepcopy(method_config), index_map=index_map)
-
-        self.solution   = None
-        self.scenario_data = None
-        self.variation_config = None
+    def __init__(self, mission, model, method, variations=None):
         
-        if variations is not None:
-            with open(variations, 'r') as f:
-                self.variation_config = yaml.safe_load(f)
+        self.config = cfg.load_trajopt_config(mission, model, method, variations)
+
+        index_map    = IndexMap(self.config)
+        self.problem = Problem(self.config, index_map=index_map)
+        self.method  = SolutionMethod(self.problem, self.config, index_map=index_map)
+
+        self.solution         = None
+        self.results          = None
+        self.variation_config = None
 
     def solve(self):
         self.solution = scp.run_scp(self)
@@ -47,9 +29,10 @@ class TrajectoryAnalyzer:
 
         # run standalone anaylsis by default or method/parameter variations if specified
         if analysis_type == "standalone":
-            self.scenario_data = analysis.run_standalone_analysis(self)
+            self.results = analysis.run_standalone_analysis(self)
+        
         elif analysis_type == "mc":
-            self.scenario_data = analysis.run_mc_analysis(self)
+            self.results = analysis.run_mc_analysis(self)
 
         # plot the results (use MC-style plots when analysis_type is "mc")
         plotting.plot_default(self, analysis_type=analysis_type)
@@ -58,4 +41,4 @@ class TrajectoryAnalyzer:
         if animate:
             plotting.plot_animated(self)
 
-        return self.scenario_data
+        return self.results

@@ -9,21 +9,21 @@ class IndexMap:
     dynamics, and constraints using configs and/or objects.
     """
 
-    def __init__(self, model_config, mission_config, method_config):
+    def __init__(self, config):
         # Accept configs or objects for flexible initialization
-        self.model_config   = model_config
-        self.mission_config = mission_config
-        self.method_config  = method_config
+        self.model_config   = config.problem.model
+        self.mission_config = config.problem.mission
+        self.method_config  = config.method
         self.problem        = None
         self.method         = None
 
         self.n = AttrDict({
             # core model dims
-            "state":        model_config['dimensions']['n'],
-            "control":      model_config['dimensions']['m'],
+            "state":        self.model_config['dimensions']['n'],
+            "control":      self.model_config['dimensions']['m'],
         })
         self.N = AttrDict({
-            "N":            method_config["N"]
+            "N":            self.method_config["N"]
         })
 
 

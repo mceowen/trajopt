@@ -8,59 +8,45 @@ import trajopt.library.methods.integrators as integrators
 from trajopt.core.indexing.index_map import IndexMap
 from trajopt.core.problem import Problem
 from trajopt.core.solution_method import SolutionMethod
+from trajopt.utils.tools import recursive_attrdict, AttrDict
 
 '''
 outline of solution_data structure:
-scenario_data = {
+results = {
     "method1": {
-        "mc_data": [{"iters": {}, "params": {}}, {"iters": {}, "params": {}}, ...]
+        "runs": [{"iters": {}, "params": {}}, {"iters": {}, "params": {}}, ...]
     },
 
     "method2": {
-        "run_data": []
+        "runs": []
     }, 
 }
 '''
 
-ITER_DATA_KEYS_KEEP = {
+ITER_DATA_KEYS_TO_KEEP = {
     "iter_num", "converged", "cost", "solve_time", "prop_time", "parse_time", "t_full",
     "t_opt", "z_opt", "nu_opt", "dt_opt", "T_opt",
     "t_nl", "z_nl", "nu_nl", "t_init", "z_init", "nu_init",
     "constraint_data", "conv_data", "W", "dual", "penalty",
 }
 
-METHOD_DATA_KEYS_KEEP = {
+METHOD_DATA_KEYS_TO_KEEP = {
     'N', 'N_dens', 'Npm', 'T_init', 'T_max', 'T_min', 'Ts_init', 'conv', 'conv_data', 'cost_init', 
     'dT_max', 'ddt_max', 'dt_init', 'dt_init', 'dt_max', 'dt_min', 'flags', 'line_guess_u_init',
     'name', 'n_minus', 'n_plus', 'nl_guess_u_start', 'nl_guess_u_stop', 'solver_opts',
     'nondim', 't_init', 'nu_init', 'penalty', 'z_ind', 'z_init'
 }
 
-def _trim_iter_record(rec):
-    return {k: rec[k] for k in ITER_DATA_KEYS_KEEP if k in rec}
-
-def perform_default_analysis(trajopt_obj, trim=True):
+def perform_analysis(trajopt_obj, trim=True):
     problem     = trajopt_obj.problem
     method      = trajopt_obj.method
 
     n_x         = problem.index_map.n['state']
     n_nu        = problem.index_map.n['control']
     params      = problem.params
+    params_dict = tools.recursive_to_dict(params)
     iter_data   = method.subprob.iter_data
     nondim      = method.nondim
-
-    def to_dict_if_attrdict(x):
-        from trajopt.utils.tools import AttrDict
-        if isinstance(x, AttrDict):
-            return dict(x)
-        return x
-    
-    params = to_dict_if_attrdict(params)
-
-    problem_config = problem.config
-    method_data = tools.extract_attributes(method, METHOD_DATA_KEYS_KEEP)
-    
-    all_params_dict = {**problem_config, **method_data}
 
     for data in iter_data[1:]:
         
@@ -79,7 +65,7 @@ def perform_default_analysis(trajopt_obj, trim=True):
         nu_init = method.nu_init
 
         # compute constraints for z_nl, z_opt, name = SUBPLOT , TYPE, group = FIGURE, units
-        constraint_data = {}
+        constraint_data = AttrDict({})
 
         for constraint in problem.constraints.get():
             if hasattr(constraint, "compute_constraint_values"):
@@ -90,162 +76,189 @@ def perform_default_analysis(trajopt_obj, trim=True):
                 if group == None:
                     group = name
                 
-                opt_vals  = constraint.compute_constraint_values(t_opt, z_opt[:, :n_x], nu_opt, params)
-                nl_vals   = constraint.compute_constraint_values(t_nl, z_nl[:, :n_x], nu_nl, params)
-                init_vals = constraint.compute_constraint_values(t_init, z_init[:, :n_x], nu_init, params)
+                opt_vals  = constraint.compute_constraint_values(t_opt,  z_opt[:, :n_x],  nu_opt,  params_dict)
+                nl_vals   = constraint.compute_constraint_values(t_nl,   z_nl[:, :n_x],   nu_nl,   params_dict)
+                init_vals = constraint.compute_constraint_values(t_init, z_init[:, :n_x], nu_init, params_dict)
 
-                output = {
+                output = AttrDict({
                     "name": name,
                     "type": type,
                     "opt_vals": opt_vals,
                     "nl_vals": nl_vals,
                     "init_vals": init_vals
-                }
+                })
 
                 if constraint_data.get(group) is None:
-                    constraint_data[group] = {}
+                    constraint_data[group] = AttrDict({})
                 
                 constraint_data[group][name] = output
 
-        # re-dimensionalize all the data (the goal is to keep nondim data internal, user should only have
-        # to worry about dimensional data)
+        # re-dimensionalize all the data
         data['t_nl']  = t_nl * nondim.nt
-        data['z_nl']  = z_nl @ nondim.M["state"]["nd2d"]
-        data['nu_nl'] = nu_nl @ nondim.M["ctrl"]["nd2d"]
+        data['z_nl']  = z_nl @ nondim.M.state.nd2d
+        data['nu_nl'] = nu_nl @ nondim.M.ctrl.nd2d
 
         data['t_init']  = t_init * nondim.nt
-        data['z_init']  = z_init[:, :n_x] @ nondim.M["state"]["nd2d"]
-        data['nu_init'] = nu_init @ nondim.M["ctrl"]["nd2d"]
+        data['z_init']  = z_init[:, :n_x] @ nondim.M.state.nd2d
+        data['nu_init'] = nu_init @ nondim.M.ctrl.nd2d
 
         data['t_opt']  = t_opt * nondim.nt
-        data['z_opt']  = z_opt[:, :n_x] @ nondim.M["state"]["nd2d"]
-        data['nu_opt'] = nu_opt @ nondim.M["ctrl"]["nd2d"]
+        data['z_opt']  = z_opt[:, :n_x] @ nondim.M.state.nd2d
+        data['nu_opt'] = nu_opt @ nondim.M.ctrl.nd2d
         data['constraint_data'] = constraint_data
 
     if trim:
-        iters_out = [_trim_iter_record(rec) for rec in iter_data]
+        iters_out = [tools.trim_dict(rec, ITER_DATA_KEYS_TO_KEEP) for rec in iter_data]
     else:
         iters_out = iter_data
-    return {'iters': iters_out, 'params': all_params_dict}
-
+    
+    return AttrDict({'iters': iters_out})
 
 # ======================================================================
 # STANDALONE ANALYSIS
 # ======================================================================
+
 def run_standalone_analysis(trajopt_obj):
-    cfg = trajopt_obj.method_config or {}
-    name = cfg.get("name", "method1")
-    return {name: {"mc_data": [perform_default_analysis(trajopt_obj)]}}
+    config  = trajopt_obj.config.method
+    name = config.get("name", "method1")
+    return recursive_attrdict({name: {"runs": [perform_analysis(trajopt_obj)]}})
 
-def get_nested(d, path):
-    for part in path.split('.'):
-        d = d.get(part, {}) if isinstance(d, dict) else None
-        if d is None:
-            return None
-    return d
+# ======================================================================
+# MISSION AND METHOD VARIATION ANALYSIS
+# ======================================================================
 
-def set_nested(d, path, value):
-    parts = path.split('.')
-    for part in parts[:-1]:
-        d = d.setdefault(part, {})
-    d[parts[-1]] = value
+def update_problem_with_variations(problem, realized_mission_variations_flat, config, nondim):
+    for path, value in realized_mission_variations_flat.items():
+        
+        if path.startswith("constraints."):
+            # constraints.initial_state.value: 
+            constraint_name = path.split(".")[1]
+            path_to_spec = ".".join(path.split(".")[2:])
 
-def _method_names(cfg):
-    method_vars = cfg.get("method_variations", {})
-    if not method_vars:
-        return ["default"]
-    seen, out = set(), []
-    for path in method_vars:
-        n = path.split(".")[0]
-        if n not in seen:
-            seen.add(n)
-            out.append(n)
-    return out
+            constraint = problem.constraints.get(name=constraint_name)[0]
+            tools.set_attr_from_path(constraint, path_to_spec, value)
+        
+        if path.startswith("costs."):
+            cost_name = path.split(".")[1]
 
-def _merge_method_config(base, method_vars, method_name):
-    prefix = method_name + "."
-    merged = copy.deepcopy(base)
-    for path, val in method_vars.items():
-        if path.startswith(prefix):
-            set_nested(merged, path[len(prefix):], val)
-    return merged
+            if cost_name in problem.costs.names:
+                cost = problem.costs.get(name=cost_name)[0]
+                path_to_spec = ".".join(path.split(".")[2:])
+                tools.set_attr_from_path(cost, path_to_spec, value)
+        
+        if path.startswith("params."):
+            path_to_param = path.split("params.")[1]
+            tools.set_attr_from_path(problem.params, path_to_param, value)
+        
+    # Nondimensionalize constraints that were just updated 
+    updated_constraint_names = set()
+    for path in realized_mission_variations_flat.keys():
+        if path.startswith("constraints."):
+            constraint_name = path.split(".")[1]
+            updated_constraint_names.add(constraint_name)
+    for constraint in problem.constraints.get():
+        if constraint.name in updated_constraint_names:
+            constraint.nondim_constraint(nondim)
 
 def run_mc_analysis(trajopt_obj):
-    cfg = trajopt_obj.variation_config
-    mission_vars = cfg.get('mission_variations', {})
-    num = cfg.get('num_mission_variations', 1)
-    method_vars = cfg.get("method_variations", {})
-    method_names = _method_names(cfg)
-    problem_config = copy.deepcopy(trajopt_obj.problem_config)
-    base_config = trajopt_obj.method_config
 
-    if 'seed' in cfg:
-        np.random.seed(cfg['seed'])
+    nominal_config = trajopt_obj.config
+    
+    seed = nominal_config.get("seed", 0)
+    np.random.seed(seed)
 
-    nominal = {}
-    mission_config = problem_config['config']['mission']
-    for path in mission_vars:
-        val = get_nested(mission_config, path)
-        nominal[path] = np.array(val).copy() if val is not None else None
+    orig_problem = trajopt_obj.problem
+    orig_method  = trajopt_obj.method
+    results = AttrDict({})
 
-    def _apply_delta(mission_cfg, path, spec):
-        delta = np.random.uniform(np.array(spec["lb"]), np.array(spec["ub"])) if spec.get("type") == "uniform" else np.random.normal(np.array(spec["mu"]), np.array(spec["sigma"]))
-        new_val = np.real(np.asarray(nominal[path], dtype=float) + np.asarray(delta, dtype=float))
-        set_nested(mission_cfg, path, new_val.tolist() if new_val.size > 1 else float(new_val))
+    for method_name, method_var_config in nominal_config.variations.method.items():
 
-    def _run_mc_for_method(name):
-        merged = _merge_method_config(base_config, method_vars, name)
-        index_map = IndexMap(
-            model_config=problem_config['model'],
-            mission_config=problem_config['mission'],
-            method_config=merged,
-        )
-        problem = Problem(copy.deepcopy(problem_config), index_map=index_map)
-        method = SolutionMethod(problem, merged, index_map=index_map)
+        # start with nominal config
+        config_for_current_method = copy.deepcopy(nominal_config)
+
+        # extract method variations
+        method_var_config_flat = tools.flatten_dict(method_var_config)
+
+        # apply method variations to current config
+        for path, val in method_var_config_flat.items():
+            if path.startswith("constraints.") or path.startswith("costs."):
+                tools.set_from_path(config_for_current_method.problem, path, val)
+            else:
+                tools.set_from_path(config_for_current_method.method, path, val)
+
+        # build a new problem and method for method variations
+        index_map = IndexMap(config_for_current_method)
+        problem   = Problem(config_for_current_method, index_map=index_map)
+        method    = SolutionMethod(problem, config_for_current_method, index_map=index_map)
+        
         method.get_initial_guess(problem)
-        
+        trajopt_obj.index_map = index_map
         trajopt_obj.problem = problem
-        trajopt_obj.method = method
+        trajopt_obj.method  = method
         trajopt_obj.solve()
-        
-        m, problem, subprob = trajopt_obj.method, trajopt_obj.problem, trajopt_obj.method.subprob
-        mc_data = [perform_default_analysis(trajopt_obj)]
-        
-        for i in range(num):
-            print(f"\n=== {name} MC Run {i+1}/{num} ===")
-            mission_cfg = problem.config['mission']
-            for path, spec in mission_vars.items():
-                _apply_delta(mission_cfg, path, spec)
-            problem.update_from_config(mission_vars.keys(), m.nondim)
-            m.get_initial_guess(problem)
+
+        subprob = method.subprob
+        runs = [perform_analysis(trajopt_obj)]
+
+        mission_var_config      = config_for_current_method.variations.mission
+        mission_var_config_flat = tools.flatten_dict(mission_var_config)
+
+        # mission variations
+        realized_mission_variations_flat = AttrDict({})
+        for i in range(config_for_current_method.variations.mission.num):
+            print(f"\n=== method: {method_name} | run: {i+1} / {config_for_current_method.variations.mission.num} ===")
             
-            W_stack, dual_stack = subprob.constraints.stack_W_and_dual(problem, m)
-            subprob.iter_data = [{
+            for path_to_spec, spec in mission_var_config_flat.items():
+                if spec == "uniform":
+                    path = path_to_spec.replace(".type", "")
+                    random_variable_spec = tools.get_from_path(mission_var_config, path)
+
+                    lb = random_variable_spec["lb"]
+                    ub = random_variable_spec["ub"]
+                    
+                    delta = np.random.uniform(lb, ub)
+
+                    new_val = tools.get_from_path(config_for_current_method.problem.mission, path) + delta
+                    realized_mission_variations_flat[path] = new_val
+                
+                if spec == "normal":
+                    path = path_to_spec.replace(".type", "")
+                    random_variable_spec = tools.get_from_path(mission_var_config, path)
+                    mu = random_variable_spec["mu"]
+                    sigma = random_variable_spec["sigma"]
+
+                    delta = np.random.normal(mu, sigma)
+
+            update_problem_with_variations(problem, realized_mission_variations_flat, config_for_current_method, method.nondim)
+            method.get_initial_guess(problem)
+
+            n_N    = problem.index_map.N.N
+            n_neq  = problem.index_map.n["nonconvex_inequality"]
+            n_dyn  = problem.index_map.n["dynamics"]
+            n_term = problem.index_map.n["term_total"]
+
+            # Reset iter_data like the first run: W and dual None so first iteration uses configure_penalty_weights
+            subprob.iter_data = [tools.recursive_attrdict({
                 "iter_num": 0,
-                "z_ref": m.z_init,
-                "nu_ref": m.nu_init,
-                "dt_ref": m.dt_init,
-                "t_ref": m.t_init,
-                "conv_data": {"vb_ineq": np.zeros((problem.index_map.N.N, problem.index_map.n['nonconvex_inequality'])), "vb_dyn": np.zeros((problem.index_map.N.N - 1, problem.index_map.n['dynamics'])), "vb_terminal": np.zeros((problem.index_map.n['term_total'], 1))},
-                "W": copy.deepcopy(W_stack),
-                "dual": copy.deepcopy(dual_stack),
-                "penalty": copy.deepcopy(m.penalty),
-            }]
-
+                "z_ref":  method.z_init,
+                "nu_ref": method.nu_init,
+                "dt_ref": method.dt_init,
+                "t_ref":  method.t_init,
+                "conv_data": {
+                    "vb_ineq": np.zeros((n_N, n_neq)),
+                    "vb_dyn":  np.zeros((n_N - 1, n_dyn)),
+                    "vb_terminal": np.zeros((n_term, 1)),
+                },
+                "W": None,
+                "dual": None,
+                "penalty": copy.deepcopy(method.penalty),
+            })]
             trajopt_obj.solve()
-            mc_data.append(perform_default_analysis(trajopt_obj))
-        for path, val in nominal.items():
-            if val is not None:
-                set_nested(problem.config['mission'], path, val.tolist() if hasattr(val, 'tolist') else val)
-        return mc_data
+            runs.append(perform_analysis(trajopt_obj))
 
-    scenario_data = {}
-    orig_problem, orig_method = trajopt_obj.problem, trajopt_obj.method
-    try:
-        for name in method_names:
-            scenario_data[name] = {"mc_data": _run_mc_for_method(name)}
-    finally:
-        trajopt_obj.problem = orig_problem
-        trajopt_obj.method = orig_method
+        results[method_name] = AttrDict({"runs": runs})
 
-    return scenario_data
+    trajopt_obj.problem = orig_problem
+    trajopt_obj.method  = orig_method
+    
+    return results

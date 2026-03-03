@@ -16,22 +16,19 @@ class SolutionMethod:
         # ===============================================================
         # load config params
         # ===============================================================
-        method_config    = config
-
         self.problem    = problem
         self.index_map  = index_map if index_map is not None else problem.index_map
 
-        self.flags       = recursive_attrdict(method_config['flags'])
-        self.guess       = recursive_attrdict(method_config["guess"])
-        self.conv        = recursive_attrdict(method_config["conv"])
-        self.penalty     = recursive_attrdict(method_config["weights"])
-        self.solver_opts = recursive_attrdict(method_config["solver_opts"])
+        self.flags       = recursive_attrdict(config.method['flags'])
+        self.guess       = recursive_attrdict(config.method["guess"])
+        self.conv        = recursive_attrdict(config.method["conv"])
+        self.penalty     = recursive_attrdict(config.method["weights"])
+        self.solver_opts = recursive_attrdict(config.method["solver_opts"])
 
         self.conv_data   = AttrDict()
 
         # update index_map
         self.index_map.update_index_map(problem=self.problem, method=self)
-
 
         # Use the same index_map as problem, but update with method config
         self.nondim = Nondim(problem)
@@ -48,7 +45,7 @@ class SolutionMethod:
         self.problem.constraints.augment_ctcs_dynamics(self.index_map.n['state'])
 
         # ---- Time grid initialization ----
-        self.dt_init  = (self.guess.T_init / (self.index_map.N.N - 1)) * np.ones(self.index_map.N.N - 1)
+        self.dt_init  = np.ones((self.index_map.N.N - 1, 1)) * (self.guess.T_init / (self.index_map.N.N - 1))
         self.Ts_init  = self.guess.T_init / self.nondim.nt
         self.dt_init  = self.dt_init / self.nondim.nt
 
@@ -102,5 +99,3 @@ class SolutionMethod:
             self.z_init = guess.ctcs_initial_guess(problem, self)
 
         self.cost_init = discretize.compute_nonconvex_costs(self.t_init, self.z_init, self.nu_init, problem, self)
-
-        # print(f"Cost initial: {self.cost_init}")

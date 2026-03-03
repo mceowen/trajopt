@@ -33,8 +33,24 @@ constraints:
     max_value: [170.0, 5.0]
     max_value_idx: [0, 1]
 
+costs:
+  control_rate_regularization:
+    type: rate_regularization
+    set: control
+    norm: l2
+    w: 1
+
 # ===============================
 # ACTIVE CONSTRAINTS AND COSTS
 # ===============================
-constraint_list: [initial_state, final_state, state_limits, bank_aoa_angle_limits]
-cost_list: [min_terminal_velocity]
+
+constraint_list: 
+  - dynamics
+  - initial_state
+  - final_state
+  - state_limits
+  - bank_aoa_angle_limits
+
+cost_list:
+  - min_terminal_velocity
+  - control_rate_regularization

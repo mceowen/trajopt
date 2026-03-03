@@ -35,11 +35,12 @@ constraints:
     eps: [0.001]
 
 constraint_list:
-- initial_state
-- final_state
-- gimbal_limit
-- max_thrust
-- min_thrust
+  - dynamics
+  - initial_state
+  - final_state
+  - gimbal_limit
+  - max_thrust
+  - min_thrust
 
 cost_list:
-- min_time
+  - min_time

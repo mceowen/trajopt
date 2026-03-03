@@ -89,9 +89,9 @@ class box:
         self.type = 'box'
 
         if self.set == "state":
-            n_elem = config['model']['dimensions']['n']
+            n_elem = config.problem.model.dimensions.n
         elif self.set == "control":
-            n_elem = config['model']['dimensions']['m']
+            n_elem = config.problem.model.dimensions.m
 
         M_min = -np.eye(n_elem)[self.min_value_idx, :]
         M_max = np.eye(n_elem)[self.max_value_idx, :]
@@ -138,7 +138,7 @@ class control_rate_limit:
         self.type = 'control_rate_limit'
         self.ct = cnstr_config.get("ct", 0)
 
-        n_elem = config['model']['dimensions']['m']
+        n_elem = config.problem.model.dimensions.m
         M_min = -np.eye(n_elem)[self.idx, :]
         M_max = np.eye(n_elem)[self.idx, :]
         self.M_select = np.vstack([M_min, M_max])
@@ -228,6 +228,7 @@ class nonconvex_inequality:
         self.name            = cnstr_config["name"]
         self.group           = cnstr_config.get("group", None)
         self.units           = cnstr_config.get("units", None)
+        self.scales          = cnstr_config.get("scales", None)
 
         self.fcn_string      = cnstr_config["fcn"]
         self.eps             = cnstr_config["eps"]
@@ -271,21 +272,36 @@ class nonconvex_inequality:
 
     def nondim_constraint(self, nondim):
         if self.backend == "jax":
+            
             if self.max_value is not None:
                 self.max_value = jnp.asarray(jnp.atleast_1d(self.max_value))
+            
+            if self.min_value is not None:
+                self.min_value = jnp.asarray(jnp.atleast_1d(self.min_value))
+
+            if self.scales is not None:
+                # TODO (Carlos): revisit, temporary scaling if max value is equal to zero
+                self.M_out_d2nd = jnp.diag(1 / jnp.abs(jnp.asarray(self.scales)))
+            
+            elif self.max_value is not None:
                 self.M_out_d2nd = jnp.diag(1 / jnp.abs(self.max_value))
-                self.max_value = self.M_out_d2nd @ self.max_value
+            
+            elif self.min_value is not None:
+                self.M_out_d2nd = jnp.diag(1 / jnp.abs(self.min_value))
+            
             else:
                 self.M_out_d2nd, _ = nondim.build_nondim_matrix(self.units)
 
+            self.M_out_nd2d = jnp.diag(1 / jnp.diag(self.M_out_d2nd))
+
+            if self.max_value is not None:
+                self.max_value = self.M_out_d2nd @ self.max_value
+            
             if self.min_value is not None:
-                self.min_value = jnp.asarray(jnp.atleast_1d(self.min_value))
                 self.min_value = self.M_out_d2nd @ self.min_value
 
             M_state_nd2d = nondim.M["state"]["nd2d"]
             M_ctrl_nd2d  = nondim.M["ctrl"]["nd2d"]
-
-            self.M_out_nd2d = jnp.diag(1 / jnp.diag(self.M_out_d2nd))
 
             self.fcn_nd = nondim.nondim_function(self.fcn_dim, M_state_nd2d, M_ctrl_nd2d, self.M_out_d2nd)
 
@@ -293,16 +309,14 @@ class nonconvex_inequality:
         if self.backend == "jax":
             if self.upper_and_lower == True:
                 fcn_lb   = lambda t, z, nu, params: -self.fcn_nd(t, z, nu, params) + self.min_value
-                fcn_ub   = lambda t, z, nu, params: self.fcn_nd(t, z, nu, params) - self.max_value
+                fcn_ub   = lambda t, z, nu, params: self.fcn_nd(t, z, nu, params)  - self.max_value
                 
                 self.fcn = lambda t, z, nu, params: jnp.concatenate([fcn_lb(t, z, nu, params), fcn_ub(t, z, nu, params)])
                 
-            
-            elif (self.max_value is not None):
+            elif (self.max_value is not None) and (self.min_value is None):
                 self.fcn = lambda t, z, nu, params: self.fcn_nd(t, z, nu, params) - self.max_value
 
-            
-            elif (self.min_value is not None):
+            elif (self.min_value is not None) and (self.max_value is None):
                 self.fcn = lambda t, z, nu, params: -self.fcn_nd(t, z, nu, params) + self.min_value
                 
             else:

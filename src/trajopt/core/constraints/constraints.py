@@ -5,13 +5,13 @@ import trajopt.library.methods.convexify as convexify
 import trajopt.utils.tools as tools
 
 class Constraints:
-    def __init__(self, cnstr_config_list, config):
+    def __init__(self, config):
 
         self.constraints_list = []
 
-        for i, cnstr_config in enumerate(cnstr_config_list):
-            print(f"  {i}: {cnstr_config['name']}: {cnstr_config['type']}")
-            self.register_constraint(cnstr_config, config)
+        for i, (cnstr_name, cnstr_config_i) in enumerate(config.problem.constraints.items()):
+            print(f"  {i}: name: {cnstr_name}: type: {cnstr_config_i.type}")
+            self.register_constraint(cnstr_config_i, config)
 
     def register_constraint(self, cnstr_config, config):
         """"

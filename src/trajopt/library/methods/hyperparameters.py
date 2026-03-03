@@ -46,8 +46,8 @@ def configure_penalty_weights(problem, method, subconstraints=None):
     # w_path: weight for path constraint buffer cost
     # w_nfz:  weight for nfz constraint buffer cost
 
-    penalty.wtr_z = 1 / (2 * penalty.alpha_z)
-    penalty.wtr_u = 0 if np.isinf(penalty.alpha_u) else 1 / (2 * penalty.alpha_u)
+    penalty.wtr_z = 1 / (2 * penalty.alpha_z * problem.index_map.N.N)
+    penalty.wtr_u = 0 if np.isinf(penalty.alpha_u) else 1 / (2 * penalty.alpha_u * problem.index_map.N.N)
 
     # === Autotune modes (flag_autotune ∈ {0,2,3,al-scvx}) ===
     if str(method.flags["flag_autotune"]) in {"0", "2", "3", "al-scvx"}:
@@ -470,8 +470,11 @@ def autotune1(subproblem, conv_data, iter_num):
     dual_plus_plus_real  = W_plus_real * vb_plus_real  + dual_plus_real
     dual_minus_plus_real = W_minus_real * vb_minus_real + dual_minus_real
 
-    dual_plus_plus_ctcs  = beta * vb_plus_ctcs  + dual_plus_ctcs
-    dual_minus_plus_ctcs = beta * vb_minus_ctcs + dual_minus_ctcs
+    W_plus_ctcs  = subproblem.W_stack.plus_ctcs
+    W_minus_ctcs = subproblem.W_stack.minus_ctcs
+
+    dual_plus_plus_ctcs  = W_plus_ctcs * vb_plus_ctcs  + dual_plus_ctcs
+    dual_minus_plus_ctcs = W_minus_ctcs * vb_minus_ctcs + dual_minus_ctcs
 
     # ==========================================
     # Saturation thresholds
@@ -610,18 +613,18 @@ def autotune2(subproblem, conv_data, iter_num):
             #     Wh_dyn[k, z_state_idx] = np.abs(dual_dyn_buff[z_state_idx] / eps_feas_dyn[z_state_idx])
 
             if ctcs == "l1":
-                Wh_dyn[k, z_ctcs_idx] = np.sum(np.abs(dual_dyn_buff[z_ctcs_idx]) / eps_feas_dyn[z_ctcs_idx])
+                Wh_dyn[k, z_ctcs_idx] = np.sum(np.abs(dual_dyn_buff[z_ctcs_idx]) / eps_target_dyn[k, z_ctcs_idx])
             elif ctcs != "none":
-                Wh_dyn[k, z_ctcs_idx] = np.abs(dual_dyn_buff[z_ctcs_idx] / eps_feas_dyn[z_ctcs_idx])
+                Wh_dyn[k, z_ctcs_idx] = np.abs(dual_dyn_buff[z_ctcs_idx] / eps_target_dyn[k, z_ctcs_idx])
 
             # TODO: THINK ABOUT THIS (MAYBE ONE IF ELSE) COME BACK TO THIS, SINGLE EPSILON ETC
             if buff_dyn == "quad-2":
-                Wh_plus_real[k]  = np.sum(np.abs(np.diag(W_plus_real[k, :]) @ vb_plus_real[k, :] / eps_target_dyn[k]))
-                Wh_minus_real[k] = np.sum(np.abs(np.diag(W_minus_real[k, :]) @ vb_minus_real[k, :] / eps_target_dyn[k]))
+                Wh_plus_real[k]  = np.sum(np.abs(np.diag(W_plus_real[k, :]) @ vb_plus_real[k, :] / eps_target_dyn[k, z_state_idx]))
+                Wh_minus_real[k] = np.sum(np.abs(np.diag(W_minus_real[k, :]) @ vb_minus_real[k, :] / eps_target_dyn[k, z_state_idx]))
             
             if ctcs == "quad-2":
-                Wh_plus_ctcs[k]  = np.sum(np.abs(np.diag(W_plus_ctcs[k, :]) @ vb_plus_ctcs[k, :] / np.min(eps_feas_dyn)))
-                Wh_minus_ctcs[k] = np.sum(np.abs(np.diag(W_minus_ctcs[k, :]) @ vb_minus_ctcs[k, :] / np.min(eps_feas_dyn)))
+                Wh_plus_ctcs[k]  = np.sum(np.abs(np.diag(W_plus_ctcs[k, :]) @ vb_plus_ctcs[k, :] / eps_target_dyn[k, z_ctcs_idx]))
+                Wh_minus_ctcs[k] = np.sum(np.abs(np.diag(W_minus_ctcs[k, :]) @ vb_minus_ctcs[k, :] / eps_target_dyn[k, z_ctcs_idx]))
 
     if problem.index_map.n['term_total'] > 0:
         dual_term_buff = np.diag(W_term) @ vb_term

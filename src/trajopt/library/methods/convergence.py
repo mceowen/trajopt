@@ -17,8 +17,8 @@ def set_convergence_tolerance(problem, method):
     ctcs_mult_cnst  = getattr(method.conv, "ctcs_fac_cnst", 1.0) * method.guess.T_init / (method.index_map.N['N']-1)
 
     if len(method.conv.eps_state) == 1:
-        eps_state    = method.conv.eps_state * np.ones(n)
-        M_state_d2nd = np.eye(n)
+        eps_state    = method.conv.eps_state * np.ones(n_z)
+        M_state_d2nd = np.eye(n_z)
     else:
         eps_state    = method.conv.eps_state
         M_state_d2nd = method.nondim.M["state"]["d2nd"]
