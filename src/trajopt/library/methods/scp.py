@@ -88,13 +88,12 @@ class ModuleFlags:
 def display_subprob_status(method, rec: Dict[str, Any]) -> None:
     conv = rec.get("conv_data", {})
 
-    chk_feas_path = conv.get("chk_feas_path", 0.0)
-    chk_feas_nfz  = conv.get("chk_feas_nfz", 0.0)
-    ineq_vb       = chk_feas_path + (chk_feas_nfz if chk_feas_nfz != 0 else 0.0)
-
-    chk_dz        = conv.get("chk_dz", 1e-12)
-    chk_feas_term = conv.get("chk_feas_term", 1e-12)
-    chk_feas_dyn  = conv.get("chk_feas_dyn", 1e-12)
+    chk_feas_path = np.max(conv.get("chk_feas_path", 0.0))
+    chk_feas_nfz  = np.max(conv.get("chk_feas_nfz", 0.0))
+    ineq_vb       = np.max(chk_feas_path + (chk_feas_nfz if chk_feas_nfz != 0 else 0.0))
+    chk_dz        = np.max(conv.get("chk_dz", 1e-12))
+    chk_feas_term = np.max(conv.get("chk_feas_term", 1e-12))
+    chk_feas_dyn  = np.max(conv.get("chk_feas_dyn", 1e-12))
 
     log_dz      = np.log10(max(chk_dz, 1e-12))
     log_vb_ineq = np.log10(max(ineq_vb, 1e-12))
@@ -103,9 +102,6 @@ def display_subprob_status(method, rec: Dict[str, Any]) -> None:
 
     solve_stat  = conv.get("status", "UNKNOWN")
     iter_num    = int(rec.get("iter_num", -1))
-
-    nt    = float(method.nondim.nt)
-    ncost = float(method.nondim.nd_cost)
 
     Ts   = float(rec.get("T_opt", 0.0))
     cost = float(rec.get("cost", 0.0))
@@ -125,7 +121,7 @@ def display_subprob_status(method, rec: Dict[str, Any]) -> None:
             log_vb_term,
             log_vb_dyn,
             str(solve_stat),
-            Ts * nt,
+            Ts * method.nondim.time_scale,
             cost
         )
     )

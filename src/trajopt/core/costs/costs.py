@@ -5,18 +5,18 @@ import trajopt.library.methods.convexify as convexify
 from trajopt.utils.tools import AttrDict
 
 class Costs:
-    def __init__(self, config):
+    def __init__(self, config, index_map):
 
         self.costs_list = []
 
-        print(f"costs:")
+        print(f"\ncosts:")
 
         # build cost_ids mapping
         for i, (cost_name, cost_config_i) in enumerate(config.problem.costs.items()):
             print(f"  {i}: {cost_name}: {cost_name}")
-            self.register_cost(cost_config_i, config)
+            self.register_cost(cost_config_i, index_map)
 
-    def register_cost(self, cost_config, config):
+    def register_cost(self, cost_config, index_map):
         """
         Register a cost object in the costs list given a cost configuration.
 
@@ -29,7 +29,7 @@ class Costs:
         """
         cost_type = cost_config["type"]
         costClass = getattr(costs_library, cost_type)
-        self.costs_list.append(costClass(cost_config, config=config))
+        self.costs_list.append(costClass(cost_config, index_map))
 
     def get(self, **kwargs):
         """

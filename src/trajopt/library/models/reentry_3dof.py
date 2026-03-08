@@ -78,3 +78,16 @@ def aero_load(t, z, nu, params, fcns):
     D = aero["D"]
 
     return jnp.array([jnp.sqrt(L ** 2 + D ** 2)])
+
+def long_lat(t, z, nu, params, fcns):
+    theta = z[1]
+    phi = z[2]
+
+    return jnp.array([theta, phi])
+
+def long_lat_alt(t, z, nu, params, fcns):
+    r = z[0]
+    theta = z[1]
+    phi = z[2]
+
+    return jnp.array([theta, phi, r - params['planet']['r']])

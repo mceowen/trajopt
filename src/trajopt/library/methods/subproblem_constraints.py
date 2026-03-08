@@ -41,6 +41,7 @@ class SubproblemConstraints(Constraints):
                 c.W    = np.zeros(d)
                 c.dual = np.zeros(d)
                 c.vb   = np.zeros(d)
+                # TODO (CARLOS): add c.eps
             else:
                 c.W    = np.zeros((Nk, d))
                 c.dual = np.zeros((Nk, d))

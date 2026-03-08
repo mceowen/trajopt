@@ -1,14 +1,41 @@
-dimensions.n: 13
-dimensions.m: 5
+# ===============================
+# PARAMETERS AND FUNCTIONS
+# ===============================
 
 params.planet.inherit: trajopt/library/missions/shared/planet/mars.yaml
 params.vehicle.inherit: trajopt/local/vehicles/cobra.yaml
 
-nondim.z_types: ["d", "d", "d", "v", "v", "v", "none", "none", "none", "none", "angv", "angv", "angv"]
-nondim.u_types: ["mom", "mom", "mom", "ang", "ang"]
+# ===============================
+# STATE AND CONTROL DEFINITIONS
+# ===============================
 
-nondim.anchor_types: ["d", "a", "m"]
-nondim.anchor_scales: [250, "${(params.planet.r * params.planet.g)**0.5}", "${params.vehicle.mass}"]
+state.pos:
+  idx: [0, 1, 2]
+  units: d
+
+state.vel:
+  idx: [3, 4, 5]
+  units: v
+
+state.quat:
+  idx: [6, 7, 8, 9]
+  units: none
+
+state.omega:
+  idx: [10, 11, 12]
+  units: angv
+
+control.torque:
+  idx: [0, 1, 2]
+  units: mom
+
+control.flap_deflections:
+  idx: [3, 4]
+  units: ang
+
+# ===============================
+# CONSTRAINT MODELS
+# ===============================
 
 constraints.dynamics:
   type: dynamics
@@ -35,12 +62,67 @@ constraints.control_limits:
 constraints.control_rate_limits:
   type: control_rate_limit
 
+constraints.max_Q:
+  type: nonconvex_inequality
+  group: path
+  fcn: trajopt/library/models/reentry_6dof.py:heat_rate
+  dimension: 1
+  ct: 0
+
+constraints.max_q:
+  type: nonconvex_inequality
+  group: path
+  fcn: trajopt/library/models/reentry_6dof.py:dynamic_pressure
+  dimension: 1
+  ct: 0
+
+constraints.max_load:
+  type: nonconvex_inequality
+  group: path
+  fcn: trajopt/library/models/reentry_6dof.py:aero_load
+  dimension: 1
+  ct: 0
+
+constraints.minimum_velocity:
+  type: nonconvex_inequality
+  group: path
+  fcn: trajopt/library/models/reentry_6dof.py:velocity
+  dimension: 1
+  ct: 0
+
+constraints.minimum_altitude:
+  type: nonconvex_inequality
+  group: path
+  fcn: trajopt/library/models/reentry_6dof.py:altitude
+  dimension: 1
+  ct: 0
+
+constraints.aoa_limits:
+  type: nonconvex_inequality
+  group: path
+  fcn: trajopt/library/models/reentry_6dof.py:aoa
+  dimension: 1
+  ct: 0
+
+constraints.sideslip_limits:
+  type: nonconvex_inequality
+  group: path
+  fcn: trajopt/library/models/reentry_6dof.py:sideslip
+  dimension: 1
+  ct: 0
+
+constraints.terminal_altitude:
+  type: nonconvex_inequality
+  group: path
+  fcn: trajopt/library/models/reentry_6dof.py:altitude
+  dimension: 1
+  ct: 0
+
 constraints.minimum_quaternion_norm:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/reentry_6dof.py:quaternion_norm
   min_value: 0.9
-  units: [{none: 1}]
   dimension: 1
   ct: 0
 
@@ -49,72 +131,12 @@ constraints.max_quat_norm:
   set: state
   idx: [6, 7, 8, 9]
 
-constraints.minimum_velocity:
-  type: nonconvex_inequality
-  group: path
-  fcn: trajopt/library/models/reentry_6dof.py:velocity
-  units: [{none: 1}]
-  dimension: 1
-  ct: 0
-
-constraints.minimum_altitude:
-  type: nonconvex_inequality
-  group: path
-  fcn: trajopt/library/models/reentry_6dof.py:altitude
-  units: [{none: 1}]
-  dimension: 1
-  ct: 0
-
-constraints.aoa_limits:
-  type: nonconvex_inequality
-  group: path
-  fcn: trajopt/library/models/reentry_6dof.py:aoa
-  units: [{none: 1}]
-  dimension: 1
-  ct: 0
-
-constraints.sideslip_limits:
-  type: nonconvex_inequality
-  group: path
-  fcn: trajopt/library/models/reentry_6dof.py:sideslip
-  units: [{none: 1}]
-  dimension: 1
-  ct: 0
-
-constraints.max_Q:
-  type: nonconvex_inequality
-  group: path
-  fcn: trajopt/library/models/reentry_6dof.py:heat_rate
-  units: [{none: 1}]
-  dimension: 1
-  ct: 0
-
-constraints.max_q:
-  type: nonconvex_inequality
-  group: path
-  fcn: trajopt/library/models/reentry_6dof.py:dynamic_pressure
-  units: [{none: 1}]
-  dimension: 1
-  ct: 0
-
-constraints.max_load:
-  type: nonconvex_inequality
-  group: path
-  fcn: trajopt/library/models/reentry_6dof.py:aero_load
-  units: [{none: 1}]
-  dimension: 1
-  ct: 0
-
-constraints.terminal_altitude:
-  type: nonconvex_inequality
-  group: path
-  fcn: trajopt/library/models/reentry_6dof.py:altitude
-  units: [{none: 1}]
-  dimension: 1
-  ct: 0
-
 costs.min_time:
   type: min_time
+
+# ===============================
+# COST MODELS
+# ===============================
 
 costs.min_terminal_velocity:
   type: min_norm_terminal
@@ -123,3 +145,23 @@ costs.min_terminal_velocity:
 costs.min_terminal_vel_1:
   type: terminal_state
   idx: 3
+
+# ===============================
+# TRAJECTORY DEFINITIONS
+# ===============================
+
+trajectories:
+  long_lat_trajectory_plot:
+    type: general
+    fcn: trajopt/library/models/reentry_6dof.py:long_lat
+    group: state_trajplots
+  
+  long_lat_alt_trajectory_plot:
+    type : general
+    fcn: trajopt/library/models/reentry_6dof.py:long_lat_alt
+    group: state_trajplots
+
+  rv_plot:
+    type: general
+    fcn: trajopt/library/models/reentry_6dof.py:r_v
+    group: rv

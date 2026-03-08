@@ -10,7 +10,7 @@ from trajopt.utils.config_loader import resolve_function
 # ===============================================================
 
 class equality_bc:
-    def __init__(self, cnstr_config, config=None):
+    def __init__(self, cnstr_config, index_map):
         # required properties
         self.name    = cnstr_config["name"]
         self.group   = cnstr_config.get("group", None)
@@ -41,12 +41,15 @@ class equality_bc:
 
     def nondim_constraint(self, nondim):
         if self.set == "state":
-            self.value = nondim.M["state"]["d2nd"][np.ix_(self.idx, self.idx)] @ self.value
+            self.value = nondim.M.state.d2nd[np.ix_(self.idx, self.idx)] @ self.value
+            self.eps = nondim.M.state.d2nd[np.ix_(self.idx, self.idx)] @ self.eps
+        
         elif self.set == "control":
-            self.value = nondim.M["ctrl"]["d2nd"][np.ix_(self.idx, self.idx)] @ self.value
+            self.value = nondim.M.ctrl.d2nd[np.ix_(self.idx, self.idx)] @ self.value
+            self.eps   = nondim.M.ctrl.d2nd[np.ix_(self.idx, self.idx)] @ self.eps
 
 class inequality_bc:
-    def __init__(self, cnstr_config, config=None):
+    def __init__(self, cnstr_config, index_map):
         self.name  = cnstr_config["name"]
         self.group = cnstr_config.get("group", None)
         self.set   = cnstr_config["set"]
@@ -74,7 +77,7 @@ class inequality_bc:
             self.max_value = nondim.M["ctrl"]["d2nd"][np.ix_(self.max_value_idx, self.max_value_idx)] @ self.max_value
 
 class box:
-    def __init__(self, cnstr_config, config=None):
+    def __init__(self, cnstr_config, index_map):
         
         self.name  = cnstr_config["name"]
         self.group = cnstr_config.get("group", None)
@@ -89,9 +92,9 @@ class box:
         self.type = 'box'
 
         if self.set == "state":
-            n_elem = config.problem.model.dimensions.n
+            n_elem = index_map.n.state
         elif self.set == "control":
-            n_elem = config.problem.model.dimensions.m
+            n_elem = index_map.n.control
 
         M_min = -np.eye(n_elem)[self.min_value_idx, :]
         M_max = np.eye(n_elem)[self.max_value_idx, :]
@@ -129,7 +132,7 @@ class box:
 # rate constraints
 # ---------------------------------------------------------------
 class control_rate_limit:
-    def __init__(self, cnstr_config, config=None):
+    def __init__(self, cnstr_config, index_map):
         self.name = cnstr_config["name"]
         self.group = cnstr_config.get("group", None)
         self.value = np.atleast_1d(cnstr_config["value"])
@@ -138,20 +141,20 @@ class control_rate_limit:
         self.type = 'control_rate_limit'
         self.ct = cnstr_config.get("ct", 0)
 
-        n_elem = config.problem.model.dimensions.m
+        n_elem = index_map.n.control
         M_min = -np.eye(n_elem)[self.idx, :]
         M_max = np.eye(n_elem)[self.idx, :]
         self.M_select = np.vstack([M_min, M_max])
 
     def nondim_constraint(self, nondim):
-        self.value = nondim.nt * nondim.M["ctrl"]["d2nd"][np.ix_(self.idx, self.idx)] @ self.value
+        self.value = nondim.time_scale * nondim.M.ctrl.d2nd[np.ix_(self.idx, self.idx)] @ self.value
 
 # ---------------------------------------------------------------
 # Second-order cone constraints
 # ---------------------------------------------------------------
 
 class axis_angle_cone:
-    def __init__(self, cnstr_config, config=None):
+    def __init__(self, cnstr_config, index_map):
 
         self.name  = cnstr_config["name"]
         self.group = cnstr_config.get("group", None)
@@ -172,10 +175,13 @@ class axis_angle_cone:
             theta = (z[:, self.idx] @ self.axis.T / np.linalg.norm(z[:, self.idx], axis=1)).reshape(-1, 1)
         elif self.set == "control":
             theta = (nu[:, self.idx] @ self.axis.T / np.linalg.norm(nu[:, self.idx], axis=1)).reshape(-1, 1)
-        return {"values": np.rad2deg(theta), "limits": self.theta_max}
+
+        limits = np.tile(self.theta_max, (t.shape[0], 1))
+        
+        return {"values": np.rad2deg(np.arccos(theta)), "limits": limits}
 
 class max_norm_cone:
-    def __init__(self, cnstr_config, config=None):
+    def __init__(self, cnstr_config, index_map):
         self.name = cnstr_config["name"]
         self.group = cnstr_config.get("group", None)
         self.set = cnstr_config["set"]
@@ -187,21 +193,23 @@ class max_norm_cone:
 
     def nondim_constraint(self, nondim):
         if self.set == "state":
-            nondim_key = nondim.z_types[self.idx[0]]
-            self.max_value = self.max_value * nondim.scales[nondim_key]
+            self.max_value = self.max_value * nondim.M.state.d2nd[self.idx[0], self.idx[0]]
         elif self.set == "control":
-            nondim_key = nondim.u_types[self.idx[0]]
-            self.max_value = self.max_value * nondim.scales[nondim_key]
+            self.max_value = self.max_value * nondim.M.state.d2nd[self.idx[0], self.idx[0]]
 
     def compute_constraint_values(self, t, z, nu, params):
         if self.set == "state":
             values = np.linalg.norm(z[:, self.idx], axis=1).reshape(-1, 1)
         elif self.set == "control":
             values = np.linalg.norm(nu[:, self.idx], axis=1).reshape(-1, 1)
-        return {"values": values, "limits": self.max_value}
+
+        limits = np.tile(self.max_value, (t.shape[0], 1))
+        
+        
+        return {"values": values, "limits": limits}
 
 class quaternion_cone:
-    def __init__(self, cnstr_config, config=None):
+    def __init__(self, cnstr_config, index_map):
         self.name = cnstr_config["name"]
         self.group = None
         self.ct = cnstr_config.get("ct", 0)
@@ -222,13 +230,12 @@ class quaternion_cone:
 # ===============================================================
 
 class nonconvex_inequality:
-    def __init__(self, cnstr_config, config=None):
+    def __init__(self, cnstr_config, index_map):
 
         # required config
         self.name            = cnstr_config["name"]
         self.group           = cnstr_config.get("group", None)
-        self.units           = cnstr_config.get("units", None)
-        self.scales          = cnstr_config.get("scales", None)
+        self.scale          = cnstr_config.get("scale", None)
 
         self.fcn_string      = cnstr_config["fcn"]
         self.eps             = cnstr_config["eps"]
@@ -247,12 +254,8 @@ class nonconvex_inequality:
             # if both upper and lower bounds are provided, stack constraint int:
             # g = [-g(x).T + lower  g(x).T - upper].T <= 0
             self.dimension = 2 * self.dimension
-            self.eps = jnp.concatenate((self.eps, self.eps))
 
-            if self.units is not None:
-                self.units = [*self.units, *self.units]
-
-        self.config     = config
+        self.index_map     = index_map
         self.type = 'nonconvex_inequality'
 
         # symbolic function in dimensional units provided by user
@@ -273,16 +276,19 @@ class nonconvex_inequality:
     def nondim_constraint(self, nondim):
         if self.backend == "jax":
             
+            # get max and min values regardless
             if self.max_value is not None:
                 self.max_value = jnp.asarray(jnp.atleast_1d(self.max_value))
             
             if self.min_value is not None:
                 self.min_value = jnp.asarray(jnp.atleast_1d(self.min_value))
 
-            if self.scales is not None:
+            # get provided scales if provided
+            if self.scale is not None:
                 # TODO (Carlos): revisit, temporary scaling if max value is equal to zero
-                self.M_out_d2nd = jnp.diag(1 / jnp.abs(jnp.asarray(self.scales)))
+                self.M_out_d2nd = jnp.diag(1 / jnp.abs(jnp.asarray(self.scale)))
             
+            # if scales aren't provided, try to scale using max/ min values if provided
             elif self.max_value is not None:
                 self.M_out_d2nd = jnp.diag(1 / jnp.abs(self.max_value))
             
@@ -290,7 +296,7 @@ class nonconvex_inequality:
                 self.M_out_d2nd = jnp.diag(1 / jnp.abs(self.min_value))
             
             else:
-                self.M_out_d2nd, _ = nondim.build_nondim_matrix(self.units)
+                raise ValueError("At least one of 'scales', 'max_value', or 'min_value' must be provided for nondimensionalization.")
 
             self.M_out_nd2d = jnp.diag(1 / jnp.diag(self.M_out_d2nd))
 
@@ -300,10 +306,18 @@ class nonconvex_inequality:
             if self.min_value is not None:
                 self.min_value = self.M_out_d2nd @ self.min_value
 
-            M_state_nd2d = nondim.M["state"]["nd2d"]
-            M_ctrl_nd2d  = nondim.M["ctrl"]["nd2d"]
+            M_state_nd2d_jax = jnp.asarray(nondim.M.state.nd2d)
+            M_ctrl_nd2d_jax  = jnp.asarray(nondim.M.ctrl.nd2d)
 
-            self.fcn_nd = nondim.nondim_function(self.fcn_dim, M_state_nd2d, M_ctrl_nd2d, self.M_out_d2nd)
+            # debug print
+            # print(f"name: {self.name}, M_out_d2nd: {self.M_out_d2nd}, max_value: {self.max_value}, min_value: {self.min_value}")
+
+            self.fcn_nd = nondim.nondim_function(self.fcn_dim, M_state_nd2d_jax, M_ctrl_nd2d_jax, self.M_out_d2nd)
+
+            self.eps = self.M_out_d2nd @ self.eps
+
+            if self.upper_and_lower == True:
+                self.eps = jnp.concatenate((self.eps, self.eps))
 
     def convexify_constraint(self):
         if self.backend == "jax":
@@ -344,18 +358,39 @@ class nonconvex_inequality:
             z_jax = jnp.asarray(z)
             nu_jax = jnp.asarray(nu)
             values = np.asarray(self.f_batched(t_jax, z_jax, nu_jax, params))
+
+            n_t = t_jax.shape[0]
+
+            if self.min_value is not None:
+                self.limits = np.tile(np.asarray(self.M_out_nd2d @ self.min_value), (n_t, self.dimension))
+            
+            if self.max_value is not None and self.min_value is not None:
+                max_val_limits = np.tile(np.asarray(self.M_out_nd2d @ self.max_value), (n_t, self.dimension))
+                self.limits    = np.hstack([self.limits, max_val_limits])
+            
+            elif self.max_value is not None:
+                max_val_limits = np.tile(np.asarray(self.M_out_nd2d @ self.max_value), (n_t, self.dimension))
+                self.limits = max_val_limits
+
+            elif self.min_value is not None:
+                min_val_limits = np.tile(np.asarray(self.M_out_nd2d @ self.min_value), (n_t, self.dimension))
+                self.limits = min_val_limits
+
+            else: 
+                self.limits = None
+
         elif self.backend == "sympy":
             pass
-        return {"values": values, 'limits': None}
+        return {"values": values, 'limits': self.limits}
 
 class dynamics:
-    def __init__(self, cnstr_config, config=None):
+    def __init__(self, cnstr_config, index_map):
         self.name       = cnstr_config["name"]
         self.fcn_string = cnstr_config["fcn"]
         self.group      = "dynamics"
-        self.type = 'dynamics'
+        self.type       = 'dynamics'
 
-        self.config = config
+        self.index_map = index_map
 
         self.fcn_dim = resolve_function(self.fcn_string)
 
@@ -374,15 +409,19 @@ class dynamics:
         )
 
     def nondim_constraint(self, nondim):
-        M_out_d2nd   = nondim.M["state"]["d2nd"] * nondim.nd_time
-        M_state_nd2d = nondim.M["state"]["nd2d"]
-        M_ctrl_nd2d  = nondim.M["ctrl"]["nd2d"]
+
+        if self.backend == "jax":
+            M_out_d2nd_jax   = jnp.asarray(nondim.M.state.d2nd * nondim.time_scale)
+            M_state_nd2d_jax = jnp.asarray(nondim.M.state.nd2d)
+            M_ctrl_nd2d_jax  = jnp.asarray(nondim.M.ctrl.nd2d)
+        
+        elif self.backend == "sympy":
+            pass
 
         # fcn_dim is already bound with params/fcns by resolve_functions
-        self.fcn = nondim.nondim_function(self.fcn_dim, M_state_nd2d, M_ctrl_nd2d, M_out_d2nd)
+        self.fcn = nondim.nondim_function(self.fcn_dim, M_state_nd2d_jax, M_ctrl_nd2d_jax, M_out_d2nd_jax)
 
     def convexify_constraint(self):
-    
         if self.backend == "jax":
             self.fcn_compiled, self.dfcn_dz_compiled, self.dfcn_du_compiled = convexify.linearize_jax(self.fcn)
         

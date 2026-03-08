@@ -130,6 +130,14 @@ def extract_attributes_exclude(obj, exclude=()):
     excl = set(exclude)
     return {k: v for k, v in vars(obj).items() if k not in excl}
 
+def expand_to_array_if_scalar(x, n):
+    x = np.asarray(x)
+
+    if x.ndim == 0 or x.size == 1:
+        return np.full(n, x)
+    
+    return x
+
 def safe_val(var, rows=1, cols=1, fallback=0.0):
     """
     Safely extract the numeric value from a cvxpy expression or return a fallback.

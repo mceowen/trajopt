@@ -8,7 +8,10 @@ def dynamics(t, z, nu, params, fcns):
     r      = z[0:3]
     v_body = z[3:6]
     q      = z[6:10]
-    w      = jnp.deg2rad(z[10:13]) 
+    w      = jnp.deg2rad(z[10:13])
+
+    # extract controls
+    torque = nu[:3]
 
     # extract parameters
     veh    = params['vehicle']
@@ -24,33 +27,30 @@ def dynamics(t, z, nu, params, fcns):
 
     # aero forces and moments
     aero = fcns['nonlinear_aero'](t, z, nu, params, fcns)
-    a_aero_trans_body = (1 / mass) * aero["f_trans"]
-    m_aero_rot_body = aero["m_rot"]
+    a_aero_trans = (1 / mass) * aero["f_trans"]
 
-    rho = fcns['density_model'](t, z, nu, params)
     v_inertial = DCM(q).T @ v_body
-    v_norm = jnp.linalg.norm(v_body)
-
-    sref = params["vehicle"]["sref"]
-    lref = params["vehicle"]["lref"]
-
-    moment_coeffs = nu[:3]
-
-    q_dyn_press = 0.5 * rho * v_norm**2
-    # moment = q_dyn_press * sref * lref * moment_coeffs
-    # moment = moment_coeffs
 
     # rotational kinematics and dynamics (body sees control + aero moments)
     q_dot = (1/2) * omega(w) @ q
-    w_dot = jnp.rad2deg(Jbinv @ (moment_coeffs - cr(w) @ Jb @ w))
+    w_dot = jnp.rad2deg(Jbinv @ (torque - cr(w) @ Jb @ w))
 
     # translational accelerations
-    v_body_dot = a_aero_trans_body + DCM(q) @ a_grav_inertial - cr(w) @ v_body
+    v_body_dot = a_aero_trans + DCM(q) @ a_grav_inertial - cr(w) @ v_body
 
     # state derivative
     x_dot = jnp.concatenate([v_inertial, v_body_dot, q_dot, w_dot])
 
     return x_dot
+
+def control_torques(t, z, nu, params, fcns):
+
+    aero = fcns["nonlinear_aero"](t, z, nu, params, fcns)
+    m_rot = aero["m_rot"]
+
+    moment = nu[:3]
+
+    return moment - m_rot # == 0
 
 def heat_rate(t, z, nu, params, fcns): # heat rate
 
@@ -119,14 +119,6 @@ def sideslip(t, z, nu, params):
 
     return jnp.array([beta])
 
-def control_torques(t, z, nu, params, fcns):
-
-    aero = fcns["nonlinear_aero_flaps"](t, z, nu, params, fcns)
-    m_rot = aero["m_rot"]
-
-    moment = nu[:3]
-
-    return moment - m_rot
 
 def altitude(t, z, nu, params):
     return jnp.array([(jnp.linalg.norm(z[0:3]) - params['planet']['r'])])
@@ -235,3 +227,36 @@ def quat_mult(q1, q2):
     z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
 
     return jnp.array([w, x, y, z])
+
+def long_lat(t, z, nu, params):
+
+    r = jnp.linalg.norm(z[0:3])
+    x = z[0]
+    y = z[1]
+    z = z[2]
+
+    theta = jnp.atan2(y, x)
+    phi = jnp.atan2(z, jnp.sqrt(x**2 + y**2))
+
+    
+    return jnp.array([theta, phi])
+
+def long_lat_alt(t, z, nu, params):
+
+    r = jnp.linalg.norm(z[0:3])
+    x = z[0]
+    y = z[1]
+    z = z[2]
+
+    theta = jnp.atan2(y, x)
+    phi = jnp.atan2(z, jnp.sqrt(x**2 + y**2))
+
+    alt = r - params['planet']['r']
+    
+    return jnp.array([theta, phi, alt])
+
+def r_v(t, z, nu, params):
+    r = jnp.linalg.norm(z[0:3])
+    v = jnp.linalg.norm(z[3:6])
+
+    return jnp.array([r, v])

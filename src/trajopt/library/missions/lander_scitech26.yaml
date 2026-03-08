@@ -7,6 +7,19 @@ params.vehicle.inherit: trajopt/library/missions/shared/vehicle/mikilander.yaml
 params.zi: [4, 4, 0, 0.0, -4.0, 4.0, 0, 0, 0]
 params.min_thrust: 0.3
 
+state: 
+  Mass.scale: 1
+  Position.scale: 1
+  Velocity.scale: 1
+  Attitude.scale: 1
+  Angular Velocity.scale: 1
+
+control:
+  Thrust.scale: 1
+
+time:
+  scale: 1
+
 # initial state constraint config
 constraints:
   initial_state:

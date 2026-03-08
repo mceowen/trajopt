@@ -897,8 +897,6 @@ class dan_custom_nonconvex_inequality(POLYTOPE):
 
         if self.max_val_dim is not None:
             M_out_d2nd = np.diag(1 / self.max_val_dim)
-        else:
-            M_out_d2nd, M_out_nd2d = nondim.build_nondim_matrix(self.units)
 
         if self.has_max_val:
             self.max_val = M_out_d2nd @ self.max_val_dim

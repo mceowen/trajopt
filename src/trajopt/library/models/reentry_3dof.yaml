@@ -1,8 +1,40 @@
 # ===============================
 # MODEL CONFIGURATION
 # ===============================
-dimensions.n: 6
-dimensions.m: 2
+
+# state vector definition
+state.r:
+    idx: [0]
+    units: d
+  
+state.theta:
+    idx: [1]
+    units: deg
+  
+state.phi:
+    idx: [2]
+    units: deg
+  
+state.v:
+    idx: [3]
+    units: v
+  
+state.gamma:
+    idx: [4]
+    units: deg
+  
+state.psi:
+    idx: [5]
+    units: deg
+
+# control vector definition
+control.bank:
+    idx: [0]
+    units: deg
+
+control.aoa:
+    idx: [1]
+    units: deg
 
 # ===============================
 # CONSTRAINT MODELS
@@ -125,33 +157,13 @@ costs.min_max_heat_rate:
     units: [{none: 1}]
     ct: 0
 
-# TODO (carlos): add back minimax heating cost 
-# costs.min_max_heat_rate:
-#   type: nonconvex_minmax
-
-# ===============================
-# MISC CONFIG
-# ===============================
-
-nondim.z_types: ["d", "ang", "ang", "v", "ang", "ang"]
-nondim.u_types: ["ang", "ang"]
-
-params.planet.inherit: trajopt/library/missions/shared/planet/mars.yaml
-params.vehicle.inherit: trajopt/library/missions/shared/vehicle/msl.yaml
-
-nondim.anchor_types : ["t", "v", "m"]
-nondim.anchor_scales: ["${(params.planet.r / params.planet.g)**0.5}", "${(params.planet.r * params.planet.g)**0.5}", "${params.vehicle.mass}"]
-
-flags.ctrl_type: "bank_only"
-
-plotting.state_groups:
-  "Radius": [0]
-  "Theta": [1]
-  "Phi": [2]
-  "Velocity": [3]
-  "Gamma": [4]
-  "Psi": [5]
-
-plotting.state_traj_groups:
-  "long_lat_alt": [1, 2, 0]
-  "long_lat": [1, 2]
+trajectories:
+  long_lat_trajectory_plot:
+    type: general
+    fcn: trajopt/library/models/reentry_3dof.py:long_lat
+    group: state_trajplots
+  
+  long_lat_alt_trajectory_plot:
+    type : general
+    fcn: trajopt/library/models/reentry_3dof.py:long_lat_alt
+    group: state_trajplots

@@ -19,13 +19,12 @@ class IndexMap:
 
         self.n = AttrDict({
             # core model dims
-            "state":        self.model_config['dimensions']['n'],
-            "control":      self.model_config['dimensions']['m'],
+            "state":        self._get_n_from_model_config("state"),
+            "control":      self._get_n_from_model_config("control"),
         })
         self.N = AttrDict({
             "N":            self.method_config["N"]
         })
-
 
     def update_index_map(self, problem=None, method=None):
         if method is not None and problem is None:
@@ -35,13 +34,23 @@ class IndexMap:
         if method is not None:
             self.method = method
         self._build_indices()
-        
 
+    def _get_n_from_model_config(self, key):
+
+        max_idx = -1
+        for name, group in self.model_config[key].items():
+            group_max = max(group["idx"])
+            max_idx = max(max_idx, group_max)
+
+        n = max_idx + 1
+
+        return n
+        
     def _build_indices(self):
         # Priority: use configs if provided, else fall back to objects
         if self.model_config is not None:
-            nx      = self.model_config['dimensions']['n']
-            n_nu    = self.model_config['dimensions']['m']
+            nx      = self._get_n_from_model_config("state")
+            n_nu    = self._get_n_from_model_config("control")
         else:
             nx = n_nu = None
 

@@ -61,6 +61,7 @@ def load_trajopt_config(mission_path, model_path, method_path, variations_path=N
     # remove inactive constraints from the problem config
     constraint_config  = problem_config.constraints
     cost_config        = problem_config.costs
+    trajectory_config  = problem_config.get("trajectories", {})
 
     # update constraints and cost with any method-specific specfications
     constraint_config = deep_merge(constraint_config, method_config.get("constraints", {}))
@@ -72,14 +73,24 @@ def load_trajopt_config(mission_path, model_path, method_path, variations_path=N
 
     constraint_config = AttrDict({name: {'name': name, **constraint_config[name]} for name in active_constraint_list})
     cost_config       = AttrDict({name: {'name': name, **cost_config[name]} for name in active_cost_list})
+    trajectory_config = AttrDict({name: {'name': name, **trajectory_config[name]} for name in trajectory_config.keys()})
 
     # extract parameters and functions
     params_config = problem_config.get('params', {})
     fcns_config   = problem_config.get('fcns', {})
 
+    # exctract state, control, and time config
+    state_config = problem_config.state
+    control_config = problem_config.control
+    time_config = problem_config.time
+
     config = recursive_attrdict({
         'problem': {
+            'state': state_config,
+            'control': control_config,
+            'time': time_config,
             'constraints': constraint_config,
+            'trajectories': trajectory_config,
             'costs': cost_config,
             'params': params_config,
             'fcns': fcns_config,

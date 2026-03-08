@@ -179,15 +179,19 @@ class SCVXPLOTS:
                                             xdata = list(range(len(ydata)));
                                         
                                         else:
+                                            if isinstance(dataloc, (tuple, list)) and (isinstance(xtag, (tuple, list)) or xtag in data_with_y):
+                                                data_for_x = data_with_y
+                                            else:
+                                                data_for_x = DAT[i]
                                             if isinstance(xtag,(tuple,list)):
-                                            	xdata = DAT[i][xtag[0]];
+                                            	xdata = data_for_x[xtag[0]];
                                             	shp = xdata.shape;
                                             	if len(shp) == 2:
                                                     xdata = xdata[:,xtag[1]];
                                             	if len(shp) == 1:
                                                     xdata = xdata[xtag[1]];
                                             else: 
-                                                xdata = DAT[i][xtag];
+                                                xdata = data_for_x[xtag];
 
                                         penn2 = {};
                                         ########################################
@@ -306,7 +310,9 @@ class SCVXPLOTS:
                             for i in iters:
                                 if i < len(RUN['iters']):
                                     data = RUN['iters'][i];
-                                    # if not(ytag == None):
+                                    if isinstance(dataloc, (tuple, list)):
+                                        for key in dataloc:
+                                            data = data[key]
                                     if isinstance(xtag,(tuple,list)): xdata = data[xtag[0]][:,xtag[1]];
                                     else: xdata = data[xtag];                                    
                                     if isinstance(ytag,(tuple,list)): ydata = data[ytag[0]][:,ytag[1]];
@@ -535,5 +541,3 @@ class SCVXPLOTS:
                 else:
                     axs[tag] = fig.add_axes(grid[tag])
         return axs;
-
-            

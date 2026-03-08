@@ -49,8 +49,8 @@ def nonlinear_initial_guess(problem, method):
     n_nu = problem.index_map.n['control']
     N = method.index_map.N['N']
 
-    nl_guess_u_start = method.nondim.M["ctrl"]["d2nd"] @ method.guess["nl_guess_u_start"]
-    nl_guess_u_stop  = method.nondim.M["ctrl"]["d2nd"] @ method.guess["nl_guess_u_stop"]
+    nl_guess_u_start = method.nondim.M.ctrl.d2nd @ method.guess["nl_guess_u_start"]
+    nl_guess_u_stop  = method.nondim.M.ctrl.d2nd @ method.guess["nl_guess_u_stop"]
 
     t_init = np.cumsum(np.concatenate(([[0]], method.dt_init)))
     t_nl   = np.linspace(t_init[0], t_init[-1], 10000)
