@@ -2,166 +2,146 @@
 Logical Operators parameterized with Generalized Mean-based Smooth Robustness (GMSR)
 
 Author: Samet Uzun
-Reference: [https://doi.org/10.48550/arXiv.2405.10996]
+Reference:  [https://doi.org/10.48550/arxiv.2405.10996]
+            [https://doi.org/10.2514/6.2025-1895]
 '''
 
-import sympy as sp
+import jax.numpy as jnp
+from jax import Array
+from jax.typing import ArrayLike
 
-# =============================
-# *———* Penalty Functions *———*
-# =============================
 
-def smooth_inequality(x, c=1e-4):
+def _root_sum_of_product_terms(terms: ArrayLike, c: float) -> Array:
     """
-    Smooth penalty function for inequality constraints.
-    
-    Args:
-        x (float): Input value.
-        c (float): Smoothing parameter.
-    
-    Returns:
-        float: Smoothed maximum function.
-    """
-    return sp.sqrt(sp.Max(x, 0)**2 + c**2) - c
+    Compute the quantity
 
-def smooth_equality(x, c=1e-4):
-    """
-    Smooth penalty function for equality constraints.
-    
-    Args:
-        x (float): Input value.
-        c (float): Smoothing parameter.
-    
-    Returns:
-        float: Smoothed absolute function.
-    """
-    return sp.sqrt(x**2 + c**2) - c
+        (prod(terms) + c**K)**(1/K)
 
-# ==============================
-# *———* Core STL Functions *———*
-# ==============================
+    in a numerically safer way using log-space operations, where K is the
+    number of terms.
 
-def negation(x):
+    This helper is used in the smooth logical operators below.
     """
-    Negation operator.
-    
-    Args:
-        x (float): Input value.
-    
-    Returns:
-        float: Negated input.
-    """
-    return -x
+    terms = jnp.ravel(jnp.asarray(terms))
+    k = terms.shape[0]
 
-def AND(x, c=1e-4):
-    """
-    Smooth parameterization for the conjunction (AND) operator.
-    
-    Args:
-        x (list of float): List of values.
-        c (float): Smoothing parameter.
-    
-    Returns:
-        float: Robustness value for AND composition.
-    """
-    K = len(x)
-    sum_terms = sum(sp.Max(0, xi)**2 for xi in x)
-    product_terms = sp.prod(sp.Max(0, -xi)**2 for xi in x)
-    
-    Mp = (sum_terms / K) + c
-    M0 = (product_terms + c**K)**(1/K)
-    
-    return sp.sqrt(Mp) - sp.sqrt(M0)
+    log_prod = jnp.sum(jnp.log(terms))
+    log_c_term = k * jnp.log(c)
 
-def OR(x, c=1e-4):
-    """
-    Smooth parameterization for the disjunction (OR) operator.
-    
-    Args:
-        x (list of float): List of values.
-        c (float): Smoothing parameter.
-    
-    Returns:
-        float: Robustness value for OR composition.
-    """
-    return -AND([-xi for xi in x], c=c)
+    return jnp.exp(jnp.logaddexp(log_prod, log_c_term) / k)
 
-# =================================
-# *———* Derived STL Functions *———*
-# =================================
 
-def IfElse(x, c=1e-4):
+def smooth_inequality(y: ArrayLike, c: float = 1e-4) -> Array:
     """
-    Smooth parameterization of implication (x[0] -> x[1]).
-    
-    Args:
-        x (list of float): List containing two values [trigger, condition].
-        c (float): Smoothing parameter.
-    
-    Returns:
-        float: Robustness value for implication.
-    """
-    return OR([negation(x[0]), x[1]], c=c)
+    Smooth penalty for inequality constraints.
 
-def integer_variable(x, values, c=1e-4):
+    smooth_inequality(y) = 0  <==>  y <= 0
     """
-    Smooth parameterization for integer variables.
-    
-    Args:
-        x (list of float): List of values.
-        c (float): Smoothing parameter.
-    
-    Returns:
-        float: Value of integer constraint (zero if x matches an integer).
+    y = jnp.asarray(y)
+    return jnp.sqrt(jnp.maximum(y, 0.0) ** 2 + c**2) - c
+
+
+def smooth_equality(y: ArrayLike, c: float = 1e-4) -> Array:
     """
-    return OR([smooth_equality(x - v_i, c=c) for v_i in values])
+    Smooth penalty for equality constraints.
 
-# =========================
-# *———* Lite Versions *———*
-# =========================
+    smooth_equality(y) = 0  <==>  y = 0
+    """
+    y = jnp.asarray(y)
+    return jnp.sqrt(y**2 + c**2) - c
 
-def AND_lite(x, c=1e-4):
+
+def AND(y: ArrayLike, c: float = 1e-4) -> Array:
+    """
+    Smooth parameterization for conjunction.
+
+    AND(y) <= 0  <==>  y_i <= 0 for all i
+    """
+    y = jnp.asarray(y)
+
+    positive_part = jnp.maximum(y, 0.0)
+    negative_part = jnp.maximum(-y, 0.0)
+
+    mp = jnp.mean(positive_part**2) + c
+    m0 = _root_sum_of_product_terms(negative_part**2, c)
+
+    return jnp.sqrt(mp) - jnp.sqrt(m0)
+
+
+def OR(y: ArrayLike, c: float = 1e-4) -> Array:
+    """
+    Smooth parameterization for disjunction.
+
+    OR(y) <= 0  <==>  y_i <= 0 for some i
+    """
+    y = jnp.asarray(y)
+    return -AND(-y, c=c)
+
+
+def IfThen(y: ArrayLike, c: float = 1e-4) -> Array:
+    """
+    Smooth parameterization of implication.
+
+    IfThen(y) <= 0  <==>  (y_0 <= 0 ==> y_1 <= 0)
+                    <==>  (y_0 > 0 OR y_1 <= 0)
+    """
+    y = jnp.asarray(y)
+    return OR(jnp.array([-y[0], y[1]]), c=c)
+
+
+def integer_variable(y: ArrayLike, values: ArrayLike, c: float = 1e-4) -> Array:
+    """
+    Smooth parameterization for discrete/integer-valued variables.
+
+    integer_variable(y, values) = 0  <==>  y is equal to one of `values`
+    """
+    y = jnp.asarray(y)
+    values = jnp.asarray(values)
+    return OR(smooth_equality(y - values, c=c), c=c)
+
+
+def AND_lite(y: ArrayLike, c: float = 1e-4) -> Array:
     """
     Lite version of the conjunction (AND) operator.
-    Considers only the positive part of the function.
-    
-    Args:
-        x (list of float): List of values.
-        c (float): Smoothing parameter.
-    
-    Returns:
-        float: Robustness value for AND.
-    """
-    K = len(x)
-    sum_terms = sum(sp.Max(0, xi)**2 for xi in x)
-    Mp = (sum_terms / K) + c
-    return sp.sqrt(Mp) - sp.sqrt(c)
+    Considers only the positive part of the AND function.
 
-def OR_lite(x, c=1e-4):
+    AND_lite(y) = 0  <==>  y_i <= 0 for all i
+    """
+    y = jnp.asarray(y)
+
+    mp = jnp.mean(jnp.maximum(y, 0.0) ** 2) + c
+    return jnp.sqrt(mp) - jnp.sqrt(c)
+
+
+def OR_lite(y: ArrayLike, c: float = 1e-4) -> Array:
     """
     Lite version of the disjunction (OR) operator.
-    
-    Args:
-        x (list of float): List of values.
-        c (float): Smoothing parameter.
-    
-    Returns:
-        float: Robustness value for OR.
-    """
-    K = len(x)
-    product_terms = sp.prod(sp.Max(0, xi)**2 for xi in x)
-    M0 = (product_terms + c**K)**(1/K)
-    return sp.sqrt(M0) - sp.sqrt(c)
+    Considers only the positive part of the OR function.
 
-def IfElse_lite(x, c=1e-4):
+    OR_lite(y) = 0  <==>  y_i <= 0 for some i
     """
-    Lite version of the implication operator.
-    
-    Args:
-        x (list of float): List containing two values [trigger, condition].
-        c (float): Smoothing parameter.
-    
-    Returns:
-        float: Robustness value for implication.
+    y = jnp.asarray(y)
+
+    m0 = _root_sum_of_product_terms(jnp.maximum(y, 0.0) ** 2, c)
+    return jnp.sqrt(m0) - jnp.sqrt(c)
+
+
+def IfThen_lite(y: ArrayLike, c: float = 1e-4) -> Array:
     """
-    return OR_lite([negation(x[0]), x[1]], c=c)
+    Lite version of implication (IfThen) operator.
+    Considers only the positive part of the IfThen function.
+
+    IfThen_lite(y) = 0  <==>  (y_0 <= 0 ==> y_1 <= 0)
+                        <==>  (y_0 > 0 OR y_1 <= 0)
+
+    Notes
+    -----
+    This operator can also be used to enforce continuous-time satisfaction
+    of an implication specification through a periodic auxiliary-state
+    construction, e.g.,
+
+        z_dot(t) = IfThen_lite([y_0(t), y_1(t)])
+        z(0) = z(T)
+    """
+    y = jnp.asarray(y)
+    return OR_lite(jnp.array([-y[0], y[1]]), c=c)
