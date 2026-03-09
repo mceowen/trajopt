@@ -27,3 +27,11 @@ def obstacle(t, z, nu, params, fcns):
     r = z[0:2]
     pos_obs = jnp.array([5, 5])
     return jnp.array([jnp.linalg.norm(r - pos_obs)])
+
+def xy(t, z, nu, params, fcns):
+    pos_xy = z[0:2]
+    return pos_xy
+
+def xyz(t, z, nu, params, fcns):
+    pos_xyz = z[0:3]
+    return pos_xyz
