@@ -17,20 +17,20 @@ def set_ltv_indices(problem, method):
     dict: Updated params with LTV indices and initialized arrays.
     """
 
-    nz = problem.index_map.n['z']
-    n_nu = problem.index_map.n['control']
-    N = method.index_map.N['N']
+    nz              = problem.index_map.n['z']
+    n_nu            = problem.index_map.n['control']
+    N               = method.index_map.N['N']
 
-    method.z_ind     = np.arange(0, nz)
-    method.Ak_ind    = np.arange(method.z_ind[-1] + 1, method.z_ind[-1] + 1 + nz**2 )
-    method.Bk_ind    = np.arange(method.Ak_ind[-1] + 1, method.Ak_ind[-1] + 1 + nz*n_nu )
-    method.Bkp_ind   = np.arange(method.Bk_ind[-1] + 1, method.Bk_ind[-1] + 1 + nz*n_nu )
-    method.Sk_ind    = np.arange(method.Bkp_ind[-1] + 1, method.Bkp_ind[-1] + 1 + nz )
+    method.z_ind    = np.arange(0, nz)
+    method.Ak_ind   = np.arange(method.z_ind[-1] + 1, method.z_ind[-1] + 1 + nz**2 )
+    method.Bk_ind   = np.arange(method.Ak_ind[-1] + 1, method.Ak_ind[-1] + 1 + nz*n_nu )
+    method.Bkp_ind  = np.arange(method.Bk_ind[-1] + 1, method.Bk_ind[-1] + 1 + nz*n_nu )
+    method.Sk_ind   = np.arange(method.Bkp_ind[-1] + 1, method.Bkp_ind[-1] + 1 + nz )
 
-    method.Ak        = np.zeros((method.index_map.N['N'] - 1, nz, nz))
-    method.Bk        = np.zeros((method.index_map.N['N'] - 1, nz, n_nu))
-    method.Bkp       = np.zeros((method.index_map.N['N'] - 1, nz, n_nu))
-    method.Sk        = np.zeros((method.index_map.N['N'] - 1, nz, 1))
+    method.Ak       = np.zeros((method.index_map.N['N'] - 1, nz, nz))
+    method.Bk       = np.zeros((method.index_map.N['N'] - 1, nz, n_nu))
+    method.Bkp      = np.zeros((method.index_map.N['N'] - 1, nz, n_nu))
+    method.Sk       = np.zeros((method.index_map.N['N'] - 1, nz, 1))
 
     method.lds0_size = method.Sk_ind[-1] + 1
     method.lds0      = np.zeros( method.lds0_size )
@@ -46,7 +46,7 @@ def set_ltv_indices(problem, method):
     method.Sk_ind_jax    = jnp.asarray(method.Sk_ind)
 
 def compute_nonconvex_constraints(t_ref, z_ref, u_ref, problem, method):
-    n_ineq  = problem.index_map.n['nonconvex_inequality']
+    n_ineq  = problem.index_map.n['ineq']
     n_x     = problem.index_map.n['state']
     n_nu    = problem.index_map.n['control']
     N       = method.index_map.N['N']

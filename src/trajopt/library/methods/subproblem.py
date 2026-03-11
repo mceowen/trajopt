@@ -32,9 +32,9 @@ class Subproblem:
         self.indices = method.index_map.indices # Use index_map.indices for index arrays
 
         # Reference constraint data
-        self.constraints = SubproblemConstraints(problem=problem, method=method)
-        self.W_stack, self.dual_stack = self.constraints.stack_W_and_dual(problem, method)
-        self.w = tools.AttrDict()
+        self.constraints                = SubproblemConstraints(problem=problem, method=method)
+        self.W_stack, self.dual_stack   = self.constraints.stack_W_and_dual(problem, method)
+        self.w                          = tools.AttrDict()
 
         # Build the DPP graph once
         self._create_variables()
@@ -214,18 +214,18 @@ class Subproblem:
             self.dt_min = self.dt_max = self.ddt_max = None
 
         # Weights & Trust Region weights (stored as simple AttrDict values)
-        self.w.cost = cp.Parameter(nonneg=True, name="w_cost")
-        self.w.tr_z = cp.Parameter(nonneg=True, name="tr_z")
-        self.w.tr_u = cp.Parameter(nonneg=True, name="tr_u")
+        self.w.cost                     = cp.Parameter(nonneg=True, name="w_cost")
+        self.w.tr_z                     = cp.Parameter(nonneg=True, name="tr_z")
+        self.w.tr_u                     = cp.Parameter(nonneg=True, name="tr_u")
 
-        self.w_cost_times_dcostdz  = cp.Parameter((N, 1, n_x),  name="dcostdz")
-        self.w_cost_times_dcostdnu = cp.Parameter((N, 1, n_nu), name="dcostdnu")
-        self.w_cost_times_cost0    = cp.Parameter((N, 1),       name="cost0")
+        self.w_cost_times_dcostdz       = cp.Parameter((N, 1, n_x),  name="dcostdz")
+        self.w_cost_times_dcostdnu      = cp.Parameter((N, 1, n_nu), name="dcostdnu")
+        self.w_cost_times_cost0         = cp.Parameter((N, 1),       name="cost0")
 
         # Build W_sqrt as attribute dictionary with CVXPY parameters, initialized to zeros
         self.W_sqrt = tools.AttrDict()
-        self.W_sqrt.nonconvex_inequality = cp.Parameter((N, max(self.n.nonconvex_inequality, 1)),  nonneg=True, name="W_ineq_sqrt",        value=np.zeros((N, max(self.n.nonconvex_inequality, 1))))
-        self.W_sqrt.final_state            = cp.Parameter((max(self.n.term_total, 1),),                         nonneg=True, name="W_term_sqrt",        value=np.zeros((max(self.n.term_total, 1),)))
+        self.W_sqrt.nonconvex_inequality= cp.Parameter((N, max(self.n.nonconvex_inequality, 1)),  nonneg=True, name="W_ineq_sqrt",        value=np.zeros((N, max(self.n.nonconvex_inequality, 1))))
+        self.W_sqrt.final_state         = cp.Parameter((max(self.n.term_total, 1),),                         nonneg=True, name="W_term_sqrt",        value=np.zeros((max(self.n.term_total, 1),)))
         self.W_sqrt.dynamics            = cp.Parameter((N - 1, max(nz, 1)),                                  nonneg=True, name="W_dyn_sqrt",         value=np.zeros((N - 1, max(nz, 1))))
         self.W_sqrt.plus_real           = cp.Parameter((max(self.N.pm_real, 1), max(self.n.plus_real, 1)),   nonneg=True, name="W_plus_real_sqrt",   value=np.zeros((max(self.N.pm_real, 1), max(self.n.plus_real, 1))))
         self.W_sqrt.minus_real          = cp.Parameter((max(self.N.pm_real, 1), max(self.n.minus_real, 1)),  nonneg=True, name="W_minus_real_sqrt",  value=np.zeros((max(self.N.pm_real, 1), max(self.n.minus_real, 1))))
@@ -234,16 +234,16 @@ class Subproblem:
 
         # duals (same ≥1-column pattern, unified inequality structure)
         self.dual = tools.AttrDict()
-        self.dual.nonconvex_inequality = cp.Parameter((N,  max(self.n.nonconvex_inequality, 1)), name="dual_ineq")
-        self.dual.dynamics            = cp.Parameter((N - 1, max(nz, 1)),              name="dual_dyn")
-        self.dual.plus_real           = cp.Parameter((max(self.N.pm_real, 1), max(self.n.plus_real, 1)),     name="dual_plus_real")
-        self.dual.minus_real          = cp.Parameter((max(self.N.pm_real, 1), max(self.n.minus_real, 1)),    name="dual_minus_real")
-        self.dual.plus_ctcs           = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.plus_ctcs, 1)),     name="dual_plus_ctcs")
-        self.dual.minus_ctcs          = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.minus_ctcs, 1)),    name="dual_minus_ctcs")
-        self.dual.final_state            = cp.Parameter((max(self.n.term_total, 1),),                           name="dual_term")
+        self.dual.nonconvex_inequality  = cp.Parameter((N,  max(self.n.nonconvex_inequality, 1)), name="dual_ineq")
+        self.dual.dynamics              = cp.Parameter((N - 1, max(nz, 1)),              name="dual_dyn")
+        self.dual.plus_real             = cp.Parameter((max(self.N.pm_real, 1), max(self.n.plus_real, 1)),     name="dual_plus_real")
+        self.dual.minus_real            = cp.Parameter((max(self.N.pm_real, 1), max(self.n.minus_real, 1)),    name="dual_minus_real")
+        self.dual.plus_ctcs             = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.plus_ctcs, 1)),     name="dual_plus_ctcs")
+        self.dual.minus_ctcs            = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.minus_ctcs, 1)),    name="dual_minus_ctcs")
+        self.dual.final_state           = cp.Parameter((max(self.n.term_total, 1),),                           name="dual_term")
 
         # CTCS epsilon (scalar)
-        self.eps_ctcs         = cp.Parameter(nonneg=True, name="eps_ctcs")
+        self.eps_ctcs                   = cp.Parameter(nonneg=True, name="eps_ctcs")
 
         self.constraint_params = {}
         for constraint in problem.constraints.get(ct=0, type="equality_bc"):
@@ -663,14 +663,14 @@ class Subproblem:
             W_stack, dual_stack = configure_penalty_weights(self.problem, self.method, subconstraints=self.constraints)
         else:
             # Use the already-stacked values from previous iteration (already updated by autotune)
-            W_stack = inputs["W"]
-            dual_stack = inputs["dual"]
+            W_stack     = inputs["W"]
+            dual_stack  = inputs["dual"]
         
         # Update subproblem state
-        self.W_stack = W_stack
+        self.W_stack    = W_stack
         self.dual_stack = dual_stack
-        inputs["W"] = W_stack
-        inputs["dual"] = dual_stack
+        inputs["W"]     = W_stack
+        inputs["dual"]  = dual_stack
 
         # update scalar weights in-subproblem
         penalty_to_use = inputs.get("penalty", tools.AttrDict(self.method.penalty))
