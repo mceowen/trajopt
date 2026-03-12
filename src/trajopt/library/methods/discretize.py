@@ -68,29 +68,30 @@ def compute_nonconvex_constraints(t_ref, z_ref, u_ref, problem, method):
         tk = t_jax[k]
         zk = z_jax[k, :n_x]
         uk = nu_jax[k]
-        
+
         col_start = 0
         for constraint in problem.constraints.get(ct=0, type="nonconvex_inequality"):
             col_end = col_start + constraint.dimension
             
-            f, dfcn_dz, dfcn_du            = constraint.g_aff(tk, zk, uk, params_jax)
+            if k in constraint.nodes:
+                f, dfcn_dz, dfcn_du            = constraint.g_aff(tk, zk, uk, params_jax)
 
-            g_k = np.asarray(f)
-            dgdz_k = np.asarray(dfcn_dz)
-            dgdnu_k = np.asarray(dfcn_du)
+                g_k = np.asarray(f)
+                dgdz_k = np.asarray(dfcn_dz)
+                dgdnu_k = np.asarray(dfcn_du)
 
-            g[k, col_start:col_end]        = g_k
-            dgdz[k, col_start:col_end, :]  = dgdz_k
-            dgdnu[k, col_start:col_end, :] = dgdnu_k
+                g[k, col_start:col_end]        = g_k
+                dgdz[k, col_start:col_end, :]  = dgdz_k
+                dgdnu[k, col_start:col_end, :] = dgdnu_k
 
-            # # condition constraints by row norms
-            # row_norms = np.linalg.norm(np.hstack([dgdz_k, dgdnu_k]), axis=1)
+                # # condition constraints by row norms
+                # row_norms = np.linalg.norm(np.hstack([dgdz_k, dgdnu_k]), axis=1)
 
-            # # avoid division by zero
-            # row_norms[row_norms == 0] = 1.0
-            # g[k, col_start:col_end] /= row_norms
-            # dgdz[k, col_start:col_end, :] /= row_norms[:, np.newaxis]
-            # dgdnu[k, col_start:col_end, :] /= row_norms[:, np.newaxis]
+                # # avoid division by zero
+                # row_norms[row_norms == 0] = 1.0
+                # g[k, col_start:col_end] /= row_norms
+                # dgdz[k, col_start:col_end, :] /= row_norms[:, np.newaxis]
+                # dgdnu[k, col_start:col_end, :] /= row_norms[:, np.newaxis]
             
             col_start = col_end
     
@@ -155,7 +156,7 @@ def compile_jax_discretization(problem, method):
     lin_dyn = problem.constraints.get(type='dynamics')[0].lin_dyn
 
     # nsub defines the number of sub *nodes* between knot points
-    nsub_nodes = 100
+    nsub_nodes = 20
     dt_sub = 1.0 / (nsub_nodes + 1)
     t = jnp.linspace(0.0, 1.0, nsub_nodes + 2)
 
@@ -646,6 +647,7 @@ def RHS_ltv_ctcs(tau, lds, nu_ref, dt_ref, problem, method):
 #####################################################
 ##### PSEUDOSPECTRAL AND POLYNOMIAL PROTOTYPES: #####
 #####################################################
+USE_SPARTAN = True
 
 # ---------------------------------------------------------------------
 # Legendre polynomial helper

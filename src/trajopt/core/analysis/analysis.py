@@ -60,7 +60,7 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
         z_opt = np.asarray(data['z_opt'])
         nu_opt = np.asarray(data["nu_opt"])
 
-        t_nl = np.linspace(t_opt[0], t_opt[-1], 10000)
+        t_nl = np.linspace(t_opt[0], t_opt[-1], 1000)
 
         # nonlinear propagation
         t_nl, z_nl, nu_nl = integrators.propagate_jax_rk4_dense(z_opt[0, :n_x], nu_opt[:, :n_nu], t_opt, t_nl, problem, method)
@@ -109,10 +109,15 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
 
                 if group == None:
                     group = name
+
+                # trajectory functions are not nondimensionalized so need to pass in dimensional state
+                nt = nondim.time_scale
+                M_state = nondim.M.state.nd2d
+                M_ctrl = nondim.M.ctrl.nd2d
                 
-                opt_vals  = trajectory.compute_trajectory_values(t_opt,  z_opt[:, :n_x],  nu_opt,  params_dict)
-                nl_vals   = trajectory.compute_trajectory_values(t_nl,   z_nl[:, :n_x],   nu_nl,   params_dict)
-                init_vals = trajectory.compute_trajectory_values(t_init, z_init[:, :n_x], nu_init, params_dict)
+                opt_vals  = trajectory.compute_trajectory_values(nt*t_opt,  z_opt[:, :n_x] @ M_state,  nu_opt @ M_ctrl,  params_dict)
+                nl_vals   = trajectory.compute_trajectory_values(nt*t_nl,   z_nl[:, :n_x]  @ M_state,   nu_nl @ M_ctrl,   params_dict)
+                init_vals = trajectory.compute_trajectory_values(nt*t_init, z_init[:, :n_x]@ M_state, nu_init @ M_ctrl, params_dict)
 
                 output = AttrDict({
                     "name": name,

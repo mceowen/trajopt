@@ -95,7 +95,7 @@ def check_convergence_tolerance(problem, method, iter_record):
 
     # debug prints
     # print(f"term state convergence: {abs_vb_term <= eps_term}")
-    # print(f"inequality convergence: {np.all(abs_vb_ineq <= eps_ineq)}")
+    # print(f"inequality convergence: {abs_vb_ineq <= eps_ineq}")
     # print(f"state convergence: {abs_dz <= eps_state}")
 
     # === Populate convergence summary

@@ -61,9 +61,6 @@ class IndexMap:
 
         if self.problem is not None and hasattr(self.problem, 'constraints'):
             n_ineq = sum(constraint.dimension for constraint in self.problem.constraints.get(ct=0, type="nonconvex_inequality"))
-            n_path = sum(constraint.dimension for constraint in self.problem.constraints.get(ct=0, type="nonconvex_inequality", group="path"))
-            n_nfz = sum(constraint.dimension for constraint in self.problem.constraints.get(ct=0, type="nonconvex_inequality", group="nfz"))
-            n_custom = sum(constraint.dimension for constraint in self.problem.constraints.get(ct=0, type="nonconvex_inequality", group="custom"))
 
             if self.problem.constraints.has(ct=1):
                 n_ctcs = sum(constraint.dimension for constraint in self.problem.constraints.get(ct=1))
@@ -84,17 +81,10 @@ class IndexMap:
         z_idx_ctcs  = np.arange(nx, nx + n_ctcs) if n_ctcs > 0 else np.array([], dtype=int)
         u_idx_all   = np.arange(0, n_nu)
 
-        i0 = 0
-        path_idx    = np.arange(i0, i0 + n_path)
-        i0 += n_path
-        nfz_idx     = np.arange(i0, i0 + n_nfz)
-        i0 += n_nfz
-        custom_idx  = np.arange(i0, i0 + n_custom)
-
         n_term_eq   = n_term
-        eq_idx      = np.arange(0, n_term_eq)
-        ineq_idx    = np.arange(n_term_eq, n_term_eq + n_term_ineq)
-        ctcs_idx    = np.arange(n_term_eq + n_term_ineq, n_term_eq + n_term_ineq + n_term_ctcs)
+        term_eq_idx      = np.arange(0, n_term_eq)
+        term_ineq_idx    = np.arange(n_term_eq, n_term_eq + n_term_ineq)
+        term_ctcs_idx    = np.arange(n_term_eq + n_term_ineq, n_term_eq + n_term_ineq + n_term_ctcs)
 
         Ak_ind      = np.arange(0, nz * nz)
         Bk_ind      = np.arange(Ak_ind[-1] + 1, Ak_ind[-1] + 1 + nz * n_nu)
@@ -155,17 +145,14 @@ class IndexMap:
             "dilation_factor": np.array([], dtype=int),
         })
 
-        nonlinear_ineq = AttrDict({
+        nonconvex_inequality = AttrDict({
             "all": np.arange(0, n_ineq),
-            "path": path_idx,
-            "nfz": nfz_idx,
-            "custom": custom_idx,
         })
 
         terminal = AttrDict({
-            "eq": eq_idx,
-            "ineq": ineq_idx,
-            "ctcs": ctcs_idx,
+            "eq": term_eq_idx,
+            "ineq": term_ineq_idx,
+            "ctcs": term_ctcs_idx,
             "all": np.arange(0, n_term_eq + n_term_ineq + n_term_ctcs),
         })
 
@@ -178,7 +165,7 @@ class IndexMap:
 
         ctcs_indices = AttrDict({
             "state": z_idx_ctcs,
-            "term": ctcs_idx,
+            "term": term_ctcs_idx,
             "ineq": np.array([], dtype=int),
         })
 
@@ -186,7 +173,7 @@ class IndexMap:
             "z": z_indices,
             "nu": nu_indices,
             "constraints": AttrDict({
-                "nonlinear_inequality": nonlinear_ineq,
+                "nonconvex_inequality": nonconvex_inequality,
                 "terminal": terminal,
                 "dynamics": dynamics_indices,
             }),
@@ -198,9 +185,6 @@ class IndexMap:
             "control": int(n_nu),
             "z": int(nz),
             "ctcs": int(n_ctcs),
-            "path": int(n_path),
-            "nfz": int(n_nfz),
-            "custom": int(n_custom),
             "nonconvex_inequality": int(n_ineq),
             "terminal": int(n_term),
             "term_ineq": int(n_term_ineq),
@@ -215,9 +199,6 @@ class IndexMap:
 
         self.N = AttrDict({
             "nonconvex_inequality": N_val,
-            "path": N_val,
-            "nfz": N_val,
-            "custom": N_val,
             "dynamics": N_val - 1,
             "terminal": 1,
             "box": N_val,
