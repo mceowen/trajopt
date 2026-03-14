@@ -91,3 +91,35 @@ def long_lat_alt(t, z, nu, params, fcns):
     phi = z[2]
 
     return jnp.array([theta, phi, r - params['planet']['r']])
+
+def altitude(t, z, nu, params, fcns):
+
+    r = z[0]
+
+    return jnp.array([r - params['planet']['r']])
+
+def longitude(t, z, nu, params, fcns):
+    
+    phi = z[1]
+
+    return jnp.array([phi])
+
+def latitude(t, z, nu, params, fcns):
+    theta = z[2]
+
+    return jnp.array([theta])
+
+def velocity(t, z, nu, params, fcns):
+    v = z[3]
+
+    return jnp.array([v])
+
+def fpa(t, z, nu, params, fcns):
+    gamma = z[4]
+
+    return jnp.array([gamma])
+
+def heading(t, z, nu, params, fcns):
+    psi = z[5]
+
+    return jnp.array([psi])

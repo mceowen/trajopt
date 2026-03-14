@@ -152,16 +152,26 @@ costs.min_terminal_vel_1:
 
 trajectories:
   long_lat_trajectory_plot:
-    type: general
+    type: spatial
     fcn: trajopt/library/models/reentry_6dof.py:long_lat
     group: state_trajplots
   
   long_lat_alt_trajectory_plot:
-    type : general
+    type : spatial
     fcn: trajopt/library/models/reentry_6dof.py:long_lat_alt
     group: state_trajplots
 
   rv_plot:
-    type: general
+    type: spatial
     fcn: trajopt/library/models/reentry_6dof.py:r_v
     group: rv
+
+  lut_density:
+    type: time_series
+    fcn: trajopt/local/aero/cobra_aero_6dof.py:lut_density_jax
+    group: density_comparison
+  
+  exp_density:
+    type: time_series
+    fcn: trajopt/local/aero/cobra_aero_6dof.py:exp_density_jax
+    group: density_comparison

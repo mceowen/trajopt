@@ -146,21 +146,39 @@ class SubproblemConstraints(Constraints):
         W_dyn       = tools.ensure_shape(W_stack.get("dynamics", 0.0), (max(N - 1, 1), max(idx.n.z, 1))) if idx.n.z > 0 else np.zeros((max(N - 1, 0), 0))
         dual_dyn    = tools.ensure_shape(dual_stack.get("dynamics", 0.0), (max(N - 1, 1), max(idx.n.z, 1))) if idx.n.z > 0 else np.zeros((max(N - 1, 0), 0))
 
-        offsets = {
-            "path": 0,
-            "nfz": idx.n.path,
-            "custom": idx.n.path + idx.n.nfz,
-        }
+
+        # get group names for constraints, if not provided, default to constraint name
+        group_names = set(getattr(c, "group", c.name) for c in self.constraints_list)
+
+        offsets = {}
+        current_offset = 0
+        for group_name in group_names:
+            # set the offsets for the groups based on total dimension of each group before it
+
+            offsets[group_name] = current_offset
+            current_offset += idx.n[group_name] if group_name in idx.n else 0
+
+        print("offset keys: ")
+        print(offsets.keys())
+
+        
+        # offsets = {
+        #     "path": 0,
+        #     "nfz": idx.n.path,
+        #     "custom": idx.n.path + idx.n.nfz,
+        # }
 
         term_offset = 0
 
         for c in self.constraints_list:
+            c_name = c.name
             c_type = getattr(c, "type", None)
             c_group = getattr(c, "group", None)
             dim = int(getattr(c, "dimension", 0))
 
             if c_type == "nonconvex_inequality":
-                start = offsets.get(c_group, offsets["custom"])
+
+                start = offsets.get(c_group, c.name)
                 end = start + dim
                 c.W = W_ineq[:, start:end] if dim > 0 else np.zeros((N, 0))
                 c.dual = dual_ineq[:, start:end] if dim > 0 else np.zeros((N, 0))

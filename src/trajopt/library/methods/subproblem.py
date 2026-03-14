@@ -12,7 +12,6 @@ from trajopt.library.methods import hyperparameters as hp
 from trajopt.utils import tools
 from trajopt.utils.tools import recursive_attrdict
 
-# TODO(Skye): revisit this
 from trajopt.library.methods.subproblem_constraints import configure_penalty_weights
 
 
@@ -84,8 +83,8 @@ class Subproblem:
         self.dnu= cp.Variable((N, n_nu), name="du")
 
         # Time variable(s)
-        if bool(self.flags["free_final_time"]):
-            if bool(self.flags["equal_dt"]):
+        if bool(method.flags["free_final_time"]):
+            if bool(method.flags["equal_dt"]):
                 self.dT = cp.Variable(name="dT")
                 self.dt = (1 / (N - 1)) * self.dT * np.ones((N - 1, 1))
             else:
@@ -94,7 +93,6 @@ class Subproblem:
         else:
             self.dT = None
             self.dt = cp.Constant(np.zeros((N - 1, 1)))  # CVXPY constant, safe in constraints
-
 
         # Virtual buffers (None if zero-sized)
         self.vb_ineq    = cp.Variable((N, self.n.nonconvex_inequality), name="vb_ineq")   if self.n.nonconvex_inequality  > 0 else None 

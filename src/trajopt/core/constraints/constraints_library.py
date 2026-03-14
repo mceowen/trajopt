@@ -233,9 +233,10 @@ class nonconvex_inequality:
     def __init__(self, cnstr_config, index_map):
 
         # required config
-        self.name            = cnstr_config["name"]
-        self.group           = cnstr_config.get("group", None)
+        self.name           = cnstr_config["name"]
+        self.group          = cnstr_config.get("group", None)
         self.scale          = cnstr_config.get("scale", None)
+        self.nodes           = cnstr_config.get("nodes", np.arange(0, index_map.N.N))
 
         self.fcn_string      = cnstr_config["fcn"]
         self.eps             = cnstr_config["eps"]
@@ -375,6 +376,121 @@ class nonconvex_inequality:
             elif self.min_value is not None:
                 min_val_limits = np.tile(np.asarray(self.M_out_nd2d @ self.min_value), (n_t, self.dimension))
                 self.limits = min_val_limits
+
+            else: 
+                self.limits = None
+
+        elif self.backend == "sympy":
+            pass
+        return {"values": values, 'limits': self.limits}
+    
+class nonconvex_equality:
+    def __init__(self, cnstr_config, index_map):
+
+        # required config
+        self.name           = cnstr_config["name"]
+        self.group          = cnstr_config.get("group", None)
+        self.scale          = cnstr_config.get("scale", None)
+        self.nodes           = cnstr_config.get("nodes", np.arange(0, index_map.N.N))
+
+        self.fcn_string      = cnstr_config["fcn"]
+        self.eps             = cnstr_config["eps"]
+        self.dimension       = cnstr_config["dimension"]
+        self.ct = cnstr_config.get("ct", 0)
+
+        # optional configs
+        self.ct              = cnstr_config.get("ct", 0)
+        self.hard            = cnstr_config.get("hard", 0)
+        self.backend         = cnstr_config.get("backend", "jax")
+        self.max_value       = cnstr_config.get("value", None)
+
+        self.index_map     = index_map
+        self.type = 'nonconvex_equality'
+
+        # symbolic function in dimensional units provided by user
+        # (jax or sympy)
+        self.fcn_dim = resolve_function(self.fcn_string)
+        self.fcn_nd = None
+
+        # this is the symbolic nondimmed version of fcn_fim, it will 
+        # be provided once the nondim_constraint() function is called
+        self.fcn = None
+
+        # the compiled version (jitted for jax / numpy for sympy)
+        # will be provided by problem.constraints.convexify_constraints() 
+        self.fcn_compiled = None
+        self.dfcn_dz_compiled = None
+        self.dfcn_du_compiled = None
+
+    def nondim_constraint(self, nondim):
+        if self.backend == "jax":
+            
+            # get max and min values regardless
+            if self.value is not None:
+                self.value = jnp.asarray(jnp.atleast_1d(self.value))
+
+            # get provided scales if provided
+            if self.scale is not None:
+                # TODO (Carlos): revisit, temporary scaling if max value is equal to zero
+                self.M_out_d2nd = jnp.diag(1 / jnp.abs(jnp.asarray(self.scale)))
+            
+            # if scales aren't provided, try to scale using max/ min values if provided
+            elif self.value is not None:
+                self.M_out_d2nd = jnp.diag(1 / jnp.abs(self.value))
+            
+            else:
+                raise ValueError("At least one of 'scales', 'max_value', or 'min_value' must be provided for nondimensionalization.")
+
+            self.M_out_nd2d = jnp.diag(1 / jnp.diag(self.M_out_d2nd))
+
+            if self.value is not None:
+                self.value = self.M_out_d2nd @ self.value
+
+            M_state_nd2d_jax = jnp.asarray(nondim.M.state.nd2d)
+            M_ctrl_nd2d_jax  = jnp.asarray(nondim.M.ctrl.nd2d)
+
+            # debug print
+            # print(f"name: {self.name}, M_out_d2nd: {self.M_out_d2nd}, max_value: {self.max_value}, min_value: {self.min_value}")
+
+            self.fcn_nd = nondim.nondim_function(self.fcn_dim, M_state_nd2d_jax, M_ctrl_nd2d_jax, self.M_out_d2nd)
+
+            self.eps = self.M_out_d2nd @ self.eps
+
+    def convexify_constraint(self):
+        if self.backend == "jax":
+                
+            if (self.max_value is not None):
+                self.fcn = lambda t, z, nu, params: self.fcn_nd(t, z, nu, params) - self.max_value
+            else:
+                self.fcn = self.fcn_nd
+
+            vals_function = lambda t, z, nu, params: self.M_out_nd2d @ (self.fcn_nd(t, z, nu, params))
+
+            self.fcn_compiled, self.dfcn_dz_compiled, self.dfcn_du_compiled = convexify.linearize_jax(self.fcn)
+
+            self.f_batched = jax.jit(jax.vmap(vals_function, in_axes=(0,0,0, None)))
+        
+        elif self.backend == "sympy":
+            pass
+
+    def g_aff(self, t, z, nu, params):
+        return (
+            self.fcn_compiled(t, z, nu, params),
+            self.dfcn_dz_compiled(t, z, nu, params),
+            self.dfcn_du_compiled(t, z, nu, params)
+        )
+
+    def compute_constraint_values(self, t, z, nu, params):
+        if self.backend == "jax":
+            t_jax = jnp.asarray(t)
+            z_jax = jnp.asarray(z)
+            nu_jax = jnp.asarray(nu)
+            values = np.asarray(self.f_batched(t_jax, z_jax, nu_jax, params))
+
+            n_t = t_jax.shape[0]
+
+            if self.value is not None:
+                self.limits = np.tile(np.asarray(self.M_out_nd2d @ self.value), (n_t, self.dimension))
 
             else: 
                 self.limits = None

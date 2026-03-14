@@ -5,7 +5,7 @@ N: 40
 flags:
   equal_dt: 0
   buff_dyn: "term"
-  ctcs: l2
+  ctcs: none
 
 # initial guess configuration
 guess: 
@@ -25,5 +25,5 @@ conv:
   iter_max: 200
 
 weights:
-  alpha_z: 0.05
-  alpha_u: 0.05
+  alpha_z: 0.5
+  alpha_u: 0.5

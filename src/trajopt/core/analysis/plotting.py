@@ -92,8 +92,14 @@ def plot_default(trajopt_obj, show_iters=False, analysis_type='standalone'):
 
         plt_type = AttrDict({})
 
-        for i, (trajectory_name, trajectory_data) in enumerate(trajectory_group_data.items()):
-            dim = trajectory_data.opt_vals["values"].shape[1]
+        for i, (trajectory_name,current_trajectory_data) in enumerate(trajectory_group_data.items()):
+            
+            if current_trajectory_data.type == "spatial":
+                dim = current_trajectory_data.opt_vals["values"].shape[1]
+
+            elif current_trajectory_data.type == "time_series":
+                dim = 2
+            
             if dim == 3:
                 plt_type[i] = "3D"
             else:
@@ -249,48 +255,80 @@ def plot_trajectories(PLTS, axs, nominal_trajectory_data,
             nl_loc  = ('trajectory_data', traj_group_name, traj_name, 'nl_vals')
             opt_loc = ('trajectory_data', traj_group_name, traj_name, 'opt_vals')
 
-            dim = current_traj_data.opt_vals["values"].shape[1]
+            traj_type = current_traj_data.type
 
-            # plot iters if specified
-            if iters != [-1]:
+            if traj_type == "spatial":
 
-                if dim == 3:
-                    # plot the nonlinear propagation of  openloop solution
-                    ins_nl = {'label': 'Nonlinear Propagation', 'x': ("values", 0), 'y': ('values', 1), 'z': ('values', 2), 'iters': iters, 'dataloc': nl_loc, 'legend': "legend1"}
-                    
-                    PLTS.addPlot3D(ax, pen=pens.itr_nl, ins=ins_nl)
+                plot_spatial_trajectories(PLTS, iters, current_traj_data, nl_loc, opt_loc, ax, pens)
 
-                    # plot the optimal solution
-                    ins_opt = {'label': 'Optimal Soltution', 'x': ('values', 0), 'y': ('values', 1), 'z': ('values', 2), 'iters': iters, 'dataloc': opt_loc,'legend': "legend1"}
-                    PLTS.addPlot3D(ax, pen=pens.itr_opt, ins=ins_opt)
-                
-                else:
-                    # plot the nonlinear propagation of  openloop solution
-                    ins_nl = {'label': 'Nonlinear Propagation', 'x': ("values", 0), 'y': ('values', 1), 'iters': iters, 'dataloc': nl_loc, 'legend': "legend1"}
-                    
-                    PLTS.addPlot2D(ax, pen=pens.itr_nl, ins=ins_nl)
+            elif traj_type == "time_series":
 
-                    # plot the optimal solution
-                    ins_opt = {'label': 'Optimal Soltution', 'x': ('values', 0), 'y': ('values', 1), 'iters': iters, 'dataloc': opt_loc,'legend': "legend1"}
-                    PLTS.addPlot2D(ax, pen=pens.itr_opt, ins=ins_opt)
+                plot_time_series_trajectories(PLTS, iters, current_traj_data, nl_loc, opt_loc, ax, pens)
 
-            if dim == 3:
-                # plot the nonlinear propagation of  openloop solution
-                ins_nl = {'label': 'Nonlinear Propagation', 'x': ('values', 0), 'y': ('values', 1), 'z': ('values', 2), 'iters': [-1], 'dataloc': nl_loc, 'legend': "legend1"}
-                PLTS.addPlot3D(ax, pen=pens.nl, ins=ins_nl)
+def plot_spatial_trajectories(PLTS, iters, current_traj_data, nl_loc, opt_loc, ax, pens):
+    dim = current_traj_data.opt_vals["values"].shape[1]
+    # plot iters if specified
+    if iters != [-1]:
 
-                # plot the optimal solution
-                ins_opt = {'label': 'Optimal Soltution', 'x': ('values', 0), 'y': ('values', 1), 'z': ('values', 2), 'iters': [-1], 'dataloc': opt_loc, 'legend': "legend1"}
-                PLTS.addPlot3D(ax, pen=pens.opt, ins=ins_opt)
+        if dim == 3:
+            # plot the nonlinear propagation of  openloop solution
+            ins_nl = {'label': 'Nonlinear Propagation', 'x': ("values", 0), 'y': ('values', 1), 'z': ('values', 2), 'iters': iters, 'dataloc': nl_loc, 'legend': "legend1"}
             
-            else:
-                # plot the nonlinear propagation of  openloop solution
-                ins_nl = {'label': 'Nonlinear Propagation', 'x': ('values', 0), 'y': ('values', 1), 'iters': [-1], 'dataloc': nl_loc, 'legend': "legend1"}
-                PLTS.addPlot2D(ax, pen=pens.nl, ins=ins_nl)
+            PLTS.addPlot3D(ax, pen=pens.itr_nl, ins=ins_nl)
 
-                # plot the optimal solution
-                ins_opt = {'label': 'Optimal Soltution', 'x': ('values', 0), 'y': ('values', 1), 'iters': [-1], 'dataloc': opt_loc, 'legend': "legend1"}
-                PLTS.addPlot2D(ax, pen=pens.opt, ins=ins_opt)
+            # plot the optimal solution
+            ins_opt = {'label': 'Optimal Soltution', 'x': ('values', 0), 'y': ('values', 1), 'z': ('values', 2), 'iters': iters, 'dataloc': opt_loc,'legend': "legend1"}
+            PLTS.addPlot3D(ax, pen=pens.itr_opt, ins=ins_opt)
+        
+        else:
+            # plot the nonlinear propagation of  openloop solution
+            ins_nl = {'label': 'Nonlinear Propagation', 'x': ("values", 0), 'y': ('values', 1), 'iters': iters, 'dataloc': nl_loc, 'legend': "legend1"}
+            
+            PLTS.addPlot2D(ax, pen=pens.itr_nl, ins=ins_nl)
+
+            # plot the optimal solution
+            ins_opt = {'label': 'Optimal Soltution', 'x': ('values', 0), 'y': ('values', 1), 'iters': iters, 'dataloc': opt_loc,'legend': "legend1"}
+            PLTS.addPlot2D(ax, pen=pens.itr_opt, ins=ins_opt)
+
+    if dim == 3:
+        # plot the nonlinear propagation of  openloop solution
+        ins_nl = {'label': 'Nonlinear Propagation', 'x': ('values', 0), 'y': ('values', 1), 'z': ('values', 2), 'iters': [-1], 'dataloc': nl_loc, 'legend': "legend1"}
+        PLTS.addPlot3D(ax, pen=pens.nl, ins=ins_nl)
+
+        # plot the optimal solution
+        ins_opt = {'label': 'Optimal Soltution', 'x': ('values', 0), 'y': ('values', 1), 'z': ('values', 2), 'iters': [-1], 'dataloc': opt_loc, 'legend': "legend1"}
+        PLTS.addPlot3D(ax, pen=pens.opt, ins=ins_opt)
+    
+    else:
+        # plot the nonlinear propagation of  openloop solution
+        ins_nl = {'label': 'Nonlinear Propagation', 'x': ('values', 0), 'y': ('values', 1), 'iters': [-1], 'dataloc': nl_loc, 'legend': "legend1"}
+        PLTS.addPlot2D(ax, pen=pens.nl, ins=ins_nl)
+
+        # plot the optimal solution
+        ins_opt = {'label': 'Optimal Soltution', 'x': ('values', 0), 'y': ('values', 1), 'iters': [-1], 'dataloc': opt_loc, 'legend': "legend1"}
+        PLTS.addPlot2D(ax, pen=pens.opt, ins=ins_opt)
+
+def plot_time_series_trajectories(PLTS, iters, current_traj_data, nl_loc, opt_loc, ax, pens):
+    # plot iters if specified
+    if iters != [-1]:
+
+        # plot the nonlinear propagation of  openloop solution
+        ins_nl = {'label': 'Nonlinear Propagation', 'x': 't_nl', 'y': 'values', 'iters': iters, 'dataloc': nl_loc, 'legend': "legend1"}
+        
+        PLTS.addPlot2D(ax, pen=pens.itr_nl, ins=ins_nl)
+
+        # plot the optimal solution
+        ins_opt = {'label': 'Optimal Soltution', 'x': 't_opt', 'y': 'values', 'iters': iters, 'dataloc': opt_loc,'legend': "legend1"}
+        PLTS.addPlot2D(ax, pen=pens.itr_opt, ins=ins_opt)
+
+    
+    # plot the nonlinear propagation of  openloop solution
+    ins_nl = {'label': 'Nonlinear Propagation', 'x': 't_nl', 'y': 'values', 'iters': [-1], 'dataloc': nl_loc, 'legend': "legend1"}
+    PLTS.addPlot2D(ax, pen=pens.nl, ins=ins_nl)
+
+    # plot the optimal solution
+    ins_opt = {'label': 'Optimal Soltution', 'x': 't_opt', 'y': 'values', 'iters': [-1], 'dataloc': opt_loc, 'legend': "legend1"}
+    PLTS.addPlot2D(ax, pen=pens.opt, ins=ins_opt)
 
 def plot_animated(trajopt_obj):
     pass

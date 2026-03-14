@@ -14,11 +14,11 @@ control:
 
 trajectories:
   xy_trajectory:
-    type: general
+    type: spatial
     fcn: trajopt/library/models/quadrotor_3dof.py:xy
     group: position_trajectories
 
   xyz_trajectory:
-    type: general
+    type: spatial
     fcn: trajopt/library/models/quadrotor_3dof.py:xyz
     group: position_trajectories

@@ -12,7 +12,7 @@ def configure_penalty_weights(problem, method, subconstraints=None):
     penalty = tools.AttrDict(method.penalty)
 
     # --- Default weights ---
-    n_ineq = problem.index_map.n['path'] + problem.index_map.n['nfz'] + problem.index_map.n['custom']
+    n_ineq = problem.index_map.n.nonconvex_inequality
     W_stack = tools.AttrDict()
     dual_stack = tools.AttrDict()
 
@@ -33,21 +33,11 @@ def configure_penalty_weights(problem, method, subconstraints=None):
     dual_stack.minus_ctcs               = np.zeros((method.index_map.N.pm_ctcs, method.index_map.n.minus_ctcs))
 
     # local block arrays
-    W_path                              = np.zeros((method.index_map.N.N, problem.index_map.n['path']))
-    W_nfz                               = np.zeros((method.index_map.N.N, problem.index_map.n['nfz']))
-    W_custom                            = np.zeros((method.index_map.N.N, problem.index_map.n['custom']))
-    dual_path                           = np.zeros((method.index_map.N.N, problem.index_map.n['path']))
-    dual_nfz                            = np.zeros((method.index_map.N.N, problem.index_map.n['nfz']))
-    dual_custom                         = np.zeros((method.index_map.N.N, problem.index_map.n['custom']))
+    W_ineq                            = np.zeros((method.index_map.N.N, problem.index_map.n.nonconvex_inequality))
+    dual_ineq                         = np.zeros((method.index_map.N.N, problem.index_map.n.nonconvex_inequality))
 
-    # PTR penalty weights
-    # Wtr: weight for trust region cost                        
-    # w_term: weight for terminal constraint buffer cost
-    # w_path: weight for path constraint buffer cost
-    # w_nfz:  weight for nfz constraint buffer cost
-
-    penalty.wtr_z = 1 / (2 * penalty.alpha_z * problem.index_map.N.N)
-    penalty.wtr_u = 0 if np.isinf(penalty.alpha_u) else 1 / (2 * penalty.alpha_u * problem.index_map.N.N)
+    penalty.wtr_z = 1 / (2 * penalty.alpha_z)
+    penalty.wtr_u = 0 if np.isinf(penalty.alpha_u) else 1 / (2 * penalty.alpha_u)
 
     # === Autotune modes (flag_autotune ∈ {0,2,3,al-scvx}) ===
     if str(method.flags["flag_autotune"]) in {"0", "2", "3", "al-scvx"}:
@@ -56,32 +46,24 @@ def configure_penalty_weights(problem, method, subconstraints=None):
         if str(method.flags["flag_autotune"]) in {"0", "al-scvx"}:
             if str(method.flags["flag_autotune"]) == "0":
 
-                w_path      = penalty.config.scale_w.path   * penalty.config.scale_w.default / method.index_map.N.N
-                w_nfz       = penalty.config.scale_w.nfz    * penalty.config.scale_w.default / method.index_map.N.N
-                w_custom    = penalty.config.scale_w.custom * penalty.config.scale_w.default / method.index_map.N.N
+                w_ineq      = penalty.config.scale_w.ineq   * penalty.config.scale_w.default / method.index_map.N.N
                 w_dyn       = penalty.config.scale_w.dyn    * penalty.config.scale_w.default / (method.index_map.N.N - 1)
                 w_term      = penalty.config.scale_w.term   * penalty.config.scale_w.default
 
             else:
-                w_path      = penalty.config.scale_w.default / method.index_map.N.N
-                w_nfz       = penalty.config.scale_w.default / method.index_map.N.N
-                w_custom    = penalty.config.scale_w.default / method.index_map.N.N
+                w_ineq      = penalty.config.scale_w.default / method.index_map.N.N
                 w_dyn       = penalty.config.scale_w.default / (method.index_map.N.N - 1)
                 w_term      = penalty.config.scale_w.default
         else:
             penalty.config.scale_w.default = 1
-            w_path          = penalty.config.scale_w.default / method.index_map.N.N
-            w_nfz           = penalty.config.scale_w.default / method.index_map.N.N
-            w_custom        = penalty.config.scale_w.default / method.index_map.N.N
+            w_ineq         = penalty.config.scale_w.default / method.index_map.N.N
             w_dyn           = penalty.config.scale_w.default / (method.index_map.N.N - 1)
             w_term          = penalty.config.scale_w.default
 
-        W_path += w_path
-        W_nfz  += w_nfz
-        W_custom  += w_custom
+        W_ineq += w_ineq
 
         # Stack into the master W_nonconvex_inequality
-        W_stack.nonconvex_inequality = np.hstack([W_path, W_nfz, W_custom])
+        W_stack.nonconvex_inequality = W_ineq
 
         if method.flags["dynamics_nonconvex"] or method.flags["ctcs"] != "none":
 
@@ -119,11 +101,9 @@ def configure_penalty_weights(problem, method, subconstraints=None):
     # === Autotune mode: {1,3,al-scvx} ===
     if str(method.flags["flag_autotune"]) in {"1", "3", "al-scvx"}:
 
-        dual_path += penalty["eps_nonzero1"]
-        dual_nfz  += penalty["eps_nonzero1"]
-        dual_custom  += penalty["eps_nonzero1"]
+        dual_ineq += penalty["eps_nonzero1"]
 
-        dual_stack.nonconvex_inequality = np.hstack([dual_path, dual_nfz, dual_custom])
+        dual_stack.nonconvex_inequality = dual_ineq
 
         if method.flags["dynamics_nonconvex"] or method.flags["ctcs"] != "none":
 
@@ -544,9 +524,9 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
     eps_feas_term = conv.eps_term
     eps_feas_dyn  = conv.eps_dyn
 
-    eps_target_term =  np.maximum(eps_feas_term, conv.fac_eps * np.abs(conv_data.vb_terminal))
-    eps_target_ineq =  np.maximum(eps_feas_ineq, conv.fac_eps * np.abs(conv_data.vb_ineq))
-    eps_target_dyn  =  np.maximum(eps_feas_dyn , conv.fac_eps * np.abs(conv_data.vb_dyn))
+    eps_target_term =  np.maximum(0.5*eps_feas_term, conv.fac_eps * np.abs(conv_data.vb_terminal))
+    eps_target_ineq =  np.maximum(0.5*eps_feas_ineq, conv.fac_eps * np.abs(conv_data.vb_ineq))
+    eps_target_dyn  =  np.maximum(0.5*eps_feas_dyn , conv.fac_eps * np.abs(conv_data.vb_dyn))
 
     conv_data.eps_target_term = eps_target_term.copy()
     conv_data.eps_target_ineq = eps_target_ineq.copy()
@@ -597,7 +577,7 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
         dual_ineq_buff = np.diag(W_ineq[k, :]) @ vb_ineq[k, :].flatten()
 
         if problem.index_map.n['nonconvex_inequality'] > 0:
-            Wh_ineq[k, :] = np.minimum(np.abs(dual_ineq_buff / eps_target_ineq[k]), 1e8)
+            Wh_ineq[k, :] = np.minimum(np.abs(dual_ineq_buff / eps_target_ineq[k]), 1e4)
         else:
             Wh_ineq[k, :] = np.abs(dual_ineq_buff)
 
@@ -615,7 +595,7 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
             if ctcs == "l1":
                 Wh_dyn[k, z_ctcs_idx] = np.sum(np.abs(dual_dyn_buff[z_ctcs_idx]) / eps_target_dyn[k, z_ctcs_idx])
             elif ctcs != "none":
-                Wh_dyn[k, z_ctcs_idx] = np.minimum(np.abs(dual_dyn_buff[z_ctcs_idx] / eps_target_dyn[k, z_ctcs_idx]), 1e8)
+                Wh_dyn[k, z_ctcs_idx] = np.minimum(np.abs(dual_dyn_buff[z_ctcs_idx] / eps_target_dyn[k, z_ctcs_idx]), 1e4)
 
             # TODO: THINK ABOUT THIS (MAYBE ONE IF ELSE) COME BACK TO THIS, SINGLE EPSILON ETC
             if buff_dyn == "quad-2":
@@ -628,7 +608,7 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
 
     if problem.index_map.n['term_total'] > 0:
         dual_term_buff = np.diag(W_term) @ vb_term
-        Wh_term = np.minimum(np.abs(dual_term_buff / eps_target_term).flatten(), 1e8)
+        Wh_term = np.minimum(np.abs(dual_term_buff / eps_target_term).flatten(), 1e4)
 
     # ==========================================
     # UPDATE WEIGHTS WITH COMPUTED AUTOTUNE UPDATES

@@ -65,10 +65,8 @@ class SolutionMethod:
         hyperparameters.configure_penalty_weights(problem, self)
 
         # --- Initialize virtual buffers ---
-        self.conv_data.vb_path = np.zeros((self.index_map.N.N,      problem.index_map.n.path))
-        self.conv_data.vb_nfz  = np.zeros((self.index_map.N.N,      problem.index_map.n.nfz))
-        self.conv_data.vb_custom  = np.zeros((self.index_map.N.N,   problem.index_map.n.custom))
-        self.conv_data.vb_dyn  = np.zeros((self.index_map.N.N-1,    problem.index_map.n.z))
+        self.conv_data.vb_ineq     = np.zeros((self.index_map.N.N,      problem.index_map.n.nonconvex_inequality))
+        self.conv_data.vb_dyn      = np.zeros((self.index_map.N.N-1,    problem.index_map.n.z))
         self.conv_data.vb_terminal = np.zeros(problem.index_map.n.z)
 
         ### Configure generic convergence criterion and max iterations ###

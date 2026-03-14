@@ -49,10 +49,8 @@ weights:
   eps_nonzero2:   0.0000000001
   config:
     scale_w:
-      default:    100.0
-      nfz:        10.0
-      path:       10.0
-      custom:     0.0
-      dyn:        10000.0
-      term:       1000.0
-  w_ctcs:         100.0
+      default: 100.0
+      ineq:    100.0
+      dyn:     10000.0
+      term:    1000.0
+  w_ctcs: 100.0
