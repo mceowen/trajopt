@@ -16,22 +16,19 @@ class SolutionMethod:
         # ===============================================================
         # load config params
         # ===============================================================
-        method_config    = config
-
         self.problem    = problem
         self.index_map  = index_map if index_map is not None else problem.index_map
 
-        self.flags       = recursive_attrdict(method_config['flags'])
-        self.guess       = recursive_attrdict(method_config["guess"])
-        self.conv        = recursive_attrdict(method_config["conv"])
-        self.penalty     = recursive_attrdict(method_config["weights"])
-        self.solver_opts = recursive_attrdict(method_config["solver_opts"])
+        self.flags       = recursive_attrdict(config.method['flags'])
+        self.guess       = recursive_attrdict(config.method["guess"])
+        self.conv        = recursive_attrdict(config.method["conv"])
+        self.penalty     = recursive_attrdict(config.method["weights"])
+        self.solver_opts = recursive_attrdict(config.method["solver_opts"])
 
         self.conv_data   = AttrDict()
 
         # update index_map
         self.index_map.update_index_map(problem=self.problem, method=self)
-
 
         # Use the same index_map as problem, but update with method config
         self.nondim = Nondim(problem)
@@ -48,33 +45,24 @@ class SolutionMethod:
         self.problem.constraints.augment_ctcs_dynamics(self.index_map.n['state'])
 
         # ---- Time grid initialization ----
-        self.dt_init  = (self.guess.T_init / (self.index_map.N.N - 1)) * np.ones(self.index_map.N.N - 1)
-        self.Ts_init  = self.guess.T_init / self.nondim.nt
-        self.dt_init  = self.dt_init / self.nondim.nt
+        self.dt_init  = np.ones((self.index_map.N.N - 1, 1)) * (self.guess.T_init / (self.index_map.N.N - 1))
+        self.Ts_init  = self.guess.T_init / self.nondim.time_scale
+        self.dt_init  = self.dt_init / self.nondim.time_scale
 
         discretize.compile_jax_discretization(problem, self)
         # discretize.compile_jax_discretization_bwd(problem, self)
         integrators.compile_dense_jax_propagator(problem, self, problem.params)
 
         ### Time of flight constraints ###
-        Ts_min       = self.guess.T_min / self.nondim.nt
-        Ts_max       = self.guess.T_max / self.nondim.nt
-        self.ddt_max = self.guess.dT_max / ((self.index_map.N.N - 1) * self.nondim.nt)
+        Ts_min       = self.guess.T_min / self.nondim.time_scale
+        Ts_max       = self.guess.T_max / self.nondim.time_scale
+        self.ddt_max = self.guess.dT_max / ((self.index_map.N.N - 1) * self.nondim.time_scale)
         self.dt_min  = Ts_min / (self.index_map.N.N - 1)
         self.dt_max  = Ts_max / (self.index_map.N.N - 1)
 
         # --- LTV indexing ---
         discretize.set_ltv_indices(problem, self)
         hyperparameters.configure_penalty_weights(problem, self)
-
-        # Extract only those terminal constraints used
-        term_eq_constraints   = problem.constraints.get(ct=0, type='equality_bc', boundary="final", set="state")
-        term_ineq_constraints = problem.constraints.get(ct=0, type='inequality_bc', boundary="final", set="state")
-        term_ctcs_constraints = problem.constraints.get(ct=1)
-
-        term_constraints = term_eq_constraints + term_ineq_constraints + term_ctcs_constraints
-
-        self.conv.eps_term = np.concatenate([constraint.eps for constraint in term_constraints])
 
         # --- Initialize virtual buffers ---
         self.conv_data.vb_path = np.zeros((self.index_map.N.N,      problem.index_map.n.path))
@@ -102,5 +90,3 @@ class SolutionMethod:
             self.z_init = guess.ctcs_initial_guess(problem, self)
 
         self.cost_init = discretize.compute_nonconvex_costs(self.t_init, self.z_init, self.nu_init, problem, self)
-
-        # print(f"Cost initial: {self.cost_init}")

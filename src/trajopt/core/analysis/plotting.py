@@ -1,339 +1,315 @@
+import enum
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
 from trajopt.core.analysis.trajplots import SCVXPLOTS
+from trajopt.utils.tools import AttrDict, recursive_attrdict
+
 plt.rcParams["text.usetex"] = False
 
-# =============================================================================
-# Pen Styles
-# =============================================================================
+plot_options = AttrDict({
+    'figsize': (12, 4),
+    'dpi': 300,
+    'grid_gap_x': 0.05,
+    'grid_gap_y': 0.12,
+})
 
-PENS = {
-    'init':    {'frgba': [0, 0, 0, .1], 'lrgba': [0, 0, 0, 1.],   'lw': 1, 'ls': '--', 'msty': '',  'msz': 3},
-    'nl':      {'frgba': [0, 0, 0, .1], 'lrgba': [1, 0, 0, 1.],   'lw': 2, 'ls': '-',  'msty': '',  'msz': 3},
-    'opt':     {'frgba': [0, 0, 0, .1], 'lrgba': [0, 0, 1, 1.],   'lw': 1, 'ls': '',   'msty': 'o', 'msz': 5},
-    'opt_small': {'frgba': [0, 0, 0, .1], 'lrgba': [0, 0, 1, 1.], 'lw': 1, 'ls': '',   'msty': 'o', 'msz': 2},
-    'itr_opt': {'frgba': [0, 0, 0, .1], 'lrgba': [.7, 0, .3, .2], 'lw': 1, 'ls': '',   'msty': 'o', 'msz': 3},
-    'itr_nl':  {'frgba': [0, 0, 0, .1], 'lrgba': [.7, 0, .3, .4], 'lw': 1, 'ls': '-',  'msty': '',  'msz': 3},
-}
+# pen: frgba, lrgba, lw, ls, msty, msz
+pens = recursive_attrdict({
+    'init':    {'frgba': [0,0,0,.1], 'lrgba': [0,0,0,1.],   'lw': 1, 'ls': '--', 'msty': '',  'msz': 3},
+    'nl':      {'frgba': [0,0,0,.1], 'lrgba': [1,0,0,1.],   'lw': 2, 'ls': '-',  'msty': '',  'msz': 3},
+    'opt':     {'frgba': [0,0,0,.1], 'lrgba': [0,0,1,1.],   'lw': 1, 'ls': '',   'msty': 'o', 'msz': 5},
+    'itr_opt': {'frgba': [0,0,0,.1], 'lrgba': [.7,0,.3,.2], 'lw': 1, 'ls': '',   'msty': 'o', 'msz': 3},
+    'itr_nl':  {'frgba': [0,0,0,.1], 'lrgba': [.7,0,.3,.4], 'lw': 1, 'ls': '-',  'msty': '',  'msz': 3},
+    'opt1':    {'frgba': [0,0,0,.1], 'lrgba': [0,0,1,1.],   'lw': 1, 'ls': '',   'msty': 'o', 'msz': 2},
+    'opt2':    {'frgba': [0,0,0,.1], 'lrgba': [1,0,1,1.],   'lw': 1, 'ls': '',   'msty': 'o', 'msz': 2},
+    'nl1':     {'frgba': [0,0,0,.1], 'lrgba': [0,0,1,1.],   'lw': 1, 'ls': '-',  'msty': '',  'msz': 3},
+    'nl2':     {'frgba': [0,0,0,.1], 'lrgba': [1,0,1,1.],   'lw': 1, 'ls': '-',  'msty': '',  'msz': 3},
+})
 
-# =============================================================================
-# Helper Functions
-# =============================================================================
-
-def _make_grid_specs(num):
-    """Create a grid layout for subplots."""
-    colnum = int(np.ceil(np.sqrt(num)))
-    rownum = int(np.ceil(num / colnum))
-    gap_x, gap_y = 0.04, 0.06
-    dx = (0.8 - (colnum - 1) * gap_x) / colnum
-    dy = (0.8 - (rownum - 1) * gap_y) / rownum
-    grid = {}
-    for i in range(rownum):
-        for j in range(colnum):
-            left = 0.05 + j * (dx + gap_x)
-            bottom = 0.95 - (i + 1) * dy - i * gap_y
-            grid[i * colnum + j] = [left, bottom, dx, dy]
-    return grid
-
-
-def _get_plotting_config(trajopt_obj):
-    """Extract plotting configuration from the problem config."""
-    model_config = trajopt_obj.problem.config.get('model', {})
-    return model_config.get('plotting', {})
-
-
-def _method_key(trajopt_obj):
-    return next(iter(trajopt_obj.scenario_data))
-
-
-def _get_final_iter_data(trajopt_obj):
-    """Get the final iteration data for setting axis limits."""
-    key = _method_key(trajopt_obj)
-    return trajopt_obj.scenario_data[key]['mc_data'][0]['iters'][-1]
-
-
-def _set_axis_limits(ax, y_data, margin_frac=0.1):
-    """Set y-axis limits based on data with a margin."""
-    y_min, y_max = np.min(y_data), np.max(y_data)
-    margin = (y_max - y_min) * margin_frac
-    if margin < 1e-10:  # Handle constant data
-        margin = abs(y_max) * 0.1 if y_max != 0 else 1.0
-    ax.set_ylim(y_min - margin, y_max + margin)
-
-# =============================================================================
-# Individual Plot Functions
-# =============================================================================
-
-def _plot_states(PLTS, trajopt_obj, show_iters, iters, lgnd, opt_pen):
-    """Plot state trajectories (individual or grouped)."""
-    plotting_config = _get_plotting_config(trajopt_obj)
-    state_groups = plotting_config.get('state_groups', None)
-    final_data = _get_final_iter_data(trajopt_obj)
-    if state_groups is None:
-        state_groups = {f'State {i}': [i] for i in range(trajopt_obj.problem.index_map.n['state'])}
-    num_plots = len(state_groups)
-    fig = plt.figure(figsize=(20, 10), dpi=300)
-    fig.suptitle('States')
-    axs = PLTS.createGrid(fig, grid=_make_grid_specs(num_plots))
-    PLTS.dumpLegend(lgnd)
-    for j, (label, indices) in enumerate(state_groups.items()):
-        ax = axs[j]
-        ax.set_title(label)
-        ax.grid(True, alpha=0.3)
-        for state_idx in indices:
-            if show_iters:
-                PLTS.addPlot2D(ax, pen=PENS['itr_nl'],  ins={'label': 'Iterations', 'x': 't_nl',  'y': ('z_nl', state_idx),  'iters': iters[1:], 'legend': lgnd})
-                PLTS.addPlot2D(ax, pen=PENS['itr_opt'], ins={'label': 'Iterations', 'x': 't_opt', 'y': ('z_opt', state_idx), 'iters': iters[1:], 'legend': lgnd})
-            PLTS.addPlot2D(ax, pen=PENS['nl'],  ins={'label': 'Propagated', 'x': 't_nl',  'y': ('z_nl', state_idx),  'iters': [-1], 'legend': lgnd})
-            PLTS.addPlot2D(ax, pen=opt_pen,    ins={'label': 'Optimal Solution', 'x': 't_opt', 'y': ('z_opt', state_idx), 'iters': [-1], 'legend': lgnd})
-        y_data = np.concatenate([final_data['z_opt'][:, idx] for idx in indices])
-        _set_axis_limits(ax, y_data)
-
-
-def _plot_controls(PLTS, trajopt_obj, show_iters, iters, lgnd, opt_pen):
-    """Plot control trajectories."""
-    num_controls = trajopt_obj.problem.index_map.n['control']
-    final_data = _get_final_iter_data(trajopt_obj)
-    fig = plt.figure(figsize=(20, 10), dpi=300)
-    fig.suptitle('Controls')
-    axs = PLTS.createGrid(fig, grid=_make_grid_specs(num_controls))
-    PLTS.dumpLegend(lgnd)
-    for j in range(num_controls):
-        ax = axs[j]
-        ax.grid(True, alpha=0.3)
-        if show_iters:
-            PLTS.addPlot2D(ax, pen=PENS['itr_nl'],  ins={'label': 'Iterations', 'x': 't_nl',  'y': ('nu_nl', j),  'iters': iters[1:], 'legend': lgnd})
-            PLTS.addPlot2D(ax, pen=PENS['itr_opt'], ins={'label': 'Iterations', 'x': 't_opt', 'y': ('nu_opt', j), 'iters': iters[1:], 'legend': lgnd})
-        PLTS.addPlot2D(ax, pen=PENS['nl'],  ins={'label': 'Propagated', 'x': 't_nl',  'y': ('nu_nl', j),  'iters': [-1], 'legend': lgnd})
-        PLTS.addPlot2D(ax, pen=opt_pen,    ins={'label': 'Optimal Solution', 'x': 't_opt', 'y': ('nu_opt', j), 'iters': [-1], 'legend': lgnd})
-        y_data = final_data['nu_opt'][:, j]
-        _set_axis_limits(ax, y_data)
-
-
-def _plot_trajectories(PLTS, trajopt_obj, lgnd, opt_pen, show_init=True):
-    """Plot 2D/3D trajectory plots if state_traj_groups is defined."""
-    state_traj_groups = _get_plotting_config(trajopt_obj).get('state_traj_groups', None)
-    if not state_traj_groups:
-        return
-    if isinstance(state_traj_groups, dict):
-        state_traj_groups = list(state_traj_groups.values())
-    n = len(state_traj_groups)
-    plt_types = {i: ('3D' if len(g) >= 3 else '2D') for i, g in enumerate(state_traj_groups)}
-    fig = plt.figure(figsize=(20, 10), dpi=300)
-    fig.suptitle('Trajectory')
-    axs = PLTS.createGrid2(fig, grid=_make_grid_specs(n), ins={'plt_typs': plt_types})
-    PLTS.dumpLegend(lgnd)
-    for idx, group in enumerate(state_traj_groups):
-        g = [int(i) for i in group]
-        ax = axs[idx]
-        ax.grid(True, alpha=0.3)
-        if len(g) == 2:
-            if show_init:
-                PLTS.addPlot2D(ax, pen=PENS['init'], ins={'label': 'Initial guess', 'x': ('z_opt', g[0]), 'y': ('z_opt', g[1]), 'iters': [1], 'legend': lgnd})
-            PLTS.addPlot2D(ax, pen=PENS['nl'],  ins={'label': 'Propagated', 'x': ('z_nl', g[0]), 'y': ('z_nl', g[1]), 'iters': [-1], 'legend': lgnd})
-            PLTS.addPlot2D(ax, pen=opt_pen,     ins={'label': 'Optimal Solution', 'x': ('z_opt', g[0]), 'y': ('z_opt', g[1]), 'iters': [-1], 'legend': lgnd})
-        else:
-            if show_init:
-                PLTS.addPlot3D(ax, pen=PENS['init'], ins={'label': 'Initial guess', 'x': ('z_opt', g[0]), 'y': ('z_opt', g[1]), 'z': ('z_opt', g[2]), 'iters': [1], 'legend': lgnd})
-            PLTS.addPlot3D(ax, pen=PENS['nl'],  ins={'label': 'Propagated', 'x': ('z_nl', g[0]), 'y': ('z_nl', g[1]), 'z': ('z_nl', g[2]), 'iters': [-1], 'legend': lgnd})
-            PLTS.addPlot3D(ax, pen=opt_pen,     ins={'label': 'Optimal Solution', 'x': ('z_opt', g[0]), 'y': ('z_opt', g[1]), 'z': ('z_opt', g[2]), 'iters': [-1], 'legend': lgnd})
-
-def _plot_constraints(PLTS, data, show_iters, iters, lgnd, opt_pen):
-    """Plot constraint data."""
-    key = next(iter(data['scenario1']))
-    constraint_data = data['scenario1'][key]['mc_data'][0]['iters'][-1].get('constraint_data', {})
-    for constraint_group, group_data in constraint_data.items():
-        num_constraints = len(group_data)
-        if num_constraints == 0:
-            continue
-        fig = plt.figure(figsize=(20, 10), dpi=300)
-        fig.suptitle(constraint_group)
-        axs = PLTS.createGrid(fig, grid=_make_grid_specs(num_constraints))
-        PLTS.dumpLegend(lgnd)
-        for idx, (name, constraint) in enumerate(group_data.items()):
-            ax = axs[idx]
-            ax.set_title(name)
-            ax.grid(True, alpha=0.3)
-            nl_loc = ('constraint_data', constraint_group, name, 'nl_vals')
-            opt_loc = ('constraint_data', constraint_group, name, 'opt_vals')
-            num_cols = constraint['nl_vals']['values'].shape[1]
-            for col in range(num_cols):
-                if show_iters:
-                    PLTS.addPlot2D(ax, pen=PENS['itr_nl'],  ins={'label': name, 'x': 't_nl',  'y': ('values', col), 'dataloc': nl_loc,  'iters': iters[1:], 'legend': lgnd})
-                    PLTS.addPlot2D(ax, pen=PENS['itr_opt'], ins={'label': name, 'x': 't_opt', 'y': ('values', col), 'dataloc': opt_loc, 'iters': iters[1:], 'legend': lgnd})
-                PLTS.addPlot2D(ax, pen=PENS['nl'],  ins={'label': name, 'x': 't_nl',  'y': ('values', col), 'dataloc': nl_loc,  'iters': [-1], 'legend': lgnd})
-                PLTS.addPlot2D(ax, pen=opt_pen,    ins={'label': name, 'x': 't_opt', 'y': ('values', col), 'dataloc': opt_loc, 'iters': [-1], 'legend': lgnd})
-            y_data = constraint['opt_vals']['values'].flatten()
-            _set_axis_limits(ax, y_data)
-
-# =============================================================================
-# Main Plotting Function
-# =============================================================================
-
-def plot_default(trajopt_obj, show_iters=True, analysis_type="standalone"):
-    """
-    Plot states, controls, trajectories, and constraints.
-    When analysis_type is "mc": no iteration curves, smaller blue dots, final nl for all MC runs.
-    """
-    data = {"scenario1": trajopt_obj.scenario_data}
+def plot_default(trajopt_obj, show_iters=False, analysis_type='standalone'):
+    data = AttrDict({"scenario1": trajopt_obj.results})
+    
+    # create trajplots object
     PLTS = SCVXPLOTS(data)
-    lgnd = 'legend1'
-    iters = list(range(1000))
-    method_key = _method_key(trajopt_obj)
-    is_mc = (analysis_type == "mc")
-    n_runs = len(trajopt_obj.scenario_data[method_key]['mc_data'])
-    runs = list(range(n_runs)) if is_mc else [0]
-    show_iters = show_iters and not is_mc
-    opt_pen = PENS['opt_small'] if is_mc else PENS['opt']
-    show_init = not is_mc
+
+    method_keys = list(trajopt_obj.results.keys())
+    runs = list(range(len(trajopt_obj.results[method_keys[0]]['runs'])))
+
+    nominal_iter_data = trajopt_obj.results[method_keys[0]]["runs"][-1]["iters"][-1]
+
+    # decide whether or not to plot the iterations
+    if show_iters:
+        iters = list(range(1, 1000))
+    else:
+        iters = [-1]
 
     PLTS.setCurrent({
         'scenarios': ['scenario1'],
-        'methods': [method_key],
+        'methods': method_keys,
         'runs': runs,
-        'iters': iters
+        'iters': iters,
     })
 
-    _plot_states(PLTS, trajopt_obj, show_iters, iters, lgnd, opt_pen)
-    _plot_controls(PLTS, trajopt_obj, show_iters, iters, lgnd, opt_pen)
-    _plot_trajectories(PLTS, trajopt_obj, lgnd, opt_pen, show_init=show_init)
-    _plot_constraints(PLTS, data, show_iters, iters, lgnd, opt_pen)
+    problem = trajopt_obj.problem
+    problem_config = problem.config.problem
+
+    # extract plotting groups from configs
+    default_groups_state   = {f'State {i}': [i] for i in range(problem.index_map.n['state'])}
+    default_groups_control = {f'Control {i}': [i] for i in range(problem.index_map.n['control'])}
+    groups_state           = problem_config.get('state', default_groups_state)
+    groups_control         = problem_config.get('control', default_groups_control)
+
+    # extract constraint_groups
+    nominal_constraint_data = nominal_iter_data["constraint_data"]
+    nominal_trajectory_data = nominal_iter_data["trajectory_data"]
+
+    # define figures and axes for each type of plot
+    fig_control     = plt.figure(figsize=plot_options.figsize, dpi=plot_options.dpi)
+    fig_state       = plt.figure(figsize=plot_options.figsize, dpi=plot_options.dpi)
+
+    axs_state       = PLTS.createGrid(fig_state ,grid=create_grid(len(groups_state.keys())))
+    axs_control     = PLTS.createGrid(fig_control ,grid=create_grid(len(groups_control.keys())))
+
+    # axs_constraints_dict = AttrDict({constraint_group: })
+
+    # create figs and axes for groups of constraints
+    figs_constraints = AttrDict({})
+    axs_constraints  = AttrDict({})
+
+    # create figs and axes for groups of trajectories
+    figs_trajectories = AttrDict({})
+    axs_trajectories  = AttrDict({})
+
+    for constraint_group_name, constraint_group_data in nominal_constraint_data.items():
+        figs_constraints[constraint_group_name] = plt.figure(figsize=plot_options.figsize, dpi=plot_options.dpi)
+
+        num_constraints_in_group = len(constraint_group_data.keys())
+        axs_constraints[constraint_group_name] = PLTS.createGrid(figs_constraints[constraint_group_name] ,grid=create_grid(num_constraints_in_group))
+
+    plt_type = {}
+    for trajectory_group_name, trajectory_group_data in nominal_trajectory_data.items():
+        figs_trajectories[trajectory_group_name] = plt.figure(figsize=plot_options.figsize, dpi=plot_options.dpi)
+
+        plt_type = AttrDict({})
+
+        for i, (trajectory_name, trajectory_data) in enumerate(trajectory_group_data.items()):
+            dim = trajectory_data.opt_vals["values"].shape[1]
+            if dim == 3:
+                plt_type[i] = "3D"
+            else:
+                plt_type[i] = "2D"
+
+        num_trajectories_in_group = len(trajectory_group_data.keys())
+        axs_trajectories[trajectory_group_name] = PLTS.createGrid2(figs_trajectories[trajectory_group_name] ,grid=create_grid(num_trajectories_in_group), ins={'plt_typs':plt_type})
+
+    if analysis_type == 'standalone':
+        standalone_pens = AttrDict({"opt": pens.opt, "nl": pens.nl, "itr_opt": pens.itr_opt, "itr_nl": pens.itr_nl, "init": pens.init})
+        
+        # plot states, controls, trajectories, and constraints on their respective figures
+        plot_states(PLTS, axs_state, groups_state, iters=iters, pens=standalone_pens)
+        plot_controls(PLTS, axs_control, groups_control, pens=standalone_pens, iters=iters)
+        plot_trajectories(PLTS, axs_trajectories, nominal_trajectory_data, iters=iters, pens=standalone_pens)
+        plot_constraints(PLTS, axs_constraints, nominal_constraint_data, iters=iters, pens=standalone_pens)
+
+    elif analysis_type == 'mc':
+        for i, (method_name, method_data) in enumerate(trajopt_obj.results.items()):
+            PLTS.setCurrent({
+                'scenarios': ['scenario1'],
+                'methods': [method_name],
+                'runs': runs,
+                'iters': iters,
+            })
+            current_method_pens = AttrDict({"opt": pens[f"opt{i+1}"], "nl": pens[f"nl{i+1}"], "itr_opt": pens.itr_opt, "itr_nl": pens.itr_nl, "init": pens.init})
+            for run in method_data['runs']:
+                plot_states(PLTS, axs_state, groups_state, iters=[-1], pens=current_method_pens)
+                plot_controls(PLTS, axs_control, groups_control, pens=current_method_pens, iters=[-1])
+                plot_trajectories(PLTS, axs_trajectories, nominal_trajectory_data, iters=[-1], pens=current_method_pens)
+                plot_constraints(PLTS, axs_constraints, nominal_constraint_data, iters=[-1], pens=current_method_pens)
+
     plt.show()
 
+def plot_states(PLTS, axs, groups, 
+                iters=[-1], 
+                pens = AttrDict({"opt": pens.opt, "nl": pens.nl, "itr_opt": pens.itr_opt, "itr_nl": pens.itr_nl})):
 
-# Legacy alias for backward compatibility
-makeGridSpecs = _make_grid_specs
+    for i, (group_name, group_data) in enumerate(groups.items()):
+        # extract the current group subplot axis
+        ax = axs[i]
+
+        group_indices = group_data["idx"]
+
+        # set properties for this subplot
+        ax.set_title(group_name)
+        ax.grid(True, alpha=0.3)
+
+        for index in group_indices:
+            # plot iters if specified
+            if iters != [-1]:
+                # plot the nonlinear propagation of  openloop solution
+                ins_nl = {'label': 'Nonlinear Propagation', 'x': 't_nl', 'y': ('z_nl', index), 'iters': iters, 'legend': "legend1"}
+                PLTS.addPlot2D(ax, pen=pens.itr_nl, ins=ins_nl)
+
+                # plot the optimal solution
+                ins_opt = {'label': 'Optimal Soltution', 'x': 't_opt', 'y': ('z_opt', index), 'iters': iters, 'legend': "legend1"}
+                PLTS.addPlot2D(ax, pen=pens.itr_opt, ins=ins_opt)
+            
+            # plot the nonlinear propagation of  openloop solution
+            ins_nl = {'label': 'Nonlinear Propagation', 'x': 't_nl', 'y': ('z_nl', index), 'iters': [-1], 'legend': "legend1"}
+            PLTS.addPlot2D(ax, pen=pens.nl, ins=ins_nl)
+
+            # plot the optimal solution
+            ins_opt = {'label': 'Optimal Soltution', 'x': 't_opt', 'y': ('z_opt', index), 'iters': [-1], 'legend': "legend1"}
+            PLTS.addPlot2D(ax, pen=pens.opt, ins=ins_opt)
+
+def plot_controls(PLTS, axs, groups, pens, iters=[-1]):
+
+    for i, (group_name, group_data) in enumerate(groups.items()):
+        # extract the current group subplot axis
+        ax = axs[i]
+
+        # set properties for this subplot
+        ax.set_title(group_name)
+        ax.grid(True, alpha=0.3)
+
+        group_indices = group_data["idx"]
+
+        for index in group_indices:
+            # plot iters if specified
+            if iters != [-1]:
+                # plot the nonlinear propagation of  openloop solution
+                ins_nl = {'label': 'Nonlinear Propagation', 'x': 't_nl', 'y': ('nu_nl', index), 'iters': iters, 'legend': "legend1"}
+                PLTS.addPlot2D(ax, pen=pens.itr_nl, ins=ins_nl)
+
+                # plot the optimal solution
+                ins_opt = {'label': 'Optimal Soltution', 'x': 't_opt', 'y': ('nu_opt', index), 'iters': iters, 'legend': "legend1"}
+                PLTS.addPlot2D(ax, pen=pens.itr_opt, ins=ins_opt)
+
+            # plot the nonlinear propagation of  openloop solution
+            ins_nl = {'label': 'Nonlinear Propagation', 'x': 't_nl', 'y': ('nu_nl', index), 'iters': [-1], 'legend': "legend1"}
+            PLTS.addPlot2D(ax, pen=pens.nl, ins=ins_nl)
+
+            # plot the optimal solution
+            ins_opt = {'label': 'Optimal Soltution', 'x': 't_opt', 'y': ('nu_opt', index), 'iters': [-1], 'legend': "legend1"}
+            PLTS.addPlot2D(ax, pen=pens.opt, ins=ins_opt)
+
+def plot_constraints(PLTS, axs, nominal_constraint_data, 
+                iters=[-1], 
+                pens = AttrDict({"opt": pens.opt, "nl": pens.nl, "itr_opt": pens.itr_opt, "itr_nl": pens.itr_nl})):
+
+    for constraint_group_name, constraint_group_data in nominal_constraint_data.items():
+        
+        # extract the current group subplot axis
+        for i, (constraint_name, current_constraint_data) in enumerate(constraint_group_data.items()):
+            ax = axs[constraint_group_name][i]
+
+            # set properties for this subplot
+            ax.set_title(constraint_name)
+            ax.grid(True, alpha=0.3)
+
+            nl_loc  = ('constraint_data', constraint_group_name, constraint_name, 'nl_vals')
+            opt_loc = ('constraint_data', constraint_group_name, constraint_name, 'opt_vals')
+
+            # plot iters if specified
+            if iters != [-1]:
+                # plot the nonlinear propagation of  openloop solution
+                ins_nl = {'label': 'Nonlinear Propagation', 'x': 't_nl', 'y': 'values', 'iters': iters, 'dataloc': nl_loc, 'legend': "legend1"}
+                PLTS.addPlot2D(ax, pen=pens.itr_nl, ins=ins_nl)
+
+                # plot the optimal solution
+                ins_opt = {'label': 'Optimal Soltution', 'x': 't_opt', 'y': 'values', 'iters': iters, 'dataloc': opt_loc,'legend': "legend1"}
+                PLTS.addPlot2D(ax, pen=pens.itr_opt, ins=ins_opt)
+            
+            # plot the nonlinear propagation of  openloop solution
+            ins_nl = {'label': 'Nonlinear Propagation', 'x': 't_nl', 'y': 'values', 'iters': [-1], 'dataloc': nl_loc, 'legend': "legend1"}
+            PLTS.addPlot2D(ax, pen=pens.nl, ins=ins_nl)
+
+            # plot the optimal solution
+            ins_opt = {'label': 'Optimal Soltution', 'x': 't_opt', 'y': 'values', 'iters': [-1], 'dataloc': opt_loc, 'legend': "legend1"}
+            PLTS.addPlot2D(ax, pen=pens.opt, ins=ins_opt)
+
+            # plot constraint limits
+            if nominal_constraint_data[constraint_group_name][constraint_name]['opt_vals']["limits"] is not None:
+                    ins_limits = {'label': 'Limits', 'x': 't_nl', 'y': 'limits', 'iters': iters, 'dataloc': nl_loc, 'legend': "legend1"}
+                    PLTS.addPlot2D(ax, pen=pens.init, ins=ins_limits)
+
+def plot_trajectories(PLTS, axs, nominal_trajectory_data, 
+                iters=[-1], 
+                pens = AttrDict({"opt": pens.opt, "nl": pens.nl, "itr_opt": pens.itr_opt, "itr_nl": pens.itr_nl})):
+
+    for traj_group_name, traj_group_data in nominal_trajectory_data.items():
+        
+        # extract the current group subplot axis
+        for i, (traj_name, current_traj_data) in enumerate(traj_group_data.items()):
+            ax = axs[traj_group_name][i]
+
+            # set properties for this subplot
+            ax.set_title(traj_name)
+            ax.grid(True, alpha=0.3)
+
+            nl_loc  = ('trajectory_data', traj_group_name, traj_name, 'nl_vals')
+            opt_loc = ('trajectory_data', traj_group_name, traj_name, 'opt_vals')
+
+            dim = current_traj_data.opt_vals["values"].shape[1]
+
+            # plot iters if specified
+            if iters != [-1]:
+
+                if dim == 3:
+                    # plot the nonlinear propagation of  openloop solution
+                    ins_nl = {'label': 'Nonlinear Propagation', 'x': ("values", 0), 'y': ('values', 1), 'z': ('values', 2), 'iters': iters, 'dataloc': nl_loc, 'legend': "legend1"}
+                    
+                    PLTS.addPlot3D(ax, pen=pens.itr_nl, ins=ins_nl)
+
+                    # plot the optimal solution
+                    ins_opt = {'label': 'Optimal Soltution', 'x': ('values', 0), 'y': ('values', 1), 'z': ('values', 2), 'iters': iters, 'dataloc': opt_loc,'legend': "legend1"}
+                    PLTS.addPlot3D(ax, pen=pens.itr_opt, ins=ins_opt)
+                
+                else:
+                    # plot the nonlinear propagation of  openloop solution
+                    ins_nl = {'label': 'Nonlinear Propagation', 'x': ("values", 0), 'y': ('values', 1), 'iters': iters, 'dataloc': nl_loc, 'legend': "legend1"}
+                    
+                    PLTS.addPlot2D(ax, pen=pens.itr_nl, ins=ins_nl)
+
+                    # plot the optimal solution
+                    ins_opt = {'label': 'Optimal Soltution', 'x': ('values', 0), 'y': ('values', 1), 'iters': iters, 'dataloc': opt_loc,'legend': "legend1"}
+                    PLTS.addPlot2D(ax, pen=pens.itr_opt, ins=ins_opt)
+
+            if dim == 3:
+                # plot the nonlinear propagation of  openloop solution
+                ins_nl = {'label': 'Nonlinear Propagation', 'x': ('values', 0), 'y': ('values', 1), 'z': ('values', 2), 'iters': [-1], 'dataloc': nl_loc, 'legend': "legend1"}
+                PLTS.addPlot3D(ax, pen=pens.nl, ins=ins_nl)
+
+                # plot the optimal solution
+                ins_opt = {'label': 'Optimal Soltution', 'x': ('values', 0), 'y': ('values', 1), 'z': ('values', 2), 'iters': [-1], 'dataloc': opt_loc, 'legend': "legend1"}
+                PLTS.addPlot3D(ax, pen=pens.opt, ins=ins_opt)
+            
+            else:
+                # plot the nonlinear propagation of  openloop solution
+                ins_nl = {'label': 'Nonlinear Propagation', 'x': ('values', 0), 'y': ('values', 1), 'iters': [-1], 'dataloc': nl_loc, 'legend': "legend1"}
+                PLTS.addPlot2D(ax, pen=pens.nl, ins=ins_nl)
+
+                # plot the optimal solution
+                ins_opt = {'label': 'Optimal Soltution', 'x': ('values', 0), 'y': ('values', 1), 'iters': [-1], 'dataloc': opt_loc, 'legend': "legend1"}
+                PLTS.addPlot2D(ax, pen=pens.opt, ins=ins_opt)
+
+def plot_animated(trajopt_obj):
+    pass
+
+def create_grid(num_groups):
+    num_columns = int(np.ceil(np.sqrt(num_groups)))
+    num_rows = int(np.ceil(num_groups / num_columns))
 
 
-def plot_animated(trajopt_obj, interval=200):
-    from IPython.display import display, HTML
+    dx = (0.8 - (num_columns - 1) * plot_options.grid_gap_x) / num_columns
+    dy = (0.8 - (num_rows - 1) * plot_options.grid_gap_y) / num_rows
 
-    key = _method_key(trajopt_obj)
-    iters = trajopt_obj.scenario_data[key]['mc_data'][0]['iters'][1:]
-    n_iters, n_states, n_ctrl = len(iters), trajopt_obj.problem.index_map.n['state'], trajopt_obj.problem.index_map.n['control']  # use unified index_map
+    grid = {}
+
+    for i in range(num_rows):
+        for j in range(num_columns):
+            tag = i * num_columns + j
+            x = 0.05 + j * (dx + plot_options.grid_gap_x)
+            y = 0.95 - (i + 1) * dy - i * plot_options.grid_gap_y
+            grid[tag] = [x, y, dx, dy]
     
-    t_all = np.concatenate([it['t_opt'] for it in iters])
-    t_lim = [np.nanmin(t_all) * 0.95, np.nanmax(t_all) * 1.05]
-
-    def make_grid(n):
-        nc = int(np.ceil(np.sqrt(n)))
-        return int(np.ceil(n / nc)), nc
-
-    def setup_axes(fig, axs, n_x, data_key, ylabel_prefix):
-        lines_nl, lines_opt = [], []
-        opt_key = data_key.replace('_nl', '_opt')
-        for j in range(n_x):
-            ax = axs.flatten()[j]
-            y_all = np.concatenate([it[opt_key][:, j] for it in iters])
-            y_min, y_max = np.nanmin(y_all), np.nanmax(y_all)
-            if not np.isfinite(y_max - y_min):
-                y_min, y_max = 0, 1
-            margin = (y_max - y_min) * 0.1 + 1
-            ax.set_xlim(t_lim)
-            ax.set_ylim(y_min - margin, y_max + margin)
-            ax.set_xlabel('Time [s]')
-            ax.set_ylabel(f'{ylabel_prefix} {j}')
-            ax.grid(True, alpha=0.3)
-            ln, = ax.plot([], [], color=PENS['nl']['lrgba'], lw=PENS['nl']['lw'])
-            lo, = ax.plot([], [], color=PENS['opt']['lrgba'], marker=PENS['opt']['msty'], ls='', ms=PENS['opt']['msz'])
-            lines_nl.append(ln)
-            lines_opt.append(lo)
-        return lines_nl, lines_opt
-
-    nr, nc = make_grid(n_states)
-    fig_s, axs_s = plt.subplots(nr, nc, figsize=(5*nc, 4*nr), dpi=300)
-    fig_s.suptitle('States - Iteration Convergence')
-    axs_s = np.atleast_1d(axs_s)
-    state_nl, state_opt = setup_axes(fig_s, axs_s, n_states, 'z_nl', 'State')
-    txt_s = fig_s.text(0.5, 0.02, '', ha='center', fontsize=12)
-
-    def anim_states(f):
-        it = iters[f]
-        for j in range(n_states):
-            state_nl[j].set_data(it['t_nl'], it['z_nl'][:, j])
-            state_opt[j].set_data(it['t_opt'], it['z_opt'][:, j])
-        txt_s.set_text(f'Iteration {f+1}/{n_iters}')
-        return state_nl + state_opt + [txt_s]
-
-    fig_s.tight_layout(rect=[0, 0.03, 1, 0.95])
-    anim_s = FuncAnimation(fig_s, anim_states, frames=n_iters, interval=interval, blit=True)
-    plt.close(fig_s)
-    display(HTML(anim_s.to_jshtml()))
-
-    nr_c, nc_c = make_grid(n_ctrl)
-    fig_c, axs_c = plt.subplots(nr_c, nc_c, figsize=(5*nc_c, 4*nr_c), dpi=300)
-    fig_c.suptitle('Controls - Iteration Convergence')
-    axs_c = np.atleast_1d(axs_c)
-    ctrl_nl, ctrl_opt = setup_axes(fig_c, axs_c, n_ctrl, 'nu_nl', 'Control')
-    txt_c = fig_c.text(0.5, 0.02, '', ha='center', fontsize=12)
-
-    def anim_ctrl(f):
-        it = iters[f]
-        for j in range(n_ctrl):
-            ctrl_nl[j].set_data(it['t_nl'], it['nu_nl'][:, j])
-            ctrl_opt[j].set_data(it['t_opt'], it['nu_opt'][:, j])
-        txt_c.set_text(f'Iteration {f+1}/{n_iters}')
-        return ctrl_nl + ctrl_opt + [txt_c]
-
-    fig_c.tight_layout(rect=[0, 0.03, 1, 0.95])
-    anim_c = FuncAnimation(fig_c, anim_ctrl, frames=n_iters, interval=interval, blit=True)
-    plt.close(fig_c)
-    display(HTML(anim_c.to_jshtml()))
-
-    constraint_data = iters[-1].get('constraint_data', {})
-    for group_name, group_data in constraint_data.items():
-        n_cnst = len(group_data)
-        if n_cnst == 0:
-            continue
-        nr_cn, nc_cn = make_grid(n_cnst)
-        fig_cn, axs_cn = plt.subplots(nr_cn, nc_cn, figsize=(5*nc_cn, 4*nr_cn), dpi=300)
-        fig_cn.suptitle(f'{group_name} - Iteration Convergence')
-        axs_cn = np.atleast_1d(axs_cn).flatten()
-        
-        lines_data = []
-        for idx, (name, _) in enumerate(group_data.items()):
-            ax = axs_cn[idx]
-            ax.set_xlabel('Time [s]')
-            ax.set_ylabel(name)
-            ax.grid(True, alpha=0.3)
-            
-            opt_vals = [it['constraint_data'][group_name][name]['opt_vals']['values'] for it in iters]
-            y_all = np.concatenate(opt_vals)
-            y_min, y_max = np.nanmin(y_all), np.nanmax(y_all)
-            if not np.isfinite(y_max - y_min):
-                y_min, y_max = 0, 1
-            margin = (y_max - y_min) * 0.1 + 1
-            ax.set_xlim(t_lim)
-            ax.set_ylim(y_min - margin, y_max + margin)
-            
-            n_cols = opt_vals[0].shape[1]
-            ln_list, lo_list = [], []
-            for _ in range(n_cols):
-                ln, = ax.plot([], [], color=PENS['nl']['lrgba'], lw=PENS['nl']['lw'])
-                lo, = ax.plot([], [], color=PENS['opt']['lrgba'], marker=PENS['opt']['msty'], ls='', ms=PENS['opt']['msz'])
-                ln_list.append(ln)
-                lo_list.append(lo)
-            lines_data.append((name, ln_list, lo_list, n_cols))
-        
-        txt_cn = fig_cn.text(0.5, 0.02, '', ha='center', fontsize=12)
-        
-        def make_anim_func(group_name, lines_data, txt):
-            def anim_fn(f):
-                it = iters[f]
-                all_lines = []
-                for name, ln_list, lo_list, n_cols in lines_data:
-                    nl_vals = it['constraint_data'][group_name][name]['nl_vals']['values']
-                    opt_vals = it['constraint_data'][group_name][name]['opt_vals']['values']
-                    for c in range(n_cols):
-                        ln_list[c].set_data(it['t_nl'], nl_vals[:, c])
-                        lo_list[c].set_data(it['t_opt'], opt_vals[:, c])
-                    all_lines.extend(ln_list + lo_list)
-                txt.set_text(f'Iteration {f+1}/{n_iters}')
-                return all_lines + [txt]
-            return anim_fn
-        
-        fig_cn.tight_layout(rect=[0, 0.03, 1, 0.95])
-        anim_cn = FuncAnimation(fig_cn, make_anim_func(group_name, lines_data, txt_cn), frames=n_iters, interval=interval, blit=True)
-        plt.close(fig_cn)
-        display(HTML(anim_cn.to_jshtml()))
+    return grid

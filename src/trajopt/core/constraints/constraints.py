@@ -5,15 +5,17 @@ import trajopt.library.methods.convexify as convexify
 import trajopt.utils.tools as tools
 
 class Constraints:
-    def __init__(self, cnstr_config_list, config):
+    def __init__(self, config, index_map):
+
+        print(f"constraints:")
 
         self.constraints_list = []
 
-        for i, cnstr_config in enumerate(cnstr_config_list):
-            print(f"  {i}: {cnstr_config['name']}: {cnstr_config['type']}")
-            self.register_constraint(cnstr_config, config)
+        for i, (cnstr_name, cnstr_config_i) in enumerate(config.problem.constraints.items()):
+            print(f"  {i}: {cnstr_name}: type: {cnstr_config_i.type}")
+            self.register_constraint(cnstr_config_i, index_map)
 
-    def register_constraint(self, cnstr_config, config):
+    def register_constraint(self, cnstr_config, index_map):
         """"
         Regsiter a constraint object in the constraints list given a constraint configuration.
 
@@ -27,7 +29,7 @@ class Constraints:
         cnstr_type = cnstr_config["type"]
         constraintClass = getattr(constraints_library, cnstr_type)
 
-        cnstr_object = constraintClass(cnstr_config=cnstr_config, config=config)
+        cnstr_object = constraintClass(cnstr_config, index_map)
         self.constraints_list.append(cnstr_object)
         
     def get(self, **kwargs):

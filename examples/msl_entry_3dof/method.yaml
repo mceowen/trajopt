@@ -4,7 +4,7 @@ inherit: trajopt/library/methods/configs/autoscvx.yaml
 # ===============================
 # GRID SETTINGS
 # ==============================
-N: 50
+N: 15
 
 # ===============================
 # METHOD FLAGS

@@ -4,7 +4,7 @@ import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 from scipy.integrate import solve_ivp
 import trajopt.library.methods.convexify as convexify
-from trajopt.utils.tools import AttrDict
+import trajopt.utils.tools as tools
 
 def set_ltv_indices(problem, method):
     """
@@ -56,14 +56,7 @@ def compute_nonconvex_constraints(t_ref, z_ref, u_ref, problem, method):
     nu_jax = jnp.asarray(u_ref)
 
     params = problem.params
-
-    def to_dict_if_attrdict(x):
-        from trajopt.utils.tools import AttrDict
-        if isinstance(x, AttrDict):
-            return dict(x)
-        return x
-    
-    params = to_dict_if_attrdict(params)
+    params_jax = tools.recursive_to_dict(params)
     
     # Preallocate stacked arrays
     g    = np.zeros((N, n_ineq))
@@ -80,10 +73,24 @@ def compute_nonconvex_constraints(t_ref, z_ref, u_ref, problem, method):
         for constraint in problem.constraints.get(ct=0, type="nonconvex_inequality"):
             col_end = col_start + constraint.dimension
             
-            f, dfcn_dz, dfcn_du            = constraint.g_aff(tk, zk, uk, params)
-            g[k, col_start:col_end]        = np.asarray(f)
-            dgdz[k, col_start:col_end, :]  = np.asarray(dfcn_dz)
-            dgdnu[k, col_start:col_end, :] = np.asarray(dfcn_du)
+            f, dfcn_dz, dfcn_du            = constraint.g_aff(tk, zk, uk, params_jax)
+
+            g_k = np.asarray(f)
+            dgdz_k = np.asarray(dfcn_dz)
+            dgdnu_k = np.asarray(dfcn_du)
+
+            g[k, col_start:col_end]        = g_k
+            dgdz[k, col_start:col_end, :]  = dgdz_k
+            dgdnu[k, col_start:col_end, :] = dgdnu_k
+
+            # # condition constraints by row norms
+            # row_norms = np.linalg.norm(np.hstack([dgdz_k, dgdnu_k]), axis=1)
+
+            # # avoid division by zero
+            # row_norms[row_norms == 0] = 1.0
+            # g[k, col_start:col_end] /= row_norms
+            # dgdz[k, col_start:col_end, :] /= row_norms[:, np.newaxis]
+            # dgdnu[k, col_start:col_end, :] /= row_norms[:, np.newaxis]
             
             col_start = col_end
     
@@ -100,14 +107,7 @@ def compute_nonconvex_costs(t_ref, z_ref, u_ref, problem, method):
     nu_jax = jnp.asarray(u_ref)
 
     params = problem.params
-
-    def to_dict_if_attrdict(x):
-        from trajopt.utils.tools import AttrDict
-        if isinstance(x, AttrDict):
-            return dict(x)
-        return x
-    
-    params = to_dict_if_attrdict(params)
+    params_jax = tools.recursive_to_dict(params)
     
     # preallocate stacked arrays (cost per timestep)
     cost = np.zeros((N, 1))
@@ -121,7 +121,7 @@ def compute_nonconvex_costs(t_ref, z_ref, u_ref, problem, method):
             zk = z_jax[k]
             uk = nu_jax[k]
             
-            f, dfcn_dz, dfcn_du = cost_object.g_aff(tk, zk, uk, params)
+            f, dfcn_dz, dfcn_du = cost_object.g_aff(tk, zk, uk, params_jax)
             cost[k, 0] += np.asarray(f)
             dcostdz[k, 0, :] += np.asarray(dfcn_dz).flatten()
             dcostdnu[k, 0, :] += np.asarray(dfcn_du).flatten()
@@ -131,7 +131,7 @@ def compute_nonconvex_costs(t_ref, z_ref, u_ref, problem, method):
         zk = z_jax[-1]
         uk = nu_jax[-1]
         
-        f, dfcn_dz, dfcn_du = cost_object.g_aff(tk, zk, uk, params)
+        f, dfcn_dz, dfcn_du = cost_object.g_aff(tk, zk, uk, params_jax)
         cost[-1, 0]        += np.asarray(f)
         dcostdz[-1, 0, :]  += np.asarray(dfcn_dz).flatten()
         dcostdnu[-1, 0, :] += np.asarray(dfcn_du).flatten()
@@ -149,20 +149,18 @@ def compile_jax_discretization(problem, method):
     Sk_ind0   = Bkp_ind0 + nz*n_nu
 
     params = problem.params
+    params_jax = tools.recursive_to_dict(params)
 
     # pull ltv dynamics
     lin_dyn = problem.constraints.get(type='dynamics')[0].lin_dyn
 
     # nsub defines the number of sub *nodes* between knot points
-    nsub_nodes = 20
+    nsub_nodes = 100
     dt_sub = 1.0 / (nsub_nodes + 1)
     t = jnp.linspace(0.0, 1.0, nsub_nodes + 2)
 
     # packs the derivative of stacked RHS vector for node k
-    def pack_lds_dot(tau, lds_k, nu_k, nu_kp, dt_k, params):
-
-        if isinstance(params, AttrDict):
-            params = dict(params)
+    def pack_lds_dot(tau, lds_k, nu_k, nu_kp, dt_k, params_jax):
 
         x       = lds_k[         : Ak_ind0]
         phi_a   = lds_k[Ak_ind0  : Bk_ind0].reshape((nz, nz))
@@ -175,7 +173,7 @@ def compile_jax_discretization(problem, method):
         u = a * nu_k + b * nu_kp
         sigma = dt_k
 
-        fc, Ac, Bc    = lin_dyn(tau, x, u, params)
+        fc, Ac, Bc    = lin_dyn(tau, x, u, params_jax)
 
         P1_dot = (sigma * fc)
         P2_dot = (sigma * Ac @ phi_a).reshape((nz*nz,))
@@ -186,15 +184,12 @@ def compile_jax_discretization(problem, method):
         return jnp.concatenate([P1_dot, P2_dot, P3_dot, P4_dot, P5_dot])
 
     # rk4 single step function for jax integration
-    def rk4_step_jax(tau, lds, nu_k, nu_kp, dt_k, params):
-
-        if isinstance(params, AttrDict):
-            params = dict(params)
+    def rk4_step_jax(tau, lds, nu_k, nu_kp, dt_k, params_jax):
         
-        k1 = pack_lds_dot(tau, lds, nu_k, nu_kp, dt_k, params)
-        k2 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k1, nu_k, nu_kp, dt_k, params)
-        k3 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k2, nu_k, nu_kp, dt_k, params)
-        k4 = pack_lds_dot(tau + dt_sub, lds + dt_sub * k3, nu_k, nu_kp, dt_k, params)
+        k1 = pack_lds_dot(tau, lds, nu_k, nu_kp, dt_k, params_jax)
+        k2 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k1, nu_k, nu_kp, dt_k, params_jax)
+        k3 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k2, nu_k, nu_kp, dt_k, params_jax)
+        k4 = pack_lds_dot(tau + dt_sub, lds + dt_sub * k3, nu_k, nu_kp, dt_k, params_jax)
         
         lds_next = lds + (dt_sub / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
         return lds_next, None
@@ -222,10 +217,7 @@ def compile_jax_discretization(problem, method):
         return (A_jax_k, B_jax_k, Bp_jax_k, S_jax_k, z_minus_k)
 
     # propagation function for node k
-    def propagate_k(k, z_ref, nu_ref, dt_ref, params):
-        
-        if isinstance(params, AttrDict):
-            params = dict(params)
+    def propagate_k(k, z_ref, nu_ref, dt_ref, params_jax):
 
         z_k  = z_ref[k]
         nu_k  = nu_ref[k]
@@ -237,7 +229,7 @@ def compile_jax_discretization(problem, method):
 
         # propagate stacked vector
         def rk4_step_jax_partial(lds, tau):
-            return rk4_step_jax_jit(tau, lds, nu_k, nu_kp, dt_k, params)
+            return rk4_step_jax_jit(tau, lds, nu_k, nu_kp, dt_k, params_jax)
 
         ldsf_k, _ = jax.lax.scan(rk4_step_jax_partial, lds0_k, t[:-1])
 
@@ -269,10 +261,7 @@ def compile_jax_discretization_bwd(problem, method):
     t = jnp.linspace(0.0, 1.0, nsub_nodes + 2)
 
     # packs the derivative of stacked RHS vector for node k
-    def pack_lds_dot(tau, lds_k, nu_k, nu_kp, dt_k, params):
-
-        if isinstance(params, AttrDict):
-            params = dict(params)
+    def pack_lds_dot(tau, lds_k, nu_k, nu_kp, dt_k, params_jax):
 
         x       = lds_k[         : Ak_ind0]
         phi_a   = lds_k[Ak_ind0  : Bk_ind0].reshape((nz, nz))
@@ -296,15 +285,12 @@ def compile_jax_discretization_bwd(problem, method):
         return jnp.concatenate([P1_dot, P2_dot, P3_dot, P4_dot, P5_dot])
 
     # rk4 single step function for jax integration
-    def rk4_step_jax_bwd(tau, lds, nu_k, nu_kp, dt_k, params):
-
-        if isinstance(params, AttrDict):
-            params = dict(params)
+    def rk4_step_jax_bwd(tau, lds, nu_k, nu_kp, dt_k, params_jax):
         
-        k1 = pack_lds_dot(tau, lds, nu_k, nu_kp, dt_k, params)
-        k2 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k1, nu_k, nu_kp, dt_k, params)
-        k3 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k2, nu_k, nu_kp, dt_k, params)
-        k4 = pack_lds_dot(tau + dt_sub, lds + dt_sub * k3, nu_k, nu_kp, dt_k, params)
+        k1 = pack_lds_dot(tau, lds, nu_k, nu_kp, dt_k, params_jax)
+        k2 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k1, nu_k, nu_kp, dt_k, params_jax)
+        k3 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k2, nu_k, nu_kp, dt_k, params_jax)
+        k4 = pack_lds_dot(tau + dt_sub, lds + dt_sub * k3, nu_k, nu_kp, dt_k, params_jax)
         
         lds_next = lds + (dt_sub / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
         return lds_next, None
@@ -332,10 +318,7 @@ def compile_jax_discretization_bwd(problem, method):
         return (A_jax_k, B_jax_k, Bp_jax_k, S_jax_k, z_minus_k)
 
     # propagation function for node k
-    def propagate_k_bwd(k, z_ref, nu_ref, dt_ref, params):
-        
-        if isinstance(params, AttrDict):
-            params = dict(params)
+    def propagate_k_bwd(k, z_ref, nu_ref, dt_ref, params_jax):
 
         z_kp  = z_ref[k+1]
         nu_k  = nu_ref[k]
@@ -347,7 +330,7 @@ def compile_jax_discretization_bwd(problem, method):
 
         # propagate stacked vector
         def rk4_step_jax_partial(lds, tau):
-            return rk4_step_jax_jit_bwd(tau, lds, nu_k, nu_kp, dt_k, params)
+            return rk4_step_jax_jit_bwd(tau, lds, nu_k, nu_kp, dt_k, params_jax)
 
         ldsf_k, _ = jax.lax.scan(rk4_step_jax_partial, lds0_k, jnp.flip(t)[:-1])
 
@@ -367,12 +350,11 @@ def discretize_inv_free_jax(z_ref_np, nu_ref_np, dt_ref_np, problem, method):
     dt_ref = jnp.asarray(dt_ref_np)
 
     params = problem.params
-    if isinstance(params, AttrDict):
-        params = dict(params)
+    params_jax = tools.recursive_to_dict(params)
 
     # call jitted propagator for each node
     ks = jnp.arange(method.index_map.N['N'] - 1)
-    A_jax, B_jax, Bp_jax, S_jax, z_minus = method.propagate_discretization_jax(ks, z_ref, nu_ref, dt_ref, params)
+    A_jax, B_jax, Bp_jax, S_jax, z_minus = method.propagate_discretization_jax(ks, z_ref, nu_ref, dt_ref, params_jax)
 
     z_ref_0 = z_ref[[0], :]
     
@@ -387,12 +369,11 @@ def discretize_inv_free_jax_bwd(z_ref_np, nu_ref_np, dt_ref_np, problem, method)
     dt_ref = jnp.asarray(dt_ref_np)
 
     params = problem.params
-    if isinstance(params, AttrDict):
-        params = dict(params)
+    params_jax = tools.recursive_to_dict(params)
 
     # call jitted propagator for each node
     ks = jnp.arange(method.index_map.N['N'] - 1)
-    A_jax, B_jax, Bp_jax, S_jax, z_minus = method.propagate_discretization_jax_bwd(ks, z_ref, nu_ref, dt_ref, params)
+    A_jax, B_jax, Bp_jax, S_jax, z_minus = method.propagate_discretization_jax_bwd(ks, z_ref, nu_ref, dt_ref, params_jax)
     
     z_ref_f = z_ref[[-1], :]
     
@@ -660,3 +641,312 @@ def RHS_ltv_ctcs(tau, lds, nu_ref, dt_ref, problem, method):
         lds_dot[k * method.lds0_size + method.Sk_ind] = S_tau_dot
 
     return lds_dot
+
+
+#####################################################
+##### PSEUDOSPECTRAL AND POLYNOMIAL PROTOTYPES: #####
+#####################################################
+
+# ---------------------------------------------------------------------
+# Legendre polynomial helper
+# ---------------------------------------------------------------------
+def compute_legendre(N: int, x: np.ndarray, use_spartan: bool = USE_SPARTAN) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Evaluate the Legendre polynomial P_n(x) and its derivative P_n'(x).
+
+    Inputs:
+    N :             Polynomial order.
+    x : Evaluation points.
+    use_spartan :   Use SPARTAN-style Legendre recursive computation if True, scipy computation if False.
+
+    Outputs:
+    Pn :            Legendre polynomial evaluated at x.
+    dPn :           Derivative d/dx P_n(x) evaluated at x.
+    """
+    x = np.asarray(x, dtype=float)
+
+    if use_spartan:
+        x = np.asarray(x, dtype=float)
+
+        if N == 0:
+            return np.ones_like(x), np.zeros_like(x)
+        elif N == 1:
+            return x.copy(), np.ones_like(x)
+
+        # P_{0}, P'_{0}
+        Pn1 = np.ones_like(x)
+        Dn1 = np.zeros_like(x)
+
+        # P_{1}, P'_{1}
+        Pn = x.copy()
+        Dn = np.ones_like(x)
+
+        for jj in range(2, N + 1):
+            k = jj - 1  # current recurrence index, building P_{k+1}
+
+            # Standard Legendre recurrence:
+            # P_{k+1} = ((2k+1)x P_k - k P_{k-1}) / (k+1)
+            P_temp = ((2 * k + 1) * x * Pn - k * Pn1) / (k + 1)
+
+            # Derivative of the standard Legendre recurrence:
+            # P'_{k+1} = ((2k+1)(P_k + x P'_k) - k P'_{k-1}) / (k+1)
+            D_temp = ((2 * k + 1) * Pn + (2 * k + 1) * x * Dn - k * Dn1) / (k + 1)
+
+            Pn1, Dn1 = Pn, Dn
+            Pn, Dn = P_temp, D_temp
+
+        return Pn, Dn
+    
+    else:
+        if N == 0:
+            return np.ones_like(x), np.zeros_like(x)
+
+        Pn      = sp.special.eval_legendre(N, x)
+        Pnm1    = sp.special.eval_legendre(N - 1, x)
+
+        dPn     = N * (x * Pn - Pnm1) / (x**2 - 1.0)
+
+        return Pn, dPn
+ 
+# ---------------------------------------------------------------------
+# Flipped Legendre-Radau polynomial
+# ---------------------------------------------------------------------
+def flipped_radau_polynomial(N: int, tau: np.ndarray, use_spartan: bool = USE_SPARTAN) -> np.ndarray:
+    """
+    Inputs:
+    N :             Polynomial order
+    tau :           Points to evaluate.
+    use_spartan :   Legendre polynomimal computation method
+
+    Outputs:        R_n(tau).
+    """
+    tau     = np.asarray(tau, dtype=float)
+
+    Ln, _   = compute_legendre(N, tau, use_spartan=use_spartan)
+    Lnm1, _ = compute_legendre(N - 1, tau, use_spartan=use_spartan)
+
+    return Ln - Lnm1
+
+
+def flipped_radau_polynomial_derivative(N: int, tau: np.ndarray) -> np.ndarray:
+    """
+    Derivative of the flipped Legendre-Radau polynomial
+    """
+    tau         = np.asarray(tau, dtype=float)
+    _, dLn      = compute_legendre(N, tau, use_spartan=USE_SPARTAN)
+    _, dLnm1    = compute_legendre(N - 1, tau, use_spartan=USE_SPARTAN)
+    
+    return dLn - dLnm1
+
+
+# ---------------------------------------------------------------------
+# Compute flipped Radau nodes and quadrature weights
+# ---------------------------------------------------------------------
+# computes flipped Radau collocation nodes, full node set, quadrature weights
+def flipped_radau_nodes_and_weights(N: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Inputs:
+    N :     # of collocation nodes.
+
+    Outputs:
+    tau :   Collocation nodes (including +1, excluding -1).
+    etau :  Full discrete node set for interpolation (includes -1).
+    w :     Quadrature weights associated with tau-vector.
+    """
+    if N < 1:
+        raise ValueError("N must be >= 1")
+
+    # Degenerate one-node case.
+    if N == 1:
+        tau     = np.array([1.0])
+        etau    = np.array([-1.0, 1.0])
+        w       = np.array([2.0])
+        return tau, etau, w
+
+    # -------------------------------------------------------------
+    # Compute LGR nodes with Newton-Raphson, flip to get fLGR.
+    # -------------------------------------------------------------
+    tau_std = -np.cos(2.0 * np.pi * np.arange(N) / (2 * (N - 1) + 1))
+    tau_std = tau_std.astype(float)
+
+    def radau_polynomial(x):
+        Ln, _   = compute_legendre(N, np.array([x]), use_spartan=USE_SPARTAN)
+        Lnm1, _ = compute_legendre(N - 1, np.array([x]), use_spartan=USE_SPARTAN)
+        return float(Ln[0] + Lnm1[0])
+
+
+    def radau_polynomial_derivative(x):
+        _, dLn  = compute_legendre(N, np.array([x]), use_spartan=USE_SPARTAN)
+        _, dLnm1= compute_legendre(N - 1, np.array([x]), use_spartan=USE_SPARTAN)
+        return float(dLn[0] + dLnm1[0])
+
+    # SPARTAN-style hardcoded Newton-Raphson iteration for LGR nodes
+    if USE_HARDCODED_NEWTON:
+
+        tau_old = np.ones_like(tau_std) * 2.0
+        eps_tol = np.finfo(float).eps
+
+        L       = np.zeros((N, N+1))
+        idx     = np.arange(1, N)
+
+        while np.max(np.abs(tau_std - tau_old)) > eps_tol:
+
+            tau_old = tau_std.copy()
+
+            # Construct Legendre Vandermonde matrix
+            L[0, :] = (-1) ** np.arange(N+1)
+
+            L[idx, 0] = 1
+            L[idx, 1] = tau_std[idx]
+
+            for k in range(2, N+1):
+                L[idx, k] = ((2*k-1) * tau_std[idx] * L[idx, k-1] - (k-1) * L[idx, k-2]) / k
+
+            tau_std[idx] = tau_old[idx] - ((1 - tau_old[idx]) / N) * \
+                (L[idx, N-1] + L[idx, N]) / (L[idx, N-1] - L[idx, N])
+    
+    # SciPy-based Newton-Raphson root finding for LGR nodes
+    else:
+
+        for j in range(1, N):
+            x0 = tau_std[j]
+            tau_std[j] = sp.optimize.newton(
+                radau_polynomial,
+                x0,
+                fprime=radau_polynomial_derivative,
+                tol=1e-14,
+                maxiter=100,
+            )
+
+    # extrapolate tau_std to get the full node set, then flip for fLGR
+    tau     = np.sort(-tau_std)
+    etau    = np.concatenate(([-1.0], tau))
+
+    # -------------------------------------------------------------
+    # Compute quadrature weights.
+    # -------------------------------------------------------------
+    weights_std = np.zeros(N)
+    weights_std[0] = 2.0 / N**2
+    for j in range(1, N):
+        Ln, _ = compute_legendre(N - 1, np.array([tau_std[j]]), use_spartan=USE_SPARTAN)
+        weights_std[j] = (1.0 - tau_std[j]) / (N * Ln[0]) ** 2
+
+    w = np.flip(weights_std)
+
+    return tau, etau, w
+
+
+# ---------------------------------------------------------------------
+# Differentiation matrix
+# ---------------------full_nodes------------------------------------------------
+# computes the differentiation matrix D, shape (N, N+1)
+
+def differentiation_matrix(etau: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Inputs:  - 1D array of length m = N+1 containing the full node set (including -1).
+    Outputs: D - differentiation matrix of shape (N, N+1) mapping state values at `full_nodes`
+                 to derivatives at the collocation nodes (all nodes except the initial node).
+    """
+    xxPlusEnd = np.asarray(etau, dtype=float)
+    M = len(xxPlusEnd)
+    # M1 = M + 1
+    # M2 = M * M
+
+    # compute the barycentric weights
+    Y       = np.tile(xxPlusEnd.reshape(-1, 1), (1, M))
+    Ydiff   =  Y - Y.T + np.eye(M)
+
+    WW      = np.tile((1.0 / np.prod(Ydiff, axis=1)).reshape(-1, 1), (1, M))
+    D       = WW / (WW.T * Ydiff)
+
+    # MATLAB: D(1:M1:M2) = 1-sum(D);
+    np.fill_diagonal(D, 1.0 - np.sum(D, axis=0))
+
+    # full differentiation matrix
+    D       = -D.T
+    D_full  = D.copy()
+
+    # fLGR D-matrix
+    D       = D[1:M, :]
+
+    D2      = D @ D_full
+
+    return D, D_full, D2
+
+def differentiation_matrix_compare(full_nodes: np.ndarray) -> np.ndarray:
+    x = np.asarray(full_nodes, dtype=float)
+    m = len(x)
+
+    # Pairwise differences: dX[i,j] = x_i - x_j
+    dX = x[:, None] - x[None, :]
+
+    # Barycentric weights:
+    #   lambda_i = 1 / prod_{j != i} (x_i - x_j)
+    dX_no_diag = dX + np.eye(m)
+    lam = 1.0 / np.prod(dX_no_diag, axis=1)
+
+    # Off-diagonal entries:
+    #   D_ij = lambda_j / (lambda_i * (x_i - x_j)),  i != j
+    D_full = np.outer(1.0 / lam, lam) / dX_no_diag
+
+    # Fix diagonal entries so each row sums to zero
+    np.fill_diagonal(D_full, 0.0)
+    np.fill_diagonal(D_full, -np.sum(D_full, axis=1))
+
+    # fLGR: remove the first row, keep all columns
+    D = D_full[1:, :]
+
+    return D
+
+
+def flipped_radau_differential_operator(N: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Inputs:
+    N : Number of collocation nodes.
+
+    Outputs:
+    tau : Collocation nodes.
+    etau : Full node set including -1.
+    w : Quadrature weights.
+    D : Differential operator mapping state values at etau to derivatives at collocation nodes tau.
+    """
+    tau, etau, w    = flipped_radau_nodes_and_weights(N)
+    D, _, _    = differentiation_matrix(etau)
+
+    #D_compare       = differentiation_matrix_compare(etau)
+    #D = D_compare
+   
+    return tau, etau, w, D
+
+
+# ---------------------------------------------------------------------
+# Lagrange interpolation (Eq. 9, CEAS2017)
+# ---------------------------------------------------------------------
+
+def lagrange_basis(eval_points, nodes):
+    """
+    Compute Lagrange basis polynomials P_i(t) evaluated at eval_points.
+    """
+    t = np.asarray(eval_points, dtype=float)
+    ti = np.asarray(nodes, dtype=float)
+
+    m_eval = len(t)
+    n_nodes = len(ti)
+
+    P = np.ones((m_eval, n_nodes))
+
+    for i in range(n_nodes):
+        for k in range(n_nodes):
+            if k != i:
+                P[:, i] *= (t - ti[k]) / (ti[i] - ti[k])
+
+    return P
+
+
+def lagrange_interpolate(eval_points, nodes, values):
+    """
+    Evaluate interpolating polynomial.
+    """
+    P = lagrange_basis(eval_points, nodes)
+    return P @ values
+

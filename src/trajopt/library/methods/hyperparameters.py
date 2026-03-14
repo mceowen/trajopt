@@ -46,8 +46,8 @@ def configure_penalty_weights(problem, method, subconstraints=None):
     # w_path: weight for path constraint buffer cost
     # w_nfz:  weight for nfz constraint buffer cost
 
-    penalty.wtr_z = 1 / (2 * penalty.alpha_z)
-    penalty.wtr_u = 0 if np.isinf(penalty.alpha_u) else 1 / (2 * penalty.alpha_u)
+    penalty.wtr_z = 1 / (2 * penalty.alpha_z * problem.index_map.N.N)
+    penalty.wtr_u = 0 if np.isinf(penalty.alpha_u) else 1 / (2 * penalty.alpha_u * problem.index_map.N.N)
 
     # === Autotune modes (flag_autotune ∈ {0,2,3,al-scvx}) ===
     if str(method.flags["flag_autotune"]) in {"0", "2", "3", "al-scvx"}:
@@ -406,7 +406,7 @@ def build_dual_buffer_cost(subprob) -> cp.Expression:
 
 # -------------- AUTOTUNING SCHEMES ----------------------------------------------------------------------------------------
 
-def autotune1(subproblem, conv_data, iter_num):
+def autotune1(subproblem, conv_data, conv_data_prev, iter_num):
     """
     Unified version of autotune1 including dual_plus and dual_minus.
     Updates subproblem.dual_stack directly.
@@ -470,8 +470,11 @@ def autotune1(subproblem, conv_data, iter_num):
     dual_plus_plus_real  = W_plus_real * vb_plus_real  + dual_plus_real
     dual_minus_plus_real = W_minus_real * vb_minus_real + dual_minus_real
 
-    dual_plus_plus_ctcs  = beta * vb_plus_ctcs  + dual_plus_ctcs
-    dual_minus_plus_ctcs = beta * vb_minus_ctcs + dual_minus_ctcs
+    W_plus_ctcs  = subproblem.W_stack.plus_ctcs
+    W_minus_ctcs = subproblem.W_stack.minus_ctcs
+
+    dual_plus_plus_ctcs  = W_plus_ctcs * vb_plus_ctcs  + dual_plus_ctcs
+    dual_minus_plus_ctcs = W_minus_ctcs * vb_minus_ctcs + dual_minus_ctcs
 
     # ==========================================
     # Saturation thresholds
@@ -504,7 +507,7 @@ def autotune1(subproblem, conv_data, iter_num):
     }
 
 
-def autotune2(subproblem, conv_data, iter_num):
+def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
     """
     Unified stacked-inequality version of autotune2.
     Updates subproblem.W_stack directly.
@@ -537,13 +540,13 @@ def autotune2(subproblem, conv_data, iter_num):
     # Saturation thresholds
     # ==========================================
     conv = method.conv
-    eps_feas_ineq = conv.eps_ineq_nd
+    eps_feas_ineq = conv.eps_ineq
     eps_feas_term = conv.eps_term
     eps_feas_dyn  = conv.eps_dyn
 
-    eps_target_term =  np.maximum(eps_feas_term, conv.fac_eps * np.abs(conv_data.vb_terminal))   #np.maximum(eps_feas_term, method.eps_init_term + (iter_num / method.target_iters) * (eps_feas_term - method.eps_init_term))
-    eps_target_ineq =  np.maximum(eps_feas_ineq, conv.fac_eps * np.abs(conv_data.vb_ineq))       #np.maximum(eps_feas_ineq, method.eps_init_ineq + (iter_num / method.target_iters) * (eps_feas_ineq - method.eps_init_ineq))
-    eps_target_dyn  =  np.maximum(eps_feas_dyn , conv.fac_eps * np.abs(conv_data.vb_dyn))        #np.maximum(eps_feas_dyn,  method.eps_init_dyn  + (iter_num / method.target_iters) * (eps_feas_dyn  - method.eps_init_dyn))
+    eps_target_term =  np.maximum(eps_feas_term, conv.fac_eps * np.abs(conv_data.vb_terminal))
+    eps_target_ineq =  np.maximum(eps_feas_ineq, conv.fac_eps * np.abs(conv_data.vb_ineq))
+    eps_target_dyn  =  np.maximum(eps_feas_dyn , conv.fac_eps * np.abs(conv_data.vb_dyn))
 
     conv_data.eps_target_term = eps_target_term.copy()
     conv_data.eps_target_ineq = eps_target_ineq.copy()
@@ -594,7 +597,7 @@ def autotune2(subproblem, conv_data, iter_num):
         dual_ineq_buff = np.diag(W_ineq[k, :]) @ vb_ineq[k, :].flatten()
 
         if problem.index_map.n['nonconvex_inequality'] > 0:
-            Wh_ineq[k, :] = np.abs(dual_ineq_buff / eps_target_ineq[k])
+            Wh_ineq[k, :] = np.minimum(np.abs(dual_ineq_buff / eps_target_ineq[k]), 1e8)
         else:
             Wh_ineq[k, :] = np.abs(dual_ineq_buff)
 
@@ -610,22 +613,22 @@ def autotune2(subproblem, conv_data, iter_num):
             #     Wh_dyn[k, z_state_idx] = np.abs(dual_dyn_buff[z_state_idx] / eps_feas_dyn[z_state_idx])
 
             if ctcs == "l1":
-                Wh_dyn[k, z_ctcs_idx] = np.sum(np.abs(dual_dyn_buff[z_ctcs_idx]) / eps_feas_dyn[z_ctcs_idx])
+                Wh_dyn[k, z_ctcs_idx] = np.sum(np.abs(dual_dyn_buff[z_ctcs_idx]) / eps_target_dyn[k, z_ctcs_idx])
             elif ctcs != "none":
-                Wh_dyn[k, z_ctcs_idx] = np.abs(dual_dyn_buff[z_ctcs_idx] / eps_feas_dyn[z_ctcs_idx])
+                Wh_dyn[k, z_ctcs_idx] = np.minimum(np.abs(dual_dyn_buff[z_ctcs_idx] / eps_target_dyn[k, z_ctcs_idx]), 1e8)
 
             # TODO: THINK ABOUT THIS (MAYBE ONE IF ELSE) COME BACK TO THIS, SINGLE EPSILON ETC
             if buff_dyn == "quad-2":
-                Wh_plus_real[k]  = np.sum(np.abs(np.diag(W_plus_real[k, :]) @ vb_plus_real[k, :] / eps_target_dyn[k]))
-                Wh_minus_real[k] = np.sum(np.abs(np.diag(W_minus_real[k, :]) @ vb_minus_real[k, :] / eps_target_dyn[k]))
+                Wh_plus_real[k]  = np.sum(np.abs(np.diag(W_plus_real[k, :]) @ vb_plus_real[k, :] / eps_target_dyn[k, z_state_idx]))
+                Wh_minus_real[k] = np.sum(np.abs(np.diag(W_minus_real[k, :]) @ vb_minus_real[k, :] / eps_target_dyn[k, z_state_idx]))
             
             if ctcs == "quad-2":
-                Wh_plus_ctcs[k]  = np.sum(np.abs(np.diag(W_plus_ctcs[k, :]) @ vb_plus_ctcs[k, :] / np.min(eps_feas_dyn)))
-                Wh_minus_ctcs[k] = np.sum(np.abs(np.diag(W_minus_ctcs[k, :]) @ vb_minus_ctcs[k, :] / np.min(eps_feas_dyn)))
+                Wh_plus_ctcs[k]  = np.sum(np.abs(np.diag(W_plus_ctcs[k, :]) @ vb_plus_ctcs[k, :] / eps_target_dyn[k, z_ctcs_idx]))
+                Wh_minus_ctcs[k] = np.sum(np.abs(np.diag(W_minus_ctcs[k, :]) @ vb_minus_ctcs[k, :] / eps_target_dyn[k, z_ctcs_idx]))
 
     if problem.index_map.n['term_total'] > 0:
         dual_term_buff = np.diag(W_term) @ vb_term
-        Wh_term = np.abs(dual_term_buff / eps_target_term).flatten()
+        Wh_term = np.minimum(np.abs(dual_term_buff / eps_target_term).flatten(), 1e8)
 
     # ==========================================
     # UPDATE WEIGHTS WITH COMPUTED AUTOTUNE UPDATES
@@ -660,9 +663,9 @@ def autotune2(subproblem, conv_data, iter_num):
     }
 
 
-def autotune3(subproblem, conv_data, iter_num):
+def autotune3(subproblem, conv_data, conv_data_prev, iter_num):
     """Combined autotune1 and autotune2."""
-    dual_info = autotune1(subproblem, conv_data, iter_num)
-    weight_info = autotune2(subproblem, conv_data, iter_num)
+    dual_info = autotune1(subproblem, conv_data, conv_data_prev, iter_num)
+    weight_info = autotune2(subproblem, conv_data, conv_data_prev, iter_num)
 
     return {"dual_update": dual_info, "weight_update": weight_info}

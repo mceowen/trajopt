@@ -1,8 +1,6 @@
 import numpy as np
 import cvxpy as cp
 
-# TODO: just condense into a single function (not both get_val, safe_val)
-
 class AttrDict(dict):
     """Dictionary that allows attribute access to keys.
 
@@ -16,15 +14,129 @@ class AttrDict(dict):
 
     def __setattr__(self, name, value):
         self[name] = value
-
-
+    
 def recursive_attrdict(d):
-            if isinstance(d, dict):
-                return AttrDict({k: recursive_attrdict(v) for k, v in d.items()})
-            elif isinstance(d, list):
-                return [recursive_attrdict(i) for i in d]
-            else:
-                return d
+    if isinstance(d, dict):
+        return AttrDict({k: recursive_attrdict(v) for k, v in d.items()})
+    elif isinstance(d, list):
+        return [recursive_attrdict(i) for i in d]
+    else:
+        return d
+    
+def recursive_to_dict(d):
+    if isinstance(d, dict):
+        return {k: recursive_to_dict(v) for k, v in d.items()}
+    elif isinstance(d, list):
+        return [recursive_to_dict(i) for i in d]
+    else:
+        return d
+            
+def get_from_path(d, path):
+    keys = path.split(".")
+    current_dict = d
+    
+    for key in keys:
+        current_dict = current_dict[key]
+        
+    return current_dict
+
+def set_from_path(d, path, value):
+    keys = path.split(".")
+    current_dict = d
+    
+    for key in keys[:-1]:
+        current_dict = current_dict[key]
+    
+    current_dict[keys[-1]] = value
+
+def set_attr_from_path(obj, path, value):
+    parts = path.split(".")
+    current = obj
+
+    for part in parts[:-1]:
+        current = getattr(current, part)
+
+    setattr(current, parts[-1], value)
+
+def get_attr_from_path(obj, path):
+    parts = path.split(".")
+    current = obj
+
+    for part in parts:
+        current = getattr(current, part)
+
+    return current
+
+def deep_merge(base, override):
+    current_dict = recursive_attrdict(base.copy())
+    for key, val in override.items():
+        if key in current_dict and isinstance(current_dict[key], dict) and isinstance(val, dict):
+            current_dict[key] = deep_merge(current_dict[key], val)
+        else:
+            current_dict[key] = val
+    return current_dict
+
+def expand_dot_keys(d):
+    result = {}
+
+    for key, value in d.items():
+
+        # If value is a dictionary, expand it first
+        if isinstance(value, dict):
+            value = expand_dot_keys(value)
+
+        parts = key.split(".")
+        current = result
+
+        # Walk down the path
+        for part in parts[:-1]:
+            
+            if part not in current:
+                current[part] = {}
+
+            current = current[part]
+
+        if (
+            parts[-1] in current
+            and isinstance(current[parts[-1]], dict)
+            and isinstance(value, dict)
+        ):
+            current[parts[-1]].update(value)
+        else:
+            current[parts[-1]] = value
+
+    return result
+
+def flatten_dict(d, parent_key=''):
+    items = AttrDict({})
+
+    for key, value in d.items():
+        new_key = f"{parent_key}.{key}" if parent_key else key
+
+        if isinstance(value, dict) and value:
+            items.update(flatten_dict(value, new_key))
+        else:
+            items[new_key] = value
+
+    return items
+
+def trim_dict(d, keys):
+    return {k: d[k] for k in keys if k in d}
+
+def extract_attributes(obj, keys):
+    return {k: getattr(obj, k) for k in keys if hasattr(obj, k)}
+
+def extract_attributes_exclude(obj, exclude=()):
+    excl = set(exclude)
+    return {k: v for k, v in vars(obj).items() if k not in excl}
+
+def expand_to_array_if_scalar(x, n):
+    x = np.asarray(x)
+
+    if x.ndim == 0 or x.size == 1:
+        return np.full(n, x)
+    
+    return x
 
 def safe_val(var, rows=1, cols=1, fallback=0.0):
     """
@@ -64,18 +176,6 @@ def safe_val(var, rows=1, cols=1, fallback=0.0):
             return var.value
     # fallback if var or var.value is None
     return fallback if (rows == 1 and cols == 1) else np.full((rows, cols), fallback)
-    
- 
-def get_val(var, rows=1, cols=1, fallback=0.0):
-    if hasattr(var, "value"):
-        val = var.value
-        if val is not None:
-            return val
-        return safe_val(var, fallback=fallback, rows=rows, cols=cols)
-    return var
-
-def safe_array(M):
-    return np.array([0.0]) if M is None or np.size(M) == 0 else M
 
 def ensure_shape(M, shape):
     """
@@ -108,26 +208,14 @@ def ensure_shape(M, shape):
     except ValueError:
         # Fallback reshape + broadcast
         return np.broadcast_to(M.reshape(-1, 1) if M.ndim == 1 else M, shape)
+    
+def get_val(var, rows=1, cols=1, fallback=0.0):
+    if hasattr(var, "value"):
+        val = var.value
+        if val is not None:
+            return val
+        return safe_val(var, fallback=fallback, rows=rows, cols=cols)
+    return var
 
-def num_timesteps(z):
-    if zs.ndim == 1:
-        return 1
-    elif zs.ndim == 2:
-        return zs.shape[0]
-    else:
-        raise ValueError(f"Expected 1D or 2D array, got shape {arr.shape}")
-
-def deep_update(dst, src):
-    for k, v in src.items():
-        if isinstance(v, dict) and isinstance(dst.get(k), dict):
-            deep_update(dst[k], v)
-        else:
-            dst[k] = v
-    return dst
-
-def extract_attributes(obj, names):
-    return {k: getattr(obj, k) for k in names if hasattr(obj, k)}
-
-def extract_attributes_exclude(obj, exclude=()):
-    excl = set(exclude)
-    return {k: v for k, v in vars(obj).items() if k not in excl}
+def safe_array(M):
+    return np.array([0.0]) if M is None or np.size(M) == 0 else M

@@ -1,19 +1,13 @@
 import numpy as np
 import jax
 import jax.numpy as jnp
+import trajopt.utils.tools as tools
 
 def compile_dense_jax_propagator(problem, method, params):
 
     dynamics = problem.constraints.get(type="dynamics")[0].fcn
 
-    def to_dict_if_attrdict(x):
-        from trajopt.utils.tools import AttrDict
-        if isinstance(x, AttrDict):
-            return dict(x)
-        return x
-
     def rk4_step(zi, ti, dt, nu_ref, t_ref, params):
-        params = to_dict_if_attrdict(params)
         k1 = z_dot(zi, ti, nu_ref, t_ref, params)
         k2 = z_dot(zi + 0.5*dt*k1, ti + 0.5*dt, nu_ref, t_ref, params)
         k3 = z_dot(zi + 0.5*dt*k2, ti + 0.5*dt, nu_ref, t_ref, params)
@@ -21,7 +15,6 @@ def compile_dense_jax_propagator(problem, method, params):
         return zi + (dt/6.0) * (k1 + 2*k2 + 2*k3 + k4)
 
     def z_dot(z, t, nu_ref, t_ref, params):
-        params = to_dict_if_attrdict(params)
         k = jnp.searchsorted(t_ref, t, side='right') - 1
         k = jnp.clip(k, 0, len(t_ref) - 2)
 
@@ -40,7 +33,6 @@ def compile_dense_jax_propagator(problem, method, params):
     rk4_step_jit = jax.jit(rk4_step)
 
     def propagate(z0, nu_ref, t_ref, t_nl, params):
-        params = to_dict_if_attrdict(params)
         dt = t_nl[1] - t_nl[0]
 
         def rk4_step_partial(zi, ti):
@@ -61,12 +53,11 @@ def propagate_jax_rk4_dense(z0, nu_ref, t_ref, t_nl, problem, method):
     nu_ref_jax = jnp.array(nu_ref)
     t_ref_jax = jnp.array(t_ref)
     t_nl_jax = jnp.array(t_nl)
-
-    from trajopt.utils.tools import AttrDict
+    
     params = problem.params
-    if isinstance(params, AttrDict):
-        params = dict(params)
-    z_full_jax = method.propagate_rk4_dense_jit(z0_jax, nu_ref_jax, t_ref_jax, t_nl_jax, params)
+    params_jax = tools.recursive_to_dict(params)
+    
+    z_full_jax = method.propagate_rk4_dense_jit(z0_jax, nu_ref_jax, t_ref_jax, t_nl_jax, params_jax)
 
     t_nl = np.asarray(t_nl_jax)
     z_nl = np.asarray(z_full_jax)

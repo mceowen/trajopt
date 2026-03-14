@@ -49,7 +49,7 @@ class SCVXPLOTS:
         for scenario in scenarios:
             for method in methods:
                 if method in self.data[scenario]:
-                    RUNS = self.data[scenario][method]['mc_data'];
+                    RUNS = self.data[scenario][method]['runs'];
                     for r in runs:
                         if r < len(RUNS):
                             RUN = RUNS[r];
@@ -73,7 +73,7 @@ class SCVXPLOTS:
                                             else: currargs.append(arg);
                                         fxvals.append(func(*currargs))
                                     fxvals = np.array(fxvals);
-                                    self.data[scenario][method]['mc_data'][r]['iters'][i][tag] = fxvals;
+                                    self.data[scenario][method]['runs'][r]['iters'][i][tag] = fxvals;
                                     # lens = [];
                                     # for arg in func_args:
                                     #     given = False;
@@ -94,7 +94,7 @@ class SCVXPLOTS:
                                     #         args.append(newarg);
                                     #     fxvals.append(func(*args))
                                     # fxvals = np.array(fxvals);
-                                    # self.data[scenario][method]['mc_data'][r]['iters'][i][tag] = fxvals;
+                                    # self.data[scenario][method]['runs'][r]['iters'][i][tag] = fxvals;
 
 
     ########### BASIC 2D-PLOTTING ###############
@@ -141,6 +141,7 @@ class SCVXPLOTS:
         if 'color_vars'  in ins: color_vars = ins['color_vars']
         if 'color_variations'  in ins: color_vars = ins['color_variations']
         if len(color_vars) > 0: use_color_vars = True;
+        method_pens = ins.get('method_pens');
         ###############################################################
         ###############################################################
 
@@ -148,7 +149,10 @@ class SCVXPLOTS:
         for scenario in scenarios:
             for method in methods:
                 if method in self.data[scenario]:
-                    RUNS = self.data[scenario][method]['mc_data'];
+                    if method_pens is not None:
+                        method_ix = methods.index(method);
+                        penn = {**self.base_pen, **method_pens[method_ix % len(method_pens)]};
+                    RUNS = self.data[scenario][method]['runs'];
                     for r in runs:
                         if r < len(RUNS):
                             RUN = RUNS[r];
@@ -175,15 +179,19 @@ class SCVXPLOTS:
                                             xdata = list(range(len(ydata)));
                                         
                                         else:
+                                            if isinstance(dataloc, (tuple, list)) and (isinstance(xtag, (tuple, list)) or xtag in data_with_y):
+                                                data_for_x = data_with_y
+                                            else:
+                                                data_for_x = DAT[i]
                                             if isinstance(xtag,(tuple,list)):
-                                            	xdata = DAT[i][xtag[0]];
+                                            	xdata = data_for_x[xtag[0]];
                                             	shp = xdata.shape;
                                             	if len(shp) == 2:
                                                     xdata = xdata[:,xtag[1]];
                                             	if len(shp) == 1:
                                                     xdata = xdata[xtag[1]];
                                             else: 
-                                                xdata = DAT[i][xtag];
+                                                xdata = data_for_x[xtag];
 
                                         penn2 = {};
                                         ########################################
@@ -285,20 +293,26 @@ class SCVXPLOTS:
         if 'color_vars'  in ins: color_vars = ins['color_vars']
         if 'color_variations'  in ins: color_vars = ins['color_variations']
         if len(color_vars) > 0: use_color_vars = True;
+        method_pens = ins.get('method_pens');
         ###############################################################
         ###############################################################        
 
         for scenario in scenarios:
             for method in methods:
                 if method in self.data[scenario]:
-                    RUNS = self.data[scenario][method]['mc_data'];
+                    if method_pens is not None:
+                        method_ix = methods.index(method);
+                        penn = {**self.base_pen, **method_pens[method_ix % len(method_pens)]};
+                    RUNS = self.data[scenario][method]['runs'];
                     for r in runs:
                         if r < len(RUNS):
                             RUN = RUNS[r];
                             for i in iters:
                                 if i < len(RUN['iters']):
                                     data = RUN['iters'][i];
-                                    # if not(ytag == None):
+                                    if isinstance(dataloc, (tuple, list)):
+                                        for key in dataloc:
+                                            data = data[key]
                                     if isinstance(xtag,(tuple,list)): xdata = data[xtag[0]][:,xtag[1]];
                                     else: xdata = data[xtag];                                    
                                     if isinstance(ytag,(tuple,list)): ydata = data[ytag[0]][:,ytag[1]];
@@ -410,7 +424,7 @@ class SCVXPLOTS:
         for scenario in scenarios:
             for method in methods:
                 if method in self.data[scenario]:
-                    RUNS = self.data[scenario][method]['mc_data'];
+                    RUNS = self.data[scenario][method]['runs'];
                     for r in runs:
                         if r < len(RUNS):
                             RUN = RUNS[r];
@@ -527,5 +541,3 @@ class SCVXPLOTS:
                 else:
                     axs[tag] = fig.add_axes(grid[tag])
         return axs;
-
-            

@@ -1,1 +1,24 @@
-{}
+state:
+  pos:
+    idx: [0, 1, 2]
+    label: "Position"
+  
+  vel:
+    idx: [3, 4, 5]
+    label: "Velocity"
+
+control:
+  thrust:
+    idx: [0, 1, 2]
+    label: "Thrust"
+
+trajectories:
+  xy_trajectory:
+    type: general
+    fcn: trajopt/library/models/quadrotor_3dof.py:xy
+    group: position_trajectories
+
+  xyz_trajectory:
+    type: general
+    fcn: trajopt/library/models/quadrotor_3dof.py:xyz
+    group: position_trajectories

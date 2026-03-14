@@ -1,20 +1,17 @@
 # ===============================
-# VARIATION CONFIGURATION
-# ===============================
-num_mission_variations: 10
-num_method_variations: 2
-seed: 42
-
-# ===============================
 # MISSION VARIATIONS
 # ===============================
-mission_variations:
-  constraints.initial_state.value:
-    type: uniform
-    lb: [0, 0, 0, 0, 0.0, 0.0]
-    ub: [0, 0, 0,  0, 0.0, 0.0]
+mission:
+  num: 10
+  seed: 42
 
-  params.vehicle.bc: 
+  constraints:
+    initial_state.value:
+      type: uniform
+      lb: [0, 0, 0, 0, 0.0, 0.0]
+      ub: [0, 0, 0,  0, 0.0, 0.0]
+
+  params.vehicle.bc:
     type: uniform
     lb: -20
     ub: 20
@@ -22,9 +19,5 @@ mission_variations:
 # ===============================
 # METHOD VARIATIONS
 # ===============================
-method_variations:
+method:
   autotune.flags.flag_autotune: "3"
-  
-  # autotune_fixed_final_time.flags.flag_autotune: "3"
-  # autotune_fixed_final_time.flags.buff_dyn: "term"
-  # autotune_fixed_final_time.flags.free_final_time: 0

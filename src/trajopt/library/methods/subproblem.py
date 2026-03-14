@@ -10,6 +10,7 @@ from trajopt.library.methods import discretize
 from trajopt.library.methods import convergence
 from trajopt.library.methods import hyperparameters as hp
 from trajopt.utils import tools
+from trajopt.utils.tools import recursive_attrdict
 
 # TODO(Skye): revisit this
 from trajopt.library.methods.subproblem_constraints import configure_penalty_weights
@@ -47,12 +48,14 @@ class Subproblem:
         self.cp_subproblem = cp.Problem(cp.Minimize(self.cp_cost), self.cp_constraints)
 
         total_param_scalars = sum(p.size for p in self.cp_subproblem.parameters())
+        print("subproblem stats:")
+        print("------------------------------------------------------------")
         print(f"total number of parameters: {total_param_scalars}")
 
         # --------------------------
         # Initialize unified history
         # --------------------------
-        self.iter_data: List[Dict[str, Any]] = [{
+        self.iter_data: List[Dict[str, Any]] = [recursive_attrdict({
             "iter_num": 0,  # init only (no outputs yet)
             "z_ref": method.z_init,
             "nu_ref": method.nu_init,
@@ -67,7 +70,7 @@ class Subproblem:
             "W": None,
             "dual": None,
             "penalty": copy.deepcopy(method.penalty),
-        }]
+        })]
 
     # ============================================================
     # VARIABLE & PARAMETER CREATION
@@ -193,7 +196,7 @@ class Subproblem:
 
         self.z_ref                 = cp.Parameter((N, nz),    name="z_ref")
         self.nu_ref                = cp.Parameter((N, n_nu),    name="nu_ref")
-        self.dt_ref                = cp.Parameter((N - 1, 1),name="dt_ref", nonneg=True)
+        self.dt_ref                = cp.Parameter((N - 1, 1), name="dt_ref", nonneg=True)
 
         self.nu_ref_sq         = cp.Parameter((N,), name="nu_ref_sq")
 
@@ -373,10 +376,7 @@ class Subproblem:
                 if method.flags["ctcs"] != "none" and n_ctcs>0:
                     n = self.n.state
                     nz = self.n.z
-                    C.append(
-                        self.z_ref[k + 1, n:nz] + self.dz[k + 1, n:nz]
-                        - (self.z_ref[k, n:nz] + self.dz[k, n:nz]) <= self.eps_ctcs
-                    )
+                    C.append((self.z_ref[k + 1, n:nz] + self.dz[k + 1, n:nz]) - (self.z_ref[k, n:nz] + self.dz[k, n:nz]) <= self.eps_ctcs)
 
                 # Free-final-time bounds
                 if bool(self.flags["free_final_time"]):
@@ -555,9 +555,31 @@ class Subproblem:
             idx = cost.idx
             self.TRUE += zf[idx]
 
+        for cost in problem.costs.get(type="rate_regularization"):
+            if cost.set == "control":
+                nu = self.nu_ref + self.dnu
+                nu_minus = nu[:-1, cost.idx]
+                nu_plus = nu[1:, cost.idx]
+
+                if cost.norm_type == "l2":
+                    self.TRUE += cost.w * cp.sum_squares(nu_plus - nu_minus) * (1 / self.N.N)
+
+                if cost.norm_type == "l1":
+                    self.TRUE += cost.w * cp.norm1(nu_plus - nu_minus) * (1 / self.N.N)
+            
+            elif cost.set == "state":
+                z = self.z_ref + self.dz
+                z_minus = z[:-1, cost.idx]
+                z_plus = z[1:, cost.idx]
+                
+                if cost.norm_type == "l2":
+                    self.TRUE += cost.w * cp.sum_squares(z_plus - z_minus) * (1 / self.N.N)
+
+                if cost.norm_type == "l1":
+                    self.TRUE += cost.w * cp.norm1(z_plus - z_minus) * (1 / self.N.N)
+
         # === Trust-region penalties ===
         TR = self.flags["flag_tr"] * (self.w.tr_z * cp.sum_squares(self.dz[:, :self.n.state]) + self.w.tr_u * cp.sum_squares(self.dnu))
-
         # === Virtual buffer penalties ===
         VB = 0.0
         DUAL = 0.0
@@ -629,8 +651,10 @@ class Subproblem:
             inputs["z_ref"], inputs["nu_ref"], inputs["dt_ref"], problem, method
         )
 
+        # inputs["z_ref"] = z_minus
+
         # Ak_bwd, Bk_bwd, Bkp_bwd, Sk_bwd, z_minus_bwd = discretize.compute_linsys_discrete_bwd(
-            # inputs["z_ref"], inputs["nu_ref"], inputs["dt_ref"], problem, method
+        #     inputs["z_ref"], inputs["nu_ref"], inputs["dt_ref"], problem, method
         # )
 
         prop_time_ms = (time.time() - start) * 1000.0
@@ -685,8 +709,8 @@ class Subproblem:
 
         # assign cost-related CP parameters
         self.z_ref.value  = inputs["z_ref"]
-        self.nu_ref.value  = inputs["nu_ref"]
-        self.dt_ref.value = inputs["dt_ref"].reshape(self.N.N - 1, 1)
+        self.nu_ref.value = inputs["nu_ref"]
+        self.dt_ref.value = inputs["dt_ref"]
 
         for constraint in problem.constraints.get(ct=0, type="equality_bc"):
             if constraint.name in self.constraint_params:
@@ -746,14 +770,16 @@ class Subproblem:
         prop_time_ms    = self._load_parameters(input_for_iter)
 
         # Solve subproblem
-        solver_name = self.method.solver_opts.get("solver", "ECOS")
+        solver_name = self.method.solver_opts.get("solver", "CLARABEL")
         ignore_dpp = self.method.flags["ignore_dpp"]
-        self.cp_subproblem.solve(solver=solver_name, warm_start=True, ignore_dpp=ignore_dpp)  # ignore_dpp=True if desired
+        self.cp_subproblem.solve(solver=solver_name, warm_start=False, ignore_dpp=ignore_dpp)  # ignore_dpp=True if desired
+        print(self.cp_subproblem.status)
 
         # Create unified record for this iteration and append
-        iter_record = self._load_outputs(input_for_iter, prop_time_ms)
-        iter_record = convergence.check_convergence_tolerance(self.problem, self.method, iter_record)
-        iter_record = self._baseline_autotune(self.problem, self.method, iter_record)
+        iter_record      = self._load_outputs(input_for_iter, prop_time_ms)
+        iter_record      = convergence.check_convergence_tolerance(self.problem, self.method, iter_record)
+        iter_record_prev = self.iter_data[-1]
+        iter_record = self._baseline_autotune(self.problem, self.method, iter_record, iter_record_prev)
         self.iter_data.append(iter_record)
 
     # ============================================================
@@ -787,9 +813,9 @@ class Subproblem:
         rec.dt_s = dt_val
 
         # outputs (absolute trajectories)
-        rec.z_opt  = tools.safe_val(dz_val, rows=N, cols=n_x) + input_for_iter["z_ref"]
-        rec.nu_opt  = tools.safe_val(dnu_val, rows=N, cols=n_nu) + input_for_iter["nu_ref"]
-        rec.dt_opt = tools.safe_val(dt_val).squeeze() + input_for_iter["dt_ref"].squeeze()
+        rec.z_opt  = tools.safe_val(dz_val, rows=N, cols=self.n.z) + input_for_iter["z_ref"]
+        rec.nu_opt = tools.safe_val(dnu_val, rows=N, cols=self.n.control) + input_for_iter["nu_ref"]
+        rec.dt_opt = tools.safe_val(dt_val) + input_for_iter["dt_ref"]
         rec.t_opt  = np.concatenate(([0], np.cumsum(rec.dt_opt)))
         rec.T_opt  = float(np.sum(rec.dt_opt))
 
@@ -814,9 +840,7 @@ class Subproblem:
 
         rec.cnst_path = g
         
-        # TODO(Carlos/Skye): revisit this
         rec.cost      = self.TRUE.value.item() / self.w.cost.value
-        #rec.cost      = 1 
 
         # Convergence data (buffers, defects, TR cost, ref cost)
         conv = tools.AttrDict()
@@ -842,20 +866,21 @@ class Subproblem:
     # ===========================
     # Baseline autotune wrapper
     # ===========================
-    def _baseline_autotune(self, problem, method, rec: Dict[str, Any]) -> Dict[str, Any]:
+    def _baseline_autotune(self, problem, method, rec: Dict[str, Any], rec_prev) -> Dict[str, Any]:
         """Autotune updates W_stack and dual_stack on the subproblem directly."""
         flag = method.flags["flag_autotune"]
         conv_data = rec["conv_data"]
+        conv_data_prev = rec_prev.get("conv_data")
         iter_num = rec["iter_num"]
         
         if flag == "1":
             dual_update_info = hp.autotune1(self, conv_data, iter_num)
             rec["dual_update"] = dual_update_info
         elif flag == "2":
-            weight_update_info = hp.autotune2(self, conv_data, iter_num)
+            weight_update_info = hp.autotune2(self, conv_data, conv_data_prev, iter_num)
             rec["weight_update"] = weight_update_info
         elif flag == "3":
-            update_info = hp.autotune3(self, conv_data, iter_num)
+            update_info = hp.autotune3(self, conv_data, conv_data_prev, iter_num)
             rec["autotune_update"] = update_info
 
         # Copy updated W_stack and dual_stack to iter_record for history

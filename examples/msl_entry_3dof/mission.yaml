@@ -10,6 +10,18 @@ fcns.nonlinear_aero: trajopt/library/missions/msl.py:nonlinear_aero_jax
 params.planet.inherit: trajopt/library/missions/shared/planet/mars.yaml
 params.vehicle.inherit: trajopt/library/missions/shared/vehicle/msl.yaml
 
+state.r.scale: 1000
+state.theta.scale: 0.01
+state.phi.scale: 0.01
+state.v.scale: 100
+state.gamma.scale: 1
+state.psi.scale: 1
+
+control.bank.scale: 1
+control.aoa.scale: 1
+
+time.scale: 100
+
 # ===============================
 # CONSTRAINT/COST PARAMS
 # ==============================
@@ -33,8 +45,24 @@ constraints:
     max_value: [170.0, 5.0]
     max_value_idx: [0, 1]
 
+costs:
+  control_rate_regularization:
+    type: rate_regularization
+    set: control
+    norm: l2
+    w: 1
+
 # ===============================
 # ACTIVE CONSTRAINTS AND COSTS
 # ===============================
-constraint_list: [initial_state, final_state, state_limits, bank_aoa_angle_limits]
-cost_list: [min_terminal_velocity]
+
+constraint_list: 
+  - dynamics
+  - initial_state
+  - final_state
+  - state_limits
+  - bank_aoa_angle_limits
+
+cost_list:
+  - min_terminal_velocity
+  # - control_rate_regularization

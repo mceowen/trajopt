@@ -9,6 +9,11 @@
 params.planet.inherit: trajopt/library/missions/shared/planet/earth.yaml
 params.vehicle.inherit: trajopt/library/missions/shared/vehicle/quadrotor.yaml
 
+state.pos.scale: 1.0
+state.vel.scale: 1.0
+control.thrust.scale: 1.0
+time.scale: 1.0
+
 # ===============================
 # CONSTRAINT/COST PARAMS
 # ===============================

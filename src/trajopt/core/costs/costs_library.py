@@ -6,7 +6,7 @@ import trajopt.library.methods.convexify as convexify
 from trajopt.utils.config_loader import resolve_function
 
 class min_time:
-    def __init__(self, cost_config, config=None):
+    def __init__(self, cost_config, index_map):
         self.type = "min_time"
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
@@ -15,7 +15,7 @@ class min_time:
         pass
 
 class terminal_state:
-    def __init__(self, cost_config, config=None):
+    def __init__(self, cost_config, index_map):
         self.type = "terminal_state"
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
@@ -24,7 +24,7 @@ class terminal_state:
         pass
 
 class min_norm_terminal:
-    def __init__(self, cost_config, config=None):
+    def __init__(self, cost_config, index_map):
         self.type = "min_norm_terminal"
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
@@ -33,8 +33,22 @@ class min_norm_terminal:
     def nondim_cost(self, nondim):
         pass
 
+class rate_regularization:
+    def __init__(self, cost_config, index_map):
+        self.type  = "rate_regularization"
+        self.name  = cost_config["name"]
+        self.group = cost_config.get("group", None)
+        self.set   = cost_config["set"]
+        self.norm_type = cost_config.get("norm_type", "l2")
+        self.w     = cost_config["w"]
+        self.idx = cost_config.get("idx",  np.arange(0, index_map.n.control))
+    
+    def nondim_cost(self, nondim):
+        pass
+    
+
 class nonconvex:
-    def __init__(self, cnstr_config, config=None):
+    def __init__(self, cnstr_config, index_map):
         # required config
         self.type       = "nonconvex"
         self.name       = cnstr_config["name"]
@@ -48,8 +62,6 @@ class nonconvex:
         # optional configs
         self.ct         = cnstr_config.get("ct", 0)
         self.backend    = cnstr_config.get("backend", "jax")
-
-        self.config     = config
 
         # symbolic function in dimensional units provided by user
         # (jax or sympy)
@@ -71,12 +83,6 @@ class nonconvex:
 
             if self.scale is not None:
                 M_out_d2nd = jnp.atleast_1d(1 / self.scale)
-
-            else:
-                if self.units is None:
-                    raise ValueError("Units must be provided if 'scale' is not provided.")
-                
-                M_out_d2nd = nondim.build_nondim_matrix(self.units)
                 
             M_state_nd2d = nondim.M["state"]["nd2d"]
             M_ctrl_nd2d  = nondim.M["ctrl"]["nd2d"]

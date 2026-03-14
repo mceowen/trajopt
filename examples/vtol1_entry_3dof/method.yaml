@@ -3,15 +3,16 @@ inherit: trajopt/library/methods/configs/autoscvx.yaml
 N: 40
 
 flags:
-  equal_dt: true
+  equal_dt: 0
   buff_dyn: "term"
+  ctcs: l2
 
 # initial guess configuration
 guess: 
   T_init: 1700
   T_min: 550.0
   T_max: 3000.0
-  dT_max: 450.0
+  dT_max: 50.0
   nl_guess_u_start: [0.0, 0.0]
   nl_guess_u_stop: [0.0, 0.0]
 
@@ -24,5 +25,5 @@ conv:
   iter_max: 200
 
 weights:
-  alpha_z: 0.5
-  alpha_u: 0.5
+  alpha_z: 0.05
+  alpha_u: 0.05
