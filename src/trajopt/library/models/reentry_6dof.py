@@ -57,7 +57,7 @@ def heat_rate(t, z, nu, params, fcns): # heat rate
     r = jnp.linalg.norm(z[0:3])
     v = jnp.linalg.norm(z[3:6])
 
-    rho = fcns['density_model'](t, z, nu, params)
+    rho = fcns['density_model'](t, z, nu, params, fcns)
 
     return jnp.array([params['vehicle']['kQ'] * rho ** 0.5 * v ** 3])
 
@@ -66,7 +66,7 @@ def dynamic_pressure(t, z, nu, params, fcns):  #dynamic pressure
     r = jnp.linalg.norm(z[0:3])
     v = jnp.linalg.norm(z[3:6])
 
-    rho = fcns['density_model'](t, z, nu, params)
+    rho = fcns['density_model'](t, z, nu, params, fcns)
 
     return jnp.array([0.5 * rho * v ** 2])
 
@@ -76,13 +76,13 @@ def aero_load(t, z, nu, params, fcns): # normal load
 
     return jnp.linalg.norm(aero["f_trans"])
 
-def quaternion_norm(t, z, nu, params):
+def quaternion_norm(t, z, nu, params, fcns):
     return jnp.array([jnp.linalg.norm(z[6:10])])
 
-def velocity(t, z, nu, params):
+def velocity(t, z, nu, params, fcns):
     return jnp.array([jnp.linalg.norm(z[3:6])])
 
-def aoa(t, z, nu, params):
+def aoa(t, z, nu, params, fcns):
     # Extract states and controls
     v = z[3:6]
     v_norm = jnp.linalg.norm(v)
@@ -103,7 +103,7 @@ def aoa(t, z, nu, params):
 
     return jnp.array([alpha])
 
-def sideslip(t, z, nu, params):
+def sideslip(t, z, nu, params, fcns):
     # Extract states and controls
     v = z[3:6]
     v_norm = jnp.linalg.norm(v)
@@ -120,7 +120,7 @@ def sideslip(t, z, nu, params):
     return jnp.array([beta])
 
 
-def altitude(t, z, nu, params):
+def altitude(t, z, nu, params, fcns):
     return jnp.array([(jnp.linalg.norm(z[0:3]) - params['planet']['r'])])
 
 # Direction Cosine Matrix Function (converts vectors from intertial to body frame)
@@ -228,7 +228,7 @@ def quat_mult(q1, q2):
 
     return jnp.array([w, x, y, z])
 
-def long_lat(t, z, nu, params):
+def long_lat(t, z, nu, params, fcns):
 
     r = jnp.linalg.norm(z[0:3])
     x = z[0]
@@ -241,7 +241,7 @@ def long_lat(t, z, nu, params):
     
     return jnp.array([theta, phi])
 
-def long_lat_alt(t, z, nu, params):
+def long_lat_alt(t, z, nu, params, fcns):
 
     r = jnp.linalg.norm(z[0:3])
     x = z[0]
@@ -255,7 +255,7 @@ def long_lat_alt(t, z, nu, params):
     
     return jnp.array([theta, phi, alt])
 
-def r_v(t, z, nu, params):
+def r_v(t, z, nu, params, fcns):
     r = jnp.linalg.norm(z[0:3])
     v = jnp.linalg.norm(z[3:6])
 

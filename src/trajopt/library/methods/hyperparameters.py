@@ -36,8 +36,8 @@ def configure_penalty_weights(problem, method, subconstraints=None):
     W_ineq                            = np.zeros((method.index_map.N.N, problem.index_map.n.nonconvex_inequality))
     dual_ineq                         = np.zeros((method.index_map.N.N, problem.index_map.n.nonconvex_inequality))
 
-    penalty.wtr_z = 1 / (2 * penalty.alpha_z)
-    penalty.wtr_u = 0 if np.isinf(penalty.alpha_u) else 1 / (2 * penalty.alpha_u)
+    penalty.wtr_z = 1 / (2 * penalty.alpha_z) * (1 / (method.index_map.N.N * (method.index_map.n['z'])))
+    penalty.wtr_u = 1 / (2 * penalty.alpha_u) * (1 / (method.index_map.N.N * (method.index_map.n['control'])))
 
     # === Autotune modes (flag_autotune ∈ {0,2,3,al-scvx}) ===
     if str(method.flags["flag_autotune"]) in {"0", "2", "3", "al-scvx"}:
@@ -57,8 +57,8 @@ def configure_penalty_weights(problem, method, subconstraints=None):
         else:
             penalty.config.scale_w.default = 1
             w_ineq         = penalty.config.scale_w.default / method.index_map.N.N
-            w_dyn           = penalty.config.scale_w.default / (method.index_map.N.N - 1)
-            w_term          = penalty.config.scale_w.default
+            w_dyn          = penalty.config.scale_w.default / (method.index_map.N.N - 1)
+            w_term         = penalty.config.scale_w.default
 
         W_ineq += w_ineq
 
