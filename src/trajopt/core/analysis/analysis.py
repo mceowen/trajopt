@@ -158,10 +158,10 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
 # STANDALONE ANALYSIS
 # ======================================================================
 
-def run_standalone_analysis(trajopt_obj):
+def run_standalone_analysis(trajopt_obj, show_iters = True):
     config  = trajopt_obj.config.method
     name = config.get("name", "method1")
-    return recursive_attrdict({name: {"runs": [perform_analysis(trajopt_obj)]}})
+    return recursive_attrdict({name: {"runs": [perform_analysis(trajopt_obj, compute_iters=show_iters)]}})
 
 # ======================================================================
 # MISSION AND METHOD VARIATION ANALYSIS
