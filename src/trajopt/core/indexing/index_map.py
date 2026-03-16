@@ -82,9 +82,9 @@ class IndexMap:
         u_idx_all   = np.arange(0, n_nu)
 
         n_term_eq   = n_term
-        term_eq_idx      = np.arange(0, n_term_eq)
-        term_ineq_idx    = np.arange(n_term_eq, n_term_eq + n_term_ineq)
-        term_ctcs_idx    = np.arange(n_term_eq + n_term_ineq, n_term_eq + n_term_ineq + n_term_ctcs)
+        term_eq_idx = np.arange(0, n_term_eq)
+        term_ineq_idx = np.arange(n_term_eq, n_term_eq + n_term_ineq)
+        term_ctcs_idx = np.arange(n_term_eq + n_term_ineq, n_term_eq + n_term_ineq + n_term_ctcs)
 
         Ak_ind      = np.arange(0, nz * nz)
         Bk_ind      = np.arange(Ak_ind[-1] + 1, Ak_ind[-1] + 1 + nz * n_nu)
@@ -96,124 +96,124 @@ class IndexMap:
         ctcs = str(self.method.flags.ctcs) if self.method is not None else "none"
 
         if buff_dyn in {"term", "l1", "l2"}:
-            n_plus_real = 0
-            n_minus_real = 0
-            Npm_real = 0
+            n_plus_real     = 0
+            n_minus_real    = 0
+            Npm_real        = 0
         elif buff_dyn == "quad-1":
-            n_plus_real = 1
-            n_minus_real = 1
-            Npm_real = 1
+            n_plus_real     = 1
+            n_minus_real    = 1
+            Npm_real        = 1
         elif buff_dyn == "quad-2":
-            n_plus_real = 1
-            n_minus_real = 1
-            Npm_real = N_val - 1
+            n_plus_real     = 1
+            n_minus_real    = 1
+            Npm_real        = N_val - 1
         elif buff_dyn == "quad-3":
-            n_plus_real = nx
-            n_minus_real = nx
-            Npm_real = 1
+            n_plus_real     = nx
+            n_minus_real    = nx
+            Npm_real        = 1
         else:
             raise ValueError("Invalid buff_dyn flag.")
 
         if ctcs in {"term", "l1", "l2", "none"}:
-            n_plus_ctcs = 0
-            n_minus_ctcs = 0
-            Npm_ctcs = 0
+            n_plus_ctcs     = 0
+            n_minus_ctcs    = 0
+            Npm_ctcs        = 0
         elif ctcs == "quad-1":
-            n_plus_ctcs = 1
-            n_minus_ctcs = 1
-            Npm_ctcs = 1
+            n_plus_ctcs     = 1
+            n_minus_ctcs    = 1
+            Npm_ctcs        = 1
         elif ctcs == "quad-2":
-            n_plus_ctcs = 1
-            n_minus_ctcs = 1
-            Npm_ctcs = N_val - 1
+            n_plus_ctcs     = 1
+            n_minus_ctcs    = 1
+            Npm_ctcs        = N_val - 1
         elif ctcs == "quad-3":
-            n_plus_ctcs = n_ctcs
-            n_minus_ctcs = n_ctcs
-            Npm_ctcs = 1
+            n_plus_ctcs     = n_ctcs
+            n_minus_ctcs    = n_ctcs
+            Npm_ctcs        = 1
         else:
             raise ValueError("Invalid ctcs flag.")
 
         z_indices = AttrDict({
-            "all": z_idx_all,
-            "state": z_idx_state,
-            "ctcs": z_idx_ctcs,
+            "all":          z_idx_all,
+            "state":        z_idx_state,
+            "ctcs":         z_idx_ctcs,
         })
 
         nu_indices = AttrDict({
-            "all": u_idx_all,
-            "control": u_idx_all,
-            "dilation_factor": np.array([], dtype=int),
+            "all":          u_idx_all,
+            "control":      u_idx_all,
+            "dilation_factor":  np.array([], dtype=int),
         })
 
         nonconvex_inequality = AttrDict({
-            "all": np.arange(0, n_ineq),
+            "all":          np.arange(0, n_ineq),
         })
 
         terminal = AttrDict({
-            "eq": term_eq_idx,
-            "ineq": term_ineq_idx,
-            "ctcs": term_ctcs_idx,
-            "all": np.arange(0, n_term_eq + n_term_ineq + n_term_ctcs),
+            "eq":           term_eq_idx,
+            "ineq":         term_ineq_idx,
+            "ctcs":         term_ctcs_idx,
+            "all":          np.arange(0, n_term_eq + n_term_ineq + n_term_ctcs),
         })
 
         dynamics_indices = AttrDict({
-            "Ak": Ak_ind,
-            "Bk": Bk_ind,
-            "Bkp": Bkp_ind,
-            "Sk": Sk_ind,
+            "Ak":           Ak_ind,
+            "Bk":           Bk_ind,
+            "Bkp":          Bkp_ind,
+            "Sk":           Sk_ind,
         })
 
         ctcs_indices = AttrDict({
-            "state": z_idx_ctcs,
-            "term": term_ctcs_idx,
-            "ineq": np.array([], dtype=int),
+            "state":        z_idx_ctcs,
+            "term":         term_ctcs_idx,
+            "ineq":         np.array([], dtype=int),
         })
 
         self.indices = AttrDict({
-            "z": z_indices,
-            "nu": nu_indices,
+            "z":            z_indices,
+            "nu":           nu_indices,
             "constraints": AttrDict({
                 "nonconvex_inequality": nonconvex_inequality,
-                "final_state": terminal,
-                "dynamics": dynamics_indices,
+                "final_state":          terminal,
+                "dynamics":             dynamics_indices,
             }),
-            "ctcs": ctcs_indices,
+            "ctcs":         ctcs_indices,
         })
 
         self.n = AttrDict({
-            "state": int(nx),
-            "control": int(n_nu),
-            "z": int(nz),
-            "ctcs": int(n_ctcs),
+            "state":                int(nx),
+            "control":              int(n_nu),
+            "z":                    int(nz),
+            "ctcs":                 int(n_ctcs),
             "nonconvex_inequality": int(n_ineq),
-            "final_state": int(n_term),
-            "term_ineq": int(n_term_ineq),
-            "term_ctcs": int(n_term_ctcs),
-            "term_total": int(n_term_total),
-            "dynamics": int(nz),
-            "plus_real": int(n_plus_real),
-            "minus_real": int(n_minus_real),
-            "plus_ctcs": int(n_plus_ctcs),
-            "minus_ctcs": int(n_minus_ctcs),
+            "final_state":          int(n_term),
+            "term_ineq":            int(n_term_ineq),
+            "term_ctcs":            int(n_term_ctcs),
+            "term_total":           int(n_term_total),
+            "dynamics":             int(nz),
+            "plus_real":            int(n_plus_real),
+            "minus_real":           int(n_minus_real),
+            "plus_ctcs":            int(n_plus_ctcs),
+            "minus_ctcs":           int(n_minus_ctcs),
         })
 
         self.N = AttrDict({
             "nonconvex_inequality": N_val,
-            "dynamics": N_val - 1,
-            "final_state": 1,
-            "box": N_val,
-            "control_rate_limit": N_val - 1,
-            "axis_angle_cone": N_val,
-            "max_norm_cone": N_val,
-            "quaternion_cone": N_val,
-            "AFFINE": N_val,
-            "POLYTOPE": N_val,
-            "SOC": N_val,
-            "equality_bc": 1,
-            "inequality_bc": 1,
-            "N": N_val,
-            "pm_real": int(Npm_real),
-            "pm_ctcs": int(Npm_ctcs),
+            "dynamics":             N_val - 1,
+            "final_state":          1,
+            "box":                  N_val,
+            "control_rate_limit":   N_val - 1,
+            "axis_angle_cone":      N_val,
+            "max_norm_cone":        N_val,
+            "quaternion_cone":      N_val,
+            "AFFINE":               N_val,
+            "POLYTOPE":             N_val,
+            "SOC":                  N_val,
+            "equality_bc":          1,
+            "inequality_bc":        1,
+            "N":                    N_val,
+            "pm_real":              int(Npm_real),
+            "pm_ctcs":              int(Npm_ctcs),
         })
 
     def summary(self):

@@ -17,7 +17,7 @@ def configure_penalty_weights(problem, method, subconstraints=None):
     dual_stack = tools.AttrDict()
 
     W_stack.nonconvex_inequality        = np.zeros((method.index_map.N.N, n_ineq))
-    W_stack.final_state                    = np.zeros(problem.index_map.n['final_state'] + problem.index_map.n['term_ineq'] + problem.index_map.n['term_ctcs'])
+    W_stack.final_state                 = np.zeros(problem.index_map.n['final_state'] + problem.index_map.n['term_ineq'] + problem.index_map.n['term_ctcs'])
     W_stack.dynamics                    = np.zeros((method.index_map.N.N - 1, problem.index_map.n['z']))
     W_stack.plus_real                   = np.zeros((method.index_map.N.pm_real, method.index_map.n.plus_real))
     W_stack.minus_real                  = np.zeros((method.index_map.N.pm_real, method.index_map.n.minus_real))
@@ -25,7 +25,7 @@ def configure_penalty_weights(problem, method, subconstraints=None):
     W_stack.minus_ctcs                  = np.zeros((method.index_map.N.pm_ctcs, method.index_map.n.minus_ctcs))
 
     dual_stack.nonconvex_inequality     = np.zeros((method.index_map.N.N, n_ineq))
-    dual_stack.final_state                 = np.zeros(problem.index_map.n['final_state'] + problem.index_map.n['term_ineq'] + problem.index_map.n['term_ctcs'])
+    dual_stack.final_state              = np.zeros(problem.index_map.n['final_state'] + problem.index_map.n['term_ineq'] + problem.index_map.n['term_ctcs'])
     dual_stack.dynamics                 = np.zeros((method.index_map.N.N - 1, problem.index_map.n['z']))
     dual_stack.plus_real                = np.zeros((method.index_map.N.pm_real, method.index_map.n.plus_real))
     dual_stack.minus_real               = np.zeros((method.index_map.N.pm_real, method.index_map.n.minus_real))

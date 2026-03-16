@@ -32,8 +32,8 @@ def set_ltv_indices(problem, method):
     method.Bkp      = np.zeros((method.index_map.N['N'] - 1, nz, n_nu))
     method.Sk       = np.zeros((method.index_map.N['N'] - 1, nz, 1))
 
-    method.lds0_size = method.Sk_ind[-1] + 1
-    method.lds0      = np.zeros( method.lds0_size )
+    method.lds0_size= method.Sk_ind[-1] + 1
+    method.lds0     = np.zeros( method.lds0_size )
 
     method.lds0[method.Ak_ind] = np.reshape(np.eye(nz), -1)
 
@@ -45,23 +45,23 @@ def set_ltv_indices(problem, method):
     method.Bkp_ind_jax   = jnp.asarray(method.Bkp_ind)
     method.Sk_ind_jax    = jnp.asarray(method.Sk_ind)
 
-def compute_nonconvex_constraints(t_ref, z_ref, u_ref, problem, method):
-    n_ineq  = problem.index_map.n['nonconvex_inequality']
-    n_x     = problem.index_map.n['state']
-    n_nu    = problem.index_map.n['control']
-    N       = method.index_map.N['N']
+def compute_nonconvex_constraints(t, z, u, problem, method):
+    n_ineq      = problem.index_map.n['nonconvex_inequality']
+    n_x         = problem.index_map.n['state']
+    n_nu        = problem.index_map.n['control']
+    N           = method.index_map.N['N']
         
-    t_jax = jnp.asarray(t_ref)
-    z_jax = jnp.asarray(z_ref)
-    nu_jax = jnp.asarray(u_ref)
+    t_jax       = jnp.asarray(t)
+    z_jax       = jnp.asarray(z)
+    nu_jax      = jnp.asarray(u)
 
-    params = problem.params
-    params_jax = tools.recursive_to_dict(params)
+    params      = problem.params
+    params_jax  = tools.recursive_to_dict(params)
     
     # Preallocate stacked arrays
-    g    = np.zeros((N, n_ineq))
-    dgdz = np.zeros((N, n_ineq, n_x))
-    dgdnu = np.zeros((N, n_ineq, n_nu))
+    g           = np.zeros((N, n_ineq))
+    dgdz        = np.zeros((N, n_ineq, n_x))
+    dgdnu       = np.zeros((N, n_ineq, n_nu))
     
     # Evaluate constraints at each timestep
     for k in range(N):
@@ -74,10 +74,10 @@ def compute_nonconvex_constraints(t_ref, z_ref, u_ref, problem, method):
             col_end = col_start + constraint.dimension
             
             if k in constraint.nodes:
-                f, dfcn_dz, dfcn_du            = constraint.g_aff(tk, zk, uk, params_jax)
+                f, dfcn_dz, dfcn_du = constraint.g_aff(tk, zk, uk, params_jax)
 
-                g_k = np.asarray(f)
-                dgdz_k = np.asarray(dfcn_dz)
+                g_k     = np.asarray(f)
+                dgdz_k  = np.asarray(dfcn_dz)
                 dgdnu_k = np.asarray(dfcn_du)
 
                 g[k, col_start:col_end]        = g_k
