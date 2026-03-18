@@ -39,9 +39,9 @@ def _ensure_initial_guess(method):
 
 # TODO(Skye): Possibly add actual computation of beta using index_map helpers
 def augment_initial_guess(problem, method):
-    idx = problem.index_map.indices
-    N = method.index_map.N.time_grid
-    init = _ensure_initial_guess(method)
+    idx     = problem.index_map.indices
+    N       = method.index_map.N.time_grid
+    init    = _ensure_initial_guess(method)
 
     if init.t is None or init.x is None or init.u is None:
         raise ValueError("method.initial_guess.t, x, and u must be set before calling augment_initial_guess")

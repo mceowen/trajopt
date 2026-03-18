@@ -77,11 +77,6 @@ class SolutionMethod:
         discretize.set_ltv_indices(problem, self)
         hyperparameters.configure_penalty_weights(problem, self)
 
-        # --- Initialize virtual buffers ---
-        self.conv_data.vb_ineq     = np.zeros((self.index_map.N.time_grid,      problem.index_map.n.nonconvex_inequality))
-        self.conv_data.vb_dyn      = np.zeros((self.index_map.N.time_grid-1,    problem.index_map.n.z))
-        self.conv_data.vb_terminal = np.zeros(problem.index_map.n.z)
-
         ### Configure generic convergence criterion and max iterations ###
         convergence.set_convergence_tolerance(problem, self)
 
@@ -90,3 +85,8 @@ class SolutionMethod:
         # TODO(Skye/Carlos): Potentially move the method=specific constraint modeling here 
         # (instead of the subproblem)
         # OR maybe just initialize the subproblem itself here and only run solve later?
+        # --- Initialize virtual buffers ---
+        self.conv_data.vb_ineq     = np.zeros((self.index_map.N.time_grid,      problem.index_map.n.nonconvex_inequality))
+        self.conv_data.vb_dyn      = np.zeros((self.index_map.N.time_grid-1,    problem.index_map.n.z))
+        self.conv_data.vb_terminal = np.zeros(problem.index_map.n.z)
+

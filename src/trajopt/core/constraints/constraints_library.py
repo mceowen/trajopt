@@ -536,6 +536,7 @@ class dynamics:
         self.fcn        = self._augmented_dynamics
 
     # TODO(Skye): Verify nondim of augmented dynamics (specifically time)
+    # Also why tf is this in the index
     # Potentially move this to subproblem constraints
     def _augmented_dynamics(self, z, nu, params):
         return self.index_map.problem.constraints.augment_dynamics_jax(self.fcn_base, z, nu, params)
