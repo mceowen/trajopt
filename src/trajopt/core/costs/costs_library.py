@@ -84,8 +84,8 @@ class nonconvex:
             if self.scale is not None:
                 M_out_d2nd = jnp.atleast_1d(1 / self.scale)
                 
-            M_state_nd2d = nondim.M["state"]["nd2d"]
-            M_ctrl_nd2d  = nondim.M["ctrl"]["nd2d"]
+            M_state_nd2d = nondim.M.state["nd2d"]
+            M_ctrl_nd2d  = nondim.M.control["nd2d"]
 
             self.fcn_nd = nondim.nondim_function(self.fcn_dim, M_state_nd2d, M_ctrl_nd2d, M_out_d2nd)
 

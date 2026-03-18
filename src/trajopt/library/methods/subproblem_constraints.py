@@ -14,6 +14,7 @@ class SubproblemConstraints(Constraints):
     def __init__(self, problem=None, method=None, cnstr_config_list=None, config=None):
         # Mode 1: replicate from Problem.constraints
         if problem is not None and method is not None:
+            self.index_map = method.index_map
             self.constraints_list = [copy.copy(c) for c in problem.constraints.constraints_list]
             
             # TODO(Skye): Fix this fundamental logic
@@ -31,7 +32,7 @@ class SubproblemConstraints(Constraints):
 
         # Allocate time-indexed SCP arrays using IndexMap.time_grid
         time_grid = method.index_map.N
-        N_default = int(method.index_map.N['N'])
+        N_default = int(method.index_map.N.time_grid)
 
         for c in self.constraints_list:
             d = int(getattr(c, "dimension"))
@@ -135,7 +136,7 @@ class SubproblemConstraints(Constraints):
         Initialize each constraint's W and dual from stacked arrays.
         """
         idx = method.index_map
-        N = idx.N.N
+        N = idx.N.time_grid
 
         W_ineq      = tools.ensure_shape(W_stack.get("nonconvex_inequality", 0.0), (N, max(idx.n.nonconvex_inequality, 1))) if idx.n.nonconvex_inequality > 0 else np.zeros((N, 0))
         dual_ineq   = tools.ensure_shape(dual_stack.get("nonconvex_inequality", 0.0), (N, max(idx.n.nonconvex_inequality, 1))) if idx.n.nonconvex_inequality > 0 else np.zeros((N, 0))

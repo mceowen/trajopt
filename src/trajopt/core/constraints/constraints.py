@@ -1,7 +1,7 @@
 import trajopt.core.constraints.constraints_library as constraints_library
 import inspect
+import jax.numpy as jnp
 from functools import partial
-import trajopt.library.methods.convexify as convexify
 import trajopt.utils.tools as tools
 
 class Constraints:
@@ -9,13 +9,14 @@ class Constraints:
 
         print(f"constraints:")
 
+        self.index_map = index_map
         self.constraints_list = []
 
         for i, (cnstr_name, cnstr_config_i) in enumerate(config.problem.constraints.items()):
             print(f"  {i}: {cnstr_name}: type: {cnstr_config_i.type}")
-            self.register_constraint(cnstr_config_i, index_map)
+            self.register_constraint(cnstr_config_i)
 
-    def register_constraint(self, cnstr_config, index_map):
+    def register_constraint(self, cnstr_config):
         """"
         Regsiter a constraint object in the constraints list given a constraint configuration.
 
@@ -26,10 +27,11 @@ class Constraints:
         Returns:
             None.
         """
-        cnstr_type = cnstr_config["type"]
+        cnstr_type      = cnstr_config["type"]
         constraintClass = getattr(constraints_library, cnstr_type)
 
-        cnstr_object = constraintClass(cnstr_config, index_map)
+        cnstr_object    = constraintClass(cnstr_config, self.index_map)
+
         self.constraints_list.append(cnstr_object)
         
     def get(self, **kwargs):
@@ -43,6 +45,7 @@ class Constraints:
             List of constraints that match the given keyword arguments.
         """
         selected_constraints = [constraint for constraint in self.constraints_list if all(getattr(constraint, k, None) == v for k, v in kwargs.items())]
+        
         return selected_constraints
 
     def has(self, **kwargs):
@@ -109,28 +112,30 @@ class Constraints:
             if getattr(constraint, 'convexify_constraint', None) is not None:
                 constraint.convexify_constraint()
 
-    def augment_ctcs_dynamics(self, n):
+    # TODO(Skye): Verify nondim (specifically time)
+    # Move this to subproblem constraints
+    # Generalize dynamics augmentation so users can add arbitrary states/controls
+    def augment_dynamics_jax(self, f_phys, z, nu, params):
         """
-        Augment CTCS dynamics with CTCS constraints.
-
-        Args:
-            n: Number of states.
-
-        Returns:
-            None.
+        Build augmented dynamics zdot = [xdot_tau, s, dbeta_dtau].
         """
-        
-        if self.has(ct=1):
-            dynamics_obj = self.get(type="dynamics")[0]
+        x, t, beta  = self.index_map.unpack_z(z)
+        u, s        = self.index_map.unpack_nu(nu)
 
-            f_ctcs, dfcn_dz_ctcs, dfcn_du_ctcs = convexify.linearize_jax_ctcs(dynamics_obj.fcn, self, n)
-            
-            lin_dyn_ctcs = lambda t, z, nu, params: (
-                f_ctcs(t, z, nu, params),
-                dfcn_dz_ctcs(t, z, nu, params),
-                dfcn_du_ctcs(t, z, nu, params)
-            )
-            
-            dynamics_obj.lin_dyn = lin_dyn_ctcs
+        dx_dt       = self.index_map.evaluate_f_phys(f_phys, z, nu, params)
 
-            #TODO(Skye): Add new CTCS dimension here!
+        dt_dt       = jnp.asarray([1.0], dtype=z.dtype)
+
+
+        # TODO(Skye/Carlos): verify scaling choice for CTCS dynamics - removed 100, check why not squared/nondim properly
+        ctcs_constraints = tuple(self.get(ct=1))
+        if ctcs_constraints:
+            ctcs_values = jnp.concatenate([constraint.fcn(t, z, nu, params) for constraint in ctcs_constraints])
+
+            dbeta_dt = jnp.maximum(ctcs_values, 0.0) # should be squared
+        else:
+            dbeta_dt = jnp.zeros_like(beta)
+
+        dz_dtau = s * jnp.concatenate([dx_dt, dt_dt, dbeta_dt])
+
+        return dz_dtau

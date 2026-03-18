@@ -45,7 +45,7 @@ def run_scp(trajopt_obj):
     print("            |   time [ms]  | time [ms] |  time [ms] |           |  (path + NFZ)   |  (terminal) |  (dynamics) |              |  Flight [s] |           ")
     print("-" * 152)
 
-    max_iter = int(method.conv["iter_max"])
+    max_iter = int(method.conv.iter_max)
 
     for _ in range(max_iter + 1):
         subprob.solve_iteration()  # appends a new unified record for this iteration

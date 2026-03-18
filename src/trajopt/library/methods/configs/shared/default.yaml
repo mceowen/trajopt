@@ -67,7 +67,7 @@ weights:
       term: 100.0
   w_ctcs: 100.0
 
-N: 40
+time_grid: 40
 
 solver_opts:
   solver: "CLARABEL"

@@ -63,7 +63,7 @@ def check_convergence_tolerance(problem, method, iter_record):
 
     # --- Extract dimensions from Subproblem
     n_state = problem.index_map.n.state
-    N   = method.index_map.N.N
+    N   = method.index_map.N.time_grid
 
     # --- Extract optimization variables
     dstate  = iter_record.dz_s[:, :n_state]

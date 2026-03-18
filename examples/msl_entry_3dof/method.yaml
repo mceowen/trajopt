@@ -4,7 +4,7 @@ inherit: trajopt/library/methods/configs/autoscvx.yaml
 # ===============================
 # GRID SETTINGS
 # ==============================
-N: 40
+time_grid: 40
 
 # ===============================
 # METHOD FLAGS

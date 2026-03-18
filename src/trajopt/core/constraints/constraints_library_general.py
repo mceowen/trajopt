@@ -567,7 +567,7 @@ class CONE(SOC):
         #### REQUIRED ##### 
         center = ins['center']
         U = ins['U']
-        N = ins['N']
+        N = ins['time_grid']
         theta = ins['theta']
         ### OPTIONAL ####
         radius = None; diag = [];
@@ -692,9 +692,9 @@ class dan_equality_bc(AFFINE):
         return x[self.x_idx] - self.x
     def nondim_constraint(self, nondim):
         if self.set == "state":
-            self.x = nondim.M["state"]["d2nd"][np.ix_(self.x_idx, self.x_idx)] @ self.x_dim
+            self.x = nondim.M.state["d2nd"][np.ix_(self.x_idx, self.x_idx)] @ self.x_dim
         elif self.set == "control":
-            self.x = nondim.M["ctrl"]["d2nd"][np.ix_(self.x_idx, self.x_idx)] @ self.x_dim
+            self.x = nondim.M.control["d2nd"][np.ix_(self.x_idx, self.x_idx)] @ self.x_dim
 
 
 
@@ -749,11 +749,11 @@ class dan_inequality_bc(POLYTOPE):
 
     def nondim_constraint(self, nondim):
         if self.set == "state":
-            self.x_min = nondim.M["state"]["d2nd"][np.ix_(self.x_min_idx, self.x_min_idx)] @ self.x_min_dim
-            self.x_max = nondim.M["state"]["d2nd"][np.ix_(self.x_max_idx, self.x_max_idx)] @ self.x_max_dim
+            self.x_min = nondim.M.state["d2nd"][np.ix_(self.x_min_idx, self.x_min_idx)] @ self.x_min_dim
+            self.x_max = nondim.M.state["d2nd"][np.ix_(self.x_max_idx, self.x_max_idx)] @ self.x_max_dim
         elif self.set == "control":
-            self.x_min = nondim.M["ctrl"]["d2nd"][np.ix_(self.x_min_idx, self.x_min_idx)] @ self.x_min_dim
-            self.x_max = nondim.M["ctrl"]["d2nd"][np.ix_(self.x_max_idx, self.x_max_idx)] @ self.x_max_dim
+            self.x_min = nondim.M.control["d2nd"][np.ix_(self.x_min_idx, self.x_min_idx)] @ self.x_min_dim
+            self.x_max = nondim.M.control["d2nd"][np.ix_(self.x_max_idx, self.x_max_idx)] @ self.x_max_dim
 
 # ---------------------------------------------------------------
 # path inequality constraints
@@ -784,12 +784,12 @@ class dan_box(BOX):
 
     def nondim_constraint(self, nondim):
         if self.set == "state":
-            self.x_min = nondim.M["state"]["d2nd"][np.ix_(self.x_min_idx, self.x_min_idx)] @ self.x_min_dim
-            self.x_max = nondim.M["state"]["d2nd"][np.ix_(self.x_max_idx, self.x_max_idx)] @ self.x_max_dim
+            self.x_min = nondim.M.state["d2nd"][np.ix_(self.x_min_idx, self.x_min_idx)] @ self.x_min_dim
+            self.x_max = nondim.M.state["d2nd"][np.ix_(self.x_max_idx, self.x_max_idx)] @ self.x_max_dim
 
         if self.set == "control":
-            self.x_min = nondim.M["ctrl"]["d2nd"][np.ix_(self.x_min_idx, self.x_min_idx)] @ self.x_min_dim
-            self.x_max = nondim.M["ctrl"]["d2nd"][np.ix_(self.x_max_idx, self.x_max_idx)] @ self.x_max_dim
+            self.x_min = nondim.M.control["d2nd"][np.ix_(self.x_min_idx, self.x_min_idx)] @ self.x_min_dim
+            self.x_max = nondim.M.control["d2nd"][np.ix_(self.x_max_idx, self.x_max_idx)] @ self.x_max_dim
 
 # ---------------------------------------------------------------
 # rate constraints
@@ -808,7 +808,7 @@ class dan_control_rate_limit(UPPER):
         self.M_select = np.vstack([M_min, M_max])
 
     def nondim_constraint(self, nondim):
-        self.udot_max = nondim.nt * nondim.M["ctrl"]["d2nd"][np.ix_(self.udot_max_idx, self.udot_max_idx)] @ self.udot_max
+        self.udot_max = nondim.nt * nondim.M.control["d2nd"][np.ix_(self.udot_max_idx, self.udot_max_idx)] @ self.udot_max
 
 # ---------------------------------------------------------------
 # Second-order cone cosntraints
@@ -902,7 +902,7 @@ class dan_custom_nonconvex_inequality(POLYTOPE):
             self.max_val = M_out_d2nd @ self.max_val_dim
 
         # fcn_dim is already bound with params/fcns by resolve_functions
-        nd_fcn_lhs = nondim.nondim_function(self.fcn_dim, nondim.M["state"]["nd2d"], nondim.M["ctrl"]["nd2d"], M_out_d2nd)
+        nd_fcn_lhs = nondim.nondim_function(self.fcn_dim, nondim.M.state["nd2d"], nondim.M.control["nd2d"], M_out_d2nd)
 
         if self.has_max_val:
             self.fcn = lambda t, z, nu: nd_fcn_lhs(t, z, nu) - self.max_val

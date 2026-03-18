@@ -31,18 +31,18 @@ ITER_DATA_KEYS_TO_KEEP = {
 }
 
 METHOD_DATA_KEYS_TO_KEEP = {
-    'N', 'N_dens', 'Npm', 'T_init', 'T_max', 'T_min', 'Ts_init', 'conv', 'conv_data', 'cost_init', 
-    'dT_max', 'ddt_max', 'dt_init', 'dt_init', 'dt_max', 'dt_min', 'flags', 'line_guess_u_init',
+    'time_grid', 'N_dens', 'Npm', 'T_init', 'T_max', 'T_min', 'Ts_init', 'conv', 'conv_data', 'cost_init', 
+    'dT_max', 'ddt_max', 'dt_max', 'dt_min', 'flags', 'line_guess_u_init',
     'name', 'n_minus', 'n_plus', 'nl_guess_u_start', 'nl_guess_u_stop', 'solver_opts',
-    'nondim', 't_init', 'nu_init', 'penalty', 'z_ind', 'z_init'
+    'nondim', 'initial_guess', 'penalty', 'z_ind'
 }
 
 def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
     problem     = trajopt_obj.problem
     method      = trajopt_obj.method
 
-    n_x         = problem.index_map.n['state']
-    n_nu        = problem.index_map.n['control']
+    n_x         = problem.index_map.n.state
+    n_u        = problem.index_map.n.control
     params      = problem.params
     params_dict = tools.recursive_to_dict(params)
     iter_data   = method.subprob.iter_data
@@ -63,11 +63,11 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
         t_nl = np.linspace(t_opt[0], t_opt[-1], 1000)
 
         # nonlinear propagation
-        t_nl, z_nl, nu_nl = integrators.propagate_jax_rk4_dense(z_opt[0, :n_x], nu_opt[:, :n_nu], t_opt, t_nl, problem, method)
+        t_nl, z_nl, nu_nl = integrators.propagate_jax_rk4_dense(z_opt[0, :n_x], nu_opt[:, :n_u], t_opt, t_nl, problem, method)
 
-        t_init = method.t_init
-        z_init = method.z_init
-        nu_init = method.nu_init
+        t_init = np.asarray(method.initial_guess.t).reshape(-1)
+        z_init = method.initial_guess.z
+        nu_init = method.initial_guess.nu
 
         # compute constraints for z_nl, z_opt, name = SUBPLOT , TYPE, group = FIGURE, units
         constraint_data = AttrDict({})
@@ -113,7 +113,7 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
                 # trajectory functions are not nondimensionalized so need to pass in dimensional state
                 nt = nondim.time_scale
                 M_state = nondim.M.state.nd2d
-                M_ctrl = nondim.M.ctrl.nd2d
+                M_ctrl = nondim.M.control.nd2d
                 
                 opt_vals  = trajectory.compute_trajectory_values(nt*t_opt,  z_opt[:, :n_x] @ M_state,  nu_opt @ M_ctrl,  params_dict)
                 nl_vals   = trajectory.compute_trajectory_values(nt*t_nl,   z_nl[:, :n_x]  @ M_state,   nu_nl @ M_ctrl,   params_dict)
@@ -135,15 +135,15 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
         # re-dimensionalize all the data
         data['t_nl']  = t_nl * nondim.time_scale
         data['z_nl']  = z_nl @ nondim.M.state.nd2d
-        data['nu_nl'] = nu_nl @ nondim.M.ctrl.nd2d
+        data['nu_nl'] = nu_nl @ nondim.M.control.nd2d
 
         data['t_init']  = t_init * nondim.time_scale
         data['z_init']  = z_init[:, :n_x] @ nondim.M.state.nd2d
-        data['nu_init'] = nu_init @ nondim.M.ctrl.nd2d
+        data['nu_init'] = nu_init @ nondim.M.control.nd2d
 
         data['t_opt']  = t_opt * nondim.time_scale
         data['z_opt']  = z_opt[:, :n_x] @ nondim.M.state.nd2d
-        data['nu_opt'] = nu_opt @ nondim.M.ctrl.nd2d
+        data['nu_opt'] = nu_opt @ nondim.M.control.nd2d
         data['constraint_data'] = constraint_data
         data['trajectory_data'] = trajectory_data
 
@@ -273,18 +273,18 @@ def run_mc_analysis(trajopt_obj):
             update_problem_with_variations(problem, realized_mission_variations_flat, config_for_current_method, method.nondim)
             method.get_initial_guess(problem)
 
-            n_N    = problem.index_map.N.N
-            n_neq  = problem.index_map.n["nonconvex_inequality"]
-            n_dyn  = problem.index_map.n["dynamics"]
-            n_term = problem.index_map.n["term_total"]
+            n_N    = problem.index_map.N.time_grid
+            n_neq  = problem.index_map.n.nonconvex_inequality
+            n_dyn  = problem.index_map.n.dynamics
+            n_term = problem.index_map.n.term_total
 
             # Reset iter_data like the first run: W and dual None so first iteration uses configure_penalty_weights
             subprob.iter_data = [tools.recursive_attrdict({
                 "iter_num": 0,
-                "z_ref":  method.z_init,
-                "nu_ref": method.nu_init,
-                "dt_ref": method.dt_init,
-                "t_ref":  method.t_init,
+                "z_ref":  method.initial_guess.z,
+                "nu_ref": method.initial_guess.nu,
+                "dt_ref": method.initial_guess.dt,
+                "t_ref":  np.asarray(method.initial_guess.t).reshape(-1, 1),
                 "conv_data": {
                     "vb_ineq": np.zeros((n_N, n_neq)),
                     "vb_dyn":  np.zeros((n_N - 1, n_dyn)),

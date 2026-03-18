@@ -95,7 +95,7 @@ def custom_constraints(CNST,local_vars):
     theta_max  = local_vars["theta_max"]
     mass       = local_vars["mass"]
     ehat_u     = local_vars["ehat_u"]
-    N          = local_vars["N"]
+    N          = local_vars['time_grid']
 
     for k in range(N):
         u_k     = nu_ref[k] + du[k]
@@ -112,7 +112,7 @@ def custom_cost(PTR_COST,local_vars):
 
     # Extract variables from local_vars
     t_ref    = local_vars["t_ref"]
-    N         = local_vars["N"]
+    N         = local_vars['time_grid']
     u_slack   = local_vars["u_slack"]
     nu_ref    = local_vars["nu_ref"]
     du        = local_vars["sol_vars"]["du"]

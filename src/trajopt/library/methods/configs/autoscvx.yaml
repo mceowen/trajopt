@@ -1,6 +1,6 @@
 inherit: trajopt/library/methods/configs/shared/default.yaml
 
-'N': 40
+time_grid: 
 
 flags:
   free_final_time:    1       # 0, 1
@@ -16,16 +16,6 @@ flags:
   jax_dyn:            1       # 0, 1
   flag_conv:          0       # 0, 1, 2
   ignore_dpp:         0
-
-  flag_path:    1.0
-  flag_nfz:     1.0
-  flag_custom:  1.0
-  flag_term:    1.0
-  flag_dyn:     1.0
-  flag_tr:      1.0
-  flag_true:    1.0
-  flag_dual:    1.0
-  flag_vb:      1.0
 
 guess: {}
 

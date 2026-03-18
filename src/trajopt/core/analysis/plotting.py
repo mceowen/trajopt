@@ -54,8 +54,8 @@ def plot_default(trajopt_obj, show_iters=False, analysis_type='standalone'):
     problem_config = problem.config.problem
 
     # extract plotting groups from configs
-    default_groups_state   = {f'State {i}': [i] for i in range(problem.index_map.n['state'])}
-    default_groups_control = {f'Control {i}': [i] for i in range(problem.index_map.n['control'])}
+    default_groups_state   = {f'State {i}': [i] for i in range(problem.index_map.n.state)}
+    default_groups_control = {f'Control {i}': [i] for i in range(problem.index_map.n.nu)}
     groups_state           = problem_config.get('state', default_groups_state)
     groups_control         = problem_config.get('control', default_groups_control)
 

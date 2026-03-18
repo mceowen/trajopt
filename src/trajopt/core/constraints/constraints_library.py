@@ -45,8 +45,8 @@ class equality_bc:
             self.eps = nondim.M.state.d2nd[np.ix_(self.idx, self.idx)] @ self.eps
         
         elif self.set == "control":
-            self.value = nondim.M.ctrl.d2nd[np.ix_(self.idx, self.idx)] @ self.value
-            self.eps   = nondim.M.ctrl.d2nd[np.ix_(self.idx, self.idx)] @ self.eps
+            self.value = nondim.M.control.d2nd[np.ix_(self.idx, self.idx)] @ self.value
+            self.eps   = nondim.M.control.d2nd[np.ix_(self.idx, self.idx)] @ self.eps
 
 class inequality_bc:
     def __init__(self, cnstr_config, index_map):
@@ -70,11 +70,11 @@ class inequality_bc:
 
     def nondim_constraint(self, nondim):
         if self.set == "state":
-            self.min_value = nondim.M["state"]["d2nd"][np.ix_(self.min_value_idx, self.min_value_idx)] @ self.min_value
-            self.max_value = nondim.M["state"]["d2nd"][np.ix_(self.max_value_idx, self.max_value_idx)] @ self.max_value
+            self.min_value = nondim.M.state["d2nd"][np.ix_(self.min_value_idx, self.min_value_idx)] @ self.min_value
+            self.max_value = nondim.M.state["d2nd"][np.ix_(self.max_value_idx, self.max_value_idx)] @ self.max_value
         elif self.set == "control":
-            self.min_value = nondim.M["ctrl"]["d2nd"][np.ix_(self.min_value_idx, self.min_value_idx)] @ self.min_value
-            self.max_value = nondim.M["ctrl"]["d2nd"][np.ix_(self.max_value_idx, self.max_value_idx)] @ self.max_value
+            self.min_value = nondim.M.control["d2nd"][np.ix_(self.min_value_idx, self.min_value_idx)] @ self.min_value
+            self.max_value = nondim.M.control["d2nd"][np.ix_(self.max_value_idx, self.max_value_idx)] @ self.max_value
 
 class box:
     def __init__(self, cnstr_config, index_map):
@@ -103,11 +103,11 @@ class box:
     def nondim_constraint(self, nondim):
         
         if self.set == "state":
-            self.max_value = nondim.M["state"]["d2nd"][np.ix_(self.max_value_idx, self.max_value_idx)] @ self.max_value
-            self.min_value = nondim.M["state"]["d2nd"][np.ix_(self.min_value_idx, self.min_value_idx)] @ self.min_value
+            self.max_value = nondim.M.state["d2nd"][np.ix_(self.max_value_idx, self.max_value_idx)] @ self.max_value
+            self.min_value = nondim.M.state["d2nd"][np.ix_(self.min_value_idx, self.min_value_idx)] @ self.min_value
         elif self.set == "control":
-            self.min_value = nondim.M["ctrl"]["d2nd"][np.ix_(self.min_value_idx, self.min_value_idx)] @ self.min_value
-            self.max_value = nondim.M["ctrl"]["d2nd"][np.ix_(self.max_value_idx, self.max_value_idx)] @ self.max_value
+            self.min_value = nondim.M.control["d2nd"][np.ix_(self.min_value_idx, self.min_value_idx)] @ self.min_value
+            self.max_value = nondim.M.control["d2nd"][np.ix_(self.max_value_idx, self.max_value_idx)] @ self.max_value
 
     def compute_constraint_values(self, t, z, nu, params):
         if self.set == "state":
@@ -147,7 +147,7 @@ class control_rate_limit:
         self.M_select = np.vstack([M_min, M_max])
 
     def nondim_constraint(self, nondim):
-        self.value = nondim.time_scale * nondim.M.ctrl.d2nd[np.ix_(self.idx, self.idx)] @ self.value
+        self.value = nondim.time_scale * nondim.M.control.d2nd[np.ix_(self.idx, self.idx)] @ self.value
 
 # ---------------------------------------------------------------
 # Second-order cone constraints
@@ -236,7 +236,7 @@ class nonconvex_inequality:
         self.name           = cnstr_config["name"]
         self.group          = cnstr_config.get("group", None)
         self.scale          = cnstr_config.get("scale", None)
-        self.nodes           = cnstr_config.get("nodes", np.arange(0, index_map.N.N))
+        self.nodes           = cnstr_config.get("nodes", np.arange(0, index_map.N.time_grid))
 
         self.fcn_string      = cnstr_config["fcn"]
         self.eps             = cnstr_config["eps"]
@@ -308,7 +308,7 @@ class nonconvex_inequality:
                 self.min_value = self.M_out_d2nd @ self.min_value
 
             M_state_nd2d_jax = jnp.asarray(nondim.M.state.nd2d)
-            M_ctrl_nd2d_jax  = jnp.asarray(nondim.M.ctrl.nd2d)
+            M_ctrl_nd2d_jax  = jnp.asarray(nondim.M.control.nd2d)
 
             # debug print
             # print(f"name: {self.name}, M_out_d2nd: {self.M_out_d2nd}, max_value: {self.max_value}, min_value: {self.min_value}")
@@ -391,7 +391,7 @@ class nonconvex_equality:
         self.name           = cnstr_config["name"]
         self.group          = cnstr_config.get("group", None)
         self.scale          = cnstr_config.get("scale", None)
-        self.nodes           = cnstr_config.get("nodes", np.arange(0, index_map.N.N))
+        self.nodes           = cnstr_config.get("nodes", np.arange(0, index_map.N.time_grid))
 
         self.fcn_string      = cnstr_config["fcn"]
         self.eps             = cnstr_config["eps"]
@@ -447,7 +447,7 @@ class nonconvex_equality:
                 self.value = self.M_out_d2nd @ self.value
 
             M_state_nd2d_jax = jnp.asarray(nondim.M.state.nd2d)
-            M_ctrl_nd2d_jax  = jnp.asarray(nondim.M.ctrl.nd2d)
+            M_ctrl_nd2d_jax  = jnp.asarray(nondim.M.control.nd2d)
 
             # debug print
             # print(f"name: {self.name}, M_out_d2nd: {self.M_out_d2nd}, max_value: {self.max_value}, min_value: {self.min_value}")
@@ -506,16 +506,51 @@ class dynamics:
         self.group      = "dynamics"
         self.type       = 'dynamics'
 
-        self.index_map = index_map
+        self.index_map  = index_map
 
-        self.fcn_dim = resolve_function(self.fcn_string)
+        self.fcn_dim    = resolve_function(self.fcn_string)
 
-        self.backend = cnstr_config.get("backend", "jax")
+        self.backend    = cnstr_config.get("backend", "jax")
         
-        self.fcn = None
-        self.fcn_compiled = None
-        self.dfcn_dz_compiled = None
-        self.dfcn_du_compiled = None
+        self.fcn                = None
+        self.fcn_base           = None
+        self.fcn_compiled       = None
+        self.dfcn_dz_compiled   = None
+        self.dfcn_du_compiled   = None
+
+    def nondim_constraint(self, nondim):
+
+        if self.backend == "jax":
+            M_out_d2nd_jax   = jnp.asarray(nondim.M.state.d2nd * nondim.time_scale)
+            M_state_nd2d_jax = jnp.asarray(nondim.M.state.nd2d)
+            M_ctrl_nd2d_jax  = jnp.asarray(nondim.M.control.nd2d)
+        
+        elif self.backend == "sympy":
+            pass # symbolic differentiation
+
+        elif self.backend == "numpy":
+            pass # analytical
+
+        # fcn_dim is already bound with params/fcns by resolve_functions
+        self.fcn_base   = nondim.nondim_function(self.fcn_dim, M_state_nd2d_jax, M_ctrl_nd2d_jax, M_out_d2nd_jax)
+        self.fcn        = self._augmented_dynamics
+
+    # TODO(Skye): Verify nondim of augmented dynamics (specifically time)
+    # Potentially move this to subproblem constraints
+    def _augmented_dynamics(self, z, nu, params):
+        return self.index_map.problem.constraints.augment_dynamics_jax(self.fcn_base, z, nu, params)
+
+
+    def convexify_constraint(self):
+        if self.backend == "jax":
+            self.fcn_compiled, self.dfcn_dz_compiled, self.dfcn_du_compiled = convexify.linearize_jax(self.fcn)
+        
+        elif self.backend == "sympy":
+            pass # symbolic differentiation
+
+        elif self.backend == "numpy":
+            pass # analytical
+
 
     def lin_dyn(self, t, z, nu, params):
         return (
@@ -523,23 +558,3 @@ class dynamics:
             self.dfcn_dz_compiled(t, z, nu, params),
             self.dfcn_du_compiled(t, z, nu, params)
         )
-
-    def nondim_constraint(self, nondim):
-
-        if self.backend == "jax":
-            M_out_d2nd_jax   = jnp.asarray(nondim.M.state.d2nd * nondim.time_scale)
-            M_state_nd2d_jax = jnp.asarray(nondim.M.state.nd2d)
-            M_ctrl_nd2d_jax  = jnp.asarray(nondim.M.ctrl.nd2d)
-        
-        elif self.backend == "sympy":
-            pass
-
-        # fcn_dim is already bound with params/fcns by resolve_functions
-        self.fcn = nondim.nondim_function(self.fcn_dim, M_state_nd2d_jax, M_ctrl_nd2d_jax, M_out_d2nd_jax)
-
-    def convexify_constraint(self):
-        if self.backend == "jax":
-            self.fcn_compiled, self.dfcn_dz_compiled, self.dfcn_du_compiled = convexify.linearize_jax(self.fcn)
-        
-        elif self.backend == "sympy":
-            pass

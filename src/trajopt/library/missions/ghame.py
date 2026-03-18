@@ -71,10 +71,10 @@ def atmosphere_model_jax(rs, trajopt_obj):
     hdim = rdim - mission.planet["r"]
     
     # TODO (carlos): add the remaining options for atmosphere model
-    if mission.flags["aero_type"] == "lookup":
+    if mission.flags.aero_type == "lookup":
         rho = jnp.interp(hdim/1e3, dens.h_grid, dens.rho_vals)
 
-    elif mission.flags["aero_type"] == "exponential":
+    elif mission.flags.aero_type == "exponential":
         rho = mission.planet["rho"] * jnp.exp(-hdim / mission.planet["H"])
 
     return rho
@@ -97,10 +97,10 @@ def atmosphere_model_nonjax(rs, trajopt_obj):
     hdim = rdim - mission.planet["r"]
     
     # TODO (carlos): add the remaining options for atmosphere model
-    if mission.flags["aero_type"] == "lookup":
+    if mission.flags.aero_type == "lookup":
         rho = np.interp(hdim/1e3, dens.h_grid, dens.rho_vals)
 
-    elif mission.flags["aero_type"] == "exponential":
+    elif mission.flags.aero_type == "exponential":
         rho = mission.planet["rho"] * np.exp(-hdim / mission.planet["H"])
 
     return rho    
@@ -120,7 +120,7 @@ def nonlinear_aero_jax(t, z, nu, trajopt_obj):
     method = trajopt_obj.method
 
 
-    ctrl_type = model.flags['ctrl_type']
+    ctrl_type = model.flags.ctrl_type
 
     # Extract key params
     nv = method.nondim['nv']
@@ -175,7 +175,7 @@ def nonlinear_aero_nonjax(t, z, nu, trajopt_obj):
     method = trajopt_obj.method
 
 
-    ctrl_type = model.flags['ctrl_type']
+    ctrl_type = model.flags.ctrl_type
 
     # Extract key params
     nv = method.nondim['nv']

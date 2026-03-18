@@ -13,15 +13,15 @@ class Problem:
         # Config
         # ------------------------------------------------------------
 
-        self.config = config
-        self.index_map = index_map
+        self.config     = config
+        self.index_map  = index_map
 
         # ------------------------------------------------------------
         # Functions
         # ------------------------------------------------------------
 
-        fcn_config = config.problem.fcns
-        self.fcns = AttrDict()
+        fcn_config      = config.problem.fcns
+        self.fcns       = AttrDict()
         
         for name, path in fcn_config.items():
             self.fcns[name] = resolve_function(path)

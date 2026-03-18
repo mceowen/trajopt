@@ -8,12 +8,12 @@ class Nondim:
         Initializes all nondimensional parameters
         """
 
-        n_x = problem.index_map.n['state']
-        n_nu = problem.index_map.n['control']
+        n_x                 = problem.index_map.n.state
+        n_u                 = problem.index_map.n.get('control')
 
-        self.state_scales    = np.ones(n_x)
-        self.control_scales  = np.ones(n_nu)
-        self.time_scale      = 1.0
+        self.state_scales   = np.ones(n_x)
+        self.control_scales = np.ones(n_u)
+        self.time_scale     = 1.0
 
         for state_group_name, state_group in problem.config.problem.state.items():
 
@@ -44,18 +44,18 @@ class Nondim:
         else:
             self.time_scale = provided_scale
 
-        self.M            = AttrDict({})
-        self.M["state"]   = AttrDict({})
-        self.M["ctrl"]    = AttrDict({})
-        self.M["time"]    = AttrDict({})
+        self.M              = AttrDict({})
+        self.M.state        = AttrDict({})
+        self.M.control      = AttrDict({})
+        self.M.time         = AttrDict({})
 
-        self.M.state.nd2d = np.diag(self.state_scales).copy()
-        self.M.state.d2nd = np.diag(1 / self.state_scales).copy()
-        self.M.ctrl.nd2d  = np.diag(self.control_scales).copy()
-        self.M.ctrl.d2nd  = np.diag(1 / self.control_scales).copy()
+        self.M.state.nd2d   = np.diag(self.state_scales).copy()
+        self.M.state.d2nd   = np.diag(1 / self.state_scales).copy()
+        self.M.control.nd2d = np.diag(self.control_scales).copy()
+        self.M.control.d2nd = np.diag(1 / self.control_scales).copy()
         
-        self.M.time.d2nd = 1 / self.time_scale
-        self.M.time.nd2d = self.time_scale
+        self.M.time.d2nd    = 1 / self.time_scale
+        self.M.time.nd2d    = self.time_scale
 
         print("\n")
         print("nondim scales: ")

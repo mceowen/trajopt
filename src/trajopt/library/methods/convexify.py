@@ -7,28 +7,44 @@ import cvxpy as cp
 # jax autodiff for affine approximations
 def linearize_jax(fcn):
 
-    dfcn_dz = jax.jit(jax.jacrev(fcn, argnums=1))
-    dfcn_du = jax.jit(jax.jacrev(fcn, argnums=2))
-    f = jax.jit(fcn)
+    dfcn_dz     = jax.jit(jax.jacrev(fcn, argnums=1))
+    dfcn_dnu    = jax.jit(jax.jacrev(fcn, argnums=2))
+    f           = jax.jit(fcn)
 
-    return f, dfcn_dz, dfcn_du
+    return f, dfcn_dz, dfcn_dnu
 
-def linearize_jax_ctcs(fcn, constraints, n):
+# def linearize_jax_ctcs(fcn, constraints):
 
-    def wrapped_fcn(t, z, nu, params):
-        constr = jnp.concatenate([constraint.fcn(t, z[:n], nu, params) for constraint in constraints.get(ct=1)])
-        f_val = jnp.concatenate([fcn(t, z[:n], nu, params), jnp.maximum(100*constr, 0.0)])
-        return f_val
+#     ctcs_constraints = tuple(constraints.get(ct=1))
 
-    dfcn_dz = jax.jacrev(wrapped_fcn, argnums=1)
-    dfcn_du = jax.jacrev(wrapped_fcn, argnums=2)
-    f = jax.jit(wrapped_fcn)
+#     constr_fcn = constraints.index_map.wrap_txu_fcn(
+#         lambda t, x, u, params: jnp.concatenate(
+#             [constraint.fcn(t, x, u, params) for constraint in ctcs_constraints]
+#         )
+#     )
+
+#     # TODO(Skye): Verify jax ctcs integration below
+#     def augmented_fcn(t, z, nu, params):
+#         z_ctcs_idx = constraints.index_map.indices.z.ctcs
+#         f_val = fcn(z, nu, params)
+
+#         # TODO(Skye): remove and properly implement time dilation
+#         # Potentially add analytical jacobians for CTCS portion because we have those,
+#         # but use jax for constraint derivs
+#         if len(z_ctcs_idx) > 0:
+#             f_val = f_val.at[z_ctcs_idx].set(jnp.maximum(100 * constr_fcn(z, nu, params), 0.0))
+
+#         return f_val
+
+#     dfcn_dz     = jax.jit(jax.jacrev(augmented_fcn, argnums=1))
+#     dfcn_dnu    = jax.jit(jax.jacrev(augmented_fcn, argnums=2))
+#     f           = jax.jit(augmented_fcn)
     
-    return f, dfcn_dz, dfcn_du
+#     return f, dfcn_dz, dfcn_dnu
 
 # PROTOTYPE 
 def linearize_sympy(fcn, trajopt_obj):
-    z, nu = trajopt_obj.method.z_init, trajopt_obj.method.nu_init
+    z, nu = trajopt_obj.method.initial_guess.z, trajopt_obj.method.initial_guess.nu
     n = trajopt_obj.model.n
     m = trajopt_obj.model.m
 
@@ -36,6 +52,9 @@ def linearize_sympy(fcn, trajopt_obj):
     nu_sym = sp.symbols(f"u0:{m}")
     fcn_sym = fcn(0, z_sym, nu_sym, trajopt_obj)
     dfcn_dz_sym = sp.diff(fcn_sym, z_sym)
-    dfcn_du_sym = sp.diff(fcn_sym, nu_sym)
+    dfcn_dnu_sym = sp.diff(fcn_sym, nu_sym)
 
-    return fcn_sym, dfcn_dz_sym, dfcn_du_sym
+    return fcn_sym, dfcn_dz_sym, dfcn_dnu_sym
+
+
+# TODO(Skye): Add back in analytical CTCS Jacobians. Try to use as unit test for jax.
