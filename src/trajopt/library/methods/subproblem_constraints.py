@@ -285,7 +285,7 @@ class SubproblemConstraints(Constraints):
 
         return Wstk
 
-
+    def stack_vb(self, ):
 
 def configure_penalty_weights(problem, method, subconstraints=None):
     """
