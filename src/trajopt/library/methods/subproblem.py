@@ -33,12 +33,8 @@ class Subproblem:
 
         # Reference constraint data
         self.constraints                = SubproblemConstraints(problem=problem, method=method)
-        self.W_stack, self.dual_stack   = configure_penalty_weights(self.problem, self.method, subconstraints=self.constraints)
+        self.W_stack, self.dual_stack   = self.constraints.stack_W_and_dual(problem, method)
         self.w                          = tools.AttrDict()
-        
-        self.w.cost.value   = penalty_to_use.get("w_cost", 1.0)
-        self.w.tr_z.value   = penalty_to_use.get("wtr_z", 1e-2)
-        self.w.tr_u.value   = penalty_to_use.get("wtr_u", 1e-2)
 
         # Build the DPP graph once
         self._create_variables()
@@ -81,6 +77,7 @@ class Subproblem:
     def _create_variables(self) -> None:
         problem, method = self.problem, self.method
         N, n_x, n_nu, nz, n_ctcs = self.N.N, self.n.state, self.n.control, self.n.z, self.n.ctcs
+
         # Core optimization variables
         self.dz = cp.Variable((N, nz), name="dz")
         self.dnu= cp.Variable((N, n_nu), name="du")
@@ -98,15 +95,7 @@ class Subproblem:
             self.dt = cp.Constant(np.zeros((N - 1, 1)))  # CVXPY constant, safe in constraints
 
         # Virtual buffers (None if zero-sized)
-        self.vb_stack   = tools.AttrDict({})
-        self.vb_stack   = self.constraints.stack_vb(problem, method)
-        
-        if self.n.nonconvex_inequality  > 0:
-            self.vb_stack.nonconvex_inequality = cp.Variable((N, self.n.nonconvex_inequality), name="vb_ineq")
-        else: 
-            self.vb_stack.nonconvex_inequality = None
-
-        
+        self.vb_ineq    = cp.Variable((N, self.n.nonconvex_inequality), name="vb_ineq")   if self.n.nonconvex_inequality  > 0 else None 
         
         # ---------------------------------------------
         # TERMINAL CONDITION BUFFERS (REAL + CTCS)
@@ -114,30 +103,27 @@ class Subproblem:
         n_term_real = self.n.final_state + self.n.term_ineq
         n_term_ctcs  = self.n.term_ctcs
         # ------------ Real terminal constraints (size = n_term_real) ------------
-        
-        self.vb_stack.terminal_real = (
+        self.vb_term_real = (
             cp.Variable(n_term_real, name="vb_term_real")
             if (method.flags["buff_dyn"] == "term"
                 and method.flags["dynamics_nonconvex"] != 0
                 and n_term_real > 0)
             else (cp.Constant(np.zeros(n_term_real)) if n_term_real > 0 else None)
         )
-
         # ------------ CTCS terminal constraints (size = n_term_ctcs) ------------
-        self.vb_stack.terminal_ctcs = (
+        self.vb_term_ctcs = (
             cp.Variable(n_term_ctcs, name="vb_term_ctcs")
             if (n_term_ctcs > 0)  
             else None
         )
-
         # ------------ Unified stacked terminal buffer ------------
-        self.vb_stack.terminal = (
-            cp.hstack([self.vb_stack.terminal_real, self.vb_stack.terminal_ctcs])
-            if (self.vb_stack.terminal_real is not None and self.vb_stack.terminal_ctcs is not None)
-            else self.vb_stack.terminal_real
-            if self.vb_stack.terminal_ctcs is None
-            else self.vb_stack.terminal_ctcs
-            if self.vb_stack.terminal_real is None
+        self.vb_term = (
+            cp.hstack([self.vb_term_real, self.vb_term_ctcs])
+            if (self.vb_term_real is not None and self.vb_term_ctcs is not None)
+            else self.vb_term_real
+            if self.vb_term_ctcs is None
+            else self.vb_term_ctcs
+            if self.vb_term_real is None
             else None # when both are None
         )
 
@@ -684,9 +670,12 @@ class Subproblem:
         # self._set_param(self.Sk_bwd,   Sk_bwd)
         # self._set_param(self.z_m_bwd, z_minus_bwd)
 
-        # Use the already-stacked values from previous iteration (already updated by autotune)
-        W_stack     = inputs["W"]
-        dual_stack  = inputs["dual"]
+        if inputs.get("W") is None or inputs.get("dual") is None:
+            W_stack, dual_stack = configure_penalty_weights(self.problem, self.method, subconstraints=self.constraints)
+        else:
+            # Use the already-stacked values from previous iteration (already updated by autotune)
+            W_stack     = inputs["W"]
+            dual_stack  = inputs["dual"]
         
         # Update subproblem state
         self.W_stack    = W_stack
@@ -696,6 +685,9 @@ class Subproblem:
 
         # update scalar weights in-subproblem
         penalty_to_use = inputs.get("penalty", tools.AttrDict(self.method.penalty))
+        self.w.cost.value   = penalty_to_use.get("w_cost", 1.0)
+        self.w.tr_z.value   = penalty_to_use.get("wtr_z", 1e-2)
+        self.w.tr_u.value   = penalty_to_use.get("wtr_u", 1e-2)
         inputs["penalty"] = copy.deepcopy(penalty_to_use)
         
         self.w_cost_times_dcostdz.value     = self.w.cost.value * dcostdz

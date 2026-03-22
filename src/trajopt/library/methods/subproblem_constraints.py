@@ -285,8 +285,6 @@ class SubproblemConstraints(Constraints):
 
         return Wstk
 
-    def stack_vb(self, ):
-
 def configure_penalty_weights(problem, method, subconstraints=None):
     """
     Wrapper to configure penalty weights using existing hyperparameters logic.
