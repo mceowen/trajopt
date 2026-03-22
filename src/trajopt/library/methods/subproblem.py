@@ -599,10 +599,10 @@ class Subproblem:
         print(self.cp_subproblem.status)
 
         # Create unified record for this iteration and append
-        iter_record      = self._load_outputs(input_for_iter, prop_time_ms)
-        iter_record      = convergence.check_convergence_tolerance(self.problem, self.method, iter_record)
-        iter_record_prev = self.iter_data[-1]
-        iter_record = self._baseline_autotune(self.problem, self.method, iter_record, iter_record_prev)
+        iter_record         = self._load_outputs(input_for_iter, prop_time_ms)
+        iter_record         = convergence.check_convergence_tolerance(self.problem, self.method, iter_record)
+        iter_record_prev    = self.iter_data[-1]
+        iter_record         = self._baseline_autotune(self.problem, self.method, iter_record, iter_record_prev)
         self.iter_data.append(iter_record)
 
     # ============================================================
@@ -638,7 +638,7 @@ class Subproblem:
             "penalty": penalty,
             "conv_data": conv_data,
         })
-        
+
         return tools.AttrDict(next_inputs)
 
     def _load_parameters(self, inputs: Dict[str, Any]) -> float:
