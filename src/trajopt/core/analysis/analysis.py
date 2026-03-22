@@ -45,7 +45,7 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
     n_u        = problem.index_map.n.control
     params      = problem.params
     params_dict = tools.recursive_to_dict(params)
-    iter_data   = method.subprob.iter_data
+    iter_data   = method.subproblem.iter_data
     nondim      = method.nondim
 
     if compute_iters == True:
@@ -238,7 +238,7 @@ def run_mc_analysis(trajopt_obj):
         trajopt_obj.method  = method
         trajopt_obj.solve()
 
-        subprob = method.subprob
+        subprob = method.subproblem
         runs = [perform_analysis(trajopt_obj)]
 
         mission_var_config      = config_for_current_method.variations.mission

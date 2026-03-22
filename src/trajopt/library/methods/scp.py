@@ -26,16 +26,9 @@ def run_scp(trajopt_obj):
     """
 
     problem = trajopt_obj.problem
-    method = trajopt_obj.method
 
     # Start full problem convergence timer
     time_start = time.perf_counter()
-
-    # Get or create the compiled Subproblem (DPP)
-    subprob: Optional[Subproblem] = getattr(method, "subprob", None)
-    if subprob is None:
-        subprob = Subproblem(problem, method)
-        method.subprob = subprob
 
     # START SUBPROBLEM CONSTRUCTION / HEADER
     print("-" * 152)
@@ -45,22 +38,22 @@ def run_scp(trajopt_obj):
     print("            |   time [ms]  | time [ms] |  time [ms] |           |  (path + NFZ)   |  (terminal) |  (dynamics) |              |  Flight [s] |           ")
     print("-" * 152)
 
-    max_iter = int(method.conv.iter_max)
+    max_iter = int(trajopt_obj.method.conv.iter_max)
 
     for _ in range(max_iter + 1):
-        subprob.solve_iteration()  # appends a new unified record for this iteration
+        trajopt_obj.method.subproblem.solve_iteration()  # appends a new unified record for this iteration
 
-        latest = subprob.iter_data[-1]
-        display_subprob_status(method, latest)
+        latest = trajopt_obj.method.subproblem.iter_data[-1]
+        display_subprob_status(trajopt_obj.method, latest)
 
         if latest.get("converged", False):
             print("Terminated from convergence criteria!")
             break
 
-    if not subprob.iter_data[-1].get("converged", False):
+    if not trajopt_obj.method.subproblem.iter_data[-1].get("converged", False):
         print("Terminated from hitting maximum iterations!")
 
-    trajopt_obj.solution = trajopt_obj.method.subprob.iter_data[-1]
+    trajopt_obj.solution = trajopt_obj.method.subproblem.iter_data[-1]
 
     # Save off convergence time (full time - parse time)
     trajopt_obj.solution['t_full'] = time.perf_counter() - time_start

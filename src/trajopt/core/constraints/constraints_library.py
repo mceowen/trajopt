@@ -538,7 +538,14 @@ class dynamics:
     # TODO(Skye): Verify nondim of augmented dynamics (specifically time)
     # Also why tf is this in the index
     # Potentially move this to subproblem constraints
-    def _augmented_dynamics(self, z, nu, params):
+    def _augmented_dynamics(self, *args):
+        if len(args) == 4:
+            _, z, nu, params = args
+        elif len(args) == 3:
+            z, nu, params = args
+        else:
+            raise TypeError("_augmented_dynamics expects (t, z, nu, params) or (z, nu, params)")
+
         return self.index_map.problem.constraints.augment_dynamics_jax(self.fcn_base, z, nu, params)
 
 

@@ -48,19 +48,36 @@ class IndexMap:
     def unpack_z(self, z):
         """
         Unpack augmented state z = [x, t, beta].
+        Supports both:
+          - z shaped (n_z,)
+          - z shaped (N, n_z)
         """
-        x = z[self.indices.z.state]
-        t = z[self.indices.z.time]
-        beta = z[self.indices.z.ctcs]
+        z_ndim = getattr(z, "ndim", np.ndim(z))
+        if z_ndim == 2:
+            x = z[:, self.indices.z.state]
+            t = z[:, self.indices.z.time]
+            beta = z[:, self.indices.z.ctcs]
+        else:
+            x = z[self.indices.z.state]
+            t = z[self.indices.z.time]
+            beta = z[self.indices.z.ctcs]
         return x, t, beta
 
 
     def unpack_nu(self, nu):
         """
         Unpack augmented control nu = [u, s].
+        Supports both:
+          - nu shaped (n_nu,)
+          - nu shaped (N, n_nu)
         """
-        u = nu[self.indices.nu.control]
-        s = nu[self.indices.nu.dilation_factor]
+        nu_ndim = getattr(nu, "ndim", np.ndim(nu))
+        if nu_ndim == 2:
+            u = nu[:, self.indices.nu.control]
+            s = nu[:, self.indices.nu.dilation_factor]
+        else:
+            u = nu[self.indices.nu.control]
+            s = nu[self.indices.nu.dilation_factor]
         return u, s
 
 
@@ -68,30 +85,66 @@ class IndexMap:
         """
         Unpack augmented state/control into physically meaningful variables.
         """
-        x, t, beta = self.unpack_z(z)
-        u, s = self.unpack_nu(nu)
+        x, t, beta  = self.unpack_z(z)
+        u, s        = self.unpack_nu(nu)
         return x, t, beta, u, s
 
 
     def pack_z(self, x, t, beta):
         """
         Pack physical variables into augmented state z = [x, t, beta].
+        Supports both per-time-step vectors and time-stacked matrices.
         """
-        z = np.zeros(len(self.indices.z.all))
-        z[self.indices.z.state] = x
-        z[self.indices.z.time] = t
-        z[self.indices.z.ctcs] = beta
+        x_ndim = getattr(x, "ndim", np.ndim(x))
+        t_ndim = getattr(t, "ndim", np.ndim(t))
+        beta_ndim = getattr(beta, "ndim", np.ndim(beta))
+
+        if x_ndim == 2 or t_ndim == 2 or beta_ndim == 2:
+            if x_ndim == 2:
+                n_time = x.shape[0]
+            elif t_ndim == 2:
+                n_time = t.shape[0]
+            else:
+                n_time = beta.shape[0]
+
+            z = np.zeros((n_time, len(self.indices.z.all)))
+            z[:, self.indices.z.state] = x
+            z[:, self.indices.z.time] = t
+            z[:, self.indices.z.ctcs] = beta
+        else:
+            z = np.zeros(len(self.indices.z.all))
+            z[self.indices.z.state] = x
+            z[self.indices.z.time] = t
+            z[self.indices.z.ctcs] = beta
         return z
 
 
     def pack_nu(self, u, s):
         """
         Pack physical variables into augmented control nu = [u, s].
+        Supports both per-time-step vectors and time-stacked matrices.
         """
-        nu = np.zeros(len(self.indices.nu.all))
-        nu[self.indices.nu.control] = u
-        nu[self.indices.nu.dilation_factor] = s
+        u_ndim = getattr(u, "ndim", np.ndim(u))
+        s_ndim = getattr(s, "ndim", np.ndim(s))
+
+        if u_ndim == 2 or s_ndim == 2:
+            n_time = u.shape[0] if u_ndim == 2 else s.shape[0]
+            nu = np.zeros((n_time, len(self.indices.nu.all)))
+            nu[:, self.indices.nu.control] = u
+            nu[:, self.indices.nu.dilation_factor] = s
+        else:
+            nu = np.zeros(len(self.indices.nu.all))
+            nu[self.indices.nu.control] = u
+            nu[self.indices.nu.dilation_factor] = s
         return nu
+    
+    def pack_znu(self, x, t, beta, u, s):
+        """
+        Unpack augmented state/control into physically meaningful variables.
+        """
+        z   = self.pack_z(x, t, beta)
+        nu  = self.pack_nu(u,s)
+        return z, nu
 
 
     def wrap_txu_fcn(self, f_phys):
@@ -187,6 +240,7 @@ class IndexMap:
         z_idx_all       = np.arange(0, nz)
         z_idx_state     = np.arange(0, nx)
         z_idx_time      = np.arange(nx, nx + n_t)
+        z_idx_real      = np.concatenate((z_idx_state, z_idx_time))
         z_idx_ctcs      = np.arange(nx + n_t, nx + n_t + n_ctcs) if n_ctcs > 0 else np.array([], dtype=int)
         nu_idx_all      = np.arange(0, n_nu)
         u_idx_ctrl      = np.arange(0, n_u)
@@ -205,6 +259,8 @@ class IndexMap:
         buff_dyn        = str(self.method.flags.buff_dyn) if self.method is not None else "l2"
         ctcs            = str(self.method.flags.ctcs) if self.method is not None else "none"
 
+        n_real = nx + n_t
+
         if buff_dyn in {"term", "l1", "l2"}:
             n_plus_real     = 0
             n_minus_real    = 0
@@ -218,8 +274,8 @@ class IndexMap:
             n_minus_real    = 1
             Npm_real        = time_grid - 1
         elif buff_dyn == "quad-3":
-            n_plus_real     = nx
-            n_minus_real    = nx
+            n_plus_real     = n_real
+            n_minus_real    = n_real
             Npm_real        = 1
         else:
             raise ValueError("Invalid buff_dyn flag.")
@@ -247,6 +303,7 @@ class IndexMap:
             "all":          z_idx_all,
             "state":        z_idx_state,
             "time":         z_idx_time,
+            "real":         z_idx_real,
             "ctcs":         z_idx_ctcs,
         })
 
@@ -290,13 +347,10 @@ class IndexMap:
             "ctcs":         ctcs_indices,
         })
 
-        self.z_idx      = self.indices.z
-        self.nu_idx     = self.indices.nu
-        self.ctcs_idx   = self.indices.ctcs
-
         self.n = AttrDict({
             "state":                int(nx),
             "time":                 int(n_t),
+            "real":                 int(n_real),
             "control":              int(n_u),
             "nu":                   int(n_nu),
             "z":                    int(nz),
@@ -328,6 +382,7 @@ class IndexMap:
             "equality_bc":          1,
             "inequality_bc":        1,
             'time_grid':            time_grid,
+            "real":                 time_grid,
             "pm_real":              int(Npm_real),
             "pm_ctcs":              int(Npm_ctcs),
         })

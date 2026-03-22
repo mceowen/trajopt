@@ -26,10 +26,11 @@ class Subproblem:
         self.method  = method
 
         # Reference to method data
-        self.flags   = method.flags
-        self.n       = method.index_map.n       # Use index_map.n for all dimension queries
-        self.N       = method.index_map.N       # Use index_map.N for all time-related queries
-        self.indices = method.index_map.indices # Use index_map.indices for index arrays
+        self.flags      = method.flags
+        self.index_map  = method.index_map          # Extract index_map
+        self.n          = method.index_map.n        # Use index_map.n for all dimension queries
+        self.N          = method.index_map.N        # Use index_map.N for all time-related queries
+        self.indices    = method.index_map.indices  # Use index_map.indices for index arrays
 
         # Reference constraint data
         self.constraints                = SubproblemConstraints(problem=problem, method=method)
@@ -37,8 +38,8 @@ class Subproblem:
         self.w                          = tools.AttrDict()
 
         # Build the DPP graph once
-        self._create_variables()
         self._create_parameters()
+        self._create_variables()
         self.cp_constraints: List[cp.constraints.constraint.Constraint] = []
         self._build_constraints_once()
         self.cp_cost = self._build_cost_once()
@@ -58,8 +59,6 @@ class Subproblem:
             "iter_num": 0,  # init only (no outputs yet)
             "z_ref": method.initial_guess.z,
             "nu_ref": method.initial_guess.nu,
-            "dt_ref": method.initial_guess.dt,
-            "t_ref": np.asarray(method.initial_guess.t).reshape(-1, 1),
             "conv_data": {
                 "vb_ineq": np.zeros((self.N.time_grid, self.n.nonconvex_inequality)),
                 "vb_dyn":  np.zeros((self.N.time_grid - 1, self.n.dynamics)),
@@ -71,23 +70,107 @@ class Subproblem:
             "penalty": copy.deepcopy(method.penalty),
         })]
 
+    def _create_parameters(self) -> None:
+        problem, method                 = self.problem, self.method
+        N, n_x, n_t, n_u, n_z, n_nu, n_ctcs   \
+            = self.N.time_grid, self.n.state, self.n.time, self.n.control, self.n.z, self.n.nu, self.n.ctcs
+
+        # Linearized dynamics & trajectory references
+        self.Ak                    = cp.Parameter((N - 1, n_z, n_z),      name="Ak")
+        self.Bk                    = cp.Parameter((N - 1, n_z, n_nu),    name="Bk")
+        self.Bkp                   = cp.Parameter((N - 1, n_z, n_nu),    name="Bkp")
+        self.z_m                   = cp.Parameter((N, n_z),              name="z_minus")
+
+        #self.Ak_bwd                = cp.Parameter((N - 1, n_z, n_z),     name="Ak_bwd")
+        #self.Bk_bwd                = cp.Parameter((N - 1, n_z, n_nu),   name="Bk_bwd")
+        #self.Bkp_bwd               = cp.Parameter((N - 1, n_z, n_nu),   name="Bkp_bwd")
+        #self.z_m_bwd               = cp.Parameter((N, n_z),             name="z_minus_bwd")
+
+        self.z_ref                 = cp.Parameter((N, n_z),      name="z_ref")
+        self.nu_ref                = cp.Parameter((N, n_nu),    name="nu_ref")
+
+        # Sliced physical reference data
+        self.x_ref, self.t_ref, self.beta_ref, self.u_ref, self.s_ref \
+            = self.index_map.unpack_znu(self.z_ref, self.nu_ref)
+
+        self.nu_ref_sq         = cp.Parameter((N,), name="nu_ref_sq")
+
+        # Path/NFZ/AUX linearized constraints
+        if problem.constraints.get(ct=0, type="nonconvex_inequality"):
+            self.dgdz   = cp.Parameter((N, problem.index_map.n.nonconvex_inequality, n_x),  name="dgdz")
+            self.dgdnu  = cp.Parameter((N, problem.index_map.n.nonconvex_inequality, n_nu), name="dgdnu")
+            self.g0     = cp.Parameter((N, problem.index_map.n.nonconvex_inequality),       name="g0")
+        else:
+            self.dgdz = self.dgdnu = self.g0 = None
+
+        # time-step scalar bounds
+        if bool(self.flags.free_final_time):
+            self.dt_min  = cp.Parameter(nonneg=True, name="dt_min")
+            self.dt_max  = cp.Parameter(nonneg=True, name="dt_max")
+            self.ddt_max = cp.Parameter(nonneg=True, name="ddt_max")
+        else:
+            self.dt_min = self.dt_max = self.ddt_max = None
+
+        # Weights & Trust Region weights (stored as simple AttrDict values)
+        self.w.cost                     = cp.Parameter(nonneg=True, name="w_cost")
+        self.w.tr_z                     = cp.Parameter(nonneg=True, name="tr_z")
+        self.w.tr_u                     = cp.Parameter(nonneg=True, name="tr_u")
+
+        self.w_cost_times_dcostdz       = cp.Parameter((N, 1, n_x),  name="dcostdz")
+        self.w_cost_times_dcostdnu      = cp.Parameter((N, 1, n_nu), name="dcostdnu")
+        self.w_cost_times_cost0         = cp.Parameter((N, 1),       name="cost0")
+
+        # Build W_sqrt as attribute dictionary with CVXPY parameters, initialized to zeros
+        self.W_sqrt = tools.AttrDict()
+        self.W_sqrt.nonconvex_inequality= cp.Parameter((N, max(self.n.nonconvex_inequality, 1)),  nonneg=True, name="W_ineq_sqrt",        value=np.zeros((N, max(self.n.nonconvex_inequality, 1))))
+        self.W_sqrt.final_state         = cp.Parameter((max(self.n.term_total, 1),),                         nonneg=True, name="W_term_sqrt",        value=np.zeros((max(self.n.term_total, 1),)))
+        self.W_sqrt.dynamics            = cp.Parameter((N - 1, max(n_z, 1)),                                  nonneg=True, name="W_dyn_sqrt",         value=np.zeros((N - 1, max(n_z, 1))))
+        self.W_sqrt.plus_real           = cp.Parameter((max(self.N.pm_real, 1), max(self.n.plus_real, 1)),   nonneg=True, name="W_plus_real_sqrt",   value=np.zeros((max(self.N.pm_real, 1), max(self.n.plus_real, 1))))
+        self.W_sqrt.minus_real          = cp.Parameter((max(self.N.pm_real, 1), max(self.n.minus_real, 1)),  nonneg=True, name="W_minus_real_sqrt",  value=np.zeros((max(self.N.pm_real, 1), max(self.n.minus_real, 1))))
+        self.W_sqrt.plus_ctcs           = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.plus_ctcs, 1)),   nonneg=True, name="W_plus_ctcs_sqrt",   value=np.zeros((max(self.N.pm_ctcs, 1), max(self.n.plus_ctcs, 1))))
+        self.W_sqrt.minus_ctcs          = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.minus_ctcs, 1)),  nonneg=True, name="W_minus_ctcs_sqrt",  value=np.zeros((max(self.N.pm_ctcs, 1), max(self.n.minus_ctcs, 1))))
+
+        # duals (same ≥1-column pattern, unified inequality structure)
+        self.dual = tools.AttrDict()
+        self.dual.nonconvex_inequality  = cp.Parameter((N,  max(self.n.nonconvex_inequality, 1)), name="dual_ineq")
+        self.dual.dynamics              = cp.Parameter((N - 1, max(n_z, 1)),              name="dual_dyn")
+        self.dual.plus_real             = cp.Parameter((max(self.N.pm_real, 1), max(self.n.plus_real, 1)),     name="dual_plus_real")
+        self.dual.minus_real            = cp.Parameter((max(self.N.pm_real, 1), max(self.n.minus_real, 1)),    name="dual_minus_real")
+        self.dual.plus_ctcs             = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.plus_ctcs, 1)),     name="dual_plus_ctcs")
+        self.dual.minus_ctcs            = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.minus_ctcs, 1)),    name="dual_minus_ctcs")
+        self.dual.final_state           = cp.Parameter((max(self.n.term_total, 1),),                           name="dual_term")
+
+        # CTCS epsilon (scalar)
+        self.eps_ctcs                   = cp.Parameter(nonneg=True, name="eps_ctcs")
+
+        self.constraint_params = {}
+        for constraint in problem.constraints.get(ct=0, type="equality_bc"):
+            if constraint.name == "initial_state":
+                self.constraint_params[constraint.name] = {
+                    "value": cp.Parameter(len(constraint.idx), name=f"{constraint.name}_value")
+                }
+                self.constraint_params[constraint.name]["value"].value = constraint.value
+
+
     # ============================================================
     # VARIABLE & PARAMETER CREATION
     # ============================================================
     def _create_variables(self) -> None:
-        problem, method = self.problem, self.method
-        N, n_x, n_u, nz, n_nu, n_ctcs = self.N.time_grid, self.n.state, self.n.control, self.n.z, self.n.nu, self.n.ctcs
+        problem, method                 = self.problem, self.method
+        N, n_x, n_t, n_u, n_z, n_nu, n_ctcs   \
+            = self.N.time_grid, self.n.state, self.n.time, self.n.control, self.n.z, self.n.nu, self.n.ctcs
 
         # Core optimization variables
-        self.dz = cp.Variable((N, nz), name="dz")
+        self.dz = cp.Variable((N, n_z), name="dz")
         self.dnu= cp.Variable((N, n_nu), name="du")
 
-        # Time variable(s)
-        self.dT = None
-        self.dt = None
+        # Sliced physical data
+        self.dx, self.dt, self.dbeta, self.du, self.ds \
+              = self.index_map.unpack_znu(self.dz,self.dnu)
 
         # Virtual buffers (None if zero-sized)
-        self.vb_ineq    = cp.Variable((N, self.n.nonconvex_inequality), name="vb_ineq")   if self.n.nonconvex_inequality  > 0 else None 
+        self.vb_ineq    = cp.Variable((N, self.n.nonconvex_inequality), name="vb_ineq")  \
+              if self.n.nonconvex_inequality  > 0 else None 
         
         # ---------------------------------------------
         # TERMINAL CONDITION BUFFERS (REAL + CTCS)
@@ -122,20 +205,20 @@ class Subproblem:
         # ---------------------------------------------
         # DYNAMICS VIRTUAL BUFFERS (REAL + CTCS)
         # ---------------------------------------------
-        # --- Physical dynamics (first n states) ---
+        # --- Real dynamics (physical state + time components) ---
         self.vb_dyn_real_p = (
-            cp.Variable((N - 1, n_x), name="vb_dyn_real_plus")
-            if method.flags.buff_dyn != "term" and method.flags.dynamics_nonconvex != 0 and n_x > 0
-            else cp.Constant(np.zeros((N - 1, n_x))) if n_x > 0
+            cp.Variable((N - 1, self.n.real), name="vb_dyn_real_plus")
+            if method.flags.buff_dyn != "term" and method.flags.dynamics_nonconvex != 0 and self.n.real > 0
+            else cp.Constant(np.zeros((N - 1, self.n.real))) if self.n.real > 0
             else None
         )
         self.vb_dyn_real_m = (
-            cp.Variable((N - 1, n_x), name="vb_dyn_real_minus")
-            if method.flags.buff_dyn != "term" and method.flags.dynamics_nonconvex != 0 and n_x > 0
-            else cp.Constant(np.zeros((N - 1, n_x))) if n_x > 0
+            cp.Variable((N - 1, self.n.real), name="vb_dyn_real_minus")
+            if method.flags.buff_dyn != "term" and method.flags.dynamics_nonconvex != 0 and self.n.real > 0
+            else cp.Constant(np.zeros((N - 1, self.n.real))) if self.n.real > 0
             else None
         )
-        # --- CTCS dynamics (augmented states n : nz) ---
+        # --- CTCS dynamics (self.indices.z.ctcs) ---
         self.vb_dyn_ctcs_p = (
             cp.Variable((N - 1, n_ctcs), name="vb_dyn_ctcs_plus")
             if method.flags.ctcs not in {"none", "term"} and n_ctcs > 0
@@ -159,90 +242,13 @@ class Subproblem:
         )
 
         # Aggregate buffers (optional)
-        self.vb_plus_real  = cp.Variable((self.N.pm_real, self.n.plus_real),  name="vb_plus_real")  if self.n.plus_real  > 0 else None
-        self.vb_minus_real = cp.Variable((self.N.pm_real, self.n.minus_real), name="vb_minus_real") if self.n.minus_real > 0 else None
-        self.vb_plus_ctcs  = cp.Variable((self.N.pm_ctcs, self.n.plus_ctcs),  name="vb_plus_ctcs")  if self.n.plus_ctcs  > 0 else None
-        self.vb_minus_ctcs = cp.Variable((self.N.pm_ctcs, self.n.minus_ctcs), name="vb_minus_ctcs") if self.n.minus_ctcs > 0 else None
+        self.vb_plus_real   = cp.Variable((self.N.pm_real, self.n.plus_real),  name="vb_plus_real")  if self.n.plus_real  > 0 else None
+        self.vb_minus_real  = cp.Variable((self.N.pm_real, self.n.minus_real), name="vb_minus_real") if self.n.minus_real > 0 else None
+        self.vb_plus_ctcs   = cp.Variable((self.N.pm_ctcs, self.n.plus_ctcs),  name="vb_plus_ctcs")  if self.n.plus_ctcs  > 0 else None
+        self.vb_minus_ctcs  = cp.Variable((self.N.pm_ctcs, self.n.minus_ctcs), name="vb_minus_ctcs") if self.n.minus_ctcs > 0 else None
 
         if problem.costs.has(type="nonconvex", minimax=1):
             self.minimax_epigraph_upperbound = cp.Variable((1,), name="minimax_epigraph_upperbound")
-
-    def _create_parameters(self) -> None:
-        problem, method = self.problem, self.method
-        N, n_x, n_u, nz, n_nu, n_ctcs = self.N.time_grid, self.n.state, self.n.control, self.n.z, self.n.nu, self.n.ctcs
-
-        # Linearized dynamics & trajectory references
-        self.Ak                    = cp.Parameter((N - 1, nz, nz), name="Ak")
-        self.Bk                    = cp.Parameter((N - 1, nz, n_nu), name="Bk")
-        self.Bkp                   = cp.Parameter((N - 1, nz, n_nu), name="Bkp")
-        self.z_m                   = cp.Parameter((N, nz),        name="z_minus")
-
-        #self.Ak_bwd                = cp.Parameter((N - 1, nz, nz), name="Ak_bwd")
-        #self.Bk_bwd                = cp.Parameter((N - 1, nz, n_nu), name="Bk_bwd")
-        #self.Bkp_bwd               = cp.Parameter((N - 1, nz, n_nu), name="Bkp_bwd")
-        #self.z_m_bwd               = cp.Parameter((N, nz),        name="z_minus_bwd")
-
-        self.z_ref                 = cp.Parameter((N, nz),    name="z_ref")
-        self.nu_ref                = cp.Parameter((N, n_nu),    name="nu_ref")
-        self.dt_ref                = cp.Parameter((N - 1, 1), name="dt_ref", nonneg=True)
-
-        self.nu_ref_sq         = cp.Parameter((N,), name="nu_ref_sq")
-
-        # Path/NFZ/AUX linearized constraints
-        if problem.constraints.get(ct=0, type="nonconvex_inequality"):
-            self.dgdz   = cp.Parameter((N, problem.index_map.n.nonconvex_inequality, n_x), name="dgdz")
-            self.dgdnu  = cp.Parameter((N, problem.index_map.n.nonconvex_inequality, n_nu), name="dgdnu")
-            self.g0     = cp.Parameter((N, problem.index_map.n.nonconvex_inequality),    name="g0")
-        else:
-            self.dgdz = self.dgdnu = self.g0 = None
-
-        # time-step scalar bounds
-        if bool(self.flags.free_final_time):
-            self.dt_min  = cp.Parameter(nonneg=True, name="dt_min")
-            self.dt_max  = cp.Parameter(nonneg=True, name="dt_max")
-            self.ddt_max = cp.Parameter(nonneg=True, name="ddt_max")
-        else:
-            self.dt_min = self.dt_max = self.ddt_max = None
-
-        # Weights & Trust Region weights (stored as simple AttrDict values)
-        self.w.cost                     = cp.Parameter(nonneg=True, name="w_cost")
-        self.w.tr_z                     = cp.Parameter(nonneg=True, name="tr_z")
-        self.w.tr_u                     = cp.Parameter(nonneg=True, name="tr_u")
-
-        self.w_cost_times_dcostdz       = cp.Parameter((N, 1, n_x),  name="dcostdz")
-        self.w_cost_times_dcostdnu      = cp.Parameter((N, 1, n_nu), name="dcostdnu")
-        self.w_cost_times_cost0         = cp.Parameter((N, 1),       name="cost0")
-
-        # Build W_sqrt as attribute dictionary with CVXPY parameters, initialized to zeros
-        self.W_sqrt = tools.AttrDict()
-        self.W_sqrt.nonconvex_inequality= cp.Parameter((N, max(self.n.nonconvex_inequality, 1)),  nonneg=True, name="W_ineq_sqrt",        value=np.zeros((N, max(self.n.nonconvex_inequality, 1))))
-        self.W_sqrt.final_state         = cp.Parameter((max(self.n.term_total, 1),),                         nonneg=True, name="W_term_sqrt",        value=np.zeros((max(self.n.term_total, 1),)))
-        self.W_sqrt.dynamics            = cp.Parameter((N - 1, max(nz, 1)),                                  nonneg=True, name="W_dyn_sqrt",         value=np.zeros((N - 1, max(nz, 1))))
-        self.W_sqrt.plus_real           = cp.Parameter((max(self.N.pm_real, 1), max(self.n.plus_real, 1)),   nonneg=True, name="W_plus_real_sqrt",   value=np.zeros((max(self.N.pm_real, 1), max(self.n.plus_real, 1))))
-        self.W_sqrt.minus_real          = cp.Parameter((max(self.N.pm_real, 1), max(self.n.minus_real, 1)),  nonneg=True, name="W_minus_real_sqrt",  value=np.zeros((max(self.N.pm_real, 1), max(self.n.minus_real, 1))))
-        self.W_sqrt.plus_ctcs           = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.plus_ctcs, 1)),   nonneg=True, name="W_plus_ctcs_sqrt",   value=np.zeros((max(self.N.pm_ctcs, 1), max(self.n.plus_ctcs, 1))))
-        self.W_sqrt.minus_ctcs          = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.minus_ctcs, 1)),  nonneg=True, name="W_minus_ctcs_sqrt",  value=np.zeros((max(self.N.pm_ctcs, 1), max(self.n.minus_ctcs, 1))))
-
-        # duals (same ≥1-column pattern, unified inequality structure)
-        self.dual = tools.AttrDict()
-        self.dual.nonconvex_inequality  = cp.Parameter((N,  max(self.n.nonconvex_inequality, 1)), name="dual_ineq")
-        self.dual.dynamics              = cp.Parameter((N - 1, max(nz, 1)),              name="dual_dyn")
-        self.dual.plus_real             = cp.Parameter((max(self.N.pm_real, 1), max(self.n.plus_real, 1)),     name="dual_plus_real")
-        self.dual.minus_real            = cp.Parameter((max(self.N.pm_real, 1), max(self.n.minus_real, 1)),    name="dual_minus_real")
-        self.dual.plus_ctcs             = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.plus_ctcs, 1)),     name="dual_plus_ctcs")
-        self.dual.minus_ctcs            = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.minus_ctcs, 1)),    name="dual_minus_ctcs")
-        self.dual.final_state           = cp.Parameter((max(self.n.term_total, 1),),                           name="dual_term")
-
-        # CTCS epsilon (scalar)
-        self.eps_ctcs                   = cp.Parameter(nonneg=True, name="eps_ctcs")
-
-        self.constraint_params = {}
-        for constraint in problem.constraints.get(ct=0, type="equality_bc"):
-            if constraint.name == "initial_state":
-                self.constraint_params[constraint.name] = {
-                    "value": cp.Parameter(len(constraint.idx), name=f"{constraint.name}_value")
-                }
-                self.constraint_params[constraint.name]["value"].value = constraint.value
 
     # ============================================================
     # CONSTRAINTS (build-once)
@@ -250,12 +256,11 @@ class Subproblem:
     def _build_constraints_once(self) -> None:
         problem     = self.problem
         method      = self.method
-        idx         = self.indices
 
-        N, n_x, n_u, nz, n_nu, n_ctcs = self.N.time_grid, self.n.state, self.n.control, self.n.z, self.n.nu, self.n.ctcs
+        N, n_x, n_u, n_z, n_nu, n_ctcs \
+            = self.N.time_grid, self.n.state, self.n.control, self.n.z, self.n.nu, self.n.ctcs
         # TODO(Skye): Verify this below (I think incorrect)
-        tau_step = 1.0 / (N - 1)
-        s_idx = int(self.indices.nu.dilation_factor[0])
+        #tau_step = 1.0 / (N - 1)
 
         C: List[cp.Constraint] = []
 
@@ -263,8 +268,8 @@ class Subproblem:
         term_idx  = self.indices.constraints.final_state  
 
         for constraint in problem.constraints.get(ct=0, type="equality_bc"):
-            idx = constraint.idx
-            boundary_idx   = constraint.boundary_idx
+            cnst_idx        = constraint.idx
+            boundary_idx    = constraint.boundary_idx
             
             if constraint.name in self.constraint_params:
                 value = self.constraint_params[constraint.name]["value"]
@@ -276,36 +281,36 @@ class Subproblem:
                     vb = self.vb_term[term_idx.eq] if self.vb_term is not None else 0.0
                 else:
                     vb = 0
-                C.append(self.dz[boundary_idx,idx] + self.z_ref[boundary_idx, idx] - vb == value)
+                C.append(self.dz[boundary_idx,cnst_idx] + self.z_ref[boundary_idx, cnst_idx] - vb == value)
             elif constraint.set == "control":
-                C.append(self.dnu[boundary_idx,idx] + self.nu_ref[boundary_idx, idx] == value)
+                C.append(self.dnu[boundary_idx,cnst_idx] + self.nu_ref[boundary_idx, cnst_idx] == value)
 
         for constraint in problem.constraints.get(ct=0, type="inequality_bc"):
 
-            min_value_idx = constraint.min_value_idx
-            max_value_idx = constraint.max_value_idx
-            min_value = constraint.min_value
-            max_value = constraint.max_value
-            idx   = constraint.idx
-            M_select = constraint.M_select
+            min_value_idx   = constraint.min_value_idx
+            max_value_idx   = constraint.max_value_idx
+            min_value       = constraint.min_value
+            max_value       = constraint.max_value
+            cnst_idx        = constraint.idx
+            boundary_idx    = constraint.boundary_idx
+            M_select        = constraint.M_select
 
             if constraint.set == "state":
                 if constraint.boundary == "final":
                     vb = self.vb_term[term_idx.ineq] if self.vb_term is not None else 0.0
                 else:
                     vb = 0
-                
-                C.append(M_select @ (self.dz[idx, :n_x] + self.z_ref[idx, :n_x]) - vb <= cp.hstack([-min_value, max_value]))
+                C.append(M_select @ (self.dz[boundary_idx, cnst_idx] + self.z_ref[boundary_idx, cnst_idx]) - vb <= cp.hstack([-min_value, max_value]))
+                C.append(M_select @ (self.dz[boundary_idx, cnst_idx] + self.z_ref[boundary_idx, cnst_idx]) - vb <= cp.hstack([-min_value, max_value]))
             
             elif constraint.set == "control":
-                C.append(M_select @ (self.dnu[idx, :n_nu] + self.nu_ref[idx, :n_nu]) <= cp.hstack([-min_value, max_value]))
+                C.append(M_select @ (self.dnu[boundary_idx, cnst_idx] + self.nu_ref[boundary_idx, cnst_idx]) <= cp.hstack([-min_value, max_value]))
         
         # CTCS terminal equalities
         if problem.index_map.n.term_ctcs>0:
-            ctcs_state_idx = self.indices.z.ctcs  
             vbN_ctcs = self.vb_term[term_idx.ctcs] if self.vb_term is not None else 0.0
             C.append(
-                self.dz[-1, ctcs_state_idx] + self.z_ref[-1, ctcs_state_idx] - vbN_ctcs == 0.0
+                self.dz[-1, self.indices.z.ctcs] + self.z_ref[-1, self.indices.z.ctcs] - vbN_ctcs == 0.0
             )
         
         if self.flags.buff_dyn == "quad-1":
@@ -317,16 +322,16 @@ class Subproblem:
             C.append(cp.sum(self.vb_dyn_m) == self.vb_minus_ctcs)
 
         if self.flags.buff_dyn == "quad-2":
-            C.append(cp.sum(self.vb_dyn_p[:, self.indices.z.state], axis=1) == self.vb_plus_real[:, 0])
-            C.append(cp.sum(self.vb_dyn_m[:, self.indices.z.state], axis=1) == self.vb_minus_real[:, 0])
+            C.append(cp.sum(self.vb_dyn_p[:, self.indices.z.real], axis=1) == self.vb_plus_real[:, 0])
+            C.append(cp.sum(self.vb_dyn_m[:, self.indices.z.real], axis=1) == self.vb_minus_real[:, 0])
 
         if self.flags.ctcs == "quad-2":
             C.append(cp.sum(self.vb_dyn_p[:, self.indices.z.ctcs], axis=1) == self.vb_plus_ctcs[:, 0])
             C.append(cp.sum(self.vb_dyn_m[:, self.indices.z.ctcs], axis=1) == self.vb_minus_ctcs[:, 0])
 
         if self.flags.buff_dyn == "quad-3":
-            C.append(cp.sum(self.vb_dyn_p[:, self.indices.z.state], axis=0) == self.vb_plus_real[0, :])
-            C.append(cp.sum(self.vb_dyn_m[:, self.indices.z.state], axis=0) == self.vb_minus_real[0, :])
+            C.append(cp.sum(self.vb_dyn_p[:, self.indices.z.real], axis=0) == self.vb_plus_real[0, :])
+            C.append(cp.sum(self.vb_dyn_m[:, self.indices.z.real], axis=0) == self.vb_minus_real[0, :])
         
         if self.flags.ctcs == "quad-3":
             C.append(cp.sum(self.vb_dyn_p[:, self.indices.z.ctcs], axis=0) == self.vb_plus_ctcs[0, :])
@@ -349,14 +354,13 @@ class Subproblem:
                 #     self.Ak_bwd[k] @ self.dz[k+1]
                 #     + self.Bk_bwd[k] @ self.dnu[k]
                 #     + self.Bkp_bwd[k] @ self.dnu[k + 1]
-                #     + cp.multiply(self.Sk_bwd[k], self.dt[k])
                 #     # + (self.vb_dyn_p[k] - self.vb_dyn_m[k])
                 # )
                 # C.append(self.dz[k] + self.z_ref[k] - self.z_m_bwd[k] == rhs)
 
                 if self.flags.buff_dyn != "term":
-                    C.append(self.vb_dyn_p[k, self.indices.z.state] >= 0)
-                    C.append(self.vb_dyn_m[k, self.indices.z.state] >= 0)
+                    C.append(self.vb_dyn_p[k, self.indices.z.real] >= 0)
+                    C.append(self.vb_dyn_m[k, self.indices.z.real] >= 0)
 
                 if self.flags.ctcs != "term" and n_ctcs > 0:
                     C.append(self.vb_dyn_p[k, self.indices.z.ctcs] >= 0)
@@ -364,26 +368,25 @@ class Subproblem:
                 
                 # CTCS coupling on extra components
                 if method.flags.ctcs != "none" and n_ctcs>0:
-                    n = self.n.state
-                    nz = self.n.z
-                    C.append((self.z_ref[k + 1, n:nz] + self.dz[k + 1, n:nz]) - (self.z_ref[k, n:nz] + self.dz[k, n:nz]) <= self.eps_ctcs)
+                    C.append((self.z_ref[k + 1, self.indices.z.ctcs] + self.dz[k + 1, self.indices.z.ctcs]) - (self.z_ref[k, self.indices.z.ctcs] + self.dz[k, self.indices.z.ctcs]) <= self.eps_ctcs)
 
                 # TODO(Skye): Verify below timestep constraints
                 # Free-final-time bounds
                 if bool(self.flags.free_final_time):
-                    s_k = self.nu_ref[k, s_idx] + self.dnu[k, s_idx]
-                    C.append(s_k <= self.dt_max / tau_step)
-                    C.append(s_k >= self.dt_min / tau_step)
-                    C.append(cp.abs(self.dnu[k, s_idx]) <= self.ddt_max / tau_step)
+                    t_k         = self.t_ref[k, 0] + self.dt[k, 0]
+                    t_kp        = self.t_ref[k + 1, 0] + self.dt[k + 1, 0]
+                    t_interval_k= t_kp - t_k
+                    C.append(t_interval_k <= self.dt_max)
+                    C.append(t_interval_k >= self.dt_min)
+                    C.append(cp.abs(self.dt[k, 0]) <= self.ddt_max)
 
                 # Control slew (udot)
                 for constraint in problem.constraints.get(ct=0, type="control_rate_limit"):
                     value = constraint.value
                     M_sel = constraint.M_select
-                    # TODO(Skye): Verify new dtk used in slew rate below
-                    dt_k = tau_step * (self.nu_ref[k, s_idx] + self.dnu[k, s_idx])
+                    dt_k = (self.s_ref[k, 0] + self.ds[k, 0])
                     C.append(
-                        M_sel @ (self.nu_ref[k + 1] + self.dnu[k + 1] - (self.nu_ref[k] + self.dnu[k]))
+                        M_sel @ (self.nu_ref[k + 1, self.indices.nu.control] + self.dnu[k + 1, self.indices.nu.control] - (self.nu_ref[k, self.indices.nu.control] + self.dnu[k, self.indices.nu.control]))
                         <= dt_k * np.concatenate([value, value])
                     )
 
@@ -396,14 +399,14 @@ class Subproblem:
 
                 if constraint.set == "state":
 
-                    C.append(M_select @ (self.z_ref[k, :n_x] + self.dz[k, :n_x]) <= np.concatenate([-min_value, max_value]))
+                    C.append(M_select @ (self.z_ref[k, self.indices.z.state] + self.dz[k, self.indices.z.state]) <= np.concatenate([-min_value, max_value]))
                 elif constraint.set == "control":
-                    C.append(M_select @ (self.nu_ref[k] + self.dnu[k]) <= np.concatenate([-min_value, max_value]))
+                    C.append(M_select @ (self.nu_ref[k, self.indices.nu.control] + self.dnu[k, self.indices.nu.control]) <= np.concatenate([-min_value, max_value]))
 
             # Linearized inequality constraints (path + nfz + custom)
             # if problem.constraints.has("nodal", "nonconvex_inequality","POLYTOPE_OUT","SOC_OUT"):  ### DAN: UPDATE BELOW LINE TO
             if problem.constraints.has(ct=0, type="nonconvex_inequality"):
-                C.append(self.dgdz[k] @ self.dz[k, :n_x] + self.dgdnu[k] @ self.dnu[k, :n_nu] + self.g0[k] - self.vb_ineq[k] <= 0)
+                C.append(self.dgdz[k] @ self.dz[k, self.indices.z.state] + self.dgdnu[k] @ self.dnu[k, :n_nu] + self.g0[k] - self.vb_ineq[k] <= 0)
                 if str(self.flags.flag_autotune) in {"1", "3", "al-scvx"} and self.vb_ineq[k]:
                     C.append(self.vb_ineq[k] >= 0)
 
@@ -411,36 +414,32 @@ class Subproblem:
                 idx = 0
                 for c in problem.constraints.get(ct=0, type="nonconvex_inequality"):
                     if c.hard:
-                        C.append(self.dgdz[k,idx:idx+c.dimension] @ self.dz[k, :n_x] + self.dgdnu[k,idx:idx+c.dimension] @ self.dnu[k, :n_nu] + self.g0[k,idx:idx+c.dimension] <= 0)
+                        C.append(self.dgdz[k,idx:idx+c.dimension] @ self.dz[k, self.indices.z.state] + self.dgdnu[k,idx:idx+c.dimension] @ self.dnu[k, :n_nu] + self.g0[k,idx:idx+c.dimension] <= 0)
                     idx += c.dimension
 
             for cost in problem.costs.get(type="nonconvex", minimax=1):
-                C.append(self.w_cost_times_dcostdz[k] @ self.dz[k, :n_x] + self.w_cost_times_dcostdnu[k] @ self.dnu[k, :n_nu] + self.w_cost_times_cost0[k] <= self.minimax_epigraph_upperbound)
+                C.append(self.w_cost_times_dcostdz[k] @ self.dz[k, self.indices.z.state] + self.w_cost_times_dcostdnu[k] @ self.dnu[k, :n_nu] + self.w_cost_times_cost0[k] <= self.minimax_epigraph_upperbound)
 
             # convex constraints
             for constraint in problem.constraints.get(ct=0, type="axis_angle_cone"):
-                z = self.z_ref[k] + self.dz[k]
-                nu = self.nu_ref[k] + self.dnu[k]
-                
-                idx = constraint.idx
+
+                cnst_idx = constraint.idx
                 axis = constraint.axis
 
                 if constraint.set == "state":
-                    C.append(constraint.cos_theta_max * cp.norm(z[idx]) <= axis @ z[idx])
+                    C.append(constraint.cos_theta_max * cp.norm(self.z_ref[k,cnst_idx] + self.dz[k,cnst_idx]) <= axis @ (self.z_ref[k,cnst_idx] + self.dz[k,cnst_idx]))
                 elif constraint.set == "control":
-                    C.append(constraint.cos_theta_max * cp.norm(nu[idx]) <= axis @ nu[idx])
+                    C.append(constraint.cos_theta_max * cp.norm(self.nu_ref[k,cnst_idx] + self.dnu[k,cnst_idx]) <= axis @ (self.nu_ref[k,cnst_idx] + self.dnu[k,cnst_idx]))
 
             for constraint in problem.constraints.get(ct=0, type="max_norm_cone"):
-                z = self.z_ref[k] + self.dz[k]
-                nu = self.nu_ref[k] + self.dnu[k]
 
-                idx = constraint.idx
+                cnst_idx = constraint.idx
                 max_value = constraint.max_value
                 
                 if constraint.set == "state":
-                    C.append(cp.norm(z[idx]) <= max_value)
+                    C.append(cp.norm(self.z_ref[k,cnst_idx] + self.dz[k,cnst_idx]) <= max_value)
                 elif constraint.set == "control":
-                    C.append(cp.norm(nu[idx]) <= max_value)
+                    C.append(cp.norm(self.nu_ref[k,cnst_idx] + self.dnu[k,cnst_idx]) <= max_value)
 
             #############################################################################################
             #### ----------------------------------------------------------------------------------- ####
@@ -461,29 +460,26 @@ class Subproblem:
             for constraint in problem.constraints.get(ct=0, type='AFFINE'):                
                 if constraint.convex == True:
                     if use_constraint_at_time_query(constraint.time_steps):
-                        z = self.z_ref[k] + self.dz[k]; nu = self.nu_ref[k] + self.dnu[k]
-                        idxx = constraint.idx
+                        cnst_idx = constraint.idx
                         AA = constraint.A; bb = constraint.b
-                        if constraint.set == 'state': C.append(AA @ z[idxx] == bb)
-                        elif constraint.set == "control": C.append(AA @ nu[idxx] == bb)
+                        if constraint.set == 'state': C.append(AA @ (self.z_ref[k, cnst_idx] + self.dz[k, cnst_idx]) == bb)
+                        elif constraint.set == "control": C.append(AA @ (self.nu_ref[k, cnst_idx] + self.dnu[k, cnst_idx]) == bb)
 
             for constraint in problem.constraints.get(ct=0, type='POLYTOPE'):
                 if constraint.convex == True:
                     if use_constraint_at_time_query(constraint.time_steps):
-                        z = self.z_ref[k] + self.dz[k]; nu = self.nu_ref[k] + self.dnu[k]
-                        idxx = constraint.idx
+                        cnst_idx = constraint.idx
                         AA = constraint.A; bb = constraint.b
-                        if constraint.set == 'state': C.append(AA @ z[idxx] <= bb)
-                        elif constraint.set == "control": C.append(AA @ nu[idxx] <= bb)
+                        if constraint.set == 'state': C.append(AA @ (self.z_ref[k, cnst_idx] + self.dz[k, cnst_idx]) <= bb)
+                        elif constraint.set == "control": C.append(AA @ (self.nu_ref[k, cnst_idx] + self.dnu[k, cnst_idx]) <= bb)
             for constraint in problem.constraints.get(ct=0, type='SOC'):
                 if constraint.convex == True:
                     if use_constraint_at_time_query(constraint.time_steps):
-                        z = self.z_ref[k] + self.dz[k]; nu = self.nu_ref[k] + self.dnu[k]
-                        idxx = constraint.idx
+                        cnst_idx = constraint.idx
                         AA = constraint.A; bb = constraint.b
                         CC = constraint.C; dd = constraint.d
-                        if constraint.set == 'state': C.append(cp.norm(AA@z[idxx] + bb) <= CC @ z[idxx] + dd)
-                        if constraint.set == 'control': C.append(cp.norm(AA@nu[idxx] + bb) <= CC @ nu[idxx] + dd)
+                        if constraint.set == 'state': C.append(cp.norm(AA@(self.z_ref[k, cnst_idx] + self.dz[k, cnst_idx]) + bb) <= CC @ (self.z_ref[k, cnst_idx] + self.dz[k, cnst_idx]) + dd)
+                        if constraint.set == 'control': C.append(cp.norm(AA@(self.nu_ref[k, cnst_idx] + self.dnu[k, cnst_idx]) + bb) <= CC @ (self.nu_ref[k, cnst_idx] + self.dnu[k, cnst_idx]) + dd)
 
             ############# -------------------- NONCONVEX CONSTRAINTS ------------------- ################
             # for constraint in problem.constraints.get('POLYTOPE_OUT','SOC_OUT'):
@@ -498,9 +494,8 @@ class Subproblem:
             # TODO(carlos): think about where to put this, this is a special constraint
             # but general enough to apply to different 6-dof models using quaternions
             for constraint in problem.constraints.get(ct=0, type="quaternion_cone"):
-                z = self.z_ref[k] + self.dz[k]
                 quat_start_idx = constraint.quat_start_idx
-                C.append(cp.norm(z[quat_start_idx + 2: quat_start_idx + 4]) <= constraint.rhs)
+                C.append(cp.norm(self.z_ref[k, quat_start_idx + 2: quat_start_idx + 4] + self.dz[k, quat_start_idx + 2: quat_start_idx + 4]) <= constraint.rhs)
         
         self.cp_constraints += C
 
@@ -515,21 +510,15 @@ class Subproblem:
 
         for cost in problem.costs.get(ct=0, type="nonconvex", minimax=0):
             self.TRUE = (cp.sum(self.w_cost_times_cost0)
-                    + cp.sum(cp.multiply(self.w_cost_times_dcostdz, self.dz[:,:self.n.state])
+                    + cp.sum(cp.multiply(self.w_cost_times_dcostdz, self.dz[:,self.indices.state])
                     + cp.sum(cp.multiply(self.w_cost_times_dcostdnu, self.dnu)))
                     )
             
         for cost in problem.costs.get(type="nonconvex", minimax=1):
             self.TRUE += self.minimax_epigraph_upperbound
 
-        # TODO(Skye): Verify below
         for cost in problem.costs.get(type="min_time"):
-            s_idx = int(self.indices.nu.dilation_factor[0])
-            tau_step = 1.0 / (self.N.time_grid - 1)
-            s = self.nu_ref[:-1, s_idx] + self.dnu[:-1, s_idx]
-            dt = tau_step * s
-            time_cost = cp.sum(dt) / (self.N.time_grid - 1)
-            
+            time_cost = cp.sum(self.t_ref[-1] + self.dt[-1])
             self.TRUE += time_cost
 
         for cost in problem.costs.get(type="min_norm_terminal"):
@@ -547,8 +536,8 @@ class Subproblem:
         for cost in problem.costs.get(type="rate_regularization"):
             if cost.set == "control":
                 nu = self.nu_ref + self.dnu
-                nu_minus = nu[:-1, cost.idx]
-                nu_plus = nu[1:, cost.idx]
+                nu_minus    = nu[:-1,  cost.idx]
+                nu_plus     = nu[1:,   cost.idx]
 
                 if cost.norm_type == "l2":
                     self.TRUE += cost.w * cp.sum_squares(nu_plus - nu_minus) * (1 / self.N.time_grid)
@@ -582,6 +571,39 @@ class Subproblem:
             DUAL = hp.build_dual_buffer_cost(self)
 
         return self.TRUE + TR + VB + DUAL
+    
+
+    # ============================================================
+    # SOLVE SCP ITERATION AND ASSEMBLE ITERATION RECORD (UNIFIED HISTORY)
+    # ============================================================
+    def solve_iteration(self) -> None:
+        """
+        Single SCP iteration (no return):
+          - builds inputs for the iteration from self.iter_data[-1],
+          - loads Parameters and solves,
+          - assembles a unified record (inputs used + outputs),
+          - appends it to self.iter_data.
+        """
+        # Build inputs for this iteration (refs/weights/conv_data, iter_num)
+        input_for_iter  = self._load_inputs()
+
+        # Parameter propagation and linearization
+        prop_time_ms    = self._load_parameters(input_for_iter)
+
+        # Solve subproblem
+        solver_name = self.method.solver_opts.get("solver", "CLARABEL")
+        ignore_dpp  = self.method.flags.ignore_dpp
+        self.cp_subproblem.solve( 
+                solver=solver_name, warm_start=False, ignore_dpp=ignore_dpp
+            )  # ignore_dpp=True if desired
+        print(self.cp_subproblem.status)
+
+        # Create unified record for this iteration and append
+        iter_record      = self._load_outputs(input_for_iter, prop_time_ms)
+        iter_record      = convergence.check_convergence_tolerance(self.problem, self.method, iter_record)
+        iter_record_prev = self.iter_data[-1]
+        iter_record = self._baseline_autotune(self.problem, self.method, iter_record, iter_record_prev)
+        self.iter_data.append(iter_record)
 
     # ============================================================
     # PARAMETER UPDATES AND SOLVE (UNIFIED HISTORY)
@@ -598,12 +620,10 @@ class Subproblem:
         last_rec = self.iter_data[-1]
         k_prev = int(last_rec.get("iter_num", 0))
 
-        if all(key in last_rec for key in ("z_opt", "nu_opt", "dt_opt", "t_opt")):
+        if all(key in last_rec for key in ("z_opt", "nu_opt")):
             refs = {
                 "z_ref": last_rec["z_opt"],
                 "nu_ref": last_rec["nu_opt"],
-                "dt_ref": last_rec["dt_opt"],
-                "t_ref": last_rec["t_opt"],
             }
             W = copy.deepcopy(last_rec.get("W"))
             dual = copy.deepcopy(last_rec.get("dual"))
@@ -613,8 +633,6 @@ class Subproblem:
             refs = {
                 "z_ref": last_rec["z_ref"],
                 "nu_ref": last_rec["nu_ref"],
-                "dt_ref": last_rec["dt_ref"],
-                "t_ref": last_rec["t_ref"],
             }
             W = last_rec.get("W")
             dual = last_rec.get("dual")
@@ -629,11 +647,21 @@ class Subproblem:
             "penalty": penalty,
             "conv_data": conv_data,
         }
-        return next_inputs
+        return tools.AttrDict(next_inputs)
 
     def _load_parameters(self, inputs: Dict[str, Any]) -> float:
 
         problem, method = self.problem, self.method
+
+
+        # assign cost-related CP parameters
+        self.z_ref.value  = inputs.z_ref
+        self.nu_ref.value = inputs.nu_ref
+
+        # Unpack numpy reference trajectories (mirrors _create_parameters for numpy arrays)
+        self.x_ref, self.t_ref, self.beta_ref, self.u_ref, self.s_ref = self.index_map.unpack_znu(
+            inputs.z_ref, inputs.nu_ref
+        )
 
         start = time.time()
         Ak, Bk, Bkp, z_minus = discretize.compute_linsys_discrete(
@@ -695,17 +723,6 @@ class Subproblem:
         self.w_cost_times_dcostdnu.value    = self.w.cost.value * dcostdnu
         self.w_cost_times_cost0.value       = self.w.cost.value * cost
 
-        # assign cost-related CP parameters
-        self.z_ref.value  = inputs.z_ref
-        self.nu_ref.value = inputs.nu_ref
-        #TODO(Skye): verify below
-        if "dt_ref" in inputs and inputs.dt_ref is not None:
-            self.dt_ref.value = inputs.dt_ref
-        else:
-            s_idx = int(self.indices.nu.dilation_factor[0])
-            tau_step = 1.0 / (self.N.time_grid - 1)
-            self.dt_ref.value = tau_step * inputs.nu_ref[:-1, [s_idx]]
-
         for constraint in problem.constraints.get(ct=0, type="equality_bc"):
             if constraint.name in self.constraint_params:
                 self.constraint_params[constraint.name]["value"].value = constraint.value
@@ -749,39 +766,12 @@ class Subproblem:
         # inputs._linsys_cache_bwd = (Ak_bwd, Bk_bwd, Bkp_bwd, z_minus_bwd)
         return prop_time_ms
 
-    def solve_iteration(self) -> None:
-        """
-        Single SCP iteration (no return):
-          - builds inputs for the iteration from self.iter_data[-1],
-          - loads Parameters and solves,
-          - assembles a unified record (inputs used + outputs),
-          - appends it to self.iter_data.
-        """
-        # Build inputs for this iteration (refs/weights/conv_data, iter_num)
-        input_for_iter  = self._load_inputs()
-
-        # Parameter propagation and linearization
-        prop_time_ms    = self._load_parameters(input_for_iter)
-
-        # Solve subproblem
-        solver_name = self.method.solver_opts.get("solver", "CLARABEL")
-        ignore_dpp = self.method.flags.ignore_dpp
-        self.cp_subproblem.solve(solver=solver_name, warm_start=False, ignore_dpp=ignore_dpp)  # ignore_dpp=True if desired
-        print(self.cp_subproblem.status)
-
-        # Create unified record for this iteration and append
-        iter_record      = self._load_outputs(input_for_iter, prop_time_ms)
-        iter_record      = convergence.check_convergence_tolerance(self.problem, self.method, iter_record)
-        iter_record_prev = self.iter_data[-1]
-        iter_record = self._baseline_autotune(self.problem, self.method, iter_record, iter_record_prev)
-        self.iter_data.append(iter_record)
-
     # ============================================================
     # OUTPUT PACKING (UNIFIED RECORD)
     # ============================================================
     def _load_outputs(self, input_for_iter: Dict[str, Any], prop_time_ms: float) -> Dict[str, Any]:
         # mission, model, method = self.problem.mission, self.problem.model, self.method
-        N, n_x, n_u, nz, n_nu, n_ctcs = self.N.time_grid, self.n.state, self.n.control, self.n.z, self.n.nu, self.n.ctcs
+        N, n_x, n_u, n_z, n_nu, n_ctcs = self.N.time_grid, self.n.state, self.n.control, self.n.z, self.n.nu, self.n.ctcs
 
         dz_val, dnu_val = self.dz.value, self.dnu.value
         dt_val = None
@@ -802,26 +792,27 @@ class Subproblem:
             rec.solve_time = None
 
         # raw solver variables (useful for diagnostics)
-        rec.dz_s = dz_val
-        rec.dnu_s = dnu_val
-        rec.dt_s = dt_val
+        rec.dz_s    = dz_val
+        rec.dnu_s   = dnu_val
+        rec.dt_s    = dt_val
 
         # outputs (absolute trajectories)
         rec.z_opt  = tools.safe_val(dz_val, rows=N, cols=self.n.z) + input_for_iter.z_ref
         rec.nu_opt = tools.safe_val(dnu_val, rows=N, cols=self.n.nu) + input_for_iter.nu_ref
-        #TODO(Skye): verify below time reconstruction
-        s_idx = int(self.indices.nu.dilation_factor[0])
-        tau_step = 1.0 / (self.N.time_grid - 1)
-        rec.dt_opt = tau_step * rec.nu_opt[:-1, [s_idx]]
-        rec.t_opt  = np.concatenate(([0], np.cumsum(rec.dt_opt)))
-        rec.T_opt  = float(np.sum(rec.dt_opt))
+
+        # Unpack physical components from optimal trajectories
+        rec.x_opt, rec.t_opt, rec.beta_opt, rec.u_opt, rec.s_opt \
+            = self.index_map.unpack_znu(rec.z_opt, rec.nu_opt)
+
+        rec.dt_opt = np.diff(tools.reshape_1d(rec.t_opt))
+        rec.T_opt  = float(tools.reshape_1d(rec.t_opt)[-1]) if tools.reshape_1d(rec.t_opt).size > 0 else 0.0
 
         # Discretization model (expose for debug/analysis)
         Ak, Bk, Bkp, z_minus = input_for_iter.get("_linsys_cache", (None, None, None, None))
-        rec.z_minus = self.z_m.value if z_minus is None else z_minus
-        rec.Ak = self.Ak.value if Ak is None else Ak
-        rec.Bk = self.Bk.value if Bk is None else Bk
-        rec.Bkp = self.Bkp.value if Bkp is None else Bkp
+        rec.z_minus             = self.z_m.value if z_minus is None else z_minus
+        rec.Ak                  = self.Ak.value if Ak is None else Ak
+        rec.Bk                  = self.Bk.value if Bk is None else Bk
+        rec.Bkp                 = self.Bkp.value if Bkp is None else Bkp
 
         # Ak_bwd, Bk_bwd, Bkp_bwd, z_minus_bwd = input_for_iter.get("_linsys_cache_bwd", (None, None, None, None))
         # rec.z_minus_bwd = self.z_m_bwd.value if z_minus_bwd is None else z_minus_bwd
@@ -835,7 +826,7 @@ class Subproblem:
 
         rec.cnst_path = g
         
-        rec.cost      = self.TRUE.value.item() / self.w.cost.value
+        rec.cost    = self.TRUE.value.item() / self.w.cost.value
 
         # Convergence data (buffers, defects, TR cost, ref cost)
         conv = tools.AttrDict()

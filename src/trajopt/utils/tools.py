@@ -219,3 +219,6 @@ def get_val(var, rows=1, cols=1, fallback=0.0):
 
 def safe_array(M):
     return np.array([0.0]) if M is None or np.size(M) == 0 else M
+
+def reshape_1d(x):
+    return np.asarray(x).reshape(-1)

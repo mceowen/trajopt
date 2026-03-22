@@ -271,7 +271,7 @@ def flipped_radau_differential_operator(N: int) -> tuple[np.ndarray, np.ndarray,
     D : Differential operator mapping state values at etau to derivatives at collocation nodes tau.
     """
     tau, etau, w    = flipped_radau_nodes_and_weights(N)
-    D, _, _    = differentiation_matrix(etau)
+    D, _, _         = differentiation_matrix(etau)
 
     #D_compare       = differentiation_matrix_compare(etau)
     #D = D_compare

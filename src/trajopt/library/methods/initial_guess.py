@@ -7,7 +7,7 @@ from trajopt.utils.tools import AttrDict
 
 def set_initial_guess(problem,method):
 
-        if (getattr(method.guess, "type", "propagation") == "propagation") or method.flags.buff_dyn == "term":
+        if (getattr(method.initial_guess, "type", "propagation") == "propagation") or method.flags.buff_dyn == "term":
             nonlinear_initial_guess(problem, method)
         else:
             straight_line_initial_guess(problem, method)
@@ -76,7 +76,7 @@ def straight_line_initial_guess(problem, method):
 
     init                        = _ensure_initial_guess(method)
 
-    line_init_u_init            = method.guess["line_guess_u_init"] @ method.nondim.M.control["d2nd"]
+    line_init_u_init            = method.initial_guess.line_guess_u_init @ method.nondim.M.control["d2nd"]
     t_init                      = np.asarray(init.t).reshape(-1)
 
     
@@ -124,8 +124,8 @@ def nonlinear_initial_guess(problem, method):
     dynamics_cnstr      = problem.constraints.get(type="dynamics")[0]
 
     # ---- Control initialization ----
-    nl_init_u_start     = method.nondim.M.control.d2nd @ method.guess["nl_guess_u_start"]
-    nl_init_u_stop      = method.nondim.M.control.d2nd @ method.guess["nl_guess_u_stop"]
+    nl_init_u_start     = method.nondim.M.control.d2nd @ method.initial_guess.nl_guess_u_start
+    nl_init_u_stop      = method.nondim.M.control.d2nd @ method.initial_guess.nl_guess_u_stop
 
     t_init              = np.asarray(init.t).reshape(-1)
     t_nl                = np.linspace(t_init[0], t_init[-1], 10000)

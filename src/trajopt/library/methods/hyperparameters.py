@@ -169,7 +169,8 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
     problem = subprob.problem
 
     N      = subprob.N.time_grid
-    n      = problem.index_map.n.state
+    idx_real = subprob.indices.z.real
+    n_real   = subprob.n.real
     n_ctcs = problem.index_map.n.ctcs
 
     VB = 0.0
@@ -190,12 +191,12 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
             )
 
     # ============================================================
-    # REAL DYNAMICS BUFFERING   (first n states)
+    # REAL DYNAMICS BUFFERING   (state + time)
     # ============================================================
     mode_real = method.flags.buff_dyn   # {"none","term","l1","l2","quad-1","quad-2"}
 
-    if subprob.vb_dyn_real_p is not None and n > 0:
-        diff_real = subprob.vb_dyn_p[:, :n] - subprob.vb_dyn_m[:, :n]
+    if subprob.vb_dyn_real_p is not None and n_real > 0:
+        diff_real = subprob.vb_dyn_p[:, idx_real] - subprob.vb_dyn_m[:, idx_real]
 
         # --------------------------------------------------------
         # L1 penalty
@@ -210,7 +211,7 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
         elif mode_real == "l2":
             for k in range(N - 1):
                 VB += cp.sum_squares(
-                    cp.diag(subprob.W_sqrt.dynamics[k, :n]) @ diff_real[k, :] # TODO(Skye/Carlos): use indices here
+                    cp.diag(subprob.W_sqrt.dynamics[k, idx_real]) @ diff_real[k, :]
                 )
 
         # --------------------------------------------------------
@@ -247,7 +248,7 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
     mode_ctcs = method.flags.ctcs       # {"none","term","l1","l2","quad-1","quad-2"}
 
     if subprob.vb_dyn_p is not None and n_ctcs > 0:
-        diff_ctcs = subprob.vb_dyn_p[:, n:n+n_ctcs] - subprob.vb_dyn_m[:, n:n+n_ctcs]
+        diff_ctcs = subprob.vb_dyn_p[:, subprob.indices.z.ctcs] - subprob.vb_dyn_m[:, subprob.indices.z.ctcs]
 
         # --------------------------------------------------------
         # L1 penalty
@@ -262,7 +263,7 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
         elif mode_ctcs == "l2":
             for k in range(N - 1):
                 VB += cp.sum_squares(
-                    cp.diag(subprob.W_sqrt.dynamics[k, n:n+n_ctcs]) @ diff_ctcs[k, :] # TODO(Skye/Carlos): use indices here
+                    cp.diag(subprob.W_sqrt.dynamics[k, subprob.indices.z.ctcs]) @ diff_ctcs[k, :]
                 )
 
         # --------------------------------------------------------
