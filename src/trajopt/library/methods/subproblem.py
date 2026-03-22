@@ -57,8 +57,8 @@ class Subproblem:
         # --------------------------
         self.iter_data: List[Dict[str, Any]] = [recursive_attrdict({
             "iter_num": 0,  # init only (no outputs yet)
-            "z_ref": method.initial_guess.z,
-            "nu_ref": method.initial_guess.nu,
+            "z_opt": method.initial_guess.z,
+            "nu_opt": method.initial_guess.nu,
             "conv_data": {
                 "vb_ineq": np.zeros((self.N.time_grid, self.n.nonconvex_inequality)),
                 "vb_dyn":  np.zeros((self.N.time_grid - 1, self.n.dynamics)),
@@ -786,7 +786,6 @@ class Subproblem:
         # raw solver variables (useful for diagnostics)
         rec.dz_s    = dz_val
         rec.dnu_s   = dnu_val
-        rec.dt_s    = dt_val
 
         # outputs (absolute trajectories)
         rec.z_opt  = tools.safe_val(dz_val, rows=N, cols=self.n.z) + input_for_iter.z_ref
