@@ -620,33 +620,25 @@ class Subproblem:
         last_rec = self.iter_data[-1]
         k_prev = int(last_rec.get("iter_num", 0))
 
-        if all(key in last_rec for key in ("z_opt", "nu_opt")):
-            refs = tools.AttrDict({
+        refs = tools.AttrDict({
                 "z_ref": last_rec["z_opt"],
                 "nu_ref": last_rec["nu_opt"],
             })
-            W           = copy.deepcopy(last_rec.get("W"))
-            dual        = copy.deepcopy(last_rec.get("dual"))
-            penalty     = copy.deepcopy(last_rec.get("penalty", self.method.penalty))
-            conv_data   = last_rec.get("conv_data", {})
-        else:
-            refs = tools.AttrDict({
-                "z_ref": last_rec["z_ref"],
-                "nu_ref": last_rec["nu_ref"],
-            })
-            W           = last_rec.get("W")
-            dual        = last_rec.get("dual")
-            penalty     = last_rec.get("penalty", self.method.penalty)
-            conv_data   = last_rec.get("conv_data", {})
+        
+        W = copy.deepcopy(last_rec.get("W"))
+        dual = copy.deepcopy(last_rec.get("dual"))
+        penalty = copy.deepcopy(last_rec.get("penalty", self.method.penalty))
+        conv_data = last_rec.get("conv_data", {})
 
-        next_inputs = {
+        next_inputs = tools.AttrDict({
             "iter_num": k_prev + 1,
             **refs,
             "W": W,
             "dual": dual,
             "penalty": penalty,
             "conv_data": conv_data,
-        }
+        })
+        
         return tools.AttrDict(next_inputs)
 
     def _load_parameters(self, inputs: Dict[str, Any]) -> float:

@@ -57,7 +57,7 @@ def heat_rate(t, z, nu, params, fcns):
     r = z[0]
     v = z[3]
 
-    rho = fcns['density_model'](t, z, nu, params)
+    rho = fcns['density_model'](t, z, nu, params, fcns)
 
     return jnp.array([params['vehicle']['kQ'] * rho ** 0.5 * v ** 3])
 
@@ -66,7 +66,7 @@ def dynamic_pressure(t, z, nu, params, fcns):
     r = z[0]
     v = z[3]
 
-    rho = fcns['density_model'](t, z, nu, params)
+    rho = fcns['density_model'](t, z, nu, params, fcns)
 
     return jnp.array([0.5 * rho * (v) ** 2])
 

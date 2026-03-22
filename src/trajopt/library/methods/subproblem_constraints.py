@@ -286,8 +286,6 @@ class SubproblemConstraints(Constraints):
 
         return Wstk
 
-
-
 def configure_penalty_weights(problem, method, subconstraints=None):
     """
     Wrapper to configure penalty weights using existing hyperparameters logic.

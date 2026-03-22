@@ -41,7 +41,7 @@ conv:
 # ==============================
 constraints:
   types: 
-    nonlinear_inequality:
+    nonconvex_inequality:
       W:
         penalty: True
         autotune: True
@@ -50,7 +50,11 @@ constraints:
         penalty: True
         autotune: True
         init: 0.0
+      
       vb: 'standard'
+      eps: [0.01]
+      ct: True
+    
     dynamics:
       W:
         penalty: True
@@ -61,6 +65,7 @@ constraints:
         autotune: True
         init: 0.0
       vb: 'standard'
+
   names: 
     final_state:
       W:

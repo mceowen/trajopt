@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 
-def exp_density_jax(t, z, nu, params):
+def exp_density_jax(t, z, nu, params, fcns=None):
     r = z[0]
 
     h = r - params['planet']['r']
