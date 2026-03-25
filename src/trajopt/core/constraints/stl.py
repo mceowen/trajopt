@@ -6,6 +6,9 @@ Reference:  [https://doi.org/10.48550/arxiv.2405.10996]
             [https://doi.org/10.2514/6.2025-1895]
 '''
 
+import inspect
+from functools import partial
+
 import jax.numpy as jnp
 from jax import Array
 from jax.typing import ArrayLike
@@ -25,7 +28,7 @@ def _root_sum_of_product_terms(terms: ArrayLike, c: float) -> Array:
     terms = jnp.ravel(jnp.asarray(terms))
     k = terms.shape[0]
 
-    log_prod = jnp.sum(jnp.log(terms))
+    log_prod = jnp.sum(jnp.log(jnp.clip(terms, 1e-12)))
     log_c_term = k * jnp.log(c)
 
     return jnp.exp(jnp.logaddexp(log_prod, log_c_term) / k)
@@ -145,3 +148,57 @@ def IfThen_lite(y: ArrayLike, c: float = 1e-4) -> Array:
     """
     y = jnp.asarray(y)
     return OR_lite(jnp.array([-y[0], y[1]]), c=c)
+
+
+# ===============================================================
+# Prototype STL Expression Parsing
+# ===============================================================
+
+class stl_expr:
+    def __init__(self, fcn):
+        self._fcn = fcn
+
+    def __le__(self, threshold):
+        f = self._fcn
+        return stl_expr(lambda t, z, nu, params: f(t, z, nu, params)[0] - threshold)
+
+    def __ge__(self, threshold):
+        f = self._fcn
+        return stl_expr(lambda t, z, nu, params: threshold - f(t, z, nu, params)[0])
+
+    def __and__(self, other):
+        f1, f2 = self._fcn, other._fcn
+        return stl_expr(lambda t, z, nu, params: AND(jnp.array([f1(t, z, nu, params), f2(t, z, nu, params)])))
+
+    def __or__(self, other):
+        f1, f2 = self._fcn, other._fcn
+        return stl_expr(lambda t, z, nu, params: OR(jnp.array([f1(t, z, nu, params), f2(t, z, nu, params)])))
+
+    def __rshift__(self, other):
+        f1, f2 = self._fcn, other._fcn
+        return stl_expr(lambda t, z, nu, params: IfThen(jnp.array([f1(t, z, nu, params), f2(t, z, nu, params)])))
+
+    def implies(self, other):
+        return self.__rshift__(other)
+
+    def build(self):
+        return lambda t, z, nu, params: jnp.atleast_1d(self._fcn(t, z, nu, params))
+
+def parse_stl_expression(expr_string, fcns):
+    # create a namespace to store the stl expressions within the expression string
+    ns = {}
+
+    # 
+    for name, fn in fcns.items():
+        sig = inspect.signature(fn)
+        
+        # close over fcns argument to just pass (t, z, nu, params)
+        if 'fcns' in sig.parameters:
+            fn = partial(fn, fcns=fcns)
+        
+        # 
+        ns[name] = stl_expr(fn)
+
+    expr = expr_string.replace('fcns.', '').replace(' and ', ' & ').replace(' or ', ' | ').replace(' implies ', ' >> ')
+    result = eval(expr, {'__builtins__': {}}, ns)
+    return result.build()

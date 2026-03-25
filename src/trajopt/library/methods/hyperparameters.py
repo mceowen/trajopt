@@ -76,24 +76,28 @@ def configure_penalty_weights(problem, method, subconstraints=None):
             if method.flags["buff_dyn"] in {"l1", "l2"}:
                 W_stack.dynamics[:, z_state_idx] += w_dyn
 
+                W_stack.final_state[term_idx["eq"]] += w_term
+                W_stack.final_state[term_idx["ineq"]] += w_term
+
             elif method.flags["buff_dyn"] in {"quad-1", "quad-2", "quad-3"}:
                 W_stack.plus_real += w_dyn
                 W_stack.minus_real += w_dyn
+                W_stack.final_state[term_idx["eq"]] += w_term
+                W_stack.final_state[term_idx["ineq"]] += w_term
 
             else:
-                if len(term_idx["eq"]) > 0:
-                    W_stack.final_state[term_idx["eq"]] += w_term
-
-                if len(term_idx["ineq"]) > 0:
-                    W_stack.final_state[term_idx["ineq"]] += w_term
+                W_stack.final_state[term_idx["eq"]] += w_term
+                W_stack.final_state[term_idx["ineq"]] += w_term
 
             # ctcs portion weights
             if method.flags["ctcs"] in {"l1", "l2"}:
                 W_stack.dynamics[:, z_ctcs_idx] += w_dyn
+                W_stack.final_state[term_idx["ctcs"]] += w_term
     
             elif method.flags["ctcs"] in {"quad-1", "quad-2", "quad-3"}:
                 W_stack.plus_ctcs += w_dyn
                 W_stack.minus_ctcs += w_dyn
+                W_stack.final_state[term_idx["ctcs"]] += w_term
             
             else:
                 W_stack.final_state[term_idx["ctcs"]] += w_term
@@ -203,7 +207,7 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
         # --------------------------------------------------------
         if mode_real == "l1":
             for k in range(N - 1):
-                VB += subprob.w_dyn_row[k] * cp.norm1(diff_real[k, :])
+                VB += 10000 * cp.norm1(diff_real[k, :])
 
         # --------------------------------------------------------
         # L2 penalty
@@ -432,30 +436,30 @@ def autotune1(subproblem, conv_data, conv_data_prev, iter_num):
     W_ineq = subproblem.W_stack.nonconvex_inequality
 
     # inequality
-    dual_ineq_plus = np.maximum(0, W_ineq * vb_ineq + dual_ineq)
+    dual_ineq_plus = np.maximum(0, 0.1 * vb_ineq + dual_ineq)
 
     W_dyn = subproblem.W_stack.dynamics
 
     # NOTE: testing the augmented lagrangian update rule for duals
-    dual_dyn_plus = W_dyn * vb_dyn + dual_dyn
+    dual_dyn_plus = 0.1 * vb_dyn + dual_dyn
 
     W_term = subproblem.W_stack.final_state
 
     # terminal
-    dual_term_plus = W_term * vb_term + dual_term
+    dual_term_plus = 0.1 * vb_term + dual_term
 
     # plus/minus (quadratic 1-norm decomposition)
     W_plus_real  = subproblem.W_stack.plus_real
     W_minus_real = subproblem.W_stack.minus_real
 
-    dual_plus_plus_real  = W_plus_real * vb_plus_real  + dual_plus_real
-    dual_minus_plus_real = W_minus_real * vb_minus_real + dual_minus_real
+    dual_plus_plus_real  = 0.1 * vb_plus_real  + dual_plus_real
+    dual_minus_plus_real = 0.1 * vb_minus_real + dual_minus_real
 
     W_plus_ctcs  = subproblem.W_stack.plus_ctcs
     W_minus_ctcs = subproblem.W_stack.minus_ctcs
 
-    dual_plus_plus_ctcs  = W_plus_ctcs * vb_plus_ctcs  + dual_plus_ctcs
-    dual_minus_plus_ctcs = W_minus_ctcs * vb_minus_ctcs + dual_minus_ctcs
+    dual_plus_plus_ctcs  = 0.1 * vb_plus_ctcs  + dual_plus_ctcs
+    dual_minus_plus_ctcs = 0.1 * vb_minus_ctcs + dual_minus_ctcs
 
     # ==========================================
     # Saturation thresholds
@@ -586,9 +590,9 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
             dual_dyn_buff = np.diag(W_dyn[k, :]) @ vb_dyn[k, :]
             
             if buff_dyn == "l1":
-                Wh_dyn[k, z_state_idx] = np.sum(np.abs(dual_dyn_buff[z_state_idx]) / eps_feas_dyn[z_state_idx])
+                Wh_dyn[k, z_state_idx] = np.minimum(np.sum(np.abs(dual_dyn_buff[z_state_idx]) / eps_feas_dyn[z_state_idx]), 1e4)
             if buff_dyn != "none":
-                Wh_dyn[k, z_state_idx] = np.abs(dual_dyn_buff[z_state_idx] / eps_target_dyn[k, z_state_idx])
+                Wh_dyn[k, z_state_idx] = np.minimum(np.abs(dual_dyn_buff[z_state_idx] / eps_target_dyn[k, z_state_idx]), 1e4)
             # TODO(Skye): REVISIT
             #if buff_dyn == "l2":
             #     Wh_dyn[k, z_state_idx] = np.abs(dual_dyn_buff[z_state_idx] / eps_feas_dyn[z_state_idx])
@@ -600,12 +604,12 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
 
             # TODO: THINK ABOUT THIS (MAYBE ONE IF ELSE) COME BACK TO THIS, SINGLE EPSILON ETC
             if buff_dyn == "quad-2":
-                Wh_plus_real[k]  = np.sum(np.abs(np.diag(W_plus_real[k, :]) @ vb_plus_real[k, :] / eps_target_dyn[k, z_state_idx]))
-                Wh_minus_real[k] = np.sum(np.abs(np.diag(W_minus_real[k, :]) @ vb_minus_real[k, :] / eps_target_dyn[k, z_state_idx]))
+                Wh_plus_real[k]  = np.minimum(np.sum(np.abs(np.diag(W_plus_real[k, :]) @ vb_plus_real[k, :] / eps_target_dyn[k, z_state_idx])), 1e4)
+                Wh_minus_real[k] = np.minimum(np.sum(np.abs(np.diag(W_minus_real[k, :]) @ vb_minus_real[k, :] / eps_target_dyn[k, z_state_idx])), 1e4)
             
             if ctcs == "quad-2":
-                Wh_plus_ctcs[k]  = np.sum(np.abs(np.diag(W_plus_ctcs[k, :]) @ vb_plus_ctcs[k, :] / eps_target_dyn[k, z_ctcs_idx]))
-                Wh_minus_ctcs[k] = np.sum(np.abs(np.diag(W_minus_ctcs[k, :]) @ vb_minus_ctcs[k, :] / eps_target_dyn[k, z_ctcs_idx]))
+                Wh_plus_ctcs[k]  = np.minimum(np.sum(np.abs(np.diag(W_plus_ctcs[k, :]) @ vb_plus_ctcs[k, :] / eps_target_dyn[k, z_ctcs_idx])), 1e4)
+                Wh_minus_ctcs[k] = np.minimum(np.sum(np.abs(np.diag(W_minus_ctcs[k, :]) @ vb_minus_ctcs[k, :] / eps_target_dyn[k, z_ctcs_idx])), 1e4)
 
     if problem.index_map.n['term_total'] > 0:
         dual_term_buff = np.diag(W_term) @ vb_term

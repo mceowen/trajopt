@@ -38,25 +38,24 @@ class Problem:
         # Constraints
         # ------------------------------------------------------------
 
-        self.constraints = Constraints(self.config, index_map)
+        self.constraints = Constraints(self.config, index_map, fcns=self.fcns)
 
         # ------------------------------------------------------------
         # Cost
         # ------------------------------------------------------------
 
-        self.costs = Costs(self.config, index_map)
+        self.costs = Costs(self.config, index_map, fcns=self.fcns)
         print("------------------------------------------------------------")
 
         # ------------------------------------------------------------
-        # Add constraint/cost config and resolve functions
+        # Bind fcns dict to constraint/cost functions that accept it
         # ------------------------------------------------------------
 
         self.constraints.resolve_functions(self.fcns)
         self.costs.resolve_functions(self.fcns)
-        # self.costs.make_epigraph_constraints()
 
         # ------------------------------------------------------------
         # Trajectories (similar to constraints but used for analysis)
         # ------------------------------------------------------------
-        self.trajectories = Trajectories(self.config, index_map)
+        self.trajectories = Trajectories(self.config, index_map, fcns=self.fcns)
         self.trajectories.resolve_functions(self.fcns)

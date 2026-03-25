@@ -29,11 +29,13 @@ def dynamics(t, z, nu, params, fcns):
     aero = fcns['nonlinear_aero'](t, z, nu, params, fcns)
     a_aero_trans = (1 / mass) * aero["f_trans"]
 
+    m_rot = aero["m_rot"]
+
     v_inertial = DCM(q).T @ v_body
 
     # rotational kinematics and dynamics (body sees control + aero moments)
     q_dot = (1/2) * omega(w) @ q
-    w_dot = jnp.rad2deg(Jbinv @ (torque - cr(w) @ Jb @ w))
+    w_dot = jnp.rad2deg(Jbinv @ ( torque - cr(w) @ Jb @ w))
 
     # translational accelerations
     v_body_dot = a_aero_trans + DCM(q) @ a_grav_inertial - cr(w) @ v_body
@@ -51,6 +53,31 @@ def control_torques(t, z, nu, params, fcns):
     moment = nu[:3]
 
     return moment - m_rot # == 0
+
+def control_torques_single(t, z, nu, params, fcns):
+
+    aero = fcns["nonlinear_aero"](t, z, nu, params, fcns)
+    m_rot = aero["m_rot"]
+
+    moment = nu[:3]
+
+    difference = moment - m_rot
+
+    ub = jnp.array([100, 100, 100])
+    lb = jnp.array([-100, -100, -100])
+
+    top    = difference - ub
+    bottom = lb - difference 
+
+    g_x = jnp.concatenate([top, bottom])
+
+    alpha = 1.0
+
+    g_max = jnp.max(g_x)
+    soft_max_g_x = g_max + (1.0 / alpha) * jnp.log(jnp.sum(jnp.exp(alpha * (g_x - g_max))))
+
+    return soft_max_g_x.reshape(1,)
+
 
 def heat_rate(t, z, nu, params, fcns): # heat rate
 
@@ -211,6 +238,44 @@ def bank_aoa_to_quat(v_vec, r_vec, sigma_deg, alpha_deg):
     q = quat_from_dcm(DCM_I2B)
 
     return q
+
+def quat_to_bank_aoa(q, v_vec, r_vec):
+
+    DCM_I2B = DCM(q)
+
+    # alpha and beta from body-frame velocity direction
+    v_body = DCM_I2B @ v_vec
+    v_body_hat = v_body / jnp.linalg.norm(v_body)
+    alpha_deg = jnp.rad2deg(jnp.arctan2(v_body_hat[2], v_body_hat[0]))
+    beta_deg  = jnp.rad2deg(jnp.arcsin(v_body_hat[1]))
+
+    # velocity frame (same construction as bank_aoa_to_quat)
+    r_hat = r_vec / jnp.linalg.norm(r_vec)
+    v_hat = v_vec / jnp.linalg.norm(v_vec)
+    v_right_hat = jnp.cross(v_hat, r_hat) / jnp.linalg.norm(jnp.cross(v_hat, r_hat))
+    v_down_hat  = jnp.cross(v_hat, v_right_hat) / jnp.linalg.norm(jnp.cross(v_hat, v_right_hat))
+
+    # zero-bank body frame: apply only beta and alpha rotations to velocity frame
+    B0 = jnp.column_stack((v_hat, v_right_hat, v_down_hat))
+    B0 = R_vec_theta(v_down_hat, -beta_deg) @ B0
+    B0 = R_vec_theta(B0[:, 1], alpha_deg) @ B0
+
+    # actual body frame columns (inertial coordinates)
+    B_actual = DCM_I2B.T
+
+    # bank angle = rotation from B0 to B_actual about v_hat
+    z0 = B0[:, 2]
+    z1 = B_actual[:, 2]
+    z0_perp = z0 - jnp.dot(z0, v_hat) * v_hat
+    z1_perp = z1 - jnp.dot(z1, v_hat) * v_hat
+    z0_perp = z0_perp / jnp.linalg.norm(z0_perp)
+    z1_perp = z1_perp / jnp.linalg.norm(z1_perp)
+
+    cos_sigma = jnp.dot(z0_perp, z1_perp)
+    sin_sigma = jnp.dot(jnp.cross(z0_perp, z1_perp), v_hat)
+    sigma_deg = jnp.rad2deg(jnp.arctan2(sin_sigma, cos_sigma))
+
+    return sigma_deg, alpha_deg, beta_deg
 
 def quaternion_error(q_des, q):
     q_conj = jnp.array([q[0], -q[1], -q[2], -q[3]])

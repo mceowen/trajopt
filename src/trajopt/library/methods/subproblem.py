@@ -280,10 +280,17 @@ class Subproblem:
 
             if constraint.set == "state":
                 if constraint.boundary == "final":
-                    vb = self.vb_term[term_idx["eq"]] if self.vb_term is not None else 0.0
+                    vb = self.vb_term[term_idx["eq"]]
+                    C.append(self.dz[boundary_idx,idx] + self.z_ref[boundary_idx, idx] - vb == value)
+
                 else:
                     vb = 0
-                C.append(self.dz[boundary_idx,idx] + self.z_ref[boundary_idx, idx] - vb == value)
+                    C.append(self.dz[boundary_idx,idx] + self.z_ref[boundary_idx, idx] - vb == value)
+                    
+                    if self.constraints.has(ct=1):
+                        ctcs_state_idx = self.indices.z["ctcs"]
+                        C.append(self.dz[0, ctcs_state_idx] + self.z_ref[0, ctcs_state_idx] == 0.0)
+                
             elif constraint.set == "control":
                 C.append(self.dnu[boundary_idx,idx] + self.nu_ref[boundary_idx, idx] == value)
 
@@ -577,7 +584,7 @@ class Subproblem:
                     self.TRUE += cost.w * cp.norm1(z_plus - z_minus) * (1 / self.N.N)
 
         # === Trust-region penalties ===
-        TR = self.flags["flag_tr"] * (self.w.tr_z * cp.sum_squares(self.dz[:, :self.n.state]) + self.w.tr_u * cp.sum_squares(self.dnu))
+        TR = self.flags["flag_tr"] * (self.w.tr_z * cp.sum_squares(self.dz[:, :self.n.state]) + self.w.tr_z * cp.sum_squares(self.dt) + self.w.tr_u * cp.sum_squares(self.dnu))
         # === Virtual buffer penalties ===
         VB = 0.0
         DUAL = 0.0
@@ -646,6 +653,8 @@ class Subproblem:
 
         prop_time_ms = (time.time() - start) * 1000.0
 
+        start = time.time()
+
         # compute linearized terminal and running costs
         cost, dcostdz, dcostdnu = discretize.compute_nonconvex_costs(inputs["t_ref"], inputs["z_ref"], inputs["nu_ref"], problem, method)
 
@@ -655,6 +664,9 @@ class Subproblem:
             g = None
             dgdz = None
             dgdnu = None
+
+        ncvx_cnstr_time = (time.time() - start) * 1000.0
+        print(f"ncvx_cnstr_time: {ncvx_cnstr_time}")
 
         # Dynamics & references
         self._set_param(self.Ak,   Ak)

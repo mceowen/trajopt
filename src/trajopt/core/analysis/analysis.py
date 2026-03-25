@@ -281,10 +281,10 @@ def run_mc_analysis(trajopt_obj):
             # Reset iter_data like the first run: W and dual None so first iteration uses configure_penalty_weights
             subprob.iter_data = [tools.recursive_attrdict({
                 "iter_num": 0,
-                "z_ref":  method.z_init,
-                "nu_ref": method.nu_init,
-                "dt_ref": method.dt_init,
-                "t_ref":  method.t_init,
+                "z_opt":  method.z_init,
+                "nu_opt": method.nu_init,
+                "dt_opt": method.dt_init,
+                "t_opt":  method.t_init,
                 "conv_data": {
                     "vb_ineq": np.zeros((n_N, n_neq)),
                     "vb_dyn":  np.zeros((n_N - 1, n_dyn)),

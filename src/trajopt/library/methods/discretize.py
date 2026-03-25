@@ -5,6 +5,13 @@ jax.config.update("jax_enable_x64", True)
 from scipy.integrate import solve_ivp
 import trajopt.library.methods.convexify as convexify
 import trajopt.utils.tools as tools
+import time
+import diffrax
+
+jax.config.update("jax_compilation_cache_dir", "/tmp/jax_cache")
+jax.config.update("jax_persistent_cache_min_entry_size_bytes", -1)
+jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
+jax.config.update("jax_persistent_cache_enable_xla_caches", "xla_gpu_per_fusion_autotune_cache_dir")
 
 def set_ltv_indices(problem, method):
     """
@@ -51,88 +58,64 @@ def compute_nonconvex_constraints(t_ref, z_ref, u_ref, problem, method):
     n_nu    = problem.index_map.n['control']
     N       = method.index_map.N['N']
         
-    t_jax = jnp.asarray(t_ref)
-    z_jax = jnp.asarray(z_ref)
+    t_jax  = jnp.asarray(t_ref)
+    z_jax  = jnp.asarray(z_ref)[:, :n_x]
     nu_jax = jnp.asarray(u_ref)
 
-    params = problem.params
-    params_jax = tools.recursive_to_dict(params)
+    params_jax = tools.recursive_to_dict(problem.params)
     
-    # Preallocate stacked arrays
-    g    = np.zeros((N, n_ineq))
-    dgdz = np.zeros((N, n_ineq, n_x))
+    g     = np.zeros((N, n_ineq))
+    dgdz  = np.zeros((N, n_ineq, n_x))
     dgdnu = np.zeros((N, n_ineq, n_nu))
     
-    # Evaluate constraints at each timestep
-    for k in range(N):
-        tk = t_jax[k]
-        zk = z_jax[k, :n_x]
-        uk = nu_jax[k]
+    col_start = 0
+    for constraint in problem.constraints.get(ct=0, type="nonconvex_inequality"):
+        col_end = col_start + constraint.dimension
+        nodes = np.asarray(constraint.nodes)
 
-        col_start = 0
-        for constraint in problem.constraints.get(ct=0, type="nonconvex_inequality"):
-            col_end = col_start + constraint.dimension
-            
-            if k in constraint.nodes:
-                f, dfcn_dz, dfcn_du            = constraint.g_aff(tk, zk, uk, params_jax)
+        t_nodes  = t_jax[nodes]
+        z_nodes  = z_jax[nodes]
+        nu_nodes = nu_jax[nodes]
 
-                g_k = np.asarray(f)
-                dgdz_k = np.asarray(dfcn_dz)
-                dgdnu_k = np.asarray(dfcn_du)
+        f, dfcn_dz, dfcn_du = constraint.g_aff_batched(t_nodes, z_nodes, nu_nodes, params_jax)
 
-                g[k, col_start:col_end]        = g_k
-                dgdz[k, col_start:col_end, :]  = dgdz_k
-                dgdnu[k, col_start:col_end, :] = dgdnu_k
+        g[nodes, col_start:col_end]        = np.asarray(f)
+        dgdz[nodes, col_start:col_end, :]  = np.asarray(dfcn_dz)
+        dgdnu[nodes, col_start:col_end, :] = np.asarray(dfcn_du)
 
-                # # condition constraints by row norms
-                # row_norms = np.linalg.norm(np.hstack([dgdz_k, dgdnu_k]), axis=1)
-
-                # # avoid division by zero
-                # row_norms[row_norms == 0] = 1.0
-                # g[k, col_start:col_end] /= row_norms
-                # dgdz[k, col_start:col_end, :] /= row_norms[:, np.newaxis]
-                # dgdnu[k, col_start:col_end, :] /= row_norms[:, np.newaxis]
-            
-            col_start = col_end
+        col_start = col_end
     
     return g, dgdz, dgdnu
 
 def compute_nonconvex_costs(t_ref, z_ref, u_ref, problem, method):
 
-    n_x = problem.index_map.n['state']
+    n_x  = problem.index_map.n['state']
     n_nu = problem.index_map.n['control']
-    N = method.index_map.N['N']
+    N    = method.index_map.N['N']
     
-    t_jax = jnp.asarray(t_ref)
-    z_jax = jnp.asarray(z_ref)
+    t_jax  = jnp.asarray(t_ref)
+    z_jax  = jnp.asarray(z_ref)
     nu_jax = jnp.asarray(u_ref)
 
-    params = problem.params
-    params_jax = tools.recursive_to_dict(params)
+    params_jax = tools.recursive_to_dict(problem.params)
     
-    # preallocate stacked arrays (cost per timestep)
-    cost = np.zeros((N, 1))
-    dcostdz = np.zeros((N, 1, n_x))
+    cost     = np.zeros((N, 1))
+    dcostdz  = np.zeros((N, 1, n_x))
     dcostdnu = np.zeros((N, 1, n_nu))
 
-    # evaluate costs at each timestep
+    path_nodes = jnp.arange(N - 1)
     for cost_object in problem.costs.get(ct=0, type="nonconvex"):
-        for k in range(N-1):
-            tk = t_jax[k]
-            zk = z_jax[k]
-            uk = nu_jax[k]
-            
-            f, dfcn_dz, dfcn_du = cost_object.g_aff(tk, zk, uk, params_jax)
-            cost[k, 0] += np.asarray(f)
-            dcostdz[k, 0, :] += np.asarray(dfcn_dz).flatten()
-            dcostdnu[k, 0, :] += np.asarray(dfcn_du).flatten()
+        f, dfcn_dz, dfcn_du = cost_object.g_aff_batched(
+            t_jax[path_nodes], z_jax[path_nodes], nu_jax[path_nodes], params_jax
+        )
+        cost[:N-1, 0]      += np.asarray(f).flatten()
+        dcostdz[:N-1, 0, :] += np.asarray(dfcn_dz).reshape(N - 1, n_x)
+        dcostdnu[:N-1, 0, :] += np.asarray(dfcn_du).reshape(N - 1, n_nu)
             
     for cost_object in problem.costs.get(type="nonconvex_terminal"):
-        tk = t_jax[-1]
-        zk = z_jax[-1]
-        uk = nu_jax[-1]
-        
-        f, dfcn_dz, dfcn_du = cost_object.g_aff(tk, zk, uk, params_jax)
+        f, dfcn_dz, dfcn_du = cost_object.g_aff(
+            t_jax[-1], z_jax[-1], nu_jax[-1], params_jax
+        )
         cost[-1, 0]        += np.asarray(f)
         dcostdz[-1, 0, :]  += np.asarray(dfcn_dz).flatten()
         dcostdnu[-1, 0, :] += np.asarray(dfcn_du).flatten()
@@ -183,19 +166,26 @@ def compile_jax_discretization(problem, method):
         P5_dot = (sigma * Ac @ phi_s   + fc)
 
         return jnp.concatenate([P1_dot, P2_dot, P3_dot, P4_dot, P5_dot])
+    
+    def f_dot(tau, lds_k, args):
+        nu_k, nu_kp, dt_k, params_jax = args
+        return pack_lds_dot(tau, lds_k, nu_k, nu_kp, dt_k, params_jax)
 
-    # rk4 single step function for jax integration
-    def rk4_step_jax(tau, lds, nu_k, nu_kp, dt_k, params_jax):
-        
-        k1 = pack_lds_dot(tau, lds, nu_k, nu_kp, dt_k, params_jax)
-        k2 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k1, nu_k, nu_kp, dt_k, params_jax)
-        k3 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k2, nu_k, nu_kp, dt_k, params_jax)
-        k4 = pack_lds_dot(tau + dt_sub, lds + dt_sub * k3, nu_k, nu_kp, dt_k, params_jax)
-        
-        lds_next = lds + (dt_sub / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
-        return lds_next, None
 
-    rk4_step_jax_jit = jax.jit(rk4_step_jax)
+    # # rk4 single step function for jax integration
+    # def rk4_step_jax(tau, lds, nu_k, nu_kp, dt_k, params_jax):
+        
+    #     k1 = pack_lds_dot(tau, lds, nu_k, nu_kp, dt_k, params_jax)
+    #     k2 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k1, nu_k, nu_kp, dt_k, params_jax)
+    #     k3 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k2, nu_k, nu_kp, dt_k, params_jax)
+    #     k4 = pack_lds_dot(tau + dt_sub, lds + dt_sub * k3, nu_k, nu_kp, dt_k, params_jax)
+        
+    #     lds_next = lds + (dt_sub / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
+    #     return lds_next, None
+
+    # rk4_step_jax_jit = jax.jit(rk4_step_jax)
+
+
 
     # initilize stacked propagation vector  
     def pack_lds0(z_k):
@@ -228,14 +218,35 @@ def compile_jax_discretization(problem, method):
         # stack z, A, B, Bp, S for multiple shooting propagation
         lds0_k = pack_lds0(z_k)
 
-        # propagate stacked vector
-        def rk4_step_jax_partial(lds, tau):
-            return rk4_step_jax_jit(tau, lds, nu_k, nu_kp, dt_k, params_jax)
+        # # propagate stacked vector
+        # def rk4_step_jax_partial(lds, tau):
+        #     return rk4_step_jax_jit(tau, lds, nu_k, nu_kp, dt_k, params_jax)
 
-        ldsf_k, _ = jax.lax.scan(rk4_step_jax_partial, lds0_k, t[:-1])
+        # ldsf_k, _ = jax.lax.scan(rk4_step_jax_partial, lds0_k, t[:-1])
+        
+        term = diffrax.ODETerm(f_dot)
+
+        solver = diffrax.Dopri5()
+        stepsize_controller = diffrax.PIDController(rtol=1e-4, atol=1e-4)
+        sol = diffrax.diffeqsolve(
+            term,
+            solver,
+            0.0,
+            1.0,
+            0.05,
+            lds0_k,
+            stepsize_controller=stepsize_controller,
+            args=(nu_k, nu_kp, dt_k, params_jax)
+        )
+
+        ldsf_k = sol.ys[-1]
 
         # unpack the stacked vector back into appropriate shapes
         return unpack_ldsf(ldsf_k)
+    
+
+    
+
     
     propagate = jax.jit(jax.vmap(propagate_k, in_axes=(0, None, None, None, None)))
 
@@ -296,7 +307,7 @@ def compile_jax_discretization_bwd(problem, method):
         lds_next = lds + (dt_sub / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
         return lds_next, None
 
-    rk4_step_jax_jit_bwd = jax.jit(rk4_step_jax_bwd)
+    rk4_step_jax_jit_bwd = rk4_step_jax_bwd
 
     # initilize stacked propagation vector  
     def pack_lds0(z_k):
@@ -354,9 +365,12 @@ def discretize_inv_free_jax(z_ref_np, nu_ref_np, dt_ref_np, problem, method):
     params_jax = tools.recursive_to_dict(params)
 
     # call jitted propagator for each node
+
+    start = time.time()
     ks = jnp.arange(method.index_map.N['N'] - 1)
     A_jax, B_jax, Bp_jax, S_jax, z_minus = method.propagate_discretization_jax(ks, z_ref, nu_ref, dt_ref, params_jax)
 
+    print(f"actual_prop_time: {(start - time.time())*1000}")
     z_ref_0 = z_ref[[0], :]
     
     return np.asarray(A_jax), np.asarray(B_jax), np.asarray(Bp_jax), np.asarray(S_jax), np.asarray(jnp.vstack([z_ref_0, z_minus]))

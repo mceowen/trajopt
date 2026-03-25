@@ -30,7 +30,7 @@ def compile_dense_jax_propagator(problem, method, params):
 
         return dynamics(t, z, nu, params)
 
-    rk4_step_jit = jax.jit(rk4_step)
+    rk4_step_jit = rk4_step
 
     def propagate(z0, nu_ref, t_ref, t_nl, params):
         dt = t_nl[1] - t_nl[0]
