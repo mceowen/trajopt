@@ -2,7 +2,7 @@ import numpy as np
 from trajopt.core.constraints.constraints import Constraints
 from trajopt.core.costs.costs import Costs
 from trajopt.core.trajectories.trajectories import Trajectories
-from trajopt.utils.config_loader import resolve_function
+from trajopt.utils.config_loader import resolve_function_from_path
 from trajopt.utils.tools import AttrDict
 
 class Problem:
@@ -24,7 +24,7 @@ class Problem:
         self.fcns = AttrDict()
         
         for name, path in fcn_config.items():
-            self.fcns[name] = resolve_function(path)
+            self.fcns[name] = resolve_function_from_path(path)
 
         # ------------------------------------------------------------
         # Parameters

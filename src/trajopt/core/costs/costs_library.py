@@ -3,7 +3,7 @@ import cvxpy as cp
 import jax
 import jax.numpy as jnp
 import trajopt.library.methods.convexify as convexify
-from trajopt.utils.config_loader import resolve_function
+from trajopt.utils.config_loader import resolve_function_from_path
 
 def _resolve_fcn(fcn_string, fcns=None):
     """Resolve a function reference: look up from fcns dict if 'fcns.X', otherwise import from path."""
@@ -13,7 +13,7 @@ def _resolve_fcn(fcn_string, fcns=None):
             raise KeyError(f"Function reference '{fcn_string}' not found in fcns dict. "
                            f"Available: {list(fcns.keys())}")
         return fcns[key]
-    return resolve_function(fcn_string)
+    return resolve_function_from_path(fcn_string)
 
 class min_time:
     def __init__(self, cost_config, index_map, **kwargs):

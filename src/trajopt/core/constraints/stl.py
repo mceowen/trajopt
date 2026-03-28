@@ -188,7 +188,6 @@ def parse_stl_expression(expr_string, fcns):
     # create a namespace to store the stl expressions within the expression string
     ns = {}
 
-    # 
     for name, fn in fcns.items():
         sig = inspect.signature(fn)
         
@@ -196,7 +195,6 @@ def parse_stl_expression(expr_string, fcns):
         if 'fcns' in sig.parameters:
             fn = partial(fn, fcns=fcns)
         
-        # 
         ns[name] = stl_expr(fn)
 
     expr = expr_string.replace('fcns.', '').replace(' and ', ' & ').replace(' or ', ' | ').replace(' implies ', ' >> ')

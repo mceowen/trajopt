@@ -45,7 +45,7 @@ def dynamics(t, z, nu, params, fcns):
 
     return x_dot
 
-def control_torques(t, z, nu, params, fcns):
+def control_torques_dt(t, z, nu, params, fcns):
 
     aero = fcns["nonlinear_aero"](t, z, nu, params, fcns)
     m_rot = aero["m_rot"]
@@ -54,29 +54,31 @@ def control_torques(t, z, nu, params, fcns):
 
     return moment - m_rot # == 0
 
-def control_torques_single(t, z, nu, params, fcns):
+def control_torques_ct(t, z, nu, params, fcns):
 
     aero = fcns["nonlinear_aero"](t, z, nu, params, fcns)
     m_rot = aero["m_rot"]
 
     moment = nu[:3]
-
     difference = moment - m_rot
 
-    ub = jnp.array([100, 100, 100])
-    lb = jnp.array([-100, -100, -100])
+    ub = jnp.array([800.0, 5000.0, 5000.0])
+    lb = jnp.array([-800.0, -5000.0, -5000.0])
+
+    # ub = jnp.array([0, 0.0, 0.0])
+    # lb = jnp.array([-0.0, -0.0, -0.0])
 
     top    = difference - ub
-    bottom = lb - difference 
+    bottom = lb - difference
 
     g_x = jnp.concatenate([top, bottom])
 
-    alpha = 1.0
+    # alpha = 50.0
+    # # numerically stable log-sum-exp
+    # m = jnp.max(g_x)
+    # lse = m + (1.0 / alpha) * jnp.log(jnp.sum(jnp.exp(alpha * (g_x - m))))
 
-    g_max = jnp.max(g_x)
-    soft_max_g_x = g_max + (1.0 / alpha) * jnp.log(jnp.sum(jnp.exp(alpha * (g_x - g_max))))
-
-    return soft_max_g_x.reshape(1,)
+    return jnp.max(g_x).reshape(1,)
 
 
 def heat_rate(t, z, nu, params, fcns): # heat rate
@@ -300,9 +302,8 @@ def long_lat(t, z, nu, params, fcns):
     y = z[1]
     z = z[2]
 
-    theta = jnp.atan2(y, x)
-    phi = jnp.atan2(z, jnp.sqrt(x**2 + y**2))
-
+    theta = jnp.rad2deg(jnp.atan2(y, x))
+    phi = jnp.rad2deg(jnp.atan2(z, jnp.sqrt(x**2 + y**2)))
     
     return jnp.array([theta, phi])
 
@@ -313,8 +314,8 @@ def long_lat_alt(t, z, nu, params, fcns):
     y = z[1]
     z = z[2]
 
-    theta = jnp.atan2(y, x)
-    phi = jnp.atan2(z, jnp.sqrt(x**2 + y**2))
+    theta = jnp.rad2deg(jnp.atan2(y, x))
+    phi = jnp.rad2deg(jnp.atan2(z, jnp.sqrt(x**2 + y**2)))
 
     alt = r - params['planet']['r']
     
@@ -325,3 +326,4 @@ def r_v(t, z, nu, params, fcns):
     v = jnp.linalg.norm(z[3:6])
 
     return jnp.array([r, v])
+

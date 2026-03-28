@@ -215,7 +215,8 @@ class Subproblem:
             self.dt_min = self.dt_max = self.ddt_max = None
 
         # Weights & Trust Region weights (stored as simple AttrDict values)
-        self.w.cost                     = cp.Parameter(nonneg=True, name="w_cost")
+        self.w.cost                     = cp.Constant(value= method.penalty.w_cost, name="w_cost")
+        print(f"w_cost: {self.w.cost.value}")
         self.w.tr_z                     = cp.Parameter(nonneg=True, name="tr_z")
         self.w.tr_u                     = cp.Parameter(nonneg=True, name="tr_u")
 
@@ -551,7 +552,8 @@ class Subproblem:
         for cost in problem.costs.get(type="min_norm_terminal"):
             zf = self.z_ref[-1] + self.dz[-1]
             idx = cost.idx
-            term_cost = cp.norm(zf[idx])
+            print(f"{zf.shape}, {idx}")
+            term_cost = self.w.cost * cp.norm(zf[idx])
             self.TRUE += term_cost
 
         for cost in problem.costs.get(type="terminal_state"):
@@ -697,7 +699,7 @@ class Subproblem:
 
         # update scalar weights in-subproblem
         penalty_to_use = inputs.get("penalty", tools.AttrDict(self.method.penalty))
-        self.w.cost.value   = penalty_to_use.get("w_cost", 1.0)
+        # self.w.cost.value   = penalty_to_use.get("w_cost", 1.0)
         self.w.tr_z.value   = penalty_to_use.get("wtr_z", 1e-2)
         self.w.tr_u.value   = penalty_to_use.get("wtr_u", 1e-2)
         inputs["penalty"] = copy.deepcopy(penalty_to_use)

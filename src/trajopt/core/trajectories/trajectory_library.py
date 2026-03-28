@@ -2,7 +2,7 @@ import numpy as np
 import cvxpy as cp
 import jax
 import jax.numpy as jnp
-from trajopt.utils.config_loader import resolve_function
+from trajopt.utils.config_loader import resolve_function_from_path
 
 def _resolve_fcn(fcn_string, fcns=None):
     """resolve function string from either fcns dictionary or direct path"""
@@ -14,7 +14,7 @@ def _resolve_fcn(fcn_string, fcns=None):
         return fcns[key]
 
     else:
-        return resolve_function(fcn_string)
+        return resolve_function_from_path(fcn_string)
 
 class spatial:
     def __init__(self, cnstr_config, index_map, fcns=None, **kwargs):

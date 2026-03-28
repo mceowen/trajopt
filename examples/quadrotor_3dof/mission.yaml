@@ -91,7 +91,7 @@ constraints:
   obstacle:
     type: nonconvex_inequality
     group: path
-    fcn: fcns.obstacle
+    fcn: "fcns.obstacle"
     min_value: 4.0
     eps: [0.1]
     dimension: 1
@@ -100,10 +100,12 @@ constraints:
   low_height_stc:
     type: nonconvex_inequality
     group: path
-    fcn: "((fcns.pos_x >= 5.0) or (fcns.pos_y >= 5.0)) implies (fcns.height <= 1.0)"
+    fcn: "((fcns.pos_x >= 5.0) and (fcns.pos_y >= 5.0)) implies (fcns.height <= 1.0)"
     eps: [0.1]
     scale: [1.0]
     dimension: 1
+
+  
 
 costs:
   min_time:

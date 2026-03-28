@@ -66,13 +66,6 @@ constraints.tilt_limit:
   axis_num: 1
   quat_start_idx: 7
 
-constraints.height_triggered_pitch:
-  type: nonconvex_inequality
-  group: path
-  fcn: trajopt/library/models/lander_6dof.py:height_triggered_pitch
-  dimension: 1
-  ct: 0
-
 constraints.min_thrust:
   type: nonconvex_inequality
   group: path

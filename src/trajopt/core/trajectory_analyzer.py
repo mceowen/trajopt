@@ -25,11 +25,11 @@ class TrajectoryAnalyzer:
     def solve(self):
         self.solution = scp.run_scp(self)
 
-    def analyze(self, analysis_type="standalone", animate=False):
+    def analyze(self, analysis_type="standalone", animate=False, show_iters = False):
 
         # run standalone anaylsis by default or method/parameter variations if specified
         if analysis_type == "standalone":
-            self.results = analysis.run_standalone_analysis(self)
+            self.results = analysis.run_standalone_analysis(self, show_iters=show_iters)
         
         elif analysis_type == "mc":
             self.results = analysis.run_mc_analysis(self)

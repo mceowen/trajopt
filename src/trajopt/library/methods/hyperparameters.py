@@ -37,8 +37,8 @@ def configure_penalty_weights(problem, method, subconstraints=None):
     W_ineq                            = np.zeros((method.index_map.N.N, problem.index_map.n.nonconvex_inequality))
     dual_ineq                         = np.zeros((method.index_map.N.N, problem.index_map.n.nonconvex_inequality))
 
-    penalty.wtr_z = 1 / (2 * penalty.alpha_z) * (1 / (method.index_map.N.N * (method.index_map.n['z'])))
-    penalty.wtr_u = 1 / (2 * penalty.alpha_u) * (1 / (method.index_map.N.N * (method.index_map.n['control'])))
+    penalty.wtr_z = 1 / (2 * penalty.alpha_z) * (1 / (method.index_map.N.N * method.index_map.n['z']))
+    penalty.wtr_u = 1 / (2 * penalty.alpha_u) * (1 / (method.index_map.N.N * method.index_map.n['control']))
 
     # === Autotune modes (flag_autotune ∈ {0,2,3,al-scvx}) ===
     if str(method.flags["flag_autotune"]) in {"0", "2", "3", "al-scvx"}:
@@ -401,7 +401,7 @@ def autotune1(subproblem, conv_data, conv_data_prev, iter_num):
 
     # Extract primal buffers
     vb_ineq  = np.array(conv_data["vb_ineq"])
-    vb_term  = np.array(conv_data["vb_terminal"])
+    vb_term  = np.array(conv_data["vb_terminal"]).flatten()
     vb_dyn   = np.array(conv_data["vb_dyn"])
     
     vb_plus_real  = np.array(conv_data["vb_plus_real"])
@@ -436,30 +436,30 @@ def autotune1(subproblem, conv_data, conv_data_prev, iter_num):
     W_ineq = subproblem.W_stack.nonconvex_inequality
 
     # inequality
-    dual_ineq_plus = np.maximum(0, 0.1 * vb_ineq + dual_ineq)
+    dual_ineq_plus = np.maximum(0, 0.3 * W_ineq * vb_ineq + dual_ineq)
 
     W_dyn = subproblem.W_stack.dynamics
 
     # NOTE: testing the augmented lagrangian update rule for duals
-    dual_dyn_plus = 0.1 * vb_dyn + dual_dyn
+    dual_dyn_plus = 0.3 * W_dyn * vb_dyn + dual_dyn
 
     W_term = subproblem.W_stack.final_state
 
     # terminal
-    dual_term_plus = 0.1 * vb_term + dual_term
+    dual_term_plus = 0.3 * W_term * vb_term + dual_term
 
     # plus/minus (quadratic 1-norm decomposition)
     W_plus_real  = subproblem.W_stack.plus_real
     W_minus_real = subproblem.W_stack.minus_real
 
-    dual_plus_plus_real  = 0.1 * vb_plus_real  + dual_plus_real
-    dual_minus_plus_real = 0.1 * vb_minus_real + dual_minus_real
+    dual_plus_plus_real  = np.maximum(0, 0.3 * W_plus_real * vb_plus_real  + dual_plus_real)
+    dual_minus_plus_real = np.maximum(0, 0.3 * W_minus_real * vb_minus_real + dual_minus_real)
 
     W_plus_ctcs  = subproblem.W_stack.plus_ctcs
     W_minus_ctcs = subproblem.W_stack.minus_ctcs
 
-    dual_plus_plus_ctcs  = 0.1 * vb_plus_ctcs  + dual_plus_ctcs
-    dual_minus_plus_ctcs = 0.1 * vb_minus_ctcs + dual_minus_ctcs
+    dual_plus_plus_ctcs  = np.maximum(0, 0.3 * W_plus_ctcs * vb_plus_ctcs  + dual_plus_ctcs)
+    dual_minus_plus_ctcs = np.maximum(0, 0.3 * W_minus_ctcs * vb_minus_ctcs + dual_minus_ctcs)
 
     # ==========================================
     # Saturation thresholds
@@ -504,7 +504,7 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
     N = method.index_map.N.N
     vb_ineq = np.array(conv_data["vb_ineq"])
     vb_dyn  = np.array(conv_data["vb_dyn"])
-    vb_term = np.array(conv_data["vb_terminal"])
+    vb_term = np.array(conv_data["vb_terminal"]).flatten()
 
     vb_plus_real = np.array(conv_data["vb_plus_real"])
     vb_minus_real = np.array(conv_data["vb_minus_real"])
@@ -529,9 +529,9 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
     eps_feas_term = conv.eps_term
     eps_feas_dyn  = conv.eps_dyn
 
-    eps_target_term =  np.maximum(0.5*eps_feas_term, conv.fac_eps * np.abs(conv_data.vb_terminal))
-    eps_target_ineq =  np.maximum(0.5*eps_feas_ineq, conv.fac_eps * np.abs(conv_data.vb_ineq))
-    eps_target_dyn  =  np.maximum(0.5*eps_feas_dyn , conv.fac_eps * np.abs(conv_data.vb_dyn))
+    eps_target_term =  np.maximum(1.0*eps_feas_term, conv.fac_eps * np.abs(conv_data.vb_terminal))
+    eps_target_ineq =  np.maximum(1.0*eps_feas_ineq, conv.fac_eps * np.abs(conv_data.vb_ineq))
+    eps_target_dyn  =  np.maximum(1.0*eps_feas_dyn , conv.fac_eps * np.abs(conv_data.vb_dyn))
 
     conv_data.eps_target_term = eps_target_term.copy()
     conv_data.eps_target_ineq = eps_target_ineq.copy()
@@ -650,7 +650,8 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
 
 def autotune3(subproblem, conv_data, conv_data_prev, iter_num):
     """Combined autotune1 and autotune2."""
-    dual_info = autotune1(subproblem, conv_data, conv_data_prev, iter_num)
     weight_info = autotune2(subproblem, conv_data, conv_data_prev, iter_num)
+    dual_info = autotune1(subproblem, conv_data, conv_data_prev, iter_num)
+    
 
     return {"dual_update": dual_info, "weight_update": weight_info}
