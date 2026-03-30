@@ -26,6 +26,7 @@ dependencies = [
     "matplotlib>=3.8",
     "setuptools>=61.0",
     "sympy>=1.10, <= 2.0",
+    "diffrax>=0.7.2",
     "qoco >=0.1.4,<0.2",
     "ecos >=2.0.12,<3.0"
 ]
