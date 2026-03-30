@@ -17,7 +17,7 @@ def linearize_jax_ctcs(fcn, constraints, n):
 
     def wrapped_fcn(t, z, nu, params):
         constr = jnp.concatenate([constraint.fcn(t, z[:n], nu, params) for constraint in constraints.get(ct=1)])
-        f_val = jnp.concatenate([fcn(t, z[:n], nu, params), jnp.maximum(constr, 0.0)])
+        f_val = jnp.concatenate([fcn(t, z[:n], nu, params), jnp.maximum(1.0*constr, 0.0)])
         return f_val
 
     dfcn_dz = jax.jacfwd(wrapped_fcn, argnums=1)

@@ -2,6 +2,7 @@ import numpy as np
 import jax 
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
+import trajopt.core.constraints.stl as stl
     
 def dynamics(t, z, nu, params, fcns):
     # extract states
@@ -54,33 +55,6 @@ def control_torques_dt(t, z, nu, params, fcns):
 
     return moment - m_rot # == 0
 
-def control_torques_ct(t, z, nu, params, fcns):
-
-    aero = fcns["nonlinear_aero"](t, z, nu, params, fcns)
-    m_rot = aero["m_rot"]
-
-    moment = nu[:3]
-    difference = moment - m_rot
-
-    ub = jnp.array([800.0, 5000.0, 5000.0])
-    lb = jnp.array([-800.0, -5000.0, -5000.0])
-
-    # ub = jnp.array([0, 0.0, 0.0])
-    # lb = jnp.array([-0.0, -0.0, -0.0])
-
-    top    = difference - ub
-    bottom = lb - difference
-
-    g_x = jnp.concatenate([top, bottom])
-
-    # alpha = 50.0
-    # # numerically stable log-sum-exp
-    # m = jnp.max(g_x)
-    # lse = m + (1.0 / alpha) * jnp.log(jnp.sum(jnp.exp(alpha * (g_x - m))))
-
-    return jnp.max(g_x).reshape(1,)
-
-
 def heat_rate(t, z, nu, params, fcns): # heat rate
 
     r = jnp.linalg.norm(z[0:3])
@@ -90,7 +64,7 @@ def heat_rate(t, z, nu, params, fcns): # heat rate
 
     return jnp.array([params['vehicle']['kQ'] * rho ** 0.5 * v ** 3])
 
-def dynamic_pressure(t, z, nu, params, fcns):  #dynamic pressure
+def dynamic_pressure(t, z, nu, params, fcns):  # dynamic pressure
     
     r = jnp.linalg.norm(z[0:3])
     v = jnp.linalg.norm(z[3:6])

@@ -227,7 +227,7 @@ def compile_jax_discretization(problem, method):
         term = diffrax.ODETerm(f_dot)
 
         solver = diffrax.Dopri5()
-        stepsize_controller = diffrax.PIDController(rtol=1e-4, atol=1e-4)
+        stepsize_controller = diffrax.PIDController(rtol=1e-5, atol=1e-5)
         sol = diffrax.diffeqsolve(
             term,
             solver,

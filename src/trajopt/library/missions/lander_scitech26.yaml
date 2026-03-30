@@ -5,7 +5,6 @@
 fcns.altitude: trajopt/library/models/lander_6dof.py:altitude
 fcns.speed: trajopt/library/models/lander_6dof.py:speed
 fcns.tilt: trajopt/library/models/lander_6dof.py:tilt
-# fcns.altitude: trajopt/library/models/lander_6dof.py:altitude
 
 params.planet.inherit: trajopt/library/missions/shared/planet/nondim_planet.yaml
 params.vehicle.inherit: trajopt/library/missions/shared/vehicle/mikilander.yaml
@@ -15,14 +14,14 @@ params.zi: [4, 4, 0, 0.0, -4.0, 4.0, 0, 0, 0]
 params.min_thrust: 0.3
 
 state: 
-  Mass.scale: 1
-  Position.scale: 1
-  Velocity.scale: 1
-  Attitude.scale: 1
-  Angular Velocity.scale: 1
+  mass.scale: 1
+  pos.scale: 1
+  vel.scale: 1
+  quat.scale: 1
+  angv.scale: 1
 
 control:
-  Thrust.scale: 1
+  thrust.scale: 1
 
 time:
   scale: 1
@@ -101,8 +100,8 @@ constraint_list:
   # - altitude_triggered_angular_velocity
   # - altitude_triggered_glideslope
   # - altitude_triggered_los
-  - altitude_triggered_speed
-  - altitude_triggered_tilt
+  # - altitude_triggered_speed
+  # - altitude_triggered_tilt
 
 
 cost_list:

@@ -3,14 +3,14 @@
 # ===============================
 
 state: 
-  Mass.idx: [0]
-  Position.idx: [1, 2, 3]
-  Velocity.idx: [4, 5, 6]
-  Attitude.idx: [7, 8, 9, 10]
-  Angular Velocity.idx: [11, 12, 13]
+  mass.idx: [0]
+  pos.idx: [1, 2, 3]
+  vel.idx: [4, 5, 6]
+  quat.idx: [7, 8, 9, 10]
+  angv.idx: [11, 12, 13]
 
 control:
-  Thrust.idx: [0, 1, 2]
+  thrust.idx: [0, 1, 2]
 
 # ===============================
 # CONSTRAINT MODELS
@@ -70,7 +70,6 @@ constraints.min_thrust:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/lander_6dof.py:thrust
-  units: [{"f": 1}]
   dimension: 1
   ct: 0
 
