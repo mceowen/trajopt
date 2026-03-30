@@ -68,11 +68,32 @@ def dynamics(t, z, nu, params):
 # (used with type: nonconvex_inequality constraints)
 # =============================================================================
 
-def height_triggered_pitch(t, z, nu, params):
-    f = 2.0 - z[1]
-    g = 1.0 - (params["cos_theta_max"] + 2 * jnp.sum(z[9:11] ** 2))
-
-    return jnp.array([jnp.maximum(f, 0.0) * jnp.maximum(-g, 0.0)])
-
 def thrust(t, z, nu, params):
     return jnp.array([jnp.linalg.norm(nu[:3])])
+
+def glideslope(t, z, nu, params, fcns):
+    r_i = z[0:3]
+
+    theta_gs = params["theta_gs"]
+
+    return jnp.array([jnp.tan(jnp.deg2rad(theta_gs))*jnp.linalg.norm(r_i[1:3]) - r_i[0]])
+     
+def tilt(t, z, nu, params, fcns):
+     
+     theta_tilt = jnp.deg2rad(params["theta_tilt"])
+
+     q2 = z[8]
+     q3 = z[9]
+
+     return jnp.array([jnp.cos(theta_tilt) - 1.0 + 2*(q2**2 + q3**2)])
+     
+# def los(t, z, nu, params, fcns):
+     
+def altitude(t, z, nu, params, fcns):
+    return jnp.array([z[0]])
+
+def speed(t, z, nu, params, fcns):
+     
+     eps = 0.000001
+     
+     return jnp.array([jnp.sqrt(z[3]**2 + z[4]**2 + z[5]**2 + eps)])

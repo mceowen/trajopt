@@ -5,20 +5,21 @@ import trajopt.library.methods.convexify as convexify
 import trajopt.utils.tools as tools
 
 class Trajectories:
-    def __init__(self, config, index_map):
+    def __init__(self, config, index_map, fcns=None):
 
         self.trajectories_list = []
 
         for i, (traj_name, traj_config_i) in enumerate(config.problem.trajectories.items()):
-            self.register_trajectory(traj_config_i, index_map)
+            self.register_trajectory(traj_config_i, index_map, fcns=fcns)
 
-    def register_trajectory(self, traj_config, index_map):
+    def register_trajectory(self, traj_config, index_map, fcns=None):
         """"
         Register a trajectory object in the trajectories list given a trajectory configuration.
 
         Args:
             traj_config: Trajectory configuration dictionary.
-            config: Problem configuration dictionary.
+            index_map: Index map object.
+            fcns: Resolved functions dictionary.
 
         Returns:
             None.
@@ -26,7 +27,7 @@ class Trajectories:
         traj_type = traj_config["type"]
         trajectoryClass = getattr(trajectory_library, traj_type)
 
-        traj_object = trajectoryClass(traj_config, index_map)
+        traj_object = trajectoryClass(traj_config, index_map, fcns=fcns)
         self.trajectories_list.append(traj_object)
         
     def get(self, **kwargs):

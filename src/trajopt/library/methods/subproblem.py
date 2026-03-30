@@ -531,7 +531,8 @@ class Subproblem:
         for cost in problem.costs.get(type="min_norm_terminal"):
             zf = self.z_ref[-1] + self.dz[-1]
             idx = cost.idx
-            term_cost = cp.norm(zf[idx])
+            print(f"{zf.shape}, {idx}")
+            term_cost = self.w.cost * cp.norm(zf[idx])
             self.TRUE += term_cost
 
         for cost in problem.costs.get(type="terminal_state"):
@@ -675,6 +676,8 @@ class Subproblem:
 
         prop_time_ms = (time.time() - start) * 1000.0
 
+        start = time.time()
+
         # compute linearized terminal and running costs
         cost, dcostdz, dcostdnu = discretize.compute_nonconvex_costs(inputs.z_ref, inputs.nu_ref, problem, method)
 
@@ -684,6 +687,9 @@ class Subproblem:
             g = None
             dgdz = None
             dgdnu = None
+
+        ncvx_cnstr_time = (time.time() - start) * 1000.0
+        print(f"ncvx_cnstr_time: {ncvx_cnstr_time}")
 
         # Dynamics & references
         self._set_param(self.Ak,   Ak)
@@ -713,7 +719,7 @@ class Subproblem:
 
         # update scalar weights in-subproblem
         penalty_to_use = inputs.get("penalty", tools.AttrDict(self.method.penalty))
-        self.w.cost.value   = penalty_to_use.get("w_cost", 1.0)
+        # self.w.cost.value   = penalty_to_use.get("w_cost", 1.0)
         self.w.tr_z.value   = penalty_to_use.get("wtr_z", 1e-2)
         self.w.tr_u.value   = penalty_to_use.get("wtr_u", 1e-2)
         inputs.penalty = copy.deepcopy(penalty_to_use)

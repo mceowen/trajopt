@@ -25,13 +25,14 @@ conv:
   eps_cost: 1
   eps_defect: [1]
   eps_dyn: [0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001]
-  iter_max: 50
+  iter_max: 40
 
 flags:
   ignore_dpp: 0
   flag_conv: 1
-  buff_dyn: "quad-2"
-  buff_dyn_dual: l1
+  buff_dyn: l2
+  buff_dyn_dual: none
+  equal_dt: 1
 
 solver_opts:
-  solver: "QOCO"
+  solver: QOCO

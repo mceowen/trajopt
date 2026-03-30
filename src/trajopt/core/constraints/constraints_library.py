@@ -3,14 +3,36 @@ import cvxpy as cp
 import jax
 import jax.numpy as jnp
 import trajopt.library.methods.convexify as convexify
-from trajopt.utils.config_loader import resolve_function
+from trajopt.utils.config_loader import resolve_function_from_path
+from trajopt.core.constraints.stl import parse_stl_expression
+
+def _resolve_fcn(fcn_string, fcns=None):
+    if fcns and isinstance(fcn_string, str):
+        # check if stl fcn string, use STL parser
+        if any(op in fcn_string for op in ('<=', '>=', ' and ', ' or ', ' implies ')):
+            return parse_stl_expression(fcn_string, fcns)
+        
+        # else look into shared fcns dict
+        elif fcn_string.startswith('fcns.'):
+            key = fcn_string.split('.', 1)[1]
+            if key not in fcns:
+                raise KeyError(f"Function reference '{fcn_string}' not found in fcns dict. "
+                               f"Available: {list(fcns.keys())}")
+            return fcns[key]
+        
+        # use raw function path function
+        else:
+            return resolve_function_from_path(fcn_string)
+
+# def resolve_stl(fcn_string, fcns=None):
+
 
 # ===============================================================
 # CONVEX CONSTRAINTS
 # ===============================================================
 
 class equality_bc:
-    def __init__(self, cnstr_config, index_map):
+    def __init__(self, cnstr_config, index_map, **kwargs):
         # required properties
         self.name    = cnstr_config["name"]
         self.group   = cnstr_config.get("group", None)
@@ -49,7 +71,7 @@ class equality_bc:
             self.eps   = nondim.M.control.d2nd[np.ix_(self.idx, self.idx)] @ self.eps
 
 class inequality_bc:
-    def __init__(self, cnstr_config, index_map):
+    def __init__(self, cnstr_config, index_map, **kwargs):
         self.name  = cnstr_config["name"]
         self.group = cnstr_config.get("group", None)
         self.set   = cnstr_config["set"]
@@ -77,7 +99,7 @@ class inequality_bc:
             self.max_value = nondim.M.control["d2nd"][np.ix_(self.max_value_idx, self.max_value_idx)] @ self.max_value
 
 class box:
-    def __init__(self, cnstr_config, index_map):
+    def __init__(self, cnstr_config, index_map, **kwargs):
         
         self.name  = cnstr_config["name"]
         self.group = cnstr_config.get("group", None)
@@ -132,7 +154,7 @@ class box:
 # rate constraints
 # ---------------------------------------------------------------
 class control_rate_limit:
-    def __init__(self, cnstr_config, index_map):
+    def __init__(self, cnstr_config, index_map, **kwargs):
         self.name = cnstr_config["name"]
         self.group = cnstr_config.get("group", None)
         self.value = np.atleast_1d(cnstr_config["value"])
@@ -154,7 +176,7 @@ class control_rate_limit:
 # ---------------------------------------------------------------
 
 class axis_angle_cone:
-    def __init__(self, cnstr_config, index_map):
+    def __init__(self, cnstr_config, index_map, **kwargs):
 
         self.name  = cnstr_config["name"]
         self.group = cnstr_config.get("group", None)
@@ -181,7 +203,7 @@ class axis_angle_cone:
         return {"values": np.rad2deg(np.arccos(theta)), "limits": limits}
 
 class max_norm_cone:
-    def __init__(self, cnstr_config, index_map):
+    def __init__(self, cnstr_config, index_map, **kwargs):
         self.name = cnstr_config["name"]
         self.group = cnstr_config.get("group", None)
         self.set = cnstr_config["set"]
@@ -209,7 +231,7 @@ class max_norm_cone:
         return {"values": values, "limits": limits}
 
 class quaternion_cone:
-    def __init__(self, cnstr_config, index_map):
+    def __init__(self, cnstr_config, index_map, **kwargs):
         self.name = cnstr_config["name"]
         self.group = None
         self.ct = cnstr_config.get("ct", 0)
@@ -230,7 +252,7 @@ class quaternion_cone:
 # ===============================================================
 
 class nonconvex_inequality:
-    def __init__(self, cnstr_config, index_map):
+    def __init__(self, cnstr_config, index_map, fcns=None, **kwargs):
 
         # required config
         self.name           = cnstr_config["name"]
@@ -261,7 +283,7 @@ class nonconvex_inequality:
 
         # symbolic function in dimensional units provided by user
         # (jax or sympy)
-        self.fcn_dim = resolve_function(self.fcn_string)
+        self.fcn_dim = _resolve_fcn(self.fcn_string, fcns)
         self.fcn_nd = None
 
         # this is the symbolic nondimmed version of fcn_fim, it will 
@@ -342,6 +364,10 @@ class nonconvex_inequality:
             self.fcn_compiled, self.dfcn_dz_compiled, self.dfcn_du_compiled = convexify.linearize_jax(self.fcn)
 
             self.f_batched = jax.jit(jax.vmap(vals_function, in_axes=(0,0,0, None)))
+
+            self.fcn_batched     = jax.jit(jax.vmap(self.fcn_compiled,     in_axes=(0, 0, 0, None)))
+            self.dfcn_dz_batched = jax.jit(jax.vmap(self.dfcn_dz_compiled, in_axes=(0, 0, 0, None)))
+            self.dfcn_du_batched = jax.jit(jax.vmap(self.dfcn_du_compiled, in_axes=(0, 0, 0, None)))
         
         elif self.backend == "sympy":
             pass
@@ -351,6 +377,13 @@ class nonconvex_inequality:
             self.fcn_compiled(t, z, nu, params),
             self.dfcn_dz_compiled(t, z, nu, params),
             self.dfcn_du_compiled(t, z, nu, params)
+        )
+
+    def g_aff_batched(self, t, z, nu, params):
+        return (
+            self.fcn_batched(t, z, nu, params),
+            self.dfcn_dz_batched(t, z, nu, params),
+            self.dfcn_du_batched(t, z, nu, params)
         )
 
     def compute_constraint_values(self, t, z, nu, params):
@@ -385,7 +418,7 @@ class nonconvex_inequality:
         return {"values": values, 'limits': self.limits}
     
 class nonconvex_equality:
-    def __init__(self, cnstr_config, index_map):
+    def __init__(self, cnstr_config, index_map, fcns=None, **kwargs):
 
         # required config
         self.name           = cnstr_config["name"]
@@ -409,7 +442,7 @@ class nonconvex_equality:
 
         # symbolic function in dimensional units provided by user
         # (jax or sympy)
-        self.fcn_dim = resolve_function(self.fcn_string)
+        self.fcn_dim = _resolve_fcn(self.fcn_string, fcns)
         self.fcn_nd = None
 
         # this is the symbolic nondimmed version of fcn_fim, it will 
@@ -469,6 +502,10 @@ class nonconvex_equality:
             self.fcn_compiled, self.dfcn_dz_compiled, self.dfcn_du_compiled = convexify.linearize_jax(self.fcn)
 
             self.f_batched = jax.jit(jax.vmap(vals_function, in_axes=(0,0,0, None)))
+
+            self.fcn_batched     = jax.jit(jax.vmap(self.fcn_compiled,     in_axes=(0, 0, 0, None)))
+            self.dfcn_dz_batched = jax.jit(jax.vmap(self.dfcn_dz_compiled, in_axes=(0, 0, 0, None)))
+            self.dfcn_du_batched = jax.jit(jax.vmap(self.dfcn_du_compiled, in_axes=(0, 0, 0, None)))
         
         elif self.backend == "sympy":
             pass
@@ -478,6 +515,13 @@ class nonconvex_equality:
             self.fcn_compiled(t, z, nu, params),
             self.dfcn_dz_compiled(t, z, nu, params),
             self.dfcn_du_compiled(t, z, nu, params)
+        )
+
+    def g_aff_batched(self, t, z, nu, params):
+        return (
+            self.fcn_batched(t, z, nu, params),
+            self.dfcn_dz_batched(t, z, nu, params),
+            self.dfcn_du_batched(t, z, nu, params)
         )
 
     def compute_constraint_values(self, t, z, nu, params):
@@ -498,9 +542,35 @@ class nonconvex_equality:
         elif self.backend == "sympy":
             pass
         return {"values": values, 'limits': self.limits}
+    
+# class stl(nonconvex_equality):
+#     def __init__(self, cnstr_config, index_map, fcns=None, **kwargs):
+#         super().__init__(cnstr_config, index_map, fcns, **kwargs)
+
+
+#         self.trigger_function    = 
+#         self.constraint_function = 
+
+#     def compute_constraint_values(self, t, z, nu, params):
+#         if self.backend == "jax":
+#             t_jax = jnp.asarray(t)
+#             z_jax = jnp.asarray(z)
+#             nu_jax = jnp.asarray(nu)
+#             values = np.asarray(self.f_batched(t_jax, z_jax, nu_jax, params))
+
+#             n_t = t_jax.shape[0]
+
+#             if self.value is not None:
+#                 self.limits = np.tile(np.asarray(self.M_out_nd2d @ self.value), (n_t, self.dimension))
+#             else: 
+#                 self.limits = None
+
+#         elif self.backend == "sympy":
+#             pass
+#         return {"values": values, 'limits': self.limits, ""}
 
 class dynamics:
-    def __init__(self, cnstr_config, index_map):
+    def __init__(self, cnstr_config, index_map, fcns=None, **kwargs):
         self.name       = cnstr_config["name"]
         self.fcn_string = cnstr_config["fcn"]
         self.group      = "dynamics"
@@ -508,7 +578,7 @@ class dynamics:
 
         self.index_map  = index_map
 
-        self.fcn_dim    = resolve_function(self.fcn_string)
+        self.fcn_dim = _resolve_fcn(self.fcn_string, fcns)
 
         self.backend    = cnstr_config.get("backend", "jax")
         

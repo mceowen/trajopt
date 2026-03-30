@@ -3,7 +3,7 @@ inherit: trajopt/library/methods/configs/autoscvx.yaml
 time_grid: 40
 
 flags:
-  equal_dt: 0
+  equal_dt: 1
   buff_dyn: "term"
   ctcs: none
 

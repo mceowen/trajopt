@@ -122,7 +122,7 @@ def resolve_path(path_str):
     
     return path
 
-def resolve_function(path_str):
+def resolve_function_from_path(path_str):
     """Load a function from 'path/to/file.py:function_name' format."""
     
     file_path_str, func_name_str = path_str.rsplit(':', 1)

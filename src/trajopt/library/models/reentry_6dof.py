@@ -2,6 +2,7 @@ import numpy as np
 import jax 
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
+import trajopt.core.constraints.stl as stl
     
 def dynamics(t, z, nu, params, fcns):
     # extract states
@@ -29,11 +30,13 @@ def dynamics(t, z, nu, params, fcns):
     aero = fcns['nonlinear_aero'](t, z, nu, params, fcns)
     a_aero_trans = (1 / mass) * aero["f_trans"]
 
+    m_rot = aero["m_rot"]
+
     v_inertial = DCM(q).T @ v_body
 
     # rotational kinematics and dynamics (body sees control + aero moments)
     q_dot = (1/2) * omega(w) @ q
-    w_dot = jnp.rad2deg(Jbinv @ (torque - cr(w) @ Jb @ w))
+    w_dot = jnp.rad2deg(Jbinv @ ( torque - cr(w) @ Jb @ w))
 
     # translational accelerations
     v_body_dot = a_aero_trans + DCM(q) @ a_grav_inertial - cr(w) @ v_body
@@ -43,7 +46,7 @@ def dynamics(t, z, nu, params, fcns):
 
     return x_dot
 
-def control_torques(t, z, nu, params, fcns):
+def control_torques_dt(t, z, nu, params, fcns):
 
     aero = fcns["nonlinear_aero"](t, z, nu, params, fcns)
     m_rot = aero["m_rot"]
@@ -61,7 +64,7 @@ def heat_rate(t, z, nu, params, fcns): # heat rate
 
     return jnp.array([params['vehicle']['kQ'] * rho ** 0.5 * v ** 3])
 
-def dynamic_pressure(t, z, nu, params, fcns):  #dynamic pressure
+def dynamic_pressure(t, z, nu, params, fcns):  # dynamic pressure
     
     r = jnp.linalg.norm(z[0:3])
     v = jnp.linalg.norm(z[3:6])
@@ -212,6 +215,44 @@ def bank_aoa_to_quat(v_vec, r_vec, sigma_deg, alpha_deg):
 
     return q
 
+def quat_to_bank_aoa(q, v_vec, r_vec):
+
+    DCM_I2B = DCM(q)
+
+    # alpha and beta from body-frame velocity direction
+    v_body = DCM_I2B @ v_vec
+    v_body_hat = v_body / jnp.linalg.norm(v_body)
+    alpha_deg = jnp.rad2deg(jnp.arctan2(v_body_hat[2], v_body_hat[0]))
+    beta_deg  = jnp.rad2deg(jnp.arcsin(v_body_hat[1]))
+
+    # velocity frame (same construction as bank_aoa_to_quat)
+    r_hat = r_vec / jnp.linalg.norm(r_vec)
+    v_hat = v_vec / jnp.linalg.norm(v_vec)
+    v_right_hat = jnp.cross(v_hat, r_hat) / jnp.linalg.norm(jnp.cross(v_hat, r_hat))
+    v_down_hat  = jnp.cross(v_hat, v_right_hat) / jnp.linalg.norm(jnp.cross(v_hat, v_right_hat))
+
+    # zero-bank body frame: apply only beta and alpha rotations to velocity frame
+    B0 = jnp.column_stack((v_hat, v_right_hat, v_down_hat))
+    B0 = R_vec_theta(v_down_hat, -beta_deg) @ B0
+    B0 = R_vec_theta(B0[:, 1], alpha_deg) @ B0
+
+    # actual body frame columns (inertial coordinates)
+    B_actual = DCM_I2B.T
+
+    # bank angle = rotation from B0 to B_actual about v_hat
+    z0 = B0[:, 2]
+    z1 = B_actual[:, 2]
+    z0_perp = z0 - jnp.dot(z0, v_hat) * v_hat
+    z1_perp = z1 - jnp.dot(z1, v_hat) * v_hat
+    z0_perp = z0_perp / jnp.linalg.norm(z0_perp)
+    z1_perp = z1_perp / jnp.linalg.norm(z1_perp)
+
+    cos_sigma = jnp.dot(z0_perp, z1_perp)
+    sin_sigma = jnp.dot(jnp.cross(z0_perp, z1_perp), v_hat)
+    sigma_deg = jnp.rad2deg(jnp.arctan2(sin_sigma, cos_sigma))
+
+    return sigma_deg, alpha_deg, beta_deg
+
 def quaternion_error(q_des, q):
     q_conj = jnp.array([q[0], -q[1], -q[2], -q[3]])
     q_error = quat_mult(q_conj, q_des)
@@ -235,9 +276,8 @@ def long_lat(t, z, nu, params, fcns):
     y = z[1]
     z = z[2]
 
-    theta = jnp.atan2(y, x)
-    phi = jnp.atan2(z, jnp.sqrt(x**2 + y**2))
-
+    theta = jnp.rad2deg(jnp.atan2(y, x))
+    phi = jnp.rad2deg(jnp.atan2(z, jnp.sqrt(x**2 + y**2)))
     
     return jnp.array([theta, phi])
 
@@ -248,8 +288,8 @@ def long_lat_alt(t, z, nu, params, fcns):
     y = z[1]
     z = z[2]
 
-    theta = jnp.atan2(y, x)
-    phi = jnp.atan2(z, jnp.sqrt(x**2 + y**2))
+    theta = jnp.rad2deg(jnp.atan2(y, x))
+    phi = jnp.rad2deg(jnp.atan2(z, jnp.sqrt(x**2 + y**2)))
 
     alt = r - params['planet']['r']
     
@@ -260,3 +300,4 @@ def r_v(t, z, nu, params, fcns):
     v = jnp.linalg.norm(z[3:6])
 
     return jnp.array([r, v])
+

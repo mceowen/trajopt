@@ -11,6 +11,13 @@ import diffrax
 
 import trajopt.library.methods.convexify as convexify
 import trajopt.utils.tools as tools
+import time
+import diffrax
+
+jax.config.update("jax_compilation_cache_dir", "/tmp/jax_cache")
+jax.config.update("jax_persistent_cache_min_entry_size_bytes", -1)
+jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
+jax.config.update("jax_persistent_cache_enable_xla_caches", "xla_gpu_per_fusion_autotune_cache_dir")
 
 def set_ltv_indices(problem, method):
     """
@@ -307,7 +314,7 @@ def compile_jax_discretization_bwd(problem, method):
         lds_next = lds + (dt_sub / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
         return lds_next, None
 
-    rk4_step_jax_jit_bwd = jax.jit(rk4_step_jax_bwd)
+    rk4_step_jax_jit_bwd = rk4_step_jax_bwd
 
     # initilize stacked propagation vector  
     def pack_lds0(z_k):
@@ -366,6 +373,7 @@ def discretize_inv_free_jax(z_ref_np, nu_ref_np, problem, method):
     ks = jnp.arange(method.index_map.N.time_grid - 1)
     A_jax, B_jax, Bp_jax, z_minus = method.propagate_discretization_jax(ks, z_ref, nu_ref, params_jax)
 
+    print(f"actual_prop_time: {(start - time.time())*1000}")
     z_ref_0 = z_ref[[0], :]
     
     return np.asarray(A_jax), np.asarray(B_jax), np.asarray(Bp_jax), np.asarray(jnp.vstack([z_ref_0, z_minus]))

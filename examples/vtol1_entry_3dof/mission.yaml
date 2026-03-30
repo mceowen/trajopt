@@ -1,7 +1,6 @@
 # ===============================
 # FUNCTIONS
 # ===============================
-
 fcns.density_model: trajopt/library/missions/vtol.py:exp_density_jax
 fcns.nonlinear_aero: trajopt/library/missions/vtol.py:nonlinear_aero_jax
 
@@ -16,15 +15,15 @@ params.vehicle.inherit: trajopt/library/missions/shared/vehicle/vtol.yaml
 # PROBLEM SCALES
 # ===============================
 
-state.r.scale: 1000
-state.theta.scale: 10
-state.phi.scale: 10
-state.v.scale: 700
-state.gamma.scale: 10
-state.psi.scale: 10
+state.r.scale: 1000000
+state.theta.scale: 1
+state.phi.scale: 1
+state.v.scale: 3000
+state.gamma.scale: 1
+state.psi.scale: 1
 
 control.bank.scale: 1
-time.scale: 100
+time.scale: 1700
 
 # ===============================
 # CONSTRAINT/COST PARAMS
@@ -38,7 +37,7 @@ constraints:
   final_state:
     value: ["${params.planet.r + 15e3}", 12, 70, -10, 90]
     idx: [0, 1, 2, 4, 5]
-    eps: [0.0001, 0.0001, 0.0001, 0.0001, 0.0001]
+    eps: [500, 0.001, 0.001, 0.001, 0.001]
 
   state_limits:
     min_value: ["${params.planet.r}", 100.0]
@@ -56,16 +55,19 @@ constraints:
   
   max_Q:
     max_value: 33300
+    scale: [33300]
     eps: [0.01]
   
   max_q:
     max_value: 18000
     # ct: 1
+    scale: [18000]
     eps: [0.01]
   
   max_load:
     max_value: 24.525
     # ct: 1
+    scale: [24.525]
     eps: [0.01]
 
 costs:
@@ -84,7 +86,7 @@ constraint_list:
   - final_state
   - state_limits
   - bank_angle_limit
-  - bank_angle_rate_limit
+  # - bank_angle_rate_limit
   - max_Q
   - max_q
   - max_load
