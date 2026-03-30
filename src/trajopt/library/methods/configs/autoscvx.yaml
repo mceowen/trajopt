@@ -16,6 +16,7 @@ flags:
   jax_dyn:            1       # 0, 1
   flag_conv:          0       # 0, 1, 2
   ignore_dpp:         0
+  discretize: "ms"  # "ms", "ps"
 
 guess: {}
 

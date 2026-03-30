@@ -338,7 +338,7 @@ class Subproblem:
 
 
         # pseudospectral collocation
-        if self.flags.discretization == "ps":
+        if self.flags.discretize == "ps":
             C.append(discretize.build_ps_dyn_constraints(self))
 
         # Per-stage constraints
@@ -346,7 +346,7 @@ class Subproblem:
             if k < N - 1:
                 
                 # multiple shooting discretization
-                if self.flags.discretization == "ms":
+                if self.flags.discretize == "ms":
                     C.append(discretize.build_ms_dyn_constraint(self, k))
 
                 # #backwards shooting dynamics constraints:
