@@ -108,6 +108,8 @@ class Subproblem:
             self.dt_min  = cp.Parameter(nonneg=True, name="dt_min")
             self.dt_max  = cp.Parameter(nonneg=True, name="dt_max")
             self.ddt_max = cp.Parameter(nonneg=True, name="ddt_max")
+            self.T_min = cp.Parameter(nonneg=True, name="T_min")
+            self.T_max = cp.Parameter(nonneg=True, name="T_max")
         else:
             self.dt_min = self.dt_max = self.ddt_max = None
 
@@ -379,6 +381,7 @@ class Subproblem:
                     C.append(t_interval_k <= self.dt_max)
                     C.append(t_interval_k >= self.dt_min)
                     C.append(cp.abs(self.dt[k, 0]) <= self.ddt_max)
+                    C.append(t_k >= 0)
 
                 # Control slew (udot)
                 for constraint in problem.constraints.get(ct=0, type="control_rate_limit"):
@@ -389,6 +392,10 @@ class Subproblem:
                         M_sel @ (self.nu_ref[k + 1, self.indices.nu.control] + self.dnu[k + 1, self.indices.nu.control] - (self.nu_ref[k, self.indices.nu.control] + self.dnu[k, self.indices.nu.control]))
                         <= dt_k * np.concatenate([value, value])
                     )
+            if bool(self.flags.free_final_time):
+                C.append(self.s_ref[k, 0] + self.ds[k, 0] >= self.dt_min * (N - 1))
+                C.append(self.T_min <= self.t_ref[-1, 0] + self.dt[-1, 0])
+                C.append(self.t_ref[-1, 0] + self.dt[-1, 0] <= self.T_max)
 
             # State box constraints
             for constraint in problem.constraints.get(ct=0, type="box"):
@@ -557,7 +564,7 @@ class Subproblem:
                     self.TRUE += cost.w * cp.norm1(z_plus - z_minus) * (1 / self.N.time_grid)
 
         # === Trust-region penalties ===
-        TR = self.flags.flag_tr * (self.w.tr_z * cp.sum_squares(self.dz[:, :self.n.state]) + self.w.tr_u * cp.sum_squares(self.dnu))
+        TR = self.flags.flag_tr * (self.w.tr_z * cp.sum_squares(self.dz) + self.w.tr_u * cp.sum_squares(self.dnu))
         # === Virtual buffer penalties ===
         VB = 0.0
         DUAL = 0.0
@@ -730,6 +737,8 @@ class Subproblem:
             self.dt_min.value  = float(method.dt_min)
             self.dt_max.value  = float(method.dt_max)
             self.ddt_max.value = float(method.ddt_max)
+            self.T_min.value   = float(method.Ts_min)
+            self.T_max.value   = float(method.Ts_max)
 
         # 1. Refresh W_sqrt CVXPY parameter values from stacked constraint weights
         self.W_sqrt.nonconvex_inequality.value = tools.ensure_shape(np.sqrt(W_stack.nonconvex_inequality), self.W_sqrt.nonconvex_inequality.shape)

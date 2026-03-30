@@ -1,6 +1,7 @@
 import numpy as np
 import jax
 import jax.numpy as jnp
+import diffrax
 import trajopt.utils.tools as tools
 from scipy.integrate import solve_ivp
 from scipy.interpolate import interp1d
@@ -74,6 +75,38 @@ def propagate_jax_rk4_dense(z0, nu_ref, t_ref, t_nl, problem, method, compiled_a
     nu_nl = np.hstack([np.interp(t_nl, t_ref, nu_ref[:, i]).reshape((-1, 1)) for i in range(nu_ref.shape[1])])
 
     return t_nl, z_nl, nu_nl
+
+def compile_tau_propagator(problem, method, n_dense=1000):
+    fcn    = problem.constraints.get(type="dynamics")[0].fcn
+    N      = method.index_map.N.time_grid
+    params = tools.recursive_to_dict(problem.params)
+    tau    = jnp.linspace(0.0, 1.0, N)
+    tau_d  = jnp.linspace(0.0, 1.0, n_dense)
+
+    @jax.jit
+    def solve(z0, nu):
+        def rhs(t, z, _):
+            k = jnp.clip(jnp.searchsorted(tau, t, side='right') - 1, 0, N - 2)
+            a = (tau[k+1] - t) / (tau[k+1] - tau[k])
+            return fcn(t, z, a * nu[k] + (1 - a) * nu[k+1], params)
+        return diffrax.diffeqsolve(
+            diffrax.ODETerm(rhs), diffrax.Dopri5(), 0.0, 1.0, 1e-4, z0,
+            stepsize_controller=diffrax.PIDController(rtol=1e-8, atol=1e-8),
+            saveat=diffrax.SaveAt(ts=tau_d), max_steps=100000,
+        ).ys
+
+    method.propagate_tau_jit = solve
+    method.tau_nodes = tau
+    method.tau_dense = tau_d
+
+
+def propagate_tau(z0, nu_ref, problem, method):
+    idx  = problem.index_map.indices
+    z_nl = np.asarray(method.propagate_tau_jit(jnp.array(z0), jnp.array(nu_ref)))
+    tau_n, tau_d = np.asarray(method.tau_nodes), np.asarray(method.tau_dense)
+    u_nl = np.column_stack([np.interp(tau_d, tau_n, nu_ref[:, c]) for c in idx.nu.control])
+    return z_nl[:, idx.z.time].reshape(-1), z_nl[:, idx.z.state], u_nl
+
 
 def propagate_scipy_rk45(z0, nu_ref, t_ref, t_nl, problem, method, dynamics=None):
 
