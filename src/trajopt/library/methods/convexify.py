@@ -8,7 +8,7 @@ import cvxpy as cp
 def linearize_jax(fcn):
 
     dfcn_dz = jax.jit(jax.jacfwd(fcn, argnums=1))
-    dfcn_du = jax.jit(jax.jacfwd(fcn, argnums=2))
+    dfcn_dnu = jax.jit(jax.jacfwd(fcn, argnums=2))
     f = jax.jit(fcn)
 
     return f, dfcn_dz, dfcn_dnu
@@ -21,10 +21,10 @@ def linearize_jax_ctcs(fcn, constraints, n):
         return f_val
 
     dfcn_dz = jax.jacfwd(wrapped_fcn, argnums=1)
-    dfcn_du = jax.jacfwd(wrapped_fcn, argnums=2)
+    dfcn_dnu = jax.jacfwd(wrapped_fcn, argnums=2)
     f = jax.jit(wrapped_fcn)
     
-    return f, dfcn_dz, dfcn_du
+    return f, dfcn_dz, dfcn_dnu
 
     # TODO(Skye): Verify jax ctcs integration below or delete
     #     def augmented_fcn(t, z, nu, params):

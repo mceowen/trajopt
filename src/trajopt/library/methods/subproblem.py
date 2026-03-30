@@ -114,7 +114,7 @@ class Subproblem:
             self.dt_min = self.dt_max = self.ddt_max = None
 
         # Weights & Trust Region weights (stored as simple AttrDict values)
-        self.w.cost                     = cp.Parameter(nonneg=True, name="w_cost")
+        self.w.cost                     = cp.Constant(value= method.penalty.w_cost, name="w_cost") 
         self.w.tr_z                     = cp.Parameter(nonneg=True, name="tr_z")
         self.w.tr_u                     = cp.Parameter(nonneg=True, name="tr_u")
 
