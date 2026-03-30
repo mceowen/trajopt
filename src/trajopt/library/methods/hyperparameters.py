@@ -630,21 +630,21 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
     if np.sum(W_dyn) > 0: Wh_dyn[Wh_dyn <= eps_nonzero2] = eps_nonzero2
     if np.sum(W_term) > 0: Wh_term[Wh_term <= eps_nonzero2] = eps_nonzero2
 
-    subproblem.W_stack.nonconvex_inequality = np.maximum(Wh_ineq, W_ineq)
-    subproblem.W_stack.dynamics             = np.maximum(Wh_dyn, W_dyn)
-    subproblem.W_stack.final_state          = np.maximum(Wh_term, W_term)
-    subproblem.W_stack.plus_real            = np.maximum(Wh_plus_real, W_plus_real)
-    subproblem.W_stack.minus_real           = np.maximum(Wh_minus_real, W_minus_real)
-    subproblem.W_stack.plus_ctcs            = np.maximum(Wh_plus_ctcs, W_plus_ctcs)
-    subproblem.W_stack.minus_ctcs           = np.maximum(Wh_minus_ctcs, W_minus_ctcs)
+    # subproblem.W_stack.nonconvex_inequality = np.maximum(Wh_ineq, W_ineq)
+    # subproblem.W_stack.dynamics             = np.maximum(Wh_dyn, W_dyn)
+    # subproblem.W_stack.final_state          = np.maximum(Wh_term, W_term)
+    # subproblem.W_stack.plus_real            = np.maximum(Wh_plus_real, W_plus_real)
+    # subproblem.W_stack.minus_real           = np.maximum(Wh_minus_real, W_minus_real)
+    # subproblem.W_stack.plus_ctcs            = np.maximum(Wh_plus_ctcs, W_plus_ctcs)
+    # subproblem.W_stack.minus_ctcs           = np.maximum(Wh_minus_ctcs, W_minus_ctcs)
     # else:
-    #     subproblem.W_stack.plus_real = Wh_plus_real
-    #     subproblem.W_stack.minus_real = Wh_minus_real
-    #     subproblem.W_stack.plus_ctcs = Wh_plus_ctcs
-    #     subproblem.W_stack.minus_ctcs = Wh_minus_ctcs
-    #     subproblem.W_stack.nonconvex_inequality = Wh_ineq
-    #     subproblem.W_stack.dynamics = Wh_dyn
-    #     subproblem.W_stack.final_state = Wh_term
+    subproblem.W_stack.plus_real = Wh_plus_real
+    subproblem.W_stack.minus_real = Wh_minus_real
+    subproblem.W_stack.plus_ctcs = Wh_plus_ctcs
+    subproblem.W_stack.minus_ctcs = Wh_minus_ctcs
+    subproblem.W_stack.nonconvex_inequality = Wh_ineq
+    subproblem.W_stack.dynamics = Wh_dyn
+    subproblem.W_stack.final_state = Wh_term
 
     # Return diagnostics for logging
     return {
