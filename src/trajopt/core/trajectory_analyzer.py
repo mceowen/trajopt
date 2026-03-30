@@ -23,7 +23,7 @@ class TrajectoryAnalyzer:
         self.variation_config = None
 
     def solve(self):
-        self.solution = scp.run_scp(self)
+        scp.run_scp(self)
 
     def analyze(self, analysis_type="standalone", animate=False):
 
