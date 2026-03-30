@@ -1,5 +1,5 @@
 import numpy as np
-import jax 
+import jax
 import jax.numpy as jnp
 
 from trajopt.core.indexing import index_map
@@ -10,6 +10,7 @@ import diffrax
 
 
 import trajopt.library.methods.convexify as convexify
+import trajopt.library.methods.pseudospectral as pseudospectral
 import trajopt.utils.tools as tools
 
 def set_ltv_indices(problem, method):
@@ -421,7 +422,107 @@ def compute_linsys_discrete_bwd(z_ref, nu_ref, problem, method):
 
     Ak, Bk, Bkp, z_minus = discretize_inv_free_jax_bwd(z_ref, nu_ref, problem, method)
 
-    return Ak, Bk, Bkp, z_minus 
+    return Ak, Bk, Bkp, z_minus
+
+
+def build_ms_dyn_constraint(subproblem, k):
+    """
+    Construct the multiple shooting dynamics constraint for time step k.
+
+    The constraint enforces:
+        dz[k+1] + z_ref[k+1] - z_m[k+1] == Ak[k] @ dz[k] + Bk[k] @ dnu[k] + Bkp[k] @ dnu[k+1] + (vb_dyn_p[k] - vb_dyn_m[k])
+
+    Returns:
+    --------
+    cp.Constraint
+        The equality constraint for the multiple shooting dynamics
+    """
+    rhs = (
+        subproblem.Ak[k] @ subproblem.dz[k]
+        + subproblem.Bk[k] @ subproblem.dnu[k]
+        + subproblem.Bkp[k] @ subproblem.dnu[k + 1]
+        + (subproblem.vb_dyn_p[k] - subproblem.vb_dyn_m[k])
+    )
+    return subproblem.dz[k + 1] + subproblem.z_ref[k + 1] - subproblem.z_m[k + 1] == rhs
+
+
+def build_ps_dyn_constraints(subproblem, scale_ps=2.0):
+    """
+    Build pseudospectral dynamics constraints as a single block matrix equation.
+
+    Computes D, f_ref_col, Ac_col, Bc_col internally.
+
+    Returns:
+    --------
+    cp.Constraint
+        Single constraint for all collocation nodes, shape (N_col, n_z)
+    """
+    import cvxpy as cp
+
+    problem = subproblem.problem
+    method = subproblem.method
+
+    N_col = method.index_map.N.time_grid - 1
+
+    tau, etau, w, D = compute_ps_differentiation_matrix(N_col)
+
+    z_ref_np = np.asarray(subproblem.z_ref.value) if hasattr(subproblem.z_ref, 'value') else np.asarray(subproblem.z_ref)
+    nu_ref_np = np.asarray(subproblem.nu_ref.value) if hasattr(subproblem.nu_ref, 'value') else np.asarray(subproblem.nu_ref)
+
+    f_ref_col, Ac_col, Bc_col = compute_ps_dynamics_and_jacobians(z_ref_np, nu_ref_np, problem, method)
+
+    Z = subproblem.z_ref + subproblem.dz
+
+    lhs = scale_ps * (D @ Z)
+
+    rhs_list = []
+    for k in range(N_col):
+        rhs_k = f_ref_col[k] + Ac_col[k] @ subproblem.dz[k + 1] + Bc_col[k] @ subproblem.dnu[k]
+        rhs_list.append(rhs_k)
+
+    rhs = cp.vstack(rhs_list)
+
+    return lhs == rhs
+
+
+def compute_ps_dynamics_and_jacobians(z_ref, nu_ref, problem, method):
+    """
+    Compute dynamics and Jacobians at reference trajectory for pseudospectral collocation.
+    """
+    N_col = nu_ref.shape[0]
+    n_z = problem.index_map.n.z
+    n_u = problem.index_map.n.control
+
+    lin_dyn = problem.constraints.get(type='dynamics')[0].lin_dyn
+    params_jax = tools.recursive_to_dict(problem.params)
+
+    z_time_idx = problem.index_map.indices.z.time
+
+    f_ref_col = np.zeros((N_col, n_z))
+    Ac_col = np.zeros((N_col, n_z, n_z))
+    Bc_col = np.zeros((N_col, n_z, n_u))
+
+    for k in range(N_col):
+        z_k = np.asarray(z_ref[k + 1])
+        nu_k = np.asarray(nu_ref[k])
+
+        t_k = z_k[z_time_idx][0] if len(z_time_idx) > 0 else k / (N_col - 1) if N_col > 1 else 0
+
+        fc_k, Ac_k, Bc_k = lin_dyn(t_k, z_k, nu_k, params_jax)
+
+        f_ref_col[k, :] = np.asarray(fc_k)
+        Ac_col[k, :, :] = np.asarray(Ac_k)
+        Bc_col[k, :, :n_u] = np.asarray(Bc_k)
+
+    return f_ref_col, Ac_col, Bc_col
+
+
+def compute_ps_differentiation_matrix(N_col):
+    """
+    Compute the pseudospectral differentiation matrix D for fLGR collocation.
+    """
+    tau, etau, w, D = pseudospectral.flipped_radau_differential_operator(N_col)
+    return tau, etau, w, D
 
 
 
