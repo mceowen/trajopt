@@ -3,8 +3,8 @@ inherit: trajopt/library/methods/configs/autoscvx.yaml
 'N': 40
 
 flags:
-  free_final_time: 0
-  equal_dt: 1
+  free_final_time:  1
+  equal_dt:         1
   flag_autotune:      "3"     # '0', '1', '2', '3'
   buff_dyn:           "term"  # "none", 'term', 'l1', 'l2', 'quad-1', 'quad-2', 'quad-3', 'l1_dual'
   ctcs: "none"

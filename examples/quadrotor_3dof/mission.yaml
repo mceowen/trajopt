@@ -139,7 +139,7 @@ constraint_list:
   - max_thrust
   - min_thrust
   - obstacle
-  - low_height_stc
+  #- low_height_stc
 
 cost_list:
   - min_time
