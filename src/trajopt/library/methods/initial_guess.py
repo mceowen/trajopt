@@ -12,7 +12,7 @@ def set_initial_guess(problem,method):
         else:
             straight_line_initial_guess(problem, method)
 
-        method.initial_guess.t = np.asarray(method.initial_guess.t).reshape(-1)
+        method.initial_guess.t  = np.asarray(method.initial_guess.t).reshape(-1)
         method.initial_guess.dt = np.diff(method.initial_guess.t.reshape(-1, 1), axis=0)
 
         augment_initial_guess(problem, method)

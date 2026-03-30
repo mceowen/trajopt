@@ -1,6 +1,6 @@
 inherit: trajopt/library/methods/configs/autoscvx.yaml
 
-N: 20 
+time_grid: 20 
 
 guess:
   type: straight_line

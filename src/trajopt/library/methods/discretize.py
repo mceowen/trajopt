@@ -349,10 +349,10 @@ def compile_jax_discretization_bwd(problem, method):
 def discretize_inv_free_jax(z_ref_np, nu_ref_np, problem, method):
 
     # convert numpy arrays to jax
-    z_ref = jnp.asarray(z_ref_np)
-    nu_ref = jnp.asarray(nu_ref_np)
-    params = problem.params
-    params_jax = tools.recursive_to_dict(params)
+    z_ref       = jnp.asarray(z_ref_np)
+    nu_ref      = jnp.asarray(nu_ref_np)
+    params      = problem.params
+    params_jax  = tools.recursive_to_dict(params)
 
     # TODO(Skye): ensure dtk is computed from the z vector correctly for each node in the jax propagator
     # call jitted propagator for each node

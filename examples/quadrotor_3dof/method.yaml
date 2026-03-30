@@ -1,6 +1,6 @@
 inherit: trajopt/library/methods/configs/autoscvx.yaml
 
-time_grid: 
+time_grid: 40
 
 flags:
   free_final_time: 0
