@@ -1,9 +1,12 @@
 import numpy as np
 import jax 
 import jax.numpy as jnp
+
+from trajopt.core.indexing import index_map
 jax.config.update("jax_enable_x64", True)
 import scipy as sp
 from scipy.integrate import solve_ivp
+import diffrax
 
 
 import trajopt.library.methods.convexify as convexify
@@ -51,7 +54,7 @@ def compute_nonconvex_constraints(z, nu, problem, method):
     n_x         = problem.index_map.n.state
     index_map   = problem.index_map
     idx         = problem.index_map.indices
-    n_nu        = problem.index_map.n.control
+    n_nu        = problem.index_map.n.nu
     N           = method.index_map.N.time_grid
     z_jax       = jnp.asarray(z)
     nu_jax      = jnp.asarray(nu)
@@ -155,21 +158,18 @@ def compile_jax_discretization(problem, method):
     # pull ltv dynamics
     lin_dyn = problem.constraints.get(type='dynamics')[0].lin_dyn
 
-    # nsub defines the number of sub *nodes* between knot points
-    nsub_nodes = 20
-    dt_sub = 1.0 / (nsub_nodes + 1)
-    t = jnp.linspace(0.0, 1.0, nsub_nodes + 2)
-
     # packs the derivative of stacked RHS vector for node k
-    def pack_lds_dot(tau, lds_k, nu_k, nu_kp, params_jax):
+    def pack_lds_dot(tau, k, lds_k, nu_k, nu_kp, params_jax):
 
         z       = lds_k[         : Ak_ind0]
         phi_a   = lds_k[Ak_ind0  : Bk_ind0].reshape((n_z, n_z))
         phi_b_m = lds_k[Bk_ind0  : Bkp_ind0].reshape((n_z, n_nu))
         phi_b_p = lds_k[Bkp_ind0 : ].reshape((n_z, n_nu))
 
-        a = 1 - tau
-        b = tau
+        tau_k = k / (problem.index_map.N.time_grid - 1)
+        tau_kp = (k+1) / (problem.index_map.N.time_grid - 1)
+        a = (tau_kp - tau) / (tau_kp - tau_k)
+        b = (tau - tau_k) / (tau_kp - tau_k)
         nu = a * nu_k + b * nu_kp
 
         # TODO(Skye): Modify lin_dyn to take in just z,nu 
@@ -184,18 +184,10 @@ def compile_jax_discretization(problem, method):
 
         return jnp.concatenate([P1_dot, P2_dot, P3_dot, P4_dot])
 
-    # rk4 single step function for jax integration
-    def rk4_step_jax(tau, lds, nu_k, nu_kp, params_jax):
-        # TODO(Skye): Update dt_sub from the z vector
-        k1 = pack_lds_dot(tau, lds, nu_k, nu_kp, params_jax)
-        k2 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k1, nu_k, nu_kp, params_jax)
-        k3 = pack_lds_dot(tau + dt_sub / 2, lds + (dt_sub / 2) * k2, nu_k, nu_kp, params_jax)
-        k4 = pack_lds_dot(tau + dt_sub, lds + dt_sub * k3, nu_k, nu_kp, params_jax)
-        
-        lds_next = lds + (dt_sub / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
-        return lds_next, None
-
-    rk4_step_jax_jit = jax.jit(rk4_step_jax)
+    # define dynamics function for diffrax integrator
+    def f_dot(tau, lds_k, args):
+        k, nu_k, nu_kp, params_jax = args
+        return pack_lds_dot(tau, k, lds_k, nu_k, nu_kp, params_jax)
 
     # initilize stacked propagation vector  
     def pack_lds0(z_k):
@@ -224,12 +216,32 @@ def compile_jax_discretization(problem, method):
         # stack z, A, B, Bp for multiple shooting propagation
         lds0_k = pack_lds0(z_k)
 
-        # TODO(Skye): ensure dtk is computed from zk_ref correctly 
-        # propagate stacked vector
-        def rk4_step_jax_partial(lds, tau):
-            return rk4_step_jax_jit(tau, lds, nu_k, nu_kp, params_jax)
+        tau_k = k / (problem.index_map.N.time_grid - 1)
+        tau_kp = (k+1) / (problem.index_map.N.time_grid - 1)
 
-        ldsf_k, _ = jax.lax.scan(rk4_step_jax_partial, lds0_k, t[:-1])
+        # # TODO(Skye): ensure dtk is computed from zk_ref correctly 
+        # # propagate stacked vector
+        # def rk4_step_jax_partial(lds, tau):
+        #     return rk4_step_jax_jit(tau, lds, nu_k, nu_kp, params_jax)
+
+        # ldsf_k, _ = jax.lax.scan(rk4_step_jax_partial, lds0_k, t[:-1])
+
+        term = diffrax.ODETerm(f_dot)
+
+        solver = diffrax.Dopri5()
+        stepsize_controller = diffrax.PIDController(rtol=1e-5, atol=1e-5)
+        sol = diffrax.diffeqsolve(
+            term,
+            solver,
+            tau_k,
+            tau_kp,
+            0.0005,
+            lds0_k,
+            stepsize_controller=stepsize_controller,
+            args=(k, nu_k, nu_kp, params_jax)
+        )
+
+        ldsf_k = sol.ys[-1]
 
         # unpack the stacked vector back into appropriate shapes
         return unpack_ldsf(ldsf_k)
@@ -237,10 +249,6 @@ def compile_jax_discretization(problem, method):
     propagate = jax.jit(jax.vmap(propagate_k, in_axes=(0, None, None, None)))
 
     method.propagate_discretization_jax = propagate
-
-
-
-
 
 
 def compile_jax_discretization_bwd(problem, method):

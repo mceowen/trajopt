@@ -64,13 +64,14 @@ class SolutionMethod:
             dynamics=problem.constraints.get(type="dynamics")[0].fcn_base,
             compiled_attr_name="propagate_rk4_physical_jit",
         )
+        integrators.compile_tau_propagator(problem, self)
 
         ### Time of flight constraints ###
-        Ts_min       = self.initial_guess.T_min / self.nondim.time_scale
-        Ts_max       = self.initial_guess.T_max / self.nondim.time_scale
+        self.Ts_min       = self.initial_guess.T_min / self.nondim.time_scale
+        self.Ts_max       = self.initial_guess.T_max / self.nondim.time_scale
         self.ddt_max = self.initial_guess.dT_max / ((self.index_map.N.time_grid - 1) * self.nondim.time_scale)
-        self.dt_min  = Ts_min / (self.index_map.N.time_grid - 1)
-        self.dt_max  = Ts_max / (self.index_map.N.time_grid - 1)
+        self.dt_min  = self.Ts_min / (self.index_map.N.time_grid - 1)
+        self.dt_max  = self.Ts_max / (self.index_map.N.time_grid - 1)
 
         # --- LTV indexing ---
         discretize.set_ltv_indices(problem, self)
