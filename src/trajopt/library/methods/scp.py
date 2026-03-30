@@ -59,22 +59,6 @@ def run_scp(trajopt_obj):
     trajopt_obj.solution['t_full'] = time.perf_counter() - time_start
 
 
-# ===================================
-# Module flags (gating via Parameters)
-# ===================================
-@dataclass
-class ModuleFlags:
-    path:  float = 1.0
-    nfz:   float = 1.0
-    custom:   float = 1.0
-    term:  float = 1.0
-    dyn:   float = 1.0
-    tr:    float = 1.0
-    true:  float = 1.0
-    dual:  float = 1.0
-    vb:    float = 1.0
-
-
 # ==========================================
 # Iteration status printout (unified record)
 # ==========================================

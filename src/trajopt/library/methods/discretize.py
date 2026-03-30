@@ -337,7 +337,6 @@ def compile_jax_discretization_bwd(problem, method):
         lds0_k = pack_lds0(z_kp)
 
         # propagate stacked vector
-        #TODO(Skye): ensure that dt_sub is computed from the z vector correctly for each node
         def rk4_step_jax_partial(lds, tau):
             return rk4_step_jax_jit_bwd(tau, lds, nu_k, nu_kp, params_jax)
 
