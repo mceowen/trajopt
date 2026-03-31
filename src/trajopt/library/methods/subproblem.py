@@ -276,8 +276,6 @@ class Subproblem:
 
         N, n_x, n_u, n_z, n_nu, n_ctcs \
             = self.N.time_grid, self.n.state, self.n.control, self.n.z, self.n.nu, self.n.ctcs
-        # TODO(Skye): Verify this below (I think incorrect)
-        #tau_step = 1.0 / (N - 1)
 
         C: List[cp.Constraint] = []
 
@@ -322,7 +320,6 @@ class Subproblem:
                 else:
                     vb = 0
                 C.append(M_select @ (self.dz[boundary_idx, cnst_idx] + self.z_ref[boundary_idx, cnst_idx]) - vb <= cp.hstack([-min_value, max_value]))
-                C.append(M_select @ (self.dz[boundary_idx, cnst_idx] + self.z_ref[boundary_idx, cnst_idx]) - vb <= cp.hstack([-min_value, max_value]))
             
             elif constraint.set == "control":
                 C.append(M_select @ (self.dnu[boundary_idx, cnst_idx] + self.nu_ref[boundary_idx, cnst_idx]) <= cp.hstack([-min_value, max_value]))
@@ -358,17 +355,18 @@ class Subproblem:
             C.append(cp.sum(self.vb_dyn_p[:, self.indices.z.ctcs], axis=0) == self.vb_plus_ctcs[0, :])
             C.append(cp.sum(self.vb_dyn_m[:, self.indices.z.ctcs], axis=0) == self.vb_minus_ctcs[0, :])
 
+
+        # pseudospectral collocation
+        if self.flags.discretize == "ps":
+            C.append(discretize.build_ps_dyn_constraints(self))
+
         # Per-stage constraints
         for k in range(N):
             if k < N - 1:
-                # Discrete dynamics with dyn buffers
-                rhs = (
-                    self.Ak[k] @ self.dz[k]
-                    + self.Bk[k] @ self.dnu[k]
-                    + self.Bkp[k] @ self.dnu[k + 1]
-                    + (self.vb_dyn_p[k] - self.vb_dyn_m[k])
-                )
-                C.append(self.dz[k + 1] + self.z_ref[k + 1] - self.z_m[k + 1] == rhs)
+                
+                # multiple shooting discretization
+                if self.flags.discretize == "ms":
+                    C.append(discretize.build_ms_dyn_constraint(self, k))
 
                 # #backwards shooting dynamics constraints:
                 # rhs = (
@@ -772,7 +770,7 @@ class Subproblem:
 
         # 1. Refresh W_sqrt CVXPY parameter values from stacked constraint weights
         self.W_sqrt.nonconvex_inequality.value = tools.ensure_shape(np.sqrt(W_stack.nonconvex_inequality), self.W_sqrt.nonconvex_inequality.shape)
-        self.W_sqrt.final_state.value             = tools.ensure_shape(np.sqrt(W_stack.final_state),             self.W_sqrt.final_state.shape)
+        self.W_sqrt.final_state.value          = tools.ensure_shape(np.sqrt(W_stack.final_state),             self.W_sqrt.final_state.shape)
         self.W_sqrt.dynamics.value             = tools.ensure_shape(np.sqrt(W_stack.dynamics),             self.W_sqrt.dynamics.shape)
         self.W_sqrt.plus_real.value            = tools.ensure_shape(np.sqrt(W_stack.plus_real),            self.W_sqrt.plus_real.shape)
         self.W_sqrt.minus_real.value           = tools.ensure_shape(np.sqrt(W_stack.minus_real),           self.W_sqrt.minus_real.shape)
@@ -781,7 +779,7 @@ class Subproblem:
 
         # 2. Update dual CVXPY parameter values from stacked constraint duals
         self.dual.nonconvex_inequality.value   = tools.ensure_shape(dual_stack.nonconvex_inequality, self.dual.nonconvex_inequality.shape)
-        self.dual.final_state.value               = tools.ensure_shape(dual_stack.final_state,               self.dual.final_state.shape)
+        self.dual.final_state.value            = tools.ensure_shape(dual_stack.final_state,               self.dual.final_state.shape)
         self.dual.dynamics.value               = tools.ensure_shape(dual_stack.dynamics,               self.dual.dynamics.shape)
         self.dual.plus_real.value              = tools.ensure_shape(dual_stack.plus_real,              self.dual.plus_real.shape)
         self.dual.minus_real.value             = tools.ensure_shape(dual_stack.minus_real,             self.dual.minus_real.shape)
