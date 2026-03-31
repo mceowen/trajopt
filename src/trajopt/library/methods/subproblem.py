@@ -740,7 +740,7 @@ class Subproblem:
 
         # 1. Refresh W_sqrt CVXPY parameter values from stacked constraint weights
         self.W_sqrt.nonconvex_inequality.value = tools.ensure_shape(np.sqrt(W_stack.nonconvex_inequality), self.W_sqrt.nonconvex_inequality.shape)
-        self.W_sqrt.final_state.value             = tools.ensure_shape(np.sqrt(W_stack.final_state),             self.W_sqrt.final_state.shape)
+        self.W_sqrt.final_state.value          = tools.ensure_shape(np.sqrt(W_stack.final_state),             self.W_sqrt.final_state.shape)
         self.W_sqrt.dynamics.value             = tools.ensure_shape(np.sqrt(W_stack.dynamics),             self.W_sqrt.dynamics.shape)
         self.W_sqrt.plus_real.value            = tools.ensure_shape(np.sqrt(W_stack.plus_real),            self.W_sqrt.plus_real.shape)
         self.W_sqrt.minus_real.value           = tools.ensure_shape(np.sqrt(W_stack.minus_real),           self.W_sqrt.minus_real.shape)
@@ -749,7 +749,7 @@ class Subproblem:
 
         # 2. Update dual CVXPY parameter values from stacked constraint duals
         self.dual.nonconvex_inequality.value   = tools.ensure_shape(dual_stack.nonconvex_inequality, self.dual.nonconvex_inequality.shape)
-        self.dual.final_state.value               = tools.ensure_shape(dual_stack.final_state,               self.dual.final_state.shape)
+        self.dual.final_state.value            = tools.ensure_shape(dual_stack.final_state,               self.dual.final_state.shape)
         self.dual.dynamics.value               = tools.ensure_shape(dual_stack.dynamics,               self.dual.dynamics.shape)
         self.dual.plus_real.value              = tools.ensure_shape(dual_stack.plus_real,              self.dual.plus_real.shape)
         self.dual.minus_real.value             = tools.ensure_shape(dual_stack.minus_real,             self.dual.minus_real.shape)
