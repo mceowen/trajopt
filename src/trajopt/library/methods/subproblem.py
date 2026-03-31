@@ -97,19 +97,19 @@ class Subproblem:
 
         # Path/NFZ/AUX linearized constraints
         if problem.constraints.get(ct=0, type="nonconvex_inequality"):
-            self.dgdz   = cp.Parameter((N, problem.index_map.n.nonconvex_inequality, n_x),  name="dgdz")
-            self.dgdnu  = cp.Parameter((N, problem.index_map.n.nonconvex_inequality, n_nu), name="dgdnu")
-            self.g0     = cp.Parameter((N, problem.index_map.n.nonconvex_inequality),       name="g0")
+            self.dgdx       = cp.Parameter((N, problem.index_map.n.nonconvex_inequality, n_x),  name="dgdx")
+            self.dgdu       = cp.Parameter((N, problem.index_map.n.nonconvex_inequality, n_u),  name="dgdu")
+            self.g0         = cp.Parameter((N, problem.index_map.n.nonconvex_inequality),       name="g0")
         else:
-            self.dgdz = self.dgdnu = self.g0 = None
+            self.dgdx = self.dgdu = self.g0 = None
 
         # time-step scalar bounds
         if bool(self.flags.free_final_time):
-            self.dt_min  = cp.Parameter(nonneg=True, name="dt_min")
-            self.dt_max  = cp.Parameter(nonneg=True, name="dt_max")
-            self.ddt_max = cp.Parameter(nonneg=True, name="ddt_max")
-            self.T_min = cp.Parameter(nonneg=True, name="T_min")
-            self.T_max = cp.Parameter(nonneg=True, name="T_max")
+            self.dt_min     = cp.Parameter(nonneg=True, name="dt_min")
+            self.dt_max     = cp.Parameter(nonneg=True, name="dt_max")
+            self.ddt_max    = cp.Parameter(nonneg=True, name="ddt_max")
+            self.T_min      = cp.Parameter(nonneg=True, name="T_min")
+            self.T_max      = cp.Parameter(nonneg=True, name="T_max")
         else:
             self.dt_min = self.dt_max = self.ddt_max = None
 
@@ -118,9 +118,9 @@ class Subproblem:
         self.w.tr_z                     = cp.Parameter(nonneg=True, name="tr_z")
         self.w.tr_u                     = cp.Parameter(nonneg=True, name="tr_u")
 
-        self.w_cost_times_dcostdz       = cp.Parameter((N, 1, n_x),  name="dcostdz")
-        self.w_cost_times_dcostdnu      = cp.Parameter((N, 1, n_nu), name="dcostdnu")
-        self.w_cost_times_cost0         = cp.Parameter((N, 1),       name="cost0")
+        self.w_cost_times_dcostdx       = cp.Parameter((N, 1, n_x),  name="w_cost_times_dcostdx")
+        self.w_cost_times_dcostdu       = cp.Parameter((N, 1, n_u),  name="w_cost_times_dcostdu")
+        self.w_cost_times_cost0         = cp.Parameter((N, 1),       name="w_cost_times_cost0")
 
         # Build W_sqrt as attribute dictionary with CVXPY parameters, initialized to zeros
         self.W_sqrt = tools.AttrDict()
@@ -162,13 +162,28 @@ class Subproblem:
         N, n_x, n_t, n_u, n_z, n_nu, n_ctcs   \
             = self.N.time_grid, self.n.state, self.n.time, self.n.control, self.n.z, self.n.nu, self.n.ctcs
 
-        # Core optimization variables
-        self.dz = cp.Variable((N, n_z), name="dz")
-        self.dnu= cp.Variable((N, n_nu), name="du")
+        # Create physical component variables individually
+        self.dx = cp.Variable((N, n_x), name="dx")
+        self.dbeta = cp.Variable((N, n_ctcs), name="dbeta") if n_ctcs > 0 else None
+        self.du = cp.Variable((N, n_u), name="du")
 
-        # Sliced physical data
-        self.dx, self.dt, self.dbeta, self.du, self.ds \
-              = self.index_map.unpack_znu(self.dz,self.dnu)
+        # Time and dilation perturbations: variable if free_final_time, else constant zeros
+        if bool(self.flags.free_final_time):
+            self.dt = cp.Variable((N, n_t), name="dt")
+            self.ds = cp.Variable((N, 1), name="ds")
+        else:
+            self.dt = cp.Constant(np.zeros((N, n_t)))
+            self.ds = cp.Constant(np.zeros((N, 1)))
+
+        # Pack physical components back into augmented variables
+        # dz = [dx, dt, dbeta]
+        dz_components = [self.dx, self.dt]
+        if n_ctcs > 0:
+            dz_components.append(self.dbeta)
+        self.dz = cp.hstack(dz_components)
+
+        # dnu = [du, ds]
+        self.dnu = cp.hstack([self.du, self.ds])
 
         # Virtual buffers (None if zero-sized)
         self.vb_ineq    = cp.Variable((N, self.n.nonconvex_inequality), name="vb_ineq")  \
@@ -387,7 +402,7 @@ class Subproblem:
                 for constraint in problem.constraints.get(ct=0, type="control_rate_limit"):
                     value = constraint.value
                     M_sel = constraint.M_select
-                    dt_k = (self.s_ref[k, 0] + self.ds[k, 0])
+                    dt_k = (self.t_ref[k, 0] + self.dt[k, 0])
                     C.append(
                         M_sel @ (self.nu_ref[k + 1, self.indices.nu.control] + self.dnu[k + 1, self.indices.nu.control] - (self.nu_ref[k, self.indices.nu.control] + self.dnu[k, self.indices.nu.control]))
                         <= dt_k * np.concatenate([value, value])
@@ -413,7 +428,7 @@ class Subproblem:
             # Linearized inequality constraints (path + nfz + custom)
             # if problem.constraints.has("nodal", "nonconvex_inequality","POLYTOPE_OUT","SOC_OUT"):  ### DAN: UPDATE BELOW LINE TO
             if problem.constraints.has(ct=0, type="nonconvex_inequality"):
-                C.append(self.dgdz[k] @ self.dz[k, self.indices.z.state] + self.dgdnu[k] @ self.dnu[k, :n_nu] + self.g0[k] - self.vb_ineq[k] <= 0)
+                C.append(self.dgdx[k] @ self.dz[k, self.indices.z.state] + self.dgdu[k] @ self.dnu[k, self.indices.nu.control] + self.g0[k] - self.vb_ineq[k] <= 0)
                 if str(self.flags.flag_autotune) in {"1", "3", "al-scvx"} and self.vb_ineq[k]:
                     C.append(self.vb_ineq[k] >= 0)
 
@@ -421,11 +436,11 @@ class Subproblem:
                 idx = 0
                 for c in problem.constraints.get(ct=0, type="nonconvex_inequality"):
                     if c.hard:
-                        C.append(self.dgdz[k,idx:idx+c.dimension] @ self.dz[k, self.indices.z.state] + self.dgdnu[k,idx:idx+c.dimension] @ self.dnu[k, :n_nu] + self.g0[k,idx:idx+c.dimension] <= 0)
+                        C.append(self.dgdx[k,idx:idx+c.dimension] @ self.dz[k, self.indices.z.state] + self.dgdu[k,idx:idx+c.dimension] @ self.dnu[k, self.indices.nu.control] + self.g0[k,idx:idx+c.dimension] <= 0)
                     idx += c.dimension
 
             for cost in problem.costs.get(type="nonconvex", minimax=1):
-                C.append(self.w_cost_times_dcostdz[k] @ self.dz[k, self.indices.z.state] + self.w_cost_times_dcostdnu[k] @ self.dnu[k, :n_nu] + self.w_cost_times_cost0[k] <= self.minimax_epigraph_upperbound)
+                C.append(self.w_cost_times_dcostdx[k] @ self.dz[k, self.indices.z.state] + self.w_cost_times_dcostdu[k] @ self.dnu[k, self.indices.nu.control] + self.w_cost_times_cost0[k] <= self.minimax_epigraph_upperbound)
 
             # convex constraints
             for constraint in problem.constraints.get(ct=0, type="axis_angle_cone"):
@@ -517,16 +532,17 @@ class Subproblem:
 
         for cost in problem.costs.get(ct=0, type="nonconvex", minimax=0):
             self.TRUE = (cp.sum(self.w_cost_times_cost0)
-                    + cp.sum(cp.multiply(self.w_cost_times_dcostdz, self.dz[:,self.indices.state])
-                    + cp.sum(cp.multiply(self.w_cost_times_dcostdnu, self.dnu)))
+                    + cp.sum(cp.multiply(self.w_cost_times_dcostdx, self.dz[:,self.indices.state])
+                    + cp.sum(cp.multiply(self.w_cost_times_dcostdu, self.dnu)))
                     )
             
         for cost in problem.costs.get(type="nonconvex", minimax=1):
             self.TRUE += self.minimax_epigraph_upperbound
 
-        for cost in problem.costs.get(type="min_time"):
-            time_cost = cp.sum(self.t_ref[-1] + self.dt[-1])
-            self.TRUE += time_cost
+        if bool(self.flags.free_final_time):
+            for cost in problem.costs.get(type="min_time"):
+                time_cost = cp.sum(self.t_ref[-1] + self.dt[-1])
+                self.TRUE += time_cost
 
         for cost in problem.costs.get(type="min_norm_terminal"):
             zf = self.z_ref[-1] + self.dz[-1]
@@ -679,14 +695,17 @@ class Subproblem:
         start = time.time()
 
         # compute linearized terminal and running costs
-        cost, dcostdz, dcostdnu = discretize.compute_nonconvex_costs(inputs.z_ref, inputs.nu_ref, problem, method)
+        cost, dcostdx, dcostdu = discretize.compute_nonconvex_costs(inputs.z_ref, inputs.nu_ref, problem, method)
 
         if problem.constraints.has(ct=0, type="nonconvex_inequality"):
-            g, dgdz, dgdnu = discretize.compute_nonconvex_constraints(inputs.z_ref, inputs.nu_ref, problem, method)
+            g, dgdx, dgdu = discretize.compute_nonconvex_constraints(inputs.z_ref, inputs.nu_ref, problem, method)
         else:
-            g = None
-            dgdz = None
-            dgdnu = None
+            g = dgdx = dgdu = None
+
+        if dgdx is not None:
+            self.dgdx.value     = dgdx
+            self.dgdu.value     = dgdu
+            self.g0.value       = g
 
         ncvx_cnstr_time = (time.time() - start) * 1000.0
         print(f"ncvx_cnstr_time: {ncvx_cnstr_time}")
@@ -724,8 +743,8 @@ class Subproblem:
         self.w.tr_u.value   = penalty_to_use.get("wtr_u", 1e-2)
         inputs.penalty = copy.deepcopy(penalty_to_use)
         
-        self.w_cost_times_dcostdz.value     = self.w.cost.value * dcostdz
-        self.w_cost_times_dcostdnu.value    = self.w.cost.value * dcostdnu
+        self.w_cost_times_dcostdx.value     = self.w.cost.value * dcostdx
+        self.w_cost_times_dcostdu.value    = self.w.cost.value  * dcostdu
         self.w_cost_times_cost0.value       = self.w.cost.value * cost
 
         for constraint in problem.constraints.get(ct=0, type="equality_bc"):
@@ -733,11 +752,6 @@ class Subproblem:
                 self.constraint_params[constraint.name]["value"].value = constraint.value
 
         self.nu_ref_sq.value = np.sum(inputs.nu_ref * inputs.nu_ref, axis=1)
-
-        if dgdz is not None:
-            self.dgdz.value = dgdz
-            self.dgdnu.value = dgdnu
-            self.g0.value   = g
         
         if bool(self.flags.free_final_time):
             self.dt_min.value  = float(method.dt_min)
@@ -831,8 +845,13 @@ class Subproblem:
         cost, _, _  = discretize.compute_nonconvex_costs(rec.z_opt, rec.nu_opt, self.problem, self.method)
 
         rec.cnst_path = g
-        
-        rec.cost    = self.TRUE.value.item() / self.w.cost.value
+
+        # Handle case where self.TRUE is either a float or cvxpy expression
+        if hasattr(self.TRUE, 'value'):
+            true_cost_value = self.TRUE.value.item()
+        else:
+            true_cost_value = float(self.TRUE)
+        rec.cost = true_cost_value / self.w.cost.value
 
         # Convergence data (buffers, defects, TR cost, ref cost)
         conv = tools.AttrDict()
