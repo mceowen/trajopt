@@ -689,6 +689,21 @@ class Subproblem:
         self._set_param(self.Bkp,  Bkp)
         self._set_param(self.z_m, z_minus)
 
+        # Update pseudospectral parameters if using PS discretization
+        if self.flags.discretize == "ps" and hasattr(self, '_ps_f_ref'):
+            N_col = method.index_map.N.time_grid - 1
+
+            # For pseudospectral collocation, use controls at collocation points (first N_col points)
+            nu_ref_col = inputs.nu_ref[:N_col]
+
+            f_ref_col, Ac_col, Bc_col = discretize.compute_ps_dynamics_and_jacobians(
+                inputs.z_ref, nu_ref_col, problem, method
+            )
+
+            self._set_param(self._ps_f_ref, f_ref_col)
+            self._set_param(self._ps_Ac, Ac_col)
+            self._set_param(self._ps_Bc, Bc_col)
+
         # # backwards shooting dynamics
         # self._set_param(self.Ak_bwd,   Ak_bwd)
         # self._set_param(self.Bk_bwd,   Bk_bwd)

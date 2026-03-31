@@ -448,9 +448,10 @@ def build_ms_dyn_constraint(subproblem, k):
 
 def build_ps_dyn_constraints(subproblem, scale_ps=2.0):
     """
-    Build pseudospectral dynamics constraints as a single block matrix equation.
+    Build pseudospectral collocation dynamics constraints.
 
-    Computes D, f_ref_col, Ac_col, Bc_col internally.
+    Note: This creates a symbolic constraint that will be properly configured
+    when the subproblem is updated with reference trajectory values.
 
     Returns:
     --------
@@ -463,21 +464,29 @@ def build_ps_dyn_constraints(subproblem, scale_ps=2.0):
     method = subproblem.method
 
     N_col = method.index_map.N.time_grid - 1
+    n_z = problem.index_map.n.z
 
+    # Create PS differentiation matrix (this doesn't depend on trajectory)
     tau, etau, w, D = compute_ps_differentiation_matrix(N_col)
 
-    z_ref_np = np.asarray(subproblem.z_ref.value) if hasattr(subproblem.z_ref, 'value') else np.asarray(subproblem.z_ref)
-    nu_ref_np = np.asarray(subproblem.nu_ref.value) if hasattr(subproblem.nu_ref, 'value') else np.asarray(subproblem.nu_ref)
+    # Store the differentiation matrix in the subproblem for later use
+    if not hasattr(subproblem, '_ps_diff_matrix'):
+        subproblem._ps_diff_matrix = D
+        subproblem._ps_scale = scale_ps
 
-    f_ref_col, Ac_col, Bc_col = compute_ps_dynamics_and_jacobians(z_ref_np, nu_ref_np, problem, method)
+    # Create parameters for reference dynamics and Jacobians (to be updated later)
+    if not hasattr(subproblem, '_ps_f_ref'):
+        subproblem._ps_f_ref = cp.Parameter((N_col, n_z), name="ps_f_ref")
+        subproblem._ps_Ac = cp.Parameter((N_col, n_z, n_z), name="ps_Ac")
+        subproblem._ps_Bc = cp.Parameter((N_col, n_z, problem.index_map.n.nu), name="ps_Bc")
 
+    # Build symbolic constraint
     Z = subproblem.z_ref + subproblem.dz
-
     lhs = scale_ps * (D @ Z)
 
     rhs_list = []
     for k in range(N_col):
-        rhs_k = f_ref_col[k] + Ac_col[k] @ subproblem.dz[k + 1] + Bc_col[k] @ subproblem.dnu[k]
+        rhs_k = subproblem._ps_f_ref[k] + subproblem._ps_Ac[k] @ subproblem.dz[k + 1] + subproblem._ps_Bc[k] @ subproblem.dnu[k]
         rhs_list.append(rhs_k)
 
     rhs = cp.vstack(rhs_list)
@@ -491,7 +500,7 @@ def compute_ps_dynamics_and_jacobians(z_ref, nu_ref, problem, method):
     """
     N_col = nu_ref.shape[0]
     n_z = problem.index_map.n.z
-    n_u = problem.index_map.n.control
+    n_nu = problem.index_map.n.nu  # Use full nu size (controls + dilation)
 
     lin_dyn = problem.constraints.get(type='dynamics')[0].lin_dyn
     params_jax = tools.recursive_to_dict(problem.params)
@@ -500,7 +509,7 @@ def compute_ps_dynamics_and_jacobians(z_ref, nu_ref, problem, method):
 
     f_ref_col = np.zeros((N_col, n_z))
     Ac_col = np.zeros((N_col, n_z, n_z))
-    Bc_col = np.zeros((N_col, n_z, n_u))
+    Bc_col = np.zeros((N_col, n_z, n_nu))  # Use full nu size
 
     for k in range(N_col):
         z_k = np.asarray(z_ref[k + 1])
@@ -512,7 +521,7 @@ def compute_ps_dynamics_and_jacobians(z_ref, nu_ref, problem, method):
 
         f_ref_col[k, :] = np.asarray(fc_k)
         Ac_col[k, :, :] = np.asarray(Ac_k)
-        Bc_col[k, :, :n_u] = np.asarray(Bc_k)
+        Bc_col[k, :, :] = np.asarray(Bc_k)  # Store full Jacobian w.r.t. nu
 
     return f_ref_col, Ac_col, Bc_col
 
