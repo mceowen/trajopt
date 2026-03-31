@@ -281,6 +281,10 @@ class Subproblem:
 
         C: List[cp.Constraint] = []
 
+        if bool(self.flags.free_final_time):
+            # Initial time is always fixed: dt[0] = 0 (whether free_final_time is True or False)
+            C.append(self.dt[0, 0] == 0)
+
         # Terminal equalities / inequalities
         term_idx  = self.indices.constraints.final_state  
 
@@ -407,10 +411,16 @@ class Subproblem:
                         M_sel @ (self.nu_ref[k + 1, self.indices.nu.control] + self.dnu[k + 1, self.indices.nu.control] - (self.nu_ref[k, self.indices.nu.control] + self.dnu[k, self.indices.nu.control]))
                         <= dt_k * np.concatenate([value, value])
                     )
+
+            # Time dilation constraints
             if bool(self.flags.free_final_time):
                 C.append(self.s_ref[k, 0] + self.ds[k, 0] >= self.dt_min * (N - 1))
                 C.append(self.T_min <= self.t_ref[-1, 0] + self.dt[-1, 0])
                 C.append(self.t_ref[-1, 0] + self.dt[-1, 0] <= self.T_max)
+                # Equal time step perturbations: force all dt[k] = dt[1] for k >= 1
+                # (dt[0] is always 0, so we want dt[1] = dt[2] = ... = dt[N-1])
+                if hasattr(self.flags, 'equal_dt') and bool(self.flags.equal_dt) and k > 1:
+                    C.append(self.dt[k, 0] == self.dt[1, 0])
 
             # State box constraints
             for constraint in problem.constraints.get(ct=0, type="box"):
