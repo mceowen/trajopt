@@ -3,13 +3,13 @@ inherit: trajopt/library/methods/configs/autoscvx.yaml
 time_grid: 50
 
 flags:
-  free_final_time: 1
+  free_final_time: 0
   equal_dt: 0
   flag_autotune:      "3"     # '0', '1', '2', '3'
   buff_dyn:           "term"  # "none", 'term', 'l1', 'l2', 'quad-1', 'quad-2', 'quad-3', 'l1_dual'
   ctcs:               "none"
   flag_conv:          1
-  discretize:         "ps"  # "ms", "ps"
+  discretize:         "ms"  # "ms", "ps"
 
 solver_opts:
   solver: CLARABEL
