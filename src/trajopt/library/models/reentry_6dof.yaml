@@ -5,6 +5,8 @@
 params.planet.inherit: trajopt/library/missions/shared/planet/mars.yaml
 params.vehicle.inherit: trajopt/local/vehicles/cobra.yaml
 
+fcns.dynamic_pressure: trajopt/library/models/reentry_6dof.py:dynamic_pressure
+
 # ===============================
 # STATE AND CONTROL DEFINITIONS
 # ===============================
@@ -28,10 +30,6 @@ state.omega:
 control.torque:
   idx: [0, 1, 2]
   units: mom
-
-control.flap_deflections:
-  idx: [3, 4]
-  units: ang
 
 # ===============================
 # CONSTRAINT MODELS
@@ -118,19 +116,6 @@ constraints.terminal_altitude:
   dimension: 1
   ct: 0
 
-constraints.minimum_quaternion_norm:
-  type: nonconvex_inequality
-  group: path
-  fcn: trajopt/library/models/reentry_6dof.py:quaternion_norm
-  min_value: 0.9
-  dimension: 1
-  ct: 0
-
-constraints.max_quat_norm:
-  type: max_norm_cone
-  set: state
-  idx: [6, 7, 8, 9]
-
 costs.min_time:
   type: min_time
 
@@ -175,3 +160,8 @@ trajectories:
     type: time_series
     fcn: trajopt/local/aero/cobra_aero_6dof.py:exp_density_jax
     group: density_comparison
+
+  dynamic_pressure:
+    type: time_series
+    fcn: trajopt/library/models/reentry_6dof.py:dynamic_pressure
+    group: dynamic_pressure

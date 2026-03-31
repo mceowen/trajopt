@@ -84,7 +84,7 @@ def straight_line_initial_guess(problem, method):
     terminal_state_constraint   = problem.constraints.get(type="equality_bc", boundary="final")[0]
 
     if len(init_state_constraint.idx) == problem.index_map.n.state:
-        xi_full = init_state_constraint.x
+        xi_full = init_state_constraint.value
     else:
         xi_guess = getattr(init_state_constraint, 'value_guess', None)
         if xi_guess is not None:

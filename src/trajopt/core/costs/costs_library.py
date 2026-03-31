@@ -3,10 +3,20 @@ import cvxpy as cp
 import jax
 import jax.numpy as jnp
 import trajopt.library.methods.convexify as convexify
-from trajopt.utils.config_loader import resolve_function
+from trajopt.utils.config_loader import resolve_function_from_path
+
+def _resolve_fcn(fcn_string, fcns=None):
+    """Resolve a function reference: look up from fcns dict if 'fcns.X', otherwise import from path."""
+    if fcns and isinstance(fcn_string, str) and fcn_string.startswith('fcns.'):
+        key = fcn_string.split('.', 1)[1]
+        if key not in fcns:
+            raise KeyError(f"Function reference '{fcn_string}' not found in fcns dict. "
+                           f"Available: {list(fcns.keys())}")
+        return fcns[key]
+    return resolve_function_from_path(fcn_string)
 
 class min_time:
-    def __init__(self, cost_config, index_map):
+    def __init__(self, cost_config, index_map, **kwargs):
         self.type = "min_time"
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
@@ -15,7 +25,7 @@ class min_time:
         pass
 
 class terminal_state:
-    def __init__(self, cost_config, index_map):
+    def __init__(self, cost_config, index_map, **kwargs):
         self.type = "terminal_state"
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
@@ -24,7 +34,7 @@ class terminal_state:
         pass
 
 class min_norm_terminal:
-    def __init__(self, cost_config, index_map):
+    def __init__(self, cost_config, index_map, **kwargs):
         self.type = "min_norm_terminal"
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
@@ -34,7 +44,7 @@ class min_norm_terminal:
         pass
 
 class rate_regularization:
-    def __init__(self, cost_config, index_map):
+    def __init__(self, cost_config, index_map, **kwargs):
         self.type  = "rate_regularization"
         self.name  = cost_config["name"]
         self.group = cost_config.get("group", None)
@@ -48,7 +58,7 @@ class rate_regularization:
     
 
 class nonconvex:
-    def __init__(self, cnstr_config, index_map):
+    def __init__(self, cnstr_config, index_map, fcns=None, **kwargs):
         # required config
         self.type       = "nonconvex"
         self.name       = cnstr_config["name"]
@@ -65,7 +75,7 @@ class nonconvex:
 
         # symbolic function in dimensional units provided by user
         # (jax or sympy)
-        self.fcn_dim = resolve_function(self.fcn_string)
+        self.fcn_dim = _resolve_fcn(self.fcn_string, fcns)
         self.fcn_nd = None
 
         # this is the symbolic nondimmed version of fcn_fim, it will 
@@ -93,6 +103,10 @@ class nonconvex:
         if self.backend == "jax":
             self.fcn = self.fcn_nd
             self.fcn_compiled, self.dfcn_dz_compiled, self.dfcn_du_compiled = convexify.linearize_jax(self.fcn)
+
+            self.fcn_batched     = jax.jit(jax.vmap(self.fcn_compiled,     in_axes=(0, 0, 0, None)))
+            self.dfcn_dz_batched = jax.jit(jax.vmap(self.dfcn_dz_compiled, in_axes=(0, 0, 0, None)))
+            self.dfcn_du_batched = jax.jit(jax.vmap(self.dfcn_du_compiled, in_axes=(0, 0, 0, None)))
         
         elif self.backend == "sympy":
             pass
@@ -102,4 +116,11 @@ class nonconvex:
             self.fcn_compiled(t, z, nu, params),
             self.dfcn_dz_compiled(t, z, nu, params),
             self.dfcn_du_compiled(t, z, nu, params)
+        )
+
+    def g_aff_batched(self, t, z, nu, params):
+        return (
+            self.fcn_batched(t, z, nu, params),
+            self.dfcn_dz_batched(t, z, nu, params),
+            self.dfcn_du_batched(t, z, nu, params)
         )

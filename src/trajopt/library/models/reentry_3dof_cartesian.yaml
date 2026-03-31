@@ -57,7 +57,6 @@ constraints.max_Q:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/reentry_3dof_cartesian.py:heat_rate
-  units: [{none: 1}]
   dimension: 1
   ct: 0
 
@@ -65,7 +64,6 @@ constraints.max_q:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/reentry_3dof_cartesian.py:dynamic_pressure
-  units: [{none: 1}]
   dimension: 1
   ct: 0
 
@@ -73,7 +71,6 @@ constraints.max_load:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/library/models/reentry_3dof_cartesian.py:aero_load
-  units: [{none: 1}]
   dimension: 1
   ct: 0
 

@@ -12,6 +12,13 @@ import diffrax
 import trajopt.library.methods.convexify as convexify
 import trajopt.library.methods.pseudospectral as pseudospectral
 import trajopt.utils.tools as tools
+import time
+import diffrax
+
+jax.config.update("jax_compilation_cache_dir", "/tmp/jax_cache")
+jax.config.update("jax_persistent_cache_min_entry_size_bytes", -1)
+jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
+jax.config.update("jax_persistent_cache_enable_xla_caches", "xla_gpu_per_fusion_autotune_cache_dir")
 
 def set_ltv_indices(problem, method):
     """
@@ -55,7 +62,7 @@ def compute_nonconvex_constraints(z, nu, problem, method):
     n_x         = problem.index_map.n.state
     index_map   = problem.index_map
     idx         = problem.index_map.indices
-    n_nu        = problem.index_map.n.nu
+    n_u        = problem.index_map.n.control
     N           = method.index_map.N.time_grid
     z_jax       = jnp.asarray(z)
     nu_jax      = jnp.asarray(nu)
@@ -65,7 +72,7 @@ def compute_nonconvex_constraints(z, nu, problem, method):
     # Preallocate stacked arrays
     g           = np.zeros((N, n_ineq))
     dgdz        = np.zeros((N, n_ineq, n_x))
-    dgdnu       = np.zeros((N, n_ineq, n_nu))
+    dgdnu       = np.zeros((N, n_ineq, n_u))
 
     # Evaluate constraints at each timestep
     for k in range(N):
@@ -83,7 +90,7 @@ def compute_nonconvex_constraints(z, nu, problem, method):
                 dgdz_k  = np.asarray(dfcn_dz)
 
                 dgdnu_k_u = np.asarray(dfcn_dnu)
-                dgdnu_k = np.zeros((constraint.dimension, n_nu))
+                dgdnu_k = np.zeros((constraint.dimension, n_u))
                 dgdnu_k[:, idx.nu.control] = dgdnu_k_u
                 
                 g[k, col_start:col_end]        = g_k
@@ -106,13 +113,12 @@ def compute_nonconvex_costs(z, nu, problem, method):
     N = method.index_map.N.time_grid
     n_x = problem.index_map.n.state
     n_u = problem.index_map.n.control
-    n_nu = problem.index_map.n.nu
     idx = problem.index_map.indices
     index_map = problem.index_map
 
     cost = np.zeros((N, 1))
     dcostdz = np.zeros((N, 1, n_x))
-    dcostdnu = np.zeros((N, 1, n_nu))
+    dcostdnu = np.zeros((N, 1, n_u))
 
     params_jax = tools.recursive_to_dict(problem.params)
     nonconvex_costs = problem.costs.get(type="nonconvex")
@@ -308,7 +314,7 @@ def compile_jax_discretization_bwd(problem, method):
         lds_next = lds + (dt_sub / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
         return lds_next, None
 
-    rk4_step_jax_jit_bwd = jax.jit(rk4_step_jax_bwd)
+    rk4_step_jax_jit_bwd = rk4_step_jax_bwd
 
     # initilize stacked propagation vector  
     def pack_lds0(z_k):
@@ -370,8 +376,6 @@ def discretize_inv_free_jax(z_ref_np, nu_ref_np, problem, method):
     z_ref_0 = z_ref[[0], :]
     
     return np.asarray(A_jax), np.asarray(B_jax), np.asarray(Bp_jax), np.asarray(jnp.vstack([z_ref_0, z_minus]))
-
-
 
 
 

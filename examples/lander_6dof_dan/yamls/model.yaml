@@ -141,7 +141,6 @@ constraint_models:
   group: path
   fcn: trajopt/library/models/lander_6dof.py:height_triggered_pitch
   eps: null
-  units: null
   dimension: 1
   ct: 0
 
@@ -150,7 +149,6 @@ constraint_models:
   group: path
   fcn: trajopt/library/models/lander_6dof.py:min_thrust_norm
   eps: null
-  units: [{"f": 1}]
   dimension: 1
   ct: 0
 

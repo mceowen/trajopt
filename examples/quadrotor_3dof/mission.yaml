@@ -1,7 +1,15 @@
 # ===============================
 # FUNCTIONS
 # ===============================
-# no shared functions for this example
+fcns.thrust_norm: trajopt/library/models/quadrotor_3dof.py:thrust_norm
+fcns.obstacle: trajopt/library/models/quadrotor_3dof.py:obstacle
+fcns.dynamics: trajopt/library/models/quadrotor_3dof.py:dynamics_jax
+fcns.height: trajopt/library/models/quadrotor_3dof.py:height
+fcns.pos_x: trajopt/library/models/quadrotor_3dof.py:pos_x
+fcns.pos_y: trajopt/library/models/quadrotor_3dof.py:pos_y
+
+fcns.xz: trajopt/library/models/quadrotor_3dof.py:xz
+fcns.yz: trajopt/library/models/quadrotor_3dof.py:yz
 
 # ===============================
 # FUNCTION PARAMETERS
@@ -20,7 +28,7 @@ time.scale: 1.0
 constraints:
   dynamics:
     type: dynamics
-    fcn: trajopt/library/models/quadrotor_3dof.py:dynamics_jax
+    fcn: fcns.dynamics
   
   initial_state:
     type: equality_bc
@@ -74,26 +82,47 @@ constraints:
   min_thrust:
     type: nonconvex_inequality
     group: path
-    fcn: trajopt/library/models/quadrotor_3dof.py:thrust_norm
+    fcn: fcns.thrust_norm
     min_value: 0.21
     eps: [0.01]
-    units: [{f: 1}]
     dimension: 1
-    ct: 0
+    # ct: 0
 
   obstacle:
     type: nonconvex_inequality
     group: path
-    fcn: trajopt/library/models/quadrotor_3dof.py:obstacle
+    fcn: "fcns.obstacle"
     min_value: 4.0
     eps: [0.1]
-    units: [{d: 1}]
     dimension: 1
     # ct: 1
+
+  low_height_stc:
+    type: nonconvex_inequality
+    group: path
+    fcn: "((fcns.pos_x >= 5.0) and (fcns.pos_y >= 5.0)) implies (fcns.height <= 1.0)"
+    eps: [0.1]
+    scale: [1.0]
+    dimension: 1
+
+  
 
 costs:
   min_time:
     type: min_time
+
+trajectories:
+  xz:
+    type: spatial
+    fcn: fcns.xz
+    group: stc_check
+
+  yz:
+    type: spatial
+    fcn: fcns.yz
+    group: stc_check
+
+
 
 # ===============================
 # ACTIVE CONSTRAINTS AND COSTS
@@ -110,6 +139,7 @@ constraint_list:
   - max_thrust
   - min_thrust
   - obstacle
+  #- low_height_stc
 
 cost_list:
   - min_time

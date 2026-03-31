@@ -55,6 +55,9 @@ class SCVXPLOTS:
             x_data = tools.get_from_path(iter_data, x_path)
             y_data = tools.get_from_path(iter_data, y_path)
 
+            if x_data.size == 0 or y_data.size == 0:
+                continue
+
             # force everything to be 2D for plotting, dont change the time axis
             if x_data.ndim == 1: x_data = x_data[:, np.newaxis]
             if y_data.ndim == 1: y_data = y_data[:, np.newaxis]
@@ -138,6 +141,10 @@ class SCVXPLOTS:
             
         # get x and y data from last iter_data
         y_data_last = tools.get_from_path(last_iter_data, y_path)
+
+        if y_data_last.size == 0:
+            return
+
         if y_data_last.ndim == 1:
             y_data_last = y_data_last[np.newaxis, :]
 
@@ -146,6 +153,8 @@ class SCVXPLOTS:
         for i, iter_data in enumerate(iter_data_list):
 
             iter_y_data = tools.get_from_path(iter_data, y_path)
+            if iter_y_data.size == 0:
+                continue
             if iter_y_data.ndim == 1:
                 y_data[i, :] = iter_y_data
             

@@ -78,6 +78,8 @@ def configure_penalty_weights(problem, method, subconstraints=None):
             elif method.flags.buff_dyn in {"quad-1", "quad-2", "quad-3"}:
                 W_stack.plus_real += w_dyn
                 W_stack.minus_real += w_dyn
+                W_stack.final_state[term_idx["eq"]] += w_term
+                W_stack.final_state[term_idx["ineq"]] += w_term
 
             else:
                 if len(term_idx.eq) > 0:
@@ -89,10 +91,12 @@ def configure_penalty_weights(problem, method, subconstraints=None):
             # ctcs portion weights
             if method.flags.ctcs in {"l1", "l2"}:
                 W_stack.dynamics[:, z_ctcs_idx] += w_dyn
+                W_stack.final_state[term_idx["ctcs"]] += w_term
     
             elif method.flags.ctcs in {"quad-1", "quad-2", "quad-3"}:
                 W_stack.plus_ctcs += w_dyn
                 W_stack.minus_ctcs += w_dyn
+                W_stack.final_state[term_idx["ctcs"]] += w_term
             
             else:
                 W_stack.final_state[term_idx.ctcs] += w_term
@@ -203,7 +207,7 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
         # --------------------------------------------------------
         if mode_real == "l1":
             for k in range(N - 1):
-                VB += subprob.w_dyn_row[k] * cp.norm1(diff_real[k, :])
+                VB += 10000 * cp.norm1(diff_real[k, :])
 
         # --------------------------------------------------------
         # L2 penalty
@@ -448,14 +452,14 @@ def autotune1(subproblem, conv_data, conv_data_prev, iter_num):
     W_plus_real  = subproblem.W_stack.plus_real
     W_minus_real = subproblem.W_stack.minus_real
 
-    dual_plus_plus_real  = W_plus_real * vb_plus_real  + dual_plus_real
-    dual_minus_plus_real = W_minus_real * vb_minus_real + dual_minus_real
+    dual_plus_plus_real  = np.maximum(0, W_plus_real * vb_plus_real  + dual_plus_real)
+    dual_minus_plus_real = np.maximum(0, W_minus_real * vb_minus_real + dual_minus_real)
 
     W_plus_ctcs  = subproblem.W_stack.plus_ctcs
     W_minus_ctcs = subproblem.W_stack.minus_ctcs
 
-    dual_plus_plus_ctcs  = W_plus_ctcs * vb_plus_ctcs  + dual_plus_ctcs
-    dual_minus_plus_ctcs = W_minus_ctcs * vb_minus_ctcs + dual_minus_ctcs
+    dual_plus_plus_ctcs  = np.maximum(0, W_plus_ctcs * vb_plus_ctcs  + dual_plus_ctcs)
+    dual_minus_plus_ctcs = np.maximum(0, W_minus_ctcs * vb_minus_ctcs + dual_minus_ctcs)
 
     # ==========================================
     # Saturation thresholds
@@ -525,9 +529,9 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
     eps_feas_term = conv.eps_term
     eps_feas_dyn  = conv.eps_dyn
 
-    eps_target_term =  np.maximum(0.5*eps_feas_term, conv.fac_eps * np.abs(conv_data.vb_terminal))
-    eps_target_ineq =  np.maximum(0.5*eps_feas_ineq, conv.fac_eps * np.abs(conv_data.vb_ineq))
-    eps_target_dyn  =  np.maximum(0.5*eps_feas_dyn , conv.fac_eps * np.abs(conv_data.vb_dyn))
+    eps_target_term =  np.maximum(1.0*eps_feas_term, conv.fac_eps * np.abs(conv_data.vb_terminal))
+    eps_target_ineq =  np.maximum(1.0*eps_feas_ineq, conv.fac_eps * np.abs(conv_data.vb_ineq))
+    eps_target_dyn  =  np.maximum(1.0*eps_feas_dyn , conv.fac_eps * np.abs(conv_data.vb_dyn))
 
     conv_data.eps_target_term = eps_target_term.copy()
     conv_data.eps_target_ineq = eps_target_ineq.copy()
@@ -580,15 +584,15 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
         if problem.index_map.n.nonconvex_inequality > 0:
             Wh_ineq[k, :] = np.minimum(np.abs(dual_ineq_buff / eps_target_ineq[k]), 1e4)
         else:
-            Wh_ineq[k, :] = np.abs(dual_ineq_buff)
+            Wh_ineq[k, :] = np.abs(dual_ineq_buff) # rho*np.ones_like(Wh_ineq[k, :])
 
         if k < N - 1:
             dual_dyn_buff = np.diag(W_dyn[k, :]) @ vb_dyn[k, :]
             
             if buff_dyn == "l1":
-                Wh_dyn[k, z_state_idx] = np.sum(np.abs(dual_dyn_buff[z_state_idx]) / eps_feas_dyn[z_state_idx])
+                Wh_dyn[k, z_state_idx] = np.minimum(np.sum(np.abs(dual_dyn_buff[z_state_idx]) / eps_feas_dyn[z_state_idx]), 1e5)
             if buff_dyn != "none":
-                Wh_dyn[k, z_state_idx] = np.abs(dual_dyn_buff[z_state_idx] / eps_target_dyn[k, z_state_idx])
+                Wh_dyn[k, z_state_idx] = np.minimum(np.abs(dual_dyn_buff[z_state_idx] / eps_target_dyn[k, z_state_idx]), 1e5) # rho*np.ones_like(W_dyn[k, z_state_idx]) #
             # TODO(Skye): REVISIT
             #if buff_dyn == "l2":
             #     Wh_dyn[k, z_state_idx] = np.abs(dual_dyn_buff[z_state_idx] / eps_feas_dyn[z_state_idx])
@@ -596,20 +600,20 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
             if ctcs == "l1":
                 Wh_dyn[k, z_ctcs_idx] = np.sum(np.abs(dual_dyn_buff[z_ctcs_idx]) / eps_target_dyn[k, z_ctcs_idx])
             elif ctcs != "none":
-                Wh_dyn[k, z_ctcs_idx] = np.minimum(np.abs(dual_dyn_buff[z_ctcs_idx] / eps_target_dyn[k, z_ctcs_idx]), 1e4)
+                Wh_dyn[k, z_ctcs_idx] = np.minimum(np.abs(dual_dyn_buff[z_ctcs_idx] / eps_target_dyn[k, z_ctcs_idx]), 1e5) #rho*np.ones_like(W_dyn[k, z_ctcs_idx])
 
             # TODO: THINK ABOUT THIS (MAYBE ONE IF ELSE) COME BACK TO THIS, SINGLE EPSILON ETC
             if buff_dyn == "quad-2":
-                Wh_plus_real[k]  = np.sum(np.abs(np.diag(W_plus_real[k, :]) @ vb_plus_real[k, :] / eps_target_dyn[k, z_state_idx]))
-                Wh_minus_real[k] = np.sum(np.abs(np.diag(W_minus_real[k, :]) @ vb_minus_real[k, :] / eps_target_dyn[k, z_state_idx]))
+                Wh_plus_real[k]  = np.minimum(np.sum(np.abs(np.diag(W_plus_real[k, :]) @ vb_plus_real[k, :] / eps_target_dyn[k, z_state_idx])), 1e5)
+                Wh_minus_real[k] = np.minimum(np.sum(np.abs(np.diag(W_minus_real[k, :]) @ vb_minus_real[k, :] / eps_target_dyn[k, z_state_idx])), 1e5)
             
             if ctcs == "quad-2":
-                Wh_plus_ctcs[k]  = np.sum(np.abs(np.diag(W_plus_ctcs[k, :]) @ vb_plus_ctcs[k, :] / eps_target_dyn[k, z_ctcs_idx]))
-                Wh_minus_ctcs[k] = np.sum(np.abs(np.diag(W_minus_ctcs[k, :]) @ vb_minus_ctcs[k, :] / eps_target_dyn[k, z_ctcs_idx]))
+                Wh_plus_ctcs[k]  = np.minimum(np.sum(np.abs(np.diag(W_plus_ctcs[k, :]) @ vb_plus_ctcs[k, :] / eps_target_dyn[k, z_ctcs_idx])), 1e5)
+                Wh_minus_ctcs[k] = np.minimum(np.sum(np.abs(np.diag(W_minus_ctcs[k, :]) @ vb_minus_ctcs[k, :] / eps_target_dyn[k, z_ctcs_idx])), 1e5)
 
     if problem.index_map.n.term_total > 0:
         dual_term_buff = np.diag(W_term) @ vb_term
-        Wh_term = np.minimum(np.abs(dual_term_buff / eps_target_term).flatten(), 1e4)
+        Wh_term = np.minimum(np.abs(dual_term_buff / eps_target_term).flatten(), 1e5) # rho*np.ones_like(W_term)
 
     # ==========================================
     # UPDATE WEIGHTS WITH COMPUTED AUTOTUNE UPDATES
@@ -624,12 +628,18 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
     if np.sum(W_dyn) > 0: Wh_dyn[Wh_dyn <= eps_nonzero2] = eps_nonzero2
     if np.sum(W_term) > 0: Wh_term[Wh_term <= eps_nonzero2] = eps_nonzero2
 
-    # Update subproblem W_stack directly
+    # subproblem.W_stack.nonconvex_inequality = np.maximum(Wh_ineq, W_ineq)
+    # subproblem.W_stack.dynamics             = np.maximum(Wh_dyn, W_dyn)
+    # subproblem.W_stack.final_state          = np.maximum(Wh_term, W_term)
+    # subproblem.W_stack.plus_real            = np.maximum(Wh_plus_real, W_plus_real)
+    # subproblem.W_stack.minus_real           = np.maximum(Wh_minus_real, W_minus_real)
+    # subproblem.W_stack.plus_ctcs            = np.maximum(Wh_plus_ctcs, W_plus_ctcs)
+    # subproblem.W_stack.minus_ctcs           = np.maximum(Wh_minus_ctcs, W_minus_ctcs)
+    # else:
     subproblem.W_stack.plus_real = Wh_plus_real
     subproblem.W_stack.minus_real = Wh_minus_real
     subproblem.W_stack.plus_ctcs = Wh_plus_ctcs
     subproblem.W_stack.minus_ctcs = Wh_minus_ctcs
-
     subproblem.W_stack.nonconvex_inequality = Wh_ineq
     subproblem.W_stack.dynamics = Wh_dyn
     subproblem.W_stack.final_state = Wh_term
@@ -648,5 +658,6 @@ def autotune3(subproblem, conv_data, conv_data_prev, iter_num):
     """Combined autotune1 and autotune2."""
     dual_info = autotune1(subproblem, conv_data, conv_data_prev, iter_num)
     weight_info = autotune2(subproblem, conv_data, conv_data_prev, iter_num)
+    
 
     return {"dual_update": dual_info, "weight_update": weight_info}

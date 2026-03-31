@@ -5,7 +5,7 @@ from functools import partial
 import trajopt.utils.tools as tools
 
 class Constraints:
-    def __init__(self, config, index_map):
+    def __init__(self, config, index_map, fcns=None):
 
         print(f"constraints:")
 
@@ -14,15 +14,16 @@ class Constraints:
 
         for i, (cnstr_name, cnstr_config_i) in enumerate(config.problem.constraints.items()):
             print(f"  {i}: {cnstr_name}: type: {cnstr_config_i.type}")
-            self.register_constraint(cnstr_config_i)
+            self.register_constraint(cnstr_config_i, index_map, fcns=fcns)
 
-    def register_constraint(self, cnstr_config):
+    def register_constraint(self, cnstr_config, index_map, fcns=None):
         """"
         Regsiter a constraint object in the constraints list given a constraint configuration.
 
         Args:
             cnstr_config: Constraint configuration dictionary.
-            config: Problem configuration dictionary.
+            index_map: Index map object.
+            fcns: Resolved functions dictionary.
 
         Returns:
             None.
@@ -30,8 +31,7 @@ class Constraints:
         cnstr_type      = cnstr_config["type"]
         constraintClass = getattr(constraints_library, cnstr_type)
 
-        cnstr_object    = constraintClass(cnstr_config, self.index_map)
-
+        cnstr_object = constraintClass(cnstr_config, index_map, fcns=fcns)
         self.constraints_list.append(cnstr_object)
         
     def get(self, **kwargs):
