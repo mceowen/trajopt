@@ -9,7 +9,7 @@ flags:
   buff_dyn:           "term"  # "none", 'term', 'l1', 'l2', 'quad-1', 'quad-2', 'quad-3', 'l1_dual'
   ctcs:               "none"
   flag_conv:          1
-  discretize:         "ms"  # "ms", "ps"
+  discretize:         "ps"  # "ms", "ps"
 
 solver_opts:
   solver: CLARABEL
