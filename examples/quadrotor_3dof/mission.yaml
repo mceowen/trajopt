@@ -95,7 +95,7 @@ constraints:
     min_value: 4.0
     eps: [0.1]
     dimension: 1
-    ct: 1
+    #ct: 1
 
   low_height_stc:
     type: nonconvex_inequality

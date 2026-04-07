@@ -552,6 +552,7 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
     Wh_plus_ctcs  = np.zeros((method.index_map.N.pm_ctcs, method.index_map.n.plus_ctcs))
     Wh_minus_ctcs = np.zeros((method.index_map.N.pm_ctcs, method.index_map.n.minus_ctcs))
 
+    z_real_idx = method.index_map.indices.z.real
     z_state_idx = method.index_map.indices.z.state
     z_ctcs_idx = method.index_map.indices.z.ctcs
 
@@ -592,7 +593,7 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
             if buff_dyn == "l1":
                 Wh_dyn[k, z_state_idx] = np.sum(np.abs(dual_dyn_buff[z_state_idx]) / eps_feas_dyn[z_state_idx])
             if buff_dyn != "none":
-                Wh_dyn[k, z_state_idx] = np.abs(dual_dyn_buff[z_state_idx] / eps_target_dyn[k, z_state_idx])
+                Wh_dyn[k, z_real_idx] = np.abs(dual_dyn_buff[z_real_idx] / eps_target_dyn[k, z_real_idx])
             # TODO(Skye): REVISIT
             #if buff_dyn == "l2":
             #     Wh_dyn[k, z_state_idx] = np.abs(dual_dyn_buff[z_state_idx] / eps_feas_dyn[z_state_idx])
@@ -604,8 +605,8 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
 
             # TODO: THINK ABOUT THIS (MAYBE ONE IF ELSE) COME BACK TO THIS, SINGLE EPSILON ETC
             if buff_dyn == "quad-2":
-                Wh_plus_real[k]  = np.sum(np.abs(np.diag(W_plus_real[k, :]) @ vb_plus_real[k, :] / eps_target_dyn[k, z_state_idx]))
-                Wh_minus_real[k] = np.sum(np.abs(np.diag(W_minus_real[k, :]) @ vb_minus_real[k, :] / eps_target_dyn[k, z_state_idx]))
+                Wh_plus_real[k]  = np.sum(np.abs(np.diag(W_plus_real[k, :]) @ vb_plus_real[k, :] / eps_target_dyn[k, z_real_idx]))
+                Wh_minus_real[k] = np.sum(np.abs(np.diag(W_minus_real[k, :]) @ vb_minus_real[k, :] / eps_target_dyn[k, z_real_idx]))
             
             if ctcs == "quad-2":
                 Wh_plus_ctcs[k]  = np.sum(np.abs(np.diag(W_plus_ctcs[k, :]) @ vb_plus_ctcs[k, :] / eps_target_dyn[k, z_ctcs_idx]))

@@ -163,9 +163,9 @@ class Subproblem:
             = self.N.time_grid, self.n.state, self.n.time, self.n.control, self.n.z, self.n.nu, self.n.ctcs
 
         # Create physical component variables individually
-        self.dx = cp.Variable((N, n_x), name="dx")
-        self.dbeta = cp.Variable((N, n_ctcs), name="dbeta") if n_ctcs > 0 else None
-        self.du = cp.Variable((N, n_u), name="du")
+        self.dx     = cp.Variable((N, n_x), name="dx")
+        self.dbeta  = cp.Variable((N, n_ctcs), name="dbeta") if n_ctcs > 0 else None
+        self.du     = cp.Variable((N, n_u), name="du")
 
         # Time and dilation perturbations: variable if free_final_time, else constant zeros
         if bool(self.flags.free_final_time):
@@ -404,9 +404,10 @@ class Subproblem:
                 for constraint in problem.constraints.get(ct=0, type="control_rate_limit"):
                     value = constraint.value
                     M_sel = constraint.M_select
-                    dt_k = (self.t_ref[k, 0] + self.dt[k, 0])
+                    du_k = (self.nu_ref[k + 1, self.indices.nu.control] + self.dnu[k + 1, self.indices.nu.control] - (self.nu_ref[k, self.indices.nu.control] + self.dnu[k, self.indices.nu.control]))
+                    dt_k = (self.t_ref[k+1, 0] + self.dt[k+1, 0]) - (self.t_ref[k, 0] + self.dt[k, 0])
                     C.append(
-                        M_sel @ (self.nu_ref[k + 1, self.indices.nu.control] + self.dnu[k + 1, self.indices.nu.control] - (self.nu_ref[k, self.indices.nu.control] + self.dnu[k, self.indices.nu.control]))
+                        M_sel @ du_k
                         <= dt_k * np.concatenate([value, value])
                     )
 
