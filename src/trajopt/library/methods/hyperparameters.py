@@ -584,7 +584,7 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
         dual_ineq_buff = np.diag(W_ineq[k, :]) @ vb_ineq[k, :].flatten()
 
         if problem.index_map.n['nonconvex_inequality'] > 0:
-            Wh_ineq[k, :] = np.minimum(np.abs(dual_ineq_buff / eps_target_ineq[k]), 1e5) # rho*np.ones_like(W_ineq[k, :])
+            Wh_ineq[k, :] = np.abs(dual_ineq_buff / eps_target_ineq[k]) # rho*np.ones_like(W_ineq[k, :])
         else:
             Wh_ineq[k, :] = np.abs(dual_ineq_buff) # rho*np.ones_like(Wh_ineq[k, :])
 
@@ -592,9 +592,9 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
             dual_dyn_buff = np.diag(W_dyn[k, :]) @ vb_dyn[k, :]
             
             if buff_dyn == "l1":
-                Wh_dyn[k, z_state_idx] = np.minimum(np.sum(np.abs(dual_dyn_buff[z_state_idx]) / eps_feas_dyn[z_state_idx]), 1e5)
+                Wh_dyn[k, z_state_idx] = np.sum(np.abs(dual_dyn_buff[z_state_idx]) / eps_feas_dyn[z_state_idx])
             if buff_dyn != "none":
-                Wh_dyn[k, z_state_idx] = np.minimum(np.abs(dual_dyn_buff[z_state_idx] / eps_target_dyn[k, z_state_idx]), 1e5) # rho*np.ones_like(W_dyn[k, z_state_idx]) #
+                Wh_dyn[k, z_state_idx] = np.abs(dual_dyn_buff[z_state_idx] / eps_target_dyn[k, z_state_idx])
             # TODO(Skye): REVISIT
             #if buff_dyn == "l2":
             #     Wh_dyn[k, z_state_idx] = np.abs(dual_dyn_buff[z_state_idx] / eps_feas_dyn[z_state_idx])
@@ -602,20 +602,20 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
             if ctcs == "l1":
                 Wh_dyn[k, z_ctcs_idx] = np.sum(np.abs(dual_dyn_buff[z_ctcs_idx]) / eps_target_dyn[k, z_ctcs_idx])
             elif ctcs != "none":
-                Wh_dyn[k, z_ctcs_idx] = np.minimum(np.abs(dual_dyn_buff[z_ctcs_idx] / eps_target_dyn[k, z_ctcs_idx]), 1e5) #rho*np.ones_like(W_dyn[k, z_ctcs_idx])
+                Wh_dyn[k, z_ctcs_idx] = np.abs(dual_dyn_buff[z_ctcs_idx] / eps_target_dyn[k, z_ctcs_idx]) #rho*np.ones_like(W_dyn[k, z_ctcs_idx])
 
             # TODO: THINK ABOUT THIS (MAYBE ONE IF ELSE) COME BACK TO THIS, SINGLE EPSILON ETC
             if buff_dyn == "quad-2":
-                Wh_plus_real[k]  = np.minimum(np.sum(np.abs(np.diag(W_plus_real[k, :]) @ vb_plus_real[k, :] / eps_target_dyn[k, z_state_idx])), 1e5)
-                Wh_minus_real[k] = np.minimum(np.sum(np.abs(np.diag(W_minus_real[k, :]) @ vb_minus_real[k, :] / eps_target_dyn[k, z_state_idx])), 1e5)
+                Wh_plus_real[k]  = np.sum(np.abs(np.diag(W_plus_real[k, :]) @ vb_plus_real[k, :] / eps_target_dyn[k, z_state_idx]))
+                Wh_minus_real[k] = np.sum(np.abs(np.diag(W_minus_real[k, :]) @ vb_minus_real[k, :] / eps_target_dyn[k, z_state_idx]))
             
             if ctcs == "quad-2":
-                Wh_plus_ctcs[k]  = np.minimum(np.sum(np.abs(np.diag(W_plus_ctcs[k, :]) @ vb_plus_ctcs[k, :] / eps_target_dyn[k, z_ctcs_idx])), 1e5)
-                Wh_minus_ctcs[k] = np.minimum(np.sum(np.abs(np.diag(W_minus_ctcs[k, :]) @ vb_minus_ctcs[k, :] / eps_target_dyn[k, z_ctcs_idx])), 1e5)
+                Wh_plus_ctcs[k]  = np.sum(np.abs(np.diag(W_plus_ctcs[k, :]) @ vb_plus_ctcs[k, :] / eps_target_dyn[k, z_ctcs_idx]))
+                Wh_minus_ctcs[k] = np.sum(np.abs(np.diag(W_minus_ctcs[k, :]) @ vb_minus_ctcs[k, :] / eps_target_dyn[k, z_ctcs_idx]))
 
     if problem.index_map.n['term_total'] > 0:
         dual_term_buff = np.diag(W_term) @ vb_term
-        Wh_term = np.minimum(np.abs(dual_term_buff / eps_target_term).flatten(), 1e5) # rho*np.ones_like(W_term)
+        Wh_term = np.abs(dual_term_buff / eps_target_term).flatten() # rho*np.ones_like(W_term)
 
     # ==========================================
     # UPDATE WEIGHTS WITH COMPUTED AUTOTUNE UPDATES

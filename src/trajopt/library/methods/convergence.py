@@ -26,7 +26,7 @@ def set_convergence_tolerance(problem, method):
         eps_dyn_ctcs = np.concatenate([c.eps for c in problem.constraints.get(ct=1)])
         
         # approximation of constraint violation integral
-        eps_dyn_ctcs = (1* eps_dyn_ctcs) * method.dt_min * 0.25
+        eps_dyn_ctcs = (1* eps_dyn_ctcs)**2 * method.dt_min * 0.25
         eps_dyn = np.concatenate([eps_dyn_real, eps_dyn_ctcs])
     else:
         eps_dyn = eps_dyn_real
