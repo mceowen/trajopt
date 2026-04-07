@@ -24,7 +24,26 @@ def set_convergence_tolerance(problem, method):
     eps_defect = tools.expand_to_array_if_scalar(method.conv.eps_defect, n.state)
     method.conv.eps_defect = nondim.M.state.d2nd @ eps_defect
 
-    # --- Nodal nonconvex inequality feasibility ---
+    # nondim dynamics convergence epsilon
+
+    # method.conv.eps_dyn is still in dimensional units here
+    eps_dyn = tools.expand_to_array_if_scalar(method.conv.eps_dyn, method.index_map.n.z)
+    eps_dyn_real = nondim.M.state.d2nd @ eps_dyn
+    
+    # augment epsilon with ctcs contributions
+    if problem.constraints.has(ct=1):
+        # constraint epsilons have already been nondimensionalized with "nondim_constraints()"
+        eps_dyn_ctcs = np.concatenate([c.eps for c in problem.constraints.get(ct=1)])
+        
+        # approximation of constraint violation integral
+        eps_dyn_ctcs = (1* eps_dyn_ctcs)**2 * method.dt_min * 0.25
+        eps_dyn = np.concatenate([eps_dyn_real, eps_dyn_ctcs])
+    else:
+        eps_dyn = eps_dyn_real
+
+    method.conv.eps_dyn = eps_dyn
+
+    # set nodal nonconvex inequality constraint tolerances
     if problem.constraints.has(ct=0, type='nonconvex_inequality'):
         method.conv.eps_ineq = np.concatenate([c.eps for c in problem.constraints.get(ct=0, type='nonconvex_inequality')])
     else:
