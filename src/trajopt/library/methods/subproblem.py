@@ -413,7 +413,6 @@ class Subproblem:
 
             # Time dilation constraints
             if bool(self.flags.free_final_time):
-                C.append(self.s_ref[k, 0] + self.ds[k, 0] >= self.dt_min * (N - 1))
                 C.append(self.T_min <= self.t_ref[-1, 0] + self.dt[-1, 0])
                 C.append(self.t_ref[-1, 0] + self.dt[-1, 0] <= self.T_max)
                 # Equal time step perturbations: force all dt[k] = dt[1] for k >= 1
