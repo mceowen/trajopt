@@ -6,8 +6,10 @@ flags:
   free_final_time:    1
   equal_dt:           0
   flag_autotune:      "3"     # '0', '1', '2', '3'
-  buff_dyn:           "term"  # "none", 'term', 'l1', 'l2', 'quad-1', 'quad-2', 'quad-3', 'l1_dual'
+  buff_dyn:           "quad-2"  # "none", 'term', 'l1', 'l2', 'quad-1', 'quad-2', 'quad-3', 'l1_dual'
+  buff_dyn_dual:      "none"   # "none", 'term', 'l1', 'l2', 'quad-1', 'quad-2', 'quad-3'
   ctcs:               "none"
+  ctcs_dual:          "none"
   flag_conv:          1
   discretize:         "ms"  # "ms", "ps"
 
@@ -19,7 +21,7 @@ guess:
   T_init:   7.0
   T_min:    1.0
   T_max:    20.0
-  dT_max:   5.0
+  dT_max:   1.0
 
   nl_guess_u_start: "${(np.array([0, 0, params.planet.g]) * params.vehicle.mass) + np.array([0.08, 0.08, 0.0])}"
   nl_guess_u_stop:  "${(np.array([0, 0, params.planet.g]) * params.vehicle.mass) + np.array([0.08, 0.08, 0.0])}"
@@ -31,8 +33,8 @@ conv:
   ctcs_mult_state:  1.0
   ctcs_mult_cnst:   1.0
   eps_ctcs:         1e-4
-  eps_state:        [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
-  eps_dyn:          [0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001]
+  eps_state:        [0.01, 0.01, 0.01, 0.1, 0.1, 0.1]
+  eps_dyn:          [0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
   eps_cost:         1.0
   eps_defect:       [0.001]
   iter_max:         100

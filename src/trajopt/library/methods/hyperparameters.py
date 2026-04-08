@@ -199,8 +199,8 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
     # ============================================================
     mode_real = method.flags.buff_dyn   # {"none","term","l1","l2","quad-1","quad-2"}
 
-    if subprob.vb_dyn_real_p is not None and n_real > 0:
-        diff_real = subprob.vb_dyn_p[:, idx_real] - subprob.vb_dyn_m[:, idx_real]
+    if n_real > 0:
+        diff_real = subprob.vb_dyn_p[:, subprob.indices.z.real] - subprob.vb_dyn_m[:, subprob.indices.z.real]
 
         # --------------------------------------------------------
         # L1 penalty

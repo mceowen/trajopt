@@ -194,9 +194,9 @@ class Subproblem:
         # --- ------------------------------------------
         n_term_real = self.n.final_state + self.n.term_ineq
         n_term_ctcs  = self.n.term_ctcs
-        # ------------ Real terminal constraints (size = n_term_real) ------------
-        self.vb_term_real = (
-            cp.Variable(n_term_real, name="vb_term_real")
+        # ------------ State terminal constraints (size = n_term_state) ------------
+        self.vb_term_state = (
+            cp.Variable(n_term_real, name="vb_term_state")
             if (method.flags.buff_dyn == "term"
                 and method.flags.dynamics_nonconvex != 0
                 and n_term_real > 0)
@@ -210,31 +210,35 @@ class Subproblem:
         )
         # ------------ Unified stacked terminal buffer ------------
         self.vb_term = (
-            cp.hstack([self.vb_term_real, self.vb_term_ctcs])
-            if (self.vb_term_real is not None and self.vb_term_ctcs is not None)
-            else self.vb_term_real
+            cp.hstack([self.vb_term_state, self.vb_term_ctcs])
+            if (self.vb_term_state is not None and self.vb_term_ctcs is not None)
+            else self.vb_term_state
             if self.vb_term_ctcs is None
             else self.vb_term_ctcs
-            if self.vb_term_real is None
+            if self.vb_term_state is None
             else None # when both are None
         )
 
         # ---------------------------------------------
         # DYNAMICS VIRTUAL BUFFERS (REAL + CTCS)
         # ---------------------------------------------
-        # --- Real dynamics (physical state + time components) ---
-        self.vb_dyn_real_p = (
-            cp.Variable((N - 1, self.n.real), name="vb_dyn_real_plus")
-            if method.flags.buff_dyn != "term" and method.flags.dynamics_nonconvex != 0 and self.n.real > 0
-            else cp.Constant(np.zeros((N - 1, self.n.real))) if self.n.real > 0
+        # --- State dynamics ---
+        self.vb_dyn_state_p = (
+            cp.Variable((N - 1, self.n.state), name="vb_dyn_state_plus")
+            if method.flags.buff_dyn != "term" and method.flags.dynamics_nonconvex != 0 and self.n.state > 0
+            else cp.Constant(np.zeros((N - 1, self.n.state))) if self.n.state > 0
             else None
         )
-        self.vb_dyn_real_m = (
-            cp.Variable((N - 1, self.n.real), name="vb_dyn_real_minus")
-            if method.flags.buff_dyn != "term" and method.flags.dynamics_nonconvex != 0 and self.n.real > 0
-            else cp.Constant(np.zeros((N - 1, self.n.real))) if self.n.real > 0
+        self.vb_dyn_state_m = (
+            cp.Variable((N - 1, self.n.state), name="vb_dyn_state_minus")
+            if method.flags.buff_dyn != "term" and method.flags.dynamics_nonconvex != 0 and self.n.state > 0
+            else cp.Constant(np.zeros((N - 1, self.n.state))) if self.n.state > 0
             else None
         )
+        # --- Time dynamics (always zero - no time buffering) ---
+        self.vb_dyn_time_p = cp.Constant(np.zeros((N - 1, self.n.time)))
+        self.vb_dyn_time_m = cp.Constant(np.zeros((N - 1, self.n.time)))
+        
         # --- CTCS dynamics (self.indices.z.ctcs) ---
         self.vb_dyn_ctcs_p = (
             cp.Variable((N - 1, n_ctcs), name="vb_dyn_ctcs_plus")
@@ -250,12 +254,12 @@ class Subproblem:
         )
         # --- Unified composite buffers (always same shape for DPP) ---
         self.vb_dyn_p = (
-            cp.hstack([self.vb_dyn_real_p, self.vb_dyn_ctcs_p])
-            if n_ctcs>0 else self.vb_dyn_real_p
+            cp.hstack([self.vb_dyn_state_p, self.vb_dyn_time_p, self.vb_dyn_ctcs_p])
+            if n_ctcs>0 else cp.hstack([self.vb_dyn_state_p, self.vb_dyn_time_p])
         )
         self.vb_dyn_m = (
-            cp.hstack([self.vb_dyn_real_m, self.vb_dyn_ctcs_m])
-            if n_ctcs>0 else self.vb_dyn_real_m
+            cp.hstack([self.vb_dyn_state_m, self.vb_dyn_time_m, self.vb_dyn_ctcs_m])
+            if n_ctcs>0 else cp.hstack([self.vb_dyn_state_m, self.vb_dyn_time_m])
         )
 
         # Aggregate buffers (optional)
@@ -340,8 +344,8 @@ class Subproblem:
             C.append(cp.sum(self.vb_dyn_m) == self.vb_minus_ctcs)
 
         if self.flags.buff_dyn == "quad-2":
-            C.append(cp.sum(self.vb_dyn_p[:, self.indices.z.real], axis=1) == self.vb_plus_real[:, 0])
-            C.append(cp.sum(self.vb_dyn_m[:, self.indices.z.real], axis=1) == self.vb_minus_real[:, 0])
+            C.append(cp.sum(self.vb_dyn_state_p, axis=1) == self.vb_plus_real[:, 0])
+            C.append(cp.sum(self.vb_dyn_state_m, axis=1) == self.vb_minus_real[:, 0])
 
         if self.flags.ctcs == "quad-2":
             C.append(cp.sum(self.vb_dyn_p[:, self.indices.z.ctcs], axis=1) == self.vb_plus_ctcs[:, 0])

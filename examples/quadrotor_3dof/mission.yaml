@@ -70,7 +70,7 @@ constraints:
   
   control_rate_limit:
     type: control_rate_limit
-    value: [5.0, 5.0, 5.0]
+    value: [4.0, 4.0, 4.0]
     idx: [0, 1, 2]
 
   max_thrust:
