@@ -809,9 +809,9 @@ class Subproblem:
             rec.solve_time = None
 
         # raw solver variables (useful for diagnostics)
-        rec.dz_s = dz_val
-        rec.dnu_s = dnu_val
-        rec.dt_s = dt_val
+        rec.dz = dz_val
+        rec.dnu = dnu_val
+        rec.dt = dt_val
 
         # outputs (absolute trajectories)
         rec.z_opt  = tools.safe_val(dz_val, rows=N, cols=self.n.z) + input_for_iter["z_ref"]

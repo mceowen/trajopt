@@ -56,7 +56,7 @@ def configure_penalty_weights(problem, method, subconstraints=None):
                 w_dyn       = penalty.config.scale_w.default / (method.index_map.N.N - 1)
                 w_term      = penalty.config.scale_w.default
         else:
-            penalty.config.scale_w.default = 100
+            penalty.config.scale_w.default = 1.0
             w_ineq         = penalty.config.scale_w.default / method.index_map.N.N
             w_dyn          = penalty.config.scale_w.default / (method.index_map.N.N - 1)
             w_term         = penalty.config.scale_w.default
@@ -452,14 +452,14 @@ def autotune1(subproblem, conv_data, conv_data_prev, iter_num):
     W_plus_real  = subproblem.W_stack.plus_real
     W_minus_real = subproblem.W_stack.minus_real
 
-    dual_plus_plus_real  = np.maximum(0, W_plus_real * vb_plus_real  + dual_plus_real)
-    dual_minus_plus_real = np.maximum(0, W_minus_real * vb_minus_real + dual_minus_real)
+    dual_plus_plus_real  = W_plus_real * vb_plus_real  + dual_plus_real
+    dual_minus_plus_real = W_minus_real * vb_minus_real + dual_minus_real
 
     W_plus_ctcs  = subproblem.W_stack.plus_ctcs
     W_minus_ctcs = subproblem.W_stack.minus_ctcs
 
-    dual_plus_plus_ctcs  = np.maximum(0, W_plus_ctcs * vb_plus_ctcs  + dual_plus_ctcs)
-    dual_minus_plus_ctcs = np.maximum(0, W_minus_ctcs * vb_minus_ctcs + dual_minus_ctcs)
+    dual_plus_plus_ctcs  = W_plus_ctcs * vb_plus_ctcs  + dual_plus_ctcs
+    dual_minus_plus_ctcs = W_minus_ctcs * vb_minus_ctcs + dual_minus_ctcs
 
     # ==========================================
     # Saturation thresholds
