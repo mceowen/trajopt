@@ -18,7 +18,7 @@ flags:
   free_final_time:  1
   equal_dt:         0
   flag_autotune:    "3"     # '0', '1', '2', '3'
-  buff_dyn:         quad-2  # "none", 'term', 'l1', 'l2', 'quad-1', 'quad-2', 'quad-3', 'l1_dual'
+  buff_dyn:         l2  # "none", 'term', 'l1', 'l2', 'quad-1', 'quad-2', 'quad-3', 'l1_dual'
   buff_dyn_dual:    none #l1
   ctcs:             none #quad-2
   ctcs_dual:        none #l1
@@ -37,6 +37,12 @@ guess:
   nl_guess_u_stop:  "${(np.array([0, 0, params.planet.g]) * params.vehicle.mass) + np.array([0.08, 0.08, 0.0])}"
 
   line_guess_u_init: "${np.tile(np.array([0, 0, params.planet.g]) * params.vehicle.mass, (N, 1))}"
+
+weights:
+  alpha_z:        0.5
+  alpha_u:        0.5
+  beta:           0.5
+  gamma:          0.1
 
 conv:
   ctcs_fac_cnst:    0.5
