@@ -37,13 +37,11 @@ def run_scp(trajopt_obj):
         subprob = Subproblem(problem, method)
         method.subprob = subprob
 
-    # START SUBPROBLEM CONSTRUCTION / HEADER
-    print("-" * 152)
-    # print(f"                                              ..:: {problem.mission.name}: PTR with Virtual Buffer ::..")
-    print("-" * 152)
-    print("  Iteration |  Propagation |   Solve   |    Parse   |  log(dz)  |      log(VB)    |   log(VB)   |  log(VB)    | Solve status |  Time of    |   Cost    ")
-    print("            |   time [ms]  | time [ms] |  time [ms] |           |  (path + NFZ)   |  (terminal) |  (dynamics) |              |  Flight [s] |           ")
-    print("-" * 152)
+    # subproblem convergence header
+    print("-" * 164)
+    print("  Iteration |  Propagation |   Solve   |    Parse   |  log(dx/eps) | log(vb_ineq/eps) | log(vb_term/eps) | log(vb_dyn/eps) | Solve status |  Time of    |   Cost    ")
+    print("            |   time [ms]  | time [ms] |  time [ms] |     (state)  |    (ncvx_ineq)   |      (terminal)  |    (dynamics)   |              |  Flight [s] |           ")
+    print("-" * 164)
 
     max_iter = int(method.conv["iter_max"])
 
@@ -81,24 +79,17 @@ class ModuleFlags:
     dual:  float = 1.0
     vb:    float = 1.0
 
-
 # ==========================================
 # Iteration status printout (unified record)
 # ==========================================
 def display_subprob_status(method, rec: Dict[str, Any]) -> None:
     conv = rec.get("conv_data", {})
 
-    chk_feas_path = np.max(conv.get("chk_feas_path", 0.0))
-    chk_feas_nfz  = np.max(conv.get("chk_feas_nfz", 0.0))
-    ineq_vb       = np.max(chk_feas_path + (chk_feas_nfz if chk_feas_nfz != 0 else 0.0))
-    chk_dz        = np.max(conv.get("chk_dz", 1e-12))
-    chk_feas_term = np.max(conv.get("chk_feas_term", 1e-12))
-    chk_feas_dyn  = np.max(conv.get("chk_feas_dyn", 1e-12))
-
-    log_dz      = np.log10(max(chk_dz, 1e-12))
-    log_vb_ineq = np.log10(max(ineq_vb, 1e-12))
-    log_vb_term = np.log10(max(chk_feas_term, 1e-12))
-    log_vb_dyn  = np.log10(max(chk_feas_dyn, 1e-12))
+    with np.errstate(divide='ignore'):
+        log_dz_ratio      = np.log10(conv["chk_dz"])
+        log_vb_ineq_ratio = np.log10(conv["chk_vb_ineq"])
+        log_vb_term_ratio = np.log10(conv["chk_vb_term"])
+        log_vb_dyn_ratio  = np.log10(conv["chk_vb_dyn"])
 
     solve_stat  = conv.get("status", "UNKNOWN")
     iter_num    = int(rec.get("iter_num", -1))
@@ -111,15 +102,15 @@ def display_subprob_status(method, rec: Dict[str, Any]) -> None:
     parse_ms= float(rec.get("parse_time", 0.0) or 0.0)
 
     print(
-        "     {:02d}     |    {:07.1f}   |   {:06.1f}  |   {:06.1f}   |   {:+04.1f}    |      {:+05.1f}      |    {:+05.1f}    |     {:+05.1f}   |    {:s}    |   {:4.2f}   |  {:4.1f}".format(
+        "{:^12d}|{:^14.1f}|{:^11.1f}|{:^12.1f}|{:^+14.1f}|{:^+18.1f}|{:^+18.1f}|{:^+17.1f}|{:^14s}|{:^13.2f}|{:^11.1f}".format(
             iter_num,
             prop_ms,
             solve_ms,
             parse_ms,
-            log_dz,
-            log_vb_ineq,
-            log_vb_term,
-            log_vb_dyn,
+            log_dz_ratio,
+            log_vb_ineq_ratio,
+            log_vb_term_ratio,
+            log_vb_dyn_ratio,
             str(solve_stat),
             Ts * method.nondim.time_scale,
             cost

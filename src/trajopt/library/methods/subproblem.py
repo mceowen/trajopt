@@ -668,7 +668,7 @@ class Subproblem:
             dgdnu = None
 
         ncvx_cnstr_time = (time.time() - start) * 1000.0
-        print(f"ncvx_cnstr_time: {ncvx_cnstr_time}")
+        # print(f"ncvx_cnstr_time: {ncvx_cnstr_time}")
 
         # Dynamics & references
         self._set_param(self.Ak,   Ak)
@@ -774,7 +774,7 @@ class Subproblem:
         solver_name = self.method.solver_opts.get("solver", "CLARABEL")
         ignore_dpp = self.method.flags["ignore_dpp"]
         self.cp_subproblem.solve(solver=solver_name, warm_start=False, ignore_dpp=ignore_dpp)  # ignore_dpp=True if desired
-        print(self.cp_subproblem.status)
+        # print(self.cp_subproblem.status)
 
         # Create unified record for this iteration and append
         iter_record      = self._load_outputs(input_for_iter, prop_time_ms)
@@ -852,6 +852,7 @@ class Subproblem:
         conv.vb_minus_real   = tools.get_val(self.vb_minus_real, rows=self.N.pm_real, cols=self.n.minus_real) if self.vb_minus_real  is not None else np.zeros((self.N.pm_real, self.n.minus_real))
         conv.vb_plus_ctcs    = tools.get_val(self.vb_plus_ctcs, rows=self.N.pm_ctcs, cols=self.n.plus_ctcs) if self.vb_plus_ctcs  is not None else np.zeros((self.N.pm_ctcs, self.n.plus_ctcs))
         conv.vb_minus_ctcs   = tools.get_val(self.vb_minus_ctcs, rows=self.N.pm_ctcs, cols=self.n.minus_ctcs) if self.vb_minus_ctcs  is not None else np.zeros((self.N.pm_ctcs, self.n.minus_ctcs))
+        conv.ncvx_ineq       = g
 
         conv.defect  = tools.safe_val(self.dz, rows=N, cols=n_x) + input_for_iter["z_ref"] - self.z_m.value
         conv.Jtr     = ( self.w.tr_z.value * np.sum(tools.safe_val(self.dz, rows=N, cols=n_x)**2)
