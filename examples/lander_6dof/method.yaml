@@ -30,9 +30,10 @@ conv:
 flags:
   ignore_dpp: 0
   flag_conv: 1
-  buff_dyn: l2
+  buff_dyn: quad-2
   buff_dyn_dual: none
-  equal_dt: 1
+  free_final_time:    1
+  equal_dt:           0
 
 solver_opts:
   solver: QOCO
