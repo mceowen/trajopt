@@ -633,7 +633,6 @@ class Subproblem:
         self.cp_subproblem.solve( 
                 solver=solver_name, warm_start=False, ignore_dpp=ignore_dpp
             )  # ignore_dpp=True if desired
-        print(self.cp_subproblem.status)
 
         # Create unified record for this iteration and append
         iter_record         = self._load_outputs(input_for_iter, prop_time_ms)
