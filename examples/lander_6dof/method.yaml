@@ -33,6 +33,7 @@ flags:
   flag_conv: 1
   buff_dyn: l2
   buff_dyn_dual: none
+  ctcs: l2
   free_final_time:    1
   equal_dt:           1
 
