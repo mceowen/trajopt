@@ -10,10 +10,10 @@ fcns.nonlinear_aero: trajopt/library/missions/msl.py:nonlinear_aero_jax
 params.planet.inherit: trajopt/library/missions/shared/planet/mars.yaml
 params.vehicle.inherit: trajopt/library/missions/shared/vehicle/msl.yaml
 
-state.r.scale: 1000
-state.theta.scale: 0.01
-state.phi.scale: 0.01
-state.v.scale: 100
+state.r.scale: 1000000
+state.theta.scale: 1.0
+state.phi.scale: 1.0
+state.v.scale: 1000
 state.gamma.scale: 1
 state.psi.scale: 1
 
@@ -31,12 +31,12 @@ constraints:
     idx: [0, 1, 2, 3, 4, 5]
 
   final_state:
-    value: ["${params.planet.r + 10e3}", 0.0, 10.5768]
+    value: ["${params.planet.r + 1e3}", 0.0, 10.5768]
     idx: [0, 1, 2]
-    eps: [1, 0.0001, 0.0001]
+    eps: [50, 0.0001, 0.0001]
 
   state_limits:
-    min_value: ["${params.planet.r + 5e3}", 100.0]
+    min_value: ["${params.planet.r + 1e3}", 100.0]
     min_value_idx: [0, 3]
 
   bank_aoa_angle_limits:

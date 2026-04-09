@@ -721,7 +721,7 @@ class Subproblem:
             self.g0.value       = g
 
         ncvx_cnstr_time = (time.time() - start) * 1000.0
-        print(f"ncvx_cnstr_time: {ncvx_cnstr_time}")
+        # print(f"ncvx_cnstr_time: {ncvx_cnstr_time}")
 
         # Dynamics & references
         self._set_param(self.Ak,   Ak)
@@ -826,8 +826,9 @@ class Subproblem:
             rec.solve_time = None
 
         # raw solver variables (useful for diagnostics)
-        rec.dz_s    = dz_val
-        rec.dnu_s   = dnu_val
+        rec.dz = dz_val
+        rec.dnu = dnu_val
+        rec.dt = dt_val
 
         # outputs (absolute trajectories)
         rec.z_opt  = tools.safe_val(dz_val, rows=N, cols=self.n.z) + input_for_iter.z_ref
@@ -875,6 +876,7 @@ class Subproblem:
         conv.vb_minus_real   = tools.get_val(self.vb_minus_real, rows=self.N.pm_real, cols=self.n.minus_real) if self.vb_minus_real  is not None else np.zeros((self.N.pm_real, self.n.minus_real))
         conv.vb_plus_ctcs    = tools.get_val(self.vb_plus_ctcs, rows=self.N.pm_ctcs, cols=self.n.plus_ctcs) if self.vb_plus_ctcs  is not None else np.zeros((self.N.pm_ctcs, self.n.plus_ctcs))
         conv.vb_minus_ctcs   = tools.get_val(self.vb_minus_ctcs, rows=self.N.pm_ctcs, cols=self.n.minus_ctcs) if self.vb_minus_ctcs  is not None else np.zeros((self.N.pm_ctcs, self.n.minus_ctcs))
+        conv.ncvx_ineq       = g
 
         conv.defect  = tools.safe_val(self.dz, rows=N, cols=n_x) + input_for_iter.z_ref - self.z_m.value
         conv.Jtr     = ( self.w.tr_z.value * np.sum(tools.safe_val(self.dz, rows=N, cols=n_x)**2)

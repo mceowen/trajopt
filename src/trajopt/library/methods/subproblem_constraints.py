@@ -159,8 +159,8 @@ class SubproblemConstraints(Constraints):
             offsets[group_name] = current_offset
             current_offset += idx.n[group_name] if group_name in idx.n else 0
 
-        print("offset keys: ")
-        print(offsets.keys())
+        # print("offset keys: ")
+        # print(offsets.keys())
 
         
         # offsets = {

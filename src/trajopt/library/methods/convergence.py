@@ -90,50 +90,80 @@ def check_convergence_tolerance(problem, method, iter_record):
     # --- Load convergence data
     conv_data = iter_record.conv_data
 
-    idx = problem.index_map.indices
+    # --- Extract dimensions from Subproblem
+    n_state = problem.index_map.n.state
+    N   = method.index_map.N.time_grid
 
-    # --- Extract optimization variables
-    dstate  = iter_record.dz_s[:, idx.z.state]
-    dt_sol  = iter_record.dz_s[:, idx.z.time]
+    index_map = method.index_map
+
+    # dz and dcost to measure optimality
+    dstate  = iter_record.dz[:, index_map.indices.z.state]
     dcost   = iter_record.cost - conv_data.cost_ref
+    
+    # linearized constraint violations
     vb_dyn  = conv_data.vb_dyn
     vb_ineq = conv_data.vb_ineq
     vb_term = conv_data.vb_terminal
 
-    # --- Extract convergence criteria
+    # nonlinear constraint violations
+    defect    = conv_data.defect
+    ncvx_ineq = conv_data.ncvx_ineq
+
+    # convergence epsilons
     eps_state  = method.conv.eps_state
-    eps_t      = method.conv.eps_t
-    eps_cost   = method.conv.eps_cost
-    eps_ineq   = method.conv.eps_ineq
-    eps_term   = method.conv.eps_term
+    eps_dcost  = method.conv.eps_cost
+    eps_ineq   = method.conv.eps_ineq   if method.conv.eps_ineq.size   > 0 else np.array([1.0])
+    eps_term   = method.conv.eps_term   if method.conv.eps_term.size   > 0 else np.array([1.0])
     eps_defect = method.conv.eps_defect
     eps_dyn    = method.conv.eps_dyn
 
+    # absolute values of dz and dcost to measure optimality
     abs_dz = np.abs(dstate)
-    abs_dt = np.abs(dt_sol)
-    abs_opt = np.abs(dcost)
+    abs_dcost = np.abs(dcost)
+
+    # absolute values of linearized constraint violations
     abs_vb_dyn = np.abs(vb_dyn)
-    abs_vb_ineq = np.abs(vb_ineq)
-    abs_vb_term = np.abs(vb_term)
 
-    bool_term  = np.all(abs_vb_term <= 1.0*eps_term)
-    bool_ineq  = np.all(abs_vb_ineq <= 1.0*eps_ineq)
-    bool_state = np.all(abs_dz <= 1.0*eps_state)
-    bool_time  = np.all(abs_dt <= 1.0*eps_t)
+    abs_vb_ineq = np.abs(vb_ineq) if problem.constraints.has(type="nonconvex_inequality", ct=0) else np.zeros((1, ))
+    abs_vb_term = np.abs(vb_term) if np.asarray(vb_term).size > 0 else np.zeros(1)
 
-    bool_conv = bool_term and bool_ineq and bool_state and bool_time
+    # absolute values nonconvex constraint violations
+    abs_ncvx_dyn = np.abs(defect[index_map.indices.z.state])
+    abs_ncvx_ineq = np.abs(ncvx_ineq)
+
+    bool_term = np.all(abs_vb_term <= 1.0*eps_term)
+    bool_vb_ineq = np.all(abs_vb_ineq <= 1.0*eps_ineq)
+    bool_dz = np.all(abs_dz <= 1.0*eps_state)
+    bool_dcost = np.all(abs_dcost <= 1.0*eps_dcost)
+    bool_vb_dyn = np.all(abs_vb_dyn <= 1.0*eps_dyn)
+    bool_ncvx_dyn_state = np.all(abs_ncvx_dyn[:, index_map.indices.z.state] <= 1.0*eps_defect[index_map.indices.z.state])
+    bool_ncvx_ineq = np.all(abs_ncvx_ineq <= 1.0*eps_ineq)
+
+    # convergence criteria option 1: 
+    # check optimality with dz and feasibility with linearized constraint violations
+    bool_opt1  = bool_dz
+    bool_feas1 = bool_term and bool_vb_ineq and bool_vb_dyn
+
+    # convergence criteria option 2: 
+    # check optimality with dcost and feasibility with nonlinear constraint violations
+    bool_opt2  = bool_dcost
+    bool_feas2 = bool_term and bool_ncvx_ineq and bool_ncvx_dyn_state
+
+    if method.flags.flag_conv == 0:
+        bool_conv = (bool_opt1 and bool_feas1) or (bool_opt2 and bool_feas2) 
+    elif method.flags.flag_conv == 1:
+        bool_conv = (bool_opt1 and bool_feas1) 
+    elif method.flags.flag_conv == 2:
+        bool_conv = (bool_opt2 and bool_feas2) 
 
     # === Populate convergence summary
-    conv_data.bool_conv = bool_conv
-    conv_data.chk_dz = np.max(abs_dz)
-    conv_data.chk_opt = np.max(abs_opt)
-    conv_data.chk_feas_term = np.max(abs_vb_term)
-    if eps_ineq.size > 0:
-        conv_data.chk_feas_ineq = np.max(abs_vb_ineq)
-    else:
-        conv_data.chk_feas_ineq = 0.0
-    conv_data.chk_feas_dyn = np.max(abs_vb_dyn)
-    conv_data.status = iter_record.cp_subprob.status
+    conv_data.bool_conv   = bool_conv
+    conv_data.chk_dz      = np.max(abs_dz / eps_state)
+    conv_data.chk_dcost   = np.max(abs_dcost / eps_dcost)
+    conv_data.chk_vb_term = np.max(abs_vb_term / eps_term)
+    conv_data.chk_vb_ineq = np.max(abs_vb_ineq / eps_ineq)
+    conv_data.chk_vb_dyn  = np.max(abs_vb_dyn / eps_dyn)
+    conv_data.status      = iter_record.cp_subprob.status
 
     iter_record.converged = bool_conv
     iter_record.conv_data = conv_data

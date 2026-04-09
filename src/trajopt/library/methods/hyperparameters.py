@@ -55,7 +55,7 @@ def configure_penalty_weights(problem, method, subconstraints=None):
                 w_dyn       = penalty.config.scale_w.default / (method.index_map.N.time_grid - 1)
                 w_term      = penalty.config.scale_w.default
         else:
-            penalty.config.scale_w.default = 1
+            penalty.config.scale_w.default = 1.0
             w_ineq         = penalty.config.scale_w.default / method.index_map.N.time_grid
             w_dyn           = penalty.config.scale_w.default / (method.index_map.N.time_grid - 1)
             w_term          = penalty.config.scale_w.default
@@ -423,43 +423,59 @@ def autotune1(subproblem, conv_data, conv_data_prev, iter_num):
 
     # Hyperparameters
     if method.flags.stepsize_auto_dual:
-        beta = gamma = 1 / iter_num
+        beta_cfg = gamma_cfg = 1 / iter_num
     else:
         penalty_rec = method.penalty
-        beta  = penalty_rec.beta
-        gamma = penalty_rec.gamma
+        beta_cfg  = penalty_rec.beta
+        gamma_cfg = penalty_rec.gamma
+
+    def _resolve_stepsize(cfg, key, fallback):
+        if isinstance(cfg, dict):
+            value = cfg.get(key, cfg.get("default", cfg))
+        else:
+            value = cfg
+
+        if isinstance(value, str):
+            if value in {"al"}:
+                return np.array(fallback, copy=True)
+            raise ValueError(f"Unsupported stepsize spec for '{key}': {value}")
+
+        return value
+
+    beta = tools.AttrDict(
+        nonconvex_inequality=_resolve_stepsize(beta_cfg, "nonconvex_inequality", subproblem.W_stack.nonconvex_inequality),
+        dynamics=_resolve_stepsize(beta_cfg, "dynamics", subproblem.W_stack.dynamics),
+        final_state=_resolve_stepsize(beta_cfg, "final_state", subproblem.W_stack.final_state),
+        plus_real=_resolve_stepsize(beta_cfg, "plus_real", subproblem.W_stack.plus_real),
+        minus_real=_resolve_stepsize(beta_cfg, "minus_real", subproblem.W_stack.minus_real),
+        plus_ctcs=_resolve_stepsize(beta_cfg, "plus_ctcs", subproblem.W_stack.plus_ctcs),
+        minus_ctcs=_resolve_stepsize(beta_cfg, "minus_ctcs", subproblem.W_stack.minus_ctcs),
+    )
+    gamma = tools.AttrDict(
+        nonconvex_inequality=_resolve_stepsize(
+            gamma_cfg, "nonconvex_inequality", subproblem.W_stack.nonconvex_inequality
+        )
+    )
 
     # ==========================================
     # Dual updates
     # ==========================================
 
-    W_ineq = subproblem.W_stack.nonconvex_inequality
-
     # inequality
-    dual_ineq_plus = np.maximum(0, W_ineq * vb_ineq + dual_ineq)
-
-    W_dyn = subproblem.W_stack.dynamics
+    dual_ineq_plus = np.maximum(0, gamma.nonconvex_inequality * vb_ineq + dual_ineq)
 
     # NOTE: testing the augmented lagrangian update rule for duals
-    dual_dyn_plus = W_dyn * vb_dyn + dual_dyn
-
-    W_term = subproblem.W_stack.final_state
+    dual_dyn_plus = beta.dynamics * vb_dyn + dual_dyn
 
     # terminal
-    dual_term_plus = W_term * vb_term + dual_term
+    dual_term_plus = beta.final_state * vb_term + dual_term
 
     # plus/minus (quadratic 1-norm decomposition)
-    W_plus_real  = subproblem.W_stack.plus_real
-    W_minus_real = subproblem.W_stack.minus_real
+    dual_plus_plus_real  = beta.plus_real * vb_plus_real + dual_plus_real
+    dual_minus_plus_real = beta.minus_real * vb_minus_real + dual_minus_real
 
-    dual_plus_plus_real  = np.maximum(0, W_plus_real * vb_plus_real  + dual_plus_real)
-    dual_minus_plus_real = np.maximum(0, W_minus_real * vb_minus_real + dual_minus_real)
-
-    W_plus_ctcs  = subproblem.W_stack.plus_ctcs
-    W_minus_ctcs = subproblem.W_stack.minus_ctcs
-
-    dual_plus_plus_ctcs  = np.maximum(0, W_plus_ctcs * vb_plus_ctcs  + dual_plus_ctcs)
-    dual_minus_plus_ctcs = np.maximum(0, W_minus_ctcs * vb_minus_ctcs + dual_minus_ctcs)
+    dual_plus_plus_ctcs  = beta.plus_ctcs * vb_plus_ctcs + dual_plus_ctcs
+    dual_minus_plus_ctcs = beta.minus_ctcs * vb_minus_ctcs + dual_minus_ctcs
 
     # ==========================================
     # Saturation thresholds
@@ -483,12 +499,12 @@ def autotune1(subproblem, conv_data, conv_data_prev, iter_num):
 
     # Return dual update info for logging
     return {
-        "dmu_ineq": dual_ineq_plus - dual_ineq,
-        "dmu_eq":   dual_term_plus - dual_term,
-        "dmu_plus_real": dual_plus_plus_real  - dual_plus_real,
-        "dmu_minus_real": dual_minus_plus_real - dual_minus_real,
-        "dmu_plus_ctcs": dual_plus_plus_ctcs  - dual_plus_ctcs,
-        "dmu_minus_ctcs": dual_minus_plus_ctcs - dual_minus_ctcs,
+        "dmu_ineq":         dual_ineq_plus - dual_ineq,
+        "dmu_eq":           dual_term_plus - dual_term,
+        "dmu_plus_real":    dual_plus_plus_real  - dual_plus_real,
+        "dmu_minus_real":   dual_minus_plus_real - dual_minus_real,
+        "dmu_plus_ctcs":    dual_plus_plus_ctcs  - dual_plus_ctcs,
+        "dmu_minus_ctcs":   dual_minus_plus_ctcs - dual_minus_ctcs,
     }
 
 
@@ -529,9 +545,9 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
     eps_feas_term = conv.eps_term
     eps_feas_dyn  = conv.eps_dyn
 
-    eps_target_term =  np.maximum(1.0*eps_feas_term, conv.fac_eps * np.abs(conv_data.vb_terminal))
-    eps_target_ineq =  np.maximum(1.0*eps_feas_ineq, conv.fac_eps * np.abs(conv_data.vb_ineq))
-    eps_target_dyn  =  np.maximum(1.0*eps_feas_dyn , conv.fac_eps * np.abs(conv_data.vb_dyn))
+    eps_target_term =  np.maximum(conv.fac_target * eps_feas_term, conv.fac_eps * np.abs(conv_data.vb_terminal))
+    eps_target_ineq =  np.maximum(conv.fac_target * eps_feas_ineq, conv.fac_eps * np.abs(conv_data.vb_ineq))
+    eps_target_dyn  =  np.maximum(conv.fac_target * eps_feas_dyn , conv.fac_eps * np.abs(conv_data.vb_dyn))
 
     conv_data.eps_target_term = eps_target_term.copy()
     conv_data.eps_target_ineq = eps_target_ineq.copy()
@@ -629,14 +645,6 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
     if np.sum(W_dyn) > 0: Wh_dyn[Wh_dyn <= eps_nonzero2] = eps_nonzero2
     if np.sum(W_term) > 0: Wh_term[Wh_term <= eps_nonzero2] = eps_nonzero2
 
-    # subproblem.W_stack.nonconvex_inequality = np.maximum(Wh_ineq, W_ineq)
-    # subproblem.W_stack.dynamics             = np.maximum(Wh_dyn, W_dyn)
-    # subproblem.W_stack.final_state          = np.maximum(Wh_term, W_term)
-    # subproblem.W_stack.plus_real            = np.maximum(Wh_plus_real, W_plus_real)
-    # subproblem.W_stack.minus_real           = np.maximum(Wh_minus_real, W_minus_real)
-    # subproblem.W_stack.plus_ctcs            = np.maximum(Wh_plus_ctcs, W_plus_ctcs)
-    # subproblem.W_stack.minus_ctcs           = np.maximum(Wh_minus_ctcs, W_minus_ctcs)
-    # else:
     subproblem.W_stack.plus_real = Wh_plus_real
     subproblem.W_stack.minus_real = Wh_minus_real
     subproblem.W_stack.plus_ctcs = Wh_plus_ctcs

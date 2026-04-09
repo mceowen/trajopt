@@ -1,5 +1,5 @@
 # INHERIT THE AUTOSCVX METHOD CONFIGS
-inherit: trajopt/library/methods/configs/autoscvx.yaml
+inherit: trajopt/library/methods/configs/autoscvx-term.yaml
 
 # ===============================
 # GRID SETTINGS
