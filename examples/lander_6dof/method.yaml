@@ -24,15 +24,18 @@ conv:
   eps_state: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
   eps_cost: 1
   eps_defect: [1]
-  eps_dyn: [0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001]
-  iter_max: 40
+  eps_dyn: [0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001]
+  iter_max: 200
+  #fac_target: 0.01
 
 flags:
   ignore_dpp: 0
   flag_conv: 1
   buff_dyn: l2
   buff_dyn_dual: none
-  equal_dt: 1
+  ctcs: l2
+  free_final_time:    1
+  equal_dt:           1
 
 solver_opts:
-  solver: QOCO
+  solver: CLARABEL

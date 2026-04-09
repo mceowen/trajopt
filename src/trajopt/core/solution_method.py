@@ -86,9 +86,9 @@ class SolutionMethod:
         # (instead of the subproblem)
         # OR maybe just initialize the subproblem itself here and only run solve later?
         # --- Initialize virtual buffers ---
-        self.conv_data.vb_ineq     = np.zeros((self.index_map.N.time_grid,      problem.index_map.n.nonconvex_inequality))
-        self.conv_data.vb_dyn      = np.zeros((self.index_map.N.time_grid-1,    problem.index_map.n.z))
-        self.conv_data.vb_terminal = np.zeros(problem.index_map.n.z)
+        self.conv_data.vb_ineq     = np.zeros((self.index_map.N.time_grid,      self.index_map.n.nonconvex_inequality))
+        self.conv_data.vb_dyn      = np.zeros((self.index_map.N.time_grid-1,    self.index_map.n.z))
+        self.conv_data.vb_terminal = np.zeros(self.index_map.n.z)
 
         # --- Initialize reusable compiled Subproblem (DPP) ---
         self.subproblem = Subproblem(problem, self)

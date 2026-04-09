@@ -55,7 +55,7 @@ def configure_penalty_weights(problem, method, subconstraints=None):
                 w_dyn       = penalty.config.scale_w.default / (method.index_map.N.time_grid - 1)
                 w_term      = penalty.config.scale_w.default
         else:
-            penalty.config.scale_w.default = 1
+            penalty.config.scale_w.default = 1.0
             w_ineq         = penalty.config.scale_w.default / method.index_map.N.time_grid
             w_dyn           = penalty.config.scale_w.default / (method.index_map.N.time_grid - 1)
             w_term          = penalty.config.scale_w.default
@@ -182,16 +182,16 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
     # ------------------------------------------------------------
     # TERMINAL TERM (REAL + CTCS)
     # ------------------------------------------------------------
-    if subprob.vb_term is not None and subprob.vb_term.size > 0:
-        VB += cp.sum_squares(cp.diag(subprob.W_sqrt.final_state) @ subprob.vb_term)
+    if subprob.vb_stack.final_state is not None and subprob.vb_stack.final_state.size > 0:
+        VB += cp.sum_squares(cp.diag(subprob.W_sqrt.final_state) @ subprob.vb_stack.final_state)
 
     # ------------------------------------------------------------
     # STACKED NONLINEAR INEQUALITY BUFFERS
     # ------------------------------------------------------------
-    if subprob.vb_ineq is not None and subprob.n.nonconvex_inequality > 0:
+    if subprob.vb_stack.nonconvex_inequality is not None and subprob.n.nonconvex_inequality > 0:
         for k in range(N):
             VB += cp.sum_squares(
-                cp.diag(subprob.W_sqrt.nonconvex_inequality[k, :]) @ subprob.vb_ineq[k, :]
+                cp.diag(subprob.W_sqrt.nonconvex_inequality[k, :]) @ subprob.vb_stack.nonconvex_inequality[k, :]
             )
 
     # ============================================================
@@ -199,8 +199,8 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
     # ============================================================
     mode_real = method.flags.buff_dyn   # {"none","term","l1","l2","quad-1","quad-2"}
 
-    if subprob.vb_dyn_real_p is not None and n_real > 0:
-        diff_real = subprob.vb_dyn_p[:, idx_real] - subprob.vb_dyn_m[:, idx_real]
+    if n_real > 0:
+        diff_real = subprob.vb_stack.dynamics[:, subprob.indices.z.real]
 
         # --------------------------------------------------------
         # L1 penalty
@@ -222,28 +222,28 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
         # QUAD-1 or QUAD-3: k = 1 only
         # --------------------------------------------------------
         elif mode_real == "quad-1" or mode_real == "quad-3":
-            if subprob.vb_plus_real is not None:
+            if subprob.vb_stack.plus_real is not None:
                 VB += cp.sum_squares(
-                    cp.diag(subprob.W_sqrt.plus_real[0, :]) @ subprob.vb_plus_real[0, :]
+                    cp.diag(subprob.W_sqrt.plus_real[0, :]) @ subprob.vb_stack.plus_real[0, :]
                 )
-            if subprob.vb_minus_real is not None:
+            if subprob.vb_stack.minus_real is not None:
                 VB += cp.sum_squares(
-                    cp.diag(subprob.W_sqrt.minus_real[0, :]) @ subprob.vb_minus_real[0, :]
+                    cp.diag(subprob.W_sqrt.minus_real[0, :]) @ subprob.vb_stack.minus_real[0, :]
                 )
 
         # --------------------------------------------------------
         # QUAD-2 : Per-time-step quadratic penalties
         # --------------------------------------------------------
         elif mode_real == "quad-2":
-            if subprob.vb_plus_real is not None:
+            if subprob.vb_stack.plus_real is not None:
                 for k in range(subprob.N.pm_real):
                     VB += cp.sum_squares(
-                        cp.diag(subprob.W_sqrt.plus_real[k, :]) @ subprob.vb_plus_real[k, :]
+                        cp.diag(subprob.W_sqrt.plus_real[k, :]) @ subprob.vb_stack.plus_real[k, :]
                     )
-            if subprob.vb_minus_real is not None:
+            if subprob.vb_stack.minus_real is not None:
                 for k in range(subprob.N.pm_real):
                     VB += cp.sum_squares(
-                        cp.diag(subprob.W_sqrt.minus_real[k, :]) @ subprob.vb_minus_real[k, :]
+                        cp.diag(subprob.W_sqrt.minus_real[k, :]) @ subprob.vb_stack.minus_real[k, :]
                     )
 
     # ============================================================
@@ -251,8 +251,8 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
     # ============================================================
     mode_ctcs = method.flags.ctcs       # {"none","term","l1","l2","quad-1","quad-2"}
 
-    if subprob.vb_dyn_p is not None and n_ctcs > 0:
-        diff_ctcs = subprob.vb_dyn_p[:, subprob.indices.z.ctcs] - subprob.vb_dyn_m[:, subprob.indices.z.ctcs]
+    if subprob.vb_stack.dynamics_plus is not None and n_ctcs > 0:
+        diff_ctcs = subprob.vb_stack.dynamics[:, subprob.indices.z.ctcs]
 
         # --------------------------------------------------------
         # L1 penalty
@@ -274,28 +274,28 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
         # QUAD-1 or QUAD-3: k = 1 only
         # --------------------------------------------------------
         elif mode_ctcs == "quad-1" or mode_ctcs == "quad-3":
-            if subprob.vb_plus_ctcs is not None:
+            if subprob.vb_stack.plus_ctcs is not None:
                 VB += cp.sum_squares(
-                    cp.diag(subprob.W_sqrt.plus_ctcs[0, :]) @ subprob.vb_plus_ctcs[0, :]
+                    cp.diag(subprob.W_sqrt.plus_ctcs[0, :]) @ subprob.vb_stack.plus_ctcs[0, :]
                 )
-            if subprob.vb_minus_ctcs is not None:
+            if subprob.vb_stack.minus_ctcs is not None:
                 VB += cp.sum_squares(
-                    cp.diag(subprob.W_sqrt.minus_ctcs[0, :]) @ subprob.vb_minus_ctcs[0, :]
+                    cp.diag(subprob.W_sqrt.minus_ctcs[0, :]) @ subprob.vb_stack.minus_ctcs[0, :]
                 )
 
         # --------------------------------------------------------
         # QUAD-2 : Per-time-step quadratic penalties
         # --------------------------------------------------------
         elif mode_ctcs == "quad-2":
-            if subprob.vb_plus_ctcs is not None:
+            if subprob.vb_stack.plus_ctcs is not None:
                 for k in range(subprob.N.pm_ctcs):
                     VB += cp.sum_squares(
-                        cp.diag(subprob.W_sqrt.plus_ctcs[k, :]) @ subprob.vb_plus_ctcs[k, :]
+                        cp.diag(subprob.W_sqrt.plus_ctcs[k, :]) @ subprob.vb_stack.plus_ctcs[k, :]
                     )
-            if subprob.vb_minus_ctcs is not None:
+            if subprob.vb_stack.minus_ctcs is not None:
                 for k in range(subprob.N.pm_ctcs):
                     VB += cp.sum_squares(
-                        cp.diag(subprob.W_sqrt.minus_ctcs[k, :]) @ subprob.vb_minus_ctcs[k, :]
+                        cp.diag(subprob.W_sqrt.minus_ctcs[k, :]) @ subprob.vb_stack.minus_ctcs[k, :]
                     )
 
     # ------------------------------------------------------------
@@ -319,13 +319,13 @@ def build_dual_buffer_cost(subprob) -> cp.Expression:
     # ============================================================
     # Unified NONCONVEX_INEQUALITY DUAL COST
     # ============================================================
-    if subprob.vb_ineq is not None and subprob.n.nonconvex_inequality > 0:
-        DUAL += cp.sum(cp.multiply(subprob.vb_ineq, subprob.dual.nonconvex_inequality))
+    if subprob.vb_stack.nonconvex_inequality is not None and subprob.n.nonconvex_inequality > 0:
+        DUAL += cp.sum(cp.multiply(subprob.vb_stack.nonconvex_inequality, subprob.dual.nonconvex_inequality))
 
     # ============================================================
     # Dynamic dual: dual_dynamics .* (vb_dyn_plus - vb_dyn_minus)
     # ============================================================
-    diff = subprob.vb_dyn_p - subprob.vb_dyn_m
+    diff = subprob.vb_stack.dynamics
     DUAL += cp.sum(cp.multiply(diff, subprob.dual.dynamics))
 
     # ============================================================
@@ -338,21 +338,21 @@ def build_dual_buffer_cost(subprob) -> cp.Expression:
         # QUAD-1 or QUAD-3: k == 1 only
         # -----------------------
         if mode_real == "quad-1" or mode_real == "quad-3":
-            if subprob.vb_plus_real is not None and subprob.dual.plus_real is not None:
-                DUAL += subprob.dual.plus_real[0, :] @ subprob.vb_plus_real[0, :]
-            if subprob.vb_minus_real is not None and subprob.dual.minus_real is not None:
-                DUAL += subprob.dual.minus_real[0, :] @ subprob.vb_minus_real[0, :]
+            if subprob.vb_stack.plus_real is not None and subprob.dual.plus_real is not None:
+                DUAL += subprob.dual.plus_real[0, :] @ subprob.vb_stack.plus_real[0, :]
+            if subprob.vb_stack.minus_real is not None and subprob.dual.minus_real is not None:
+                DUAL += subprob.dual.minus_real[0, :] @ subprob.vb_stack.minus_real[0, :]
 
         # -----------------------
         # QUAD-2  (per time index)
         # -----------------------
         elif mode_real == "quad-2":
-            if subprob.vb_plus_real is not None and subprob.dual.plus_real is not None:
+            if subprob.vb_stack.plus_real is not None and subprob.dual.plus_real is not None:
                 for k in range(subprob.N.pm_real):
-                    DUAL += subprob.dual.plus_real[k, :] @ subprob.vb_plus_real[k, :]
-            if subprob.vb_minus_real is not None and subprob.dual.minus_real is not None:
+                    DUAL += subprob.dual.plus_real[k, :] @ subprob.vb_stack.plus_real[k, :]
+            if subprob.vb_stack.minus_real is not None and subprob.dual.minus_real is not None:
                 for k in range(subprob.N.pm_real):
-                    DUAL += subprob.dual.minus_real[k, :] @ subprob.vb_minus_real[k, :]
+                    DUAL += subprob.dual.minus_real[k, :] @ subprob.vb_stack.minus_real[k, :]
 
     # ============================================================
     # CTCS DUAL COST
@@ -364,27 +364,27 @@ def build_dual_buffer_cost(subprob) -> cp.Expression:
         # QUAD-1 or QUAD-3: k == 1 only
         # -----------------------
         if mode_ctcs == "quad-1" or mode_ctcs == "quad-3":
-            if subprob.vb_plus_ctcs is not None and subprob.dual.plus_ctcs is not None:
-                DUAL += subprob.dual.plus_ctcs[0, :] @ subprob.vb_plus_ctcs[0, :]
-            if subprob.vb_minus_ctcs is not None and subprob.dual.minus_ctcs is not None:
-                DUAL += subprob.dual.minus_ctcs[0, :] @ subprob.vb_minus_ctcs[0, :]
+            if subprob.vb_stack.plus_ctcs is not None and subprob.dual.plus_ctcs is not None:
+                DUAL += subprob.dual.plus_ctcs[0, :] @ subprob.vb_stack.plus_ctcs[0, :]
+            if subprob.vb_stack.minus_ctcs is not None and subprob.dual.minus_ctcs is not None:
+                DUAL += subprob.dual.minus_ctcs[0, :] @ subprob.vb_stack.minus_ctcs[0, :]
 
         # -----------------------
         # QUAD-2  (per time index)
         # -----------------------
         elif mode_ctcs == "quad-2":
-            if subprob.vb_plus_ctcs is not None and subprob.dual.plus_ctcs is not None:
+            if subprob.vb_stack.plus_ctcs is not None and subprob.dual.plus_ctcs is not None:
                 for k in range(subprob.N.pm_ctcs):
-                    DUAL += subprob.dual.plus_ctcs[k, :] @ subprob.vb_plus_ctcs[k, :]
-            if subprob.vb_minus_ctcs is not None and subprob.dual.minus_ctcs is not None:
+                    DUAL += subprob.dual.plus_ctcs[k, :] @ subprob.vb_stack.plus_ctcs[k, :]
+            if subprob.vb_stack.minus_ctcs is not None and subprob.dual.minus_ctcs is not None:
                 for k in range(subprob.N.pm_ctcs):
-                    DUAL += subprob.dual.minus_ctcs[k, :] @ subprob.vb_minus_ctcs[k, :]
+                    DUAL += subprob.dual.minus_ctcs[k, :] @ subprob.vb_stack.minus_ctcs[k, :]
 
     # ============================================================
     # Terminal dual cost
     # ============================================================
-    if subprob.vb_term is not None and subprob.n.final_state > 0:
-        DUAL += subprob.dual.final_state @ subprob.vb_term
+    if subprob.vb_stack.final_state is not None and subprob.n.final_state > 0:
+        DUAL += subprob.dual.final_state @ subprob.vb_stack.final_state
 
     return DUAL
 
@@ -423,43 +423,59 @@ def autotune1(subproblem, conv_data, conv_data_prev, iter_num):
 
     # Hyperparameters
     if method.flags.stepsize_auto_dual:
-        beta = gamma = 1 / iter_num
+        beta_cfg = gamma_cfg = 1 / iter_num
     else:
         penalty_rec = method.penalty
-        beta  = penalty_rec.beta
-        gamma = penalty_rec.gamma
+        beta_cfg  = penalty_rec.beta
+        gamma_cfg = penalty_rec.gamma
+
+    def _resolve_stepsize(cfg, key, fallback):
+        if isinstance(cfg, dict):
+            value = cfg.get(key, cfg.get("default", cfg))
+        else:
+            value = cfg
+
+        if isinstance(value, str):
+            if value in {"al"}:
+                return np.array(fallback, copy=True)
+            raise ValueError(f"Unsupported stepsize spec for '{key}': {value}")
+
+        return value
+
+    beta = tools.AttrDict(
+        nonconvex_inequality=_resolve_stepsize(beta_cfg, "nonconvex_inequality", subproblem.W_stack.nonconvex_inequality),
+        dynamics=_resolve_stepsize(beta_cfg, "dynamics", subproblem.W_stack.dynamics),
+        final_state=_resolve_stepsize(beta_cfg, "final_state", subproblem.W_stack.final_state),
+        plus_real=_resolve_stepsize(beta_cfg, "plus_real", subproblem.W_stack.plus_real),
+        minus_real=_resolve_stepsize(beta_cfg, "minus_real", subproblem.W_stack.minus_real),
+        plus_ctcs=_resolve_stepsize(beta_cfg, "plus_ctcs", subproblem.W_stack.plus_ctcs),
+        minus_ctcs=_resolve_stepsize(beta_cfg, "minus_ctcs", subproblem.W_stack.minus_ctcs),
+    )
+    gamma = tools.AttrDict(
+        nonconvex_inequality=_resolve_stepsize(
+            gamma_cfg, "nonconvex_inequality", subproblem.W_stack.nonconvex_inequality
+        )
+    )
 
     # ==========================================
     # Dual updates
     # ==========================================
 
-    W_ineq = subproblem.W_stack.nonconvex_inequality
-
     # inequality
-    dual_ineq_plus = np.maximum(0, W_ineq * vb_ineq + dual_ineq)
-
-    W_dyn = subproblem.W_stack.dynamics
+    dual_ineq_plus = np.maximum(0, gamma.nonconvex_inequality * vb_ineq + dual_ineq)
 
     # NOTE: testing the augmented lagrangian update rule for duals
-    dual_dyn_plus = W_dyn * vb_dyn + dual_dyn
-
-    W_term = subproblem.W_stack.final_state
+    dual_dyn_plus = beta.dynamics * vb_dyn + dual_dyn
 
     # terminal
-    dual_term_plus = W_term * vb_term + dual_term
+    dual_term_plus = beta.final_state * vb_term + dual_term
 
     # plus/minus (quadratic 1-norm decomposition)
-    W_plus_real  = subproblem.W_stack.plus_real
-    W_minus_real = subproblem.W_stack.minus_real
+    dual_plus_plus_real  = beta.plus_real * vb_plus_real + dual_plus_real
+    dual_minus_plus_real = beta.minus_real * vb_minus_real + dual_minus_real
 
-    dual_plus_plus_real  = np.maximum(0, W_plus_real * vb_plus_real  + dual_plus_real)
-    dual_minus_plus_real = np.maximum(0, W_minus_real * vb_minus_real + dual_minus_real)
-
-    W_plus_ctcs  = subproblem.W_stack.plus_ctcs
-    W_minus_ctcs = subproblem.W_stack.minus_ctcs
-
-    dual_plus_plus_ctcs  = np.maximum(0, W_plus_ctcs * vb_plus_ctcs  + dual_plus_ctcs)
-    dual_minus_plus_ctcs = np.maximum(0, W_minus_ctcs * vb_minus_ctcs + dual_minus_ctcs)
+    dual_plus_plus_ctcs  = beta.plus_ctcs * vb_plus_ctcs + dual_plus_ctcs
+    dual_minus_plus_ctcs = beta.minus_ctcs * vb_minus_ctcs + dual_minus_ctcs
 
     # ==========================================
     # Saturation thresholds
@@ -483,12 +499,12 @@ def autotune1(subproblem, conv_data, conv_data_prev, iter_num):
 
     # Return dual update info for logging
     return {
-        "dmu_ineq": dual_ineq_plus - dual_ineq,
-        "dmu_eq":   dual_term_plus - dual_term,
-        "dmu_plus_real": dual_plus_plus_real  - dual_plus_real,
-        "dmu_minus_real": dual_minus_plus_real - dual_minus_real,
-        "dmu_plus_ctcs": dual_plus_plus_ctcs  - dual_plus_ctcs,
-        "dmu_minus_ctcs": dual_minus_plus_ctcs - dual_minus_ctcs,
+        "dmu_ineq":         dual_ineq_plus - dual_ineq,
+        "dmu_eq":           dual_term_plus - dual_term,
+        "dmu_plus_real":    dual_plus_plus_real  - dual_plus_real,
+        "dmu_minus_real":   dual_minus_plus_real - dual_minus_real,
+        "dmu_plus_ctcs":    dual_plus_plus_ctcs  - dual_plus_ctcs,
+        "dmu_minus_ctcs":   dual_minus_plus_ctcs - dual_minus_ctcs,
     }
 
 
@@ -529,9 +545,9 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
     eps_feas_term = conv.eps_term
     eps_feas_dyn  = conv.eps_dyn
 
-    eps_target_term =  np.maximum(1.0*eps_feas_term, conv.fac_eps * np.abs(conv_data.vb_terminal))
-    eps_target_ineq =  np.maximum(1.0*eps_feas_ineq, conv.fac_eps * np.abs(conv_data.vb_ineq))
-    eps_target_dyn  =  np.maximum(1.0*eps_feas_dyn , conv.fac_eps * np.abs(conv_data.vb_dyn))
+    eps_target_term =  np.maximum(conv.fac_target * eps_feas_term, conv.fac_eps * np.abs(conv_data.vb_terminal))
+    eps_target_ineq =  np.maximum(conv.fac_target * eps_feas_ineq, conv.fac_eps * np.abs(conv_data.vb_ineq))
+    eps_target_dyn  =  np.maximum(conv.fac_target * eps_feas_dyn , conv.fac_eps * np.abs(conv_data.vb_dyn))
 
     conv_data.eps_target_term = eps_target_term.copy()
     conv_data.eps_target_ineq = eps_target_ineq.copy()
@@ -552,6 +568,7 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
     Wh_plus_ctcs  = np.zeros((method.index_map.N.pm_ctcs, method.index_map.n.plus_ctcs))
     Wh_minus_ctcs = np.zeros((method.index_map.N.pm_ctcs, method.index_map.n.minus_ctcs))
 
+    z_real_idx = method.index_map.indices.z.real
     z_state_idx = method.index_map.indices.z.state
     z_ctcs_idx = method.index_map.indices.z.ctcs
 
@@ -581,8 +598,8 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
     for k in range(N):
         dual_ineq_buff = np.diag(W_ineq[k, :]) @ vb_ineq[k, :].flatten()
 
-        if problem.index_map.n.nonconvex_inequality > 0:
-            Wh_ineq[k, :] = np.minimum(np.abs(dual_ineq_buff / eps_target_ineq[k]), 1e4)
+        if problem.index_map.n['nonconvex_inequality'] > 0:
+            Wh_ineq[k, :] = np.abs(dual_ineq_buff / eps_target_ineq[k]) # rho*np.ones_like(W_ineq[k, :])
         else:
             Wh_ineq[k, :] = np.abs(dual_ineq_buff) # rho*np.ones_like(Wh_ineq[k, :])
 
@@ -590,9 +607,9 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
             dual_dyn_buff = np.diag(W_dyn[k, :]) @ vb_dyn[k, :]
             
             if buff_dyn == "l1":
-                Wh_dyn[k, z_state_idx] = np.minimum(np.sum(np.abs(dual_dyn_buff[z_state_idx]) / eps_feas_dyn[z_state_idx]), 1e5)
+                Wh_dyn[k, z_state_idx] = np.sum(np.abs(dual_dyn_buff[z_state_idx]) / eps_feas_dyn[z_state_idx])
             if buff_dyn != "none":
-                Wh_dyn[k, z_state_idx] = np.minimum(np.abs(dual_dyn_buff[z_state_idx] / eps_target_dyn[k, z_state_idx]), 1e5) # rho*np.ones_like(W_dyn[k, z_state_idx]) #
+                Wh_dyn[k, z_real_idx] = np.abs(dual_dyn_buff[z_real_idx] / eps_target_dyn[k, z_real_idx])
             # TODO(Skye): REVISIT
             #if buff_dyn == "l2":
             #     Wh_dyn[k, z_state_idx] = np.abs(dual_dyn_buff[z_state_idx] / eps_feas_dyn[z_state_idx])
@@ -600,20 +617,20 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
             if ctcs == "l1":
                 Wh_dyn[k, z_ctcs_idx] = np.sum(np.abs(dual_dyn_buff[z_ctcs_idx]) / eps_target_dyn[k, z_ctcs_idx])
             elif ctcs != "none":
-                Wh_dyn[k, z_ctcs_idx] = np.minimum(np.abs(dual_dyn_buff[z_ctcs_idx] / eps_target_dyn[k, z_ctcs_idx]), 1e5) #rho*np.ones_like(W_dyn[k, z_ctcs_idx])
+                Wh_dyn[k, z_ctcs_idx] = np.abs(dual_dyn_buff[z_ctcs_idx] / eps_target_dyn[k, z_ctcs_idx]) #rho*np.ones_like(W_dyn[k, z_ctcs_idx])
 
             # TODO: THINK ABOUT THIS (MAYBE ONE IF ELSE) COME BACK TO THIS, SINGLE EPSILON ETC
             if buff_dyn == "quad-2":
-                Wh_plus_real[k]  = np.minimum(np.sum(np.abs(np.diag(W_plus_real[k, :]) @ vb_plus_real[k, :] / eps_target_dyn[k, z_state_idx])), 1e5)
-                Wh_minus_real[k] = np.minimum(np.sum(np.abs(np.diag(W_minus_real[k, :]) @ vb_minus_real[k, :] / eps_target_dyn[k, z_state_idx])), 1e5)
+                Wh_plus_real[k]  = np.sum(np.abs(np.diag(W_plus_real[k, :]) @ vb_plus_real[k, :] / eps_target_dyn[k, z_real_idx]))
+                Wh_minus_real[k] = np.sum(np.abs(np.diag(W_minus_real[k, :]) @ vb_minus_real[k, :] / eps_target_dyn[k, z_real_idx]))
             
             if ctcs == "quad-2":
-                Wh_plus_ctcs[k]  = np.minimum(np.sum(np.abs(np.diag(W_plus_ctcs[k, :]) @ vb_plus_ctcs[k, :] / eps_target_dyn[k, z_ctcs_idx])), 1e5)
-                Wh_minus_ctcs[k] = np.minimum(np.sum(np.abs(np.diag(W_minus_ctcs[k, :]) @ vb_minus_ctcs[k, :] / eps_target_dyn[k, z_ctcs_idx])), 1e5)
+                Wh_plus_ctcs[k]  = np.sum(np.abs(np.diag(W_plus_ctcs[k, :]) @ vb_plus_ctcs[k, :] / eps_target_dyn[k, z_ctcs_idx]))
+                Wh_minus_ctcs[k] = np.sum(np.abs(np.diag(W_minus_ctcs[k, :]) @ vb_minus_ctcs[k, :] / eps_target_dyn[k, z_ctcs_idx]))
 
     if problem.index_map.n.term_total > 0:
         dual_term_buff = np.diag(W_term) @ vb_term
-        Wh_term = np.minimum(np.abs(dual_term_buff / eps_target_term).flatten(), 1e5) # rho*np.ones_like(W_term)
+        Wh_term = np.abs(dual_term_buff / eps_target_term).flatten() # rho*np.ones_like(W_term)
 
     # ==========================================
     # UPDATE WEIGHTS WITH COMPUTED AUTOTUNE UPDATES
@@ -628,14 +645,6 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
     if np.sum(W_dyn) > 0: Wh_dyn[Wh_dyn <= eps_nonzero2] = eps_nonzero2
     if np.sum(W_term) > 0: Wh_term[Wh_term <= eps_nonzero2] = eps_nonzero2
 
-    # subproblem.W_stack.nonconvex_inequality = np.maximum(Wh_ineq, W_ineq)
-    # subproblem.W_stack.dynamics             = np.maximum(Wh_dyn, W_dyn)
-    # subproblem.W_stack.final_state          = np.maximum(Wh_term, W_term)
-    # subproblem.W_stack.plus_real            = np.maximum(Wh_plus_real, W_plus_real)
-    # subproblem.W_stack.minus_real           = np.maximum(Wh_minus_real, W_minus_real)
-    # subproblem.W_stack.plus_ctcs            = np.maximum(Wh_plus_ctcs, W_plus_ctcs)
-    # subproblem.W_stack.minus_ctcs           = np.maximum(Wh_minus_ctcs, W_minus_ctcs)
-    # else:
     subproblem.W_stack.plus_real = Wh_plus_real
     subproblem.W_stack.minus_real = Wh_minus_real
     subproblem.W_stack.plus_ctcs = Wh_plus_ctcs

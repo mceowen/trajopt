@@ -1,5 +1,5 @@
 # INHERIT THE AUTOSCVX METHOD CONFIGS
-inherit: trajopt/library/methods/configs/autoscvx.yaml
+inherit: trajopt/library/methods/configs/autoscvx-term.yaml
 
 # ===============================
 # GRID SETTINGS
@@ -10,8 +10,6 @@ time_grid: 40
 # METHOD FLAGS
 # ==============================
 flags:
-  buff_dyn: term    # 'term', 'l1', 'l2', 'quad-1', 'quad-2'
-  buff_dyn_dual: none 
   flag_conv: 1
 
 # ===============================

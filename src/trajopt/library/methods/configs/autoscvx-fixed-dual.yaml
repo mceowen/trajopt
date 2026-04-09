@@ -1,0 +1,5 @@
+inherit: trajopt/library/methods/configs/autoscvx.yaml
+
+weights:
+  beta:           0.1
+  gamma:          0.1
