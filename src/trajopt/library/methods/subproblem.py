@@ -185,88 +185,126 @@ class Subproblem:
         # dnu = [du, ds]
         self.dnu = cp.hstack([self.du, self.ds])
 
-        # Virtual buffers (None if zero-sized)
-        self.vb_ineq    = cp.Variable((N, self.n.nonconvex_inequality), name="vb_ineq")  \
-              if self.n.nonconvex_inequality  > 0 else None 
-        
-        # ---------------------------------------------
-        # TERMINAL CONDITION BUFFERS (REAL + CTCS)
-        # --- ------------------------------------------
-        n_term_real = self.n.final_state + self.n.term_ineq
-        n_term_ctcs  = self.n.term_ctcs
-        # ------------ State terminal constraints (size = n_term_state) ------------
-        self.vb_term_state = (
-            cp.Variable(n_term_real, name="vb_term_state")
-            if (method.flags.buff_dyn == "term"
-                and method.flags.dynamics_nonconvex != 0
-                and n_term_real > 0)
-            else (cp.Constant(np.zeros(n_term_real)) if n_term_real > 0 else None)
-        )
-        # ------------ CTCS terminal constraints (size = n_term_ctcs) ------------
-        self.vb_term_ctcs = (
-            cp.Variable(n_term_ctcs, name="vb_term_ctcs")
-            if (n_term_ctcs > 0)  
+        # Virtual buffers (stored under vb_stack, parallel to W_stack)
+        self.vb_stack = tools.AttrDict()
+        self.vb_stack.nonconvex_inequality = (
+            cp.Variable((N, self.n.nonconvex_inequality), name="vb_ineq")
+            if self.n.nonconvex_inequality > 0
             else None
         )
-        # ------------ Unified stacked terminal buffer ------------
-        self.vb_term = (
-            cp.hstack([self.vb_term_state, self.vb_term_ctcs])
-            if (self.vb_term_state is not None and self.vb_term_ctcs is not None)
-            else self.vb_term_state
-            if self.vb_term_ctcs is None
-            else self.vb_term_ctcs
-            if self.vb_term_state is None
-            else None # when both are None
+
+        # ---------------------------------------------
+        # TERMINAL CONDITION BUFFERS (REAL + CTCS)
+        # ---------------------------------------------
+        n_term_real = self.n.final_state + self.n.term_ineq
+        n_term_ctcs = self.n.term_ctcs
+
+        self.vb_stack.terminal_state = (
+            cp.Variable(n_term_real, name="vb_term_state")
+            if (
+                method.flags.buff_dyn == "term"
+                and method.flags.dynamics_nonconvex != 0
+                and n_term_real > 0
+            )
+            else (cp.Constant(np.zeros(n_term_real)) if n_term_real > 0 else None)
+        )
+        self.vb_stack.terminal_ctcs = (
+            cp.Variable(n_term_ctcs, name="vb_term_ctcs")
+            if n_term_ctcs > 0
+            else None
+        )
+        self.vb_stack.final_state = (
+            cp.hstack([self.vb_stack.terminal_state, self.vb_stack.terminal_ctcs])
+            if (
+                self.vb_stack.terminal_state is not None
+                and self.vb_stack.terminal_ctcs is not None
+            )
+            else self.vb_stack.terminal_state
+            if self.vb_stack.terminal_ctcs is None
+            else self.vb_stack.terminal_ctcs
+            if self.vb_stack.terminal_state is None
+            else None
         )
 
         # ---------------------------------------------
         # DYNAMICS VIRTUAL BUFFERS (REAL + CTCS)
         # ---------------------------------------------
-        # --- State dynamics ---
-        self.vb_dyn_state_p = (
+        self.vb_stack.dynamics_state_plus = (
             cp.Variable((N - 1, self.n.state), name="vb_dyn_state_plus")
             if method.flags.buff_dyn != "term" and method.flags.dynamics_nonconvex != 0 and self.n.state > 0
             else cp.Constant(np.zeros((N - 1, self.n.state))) if self.n.state > 0
             else None
         )
-        self.vb_dyn_state_m = (
+        self.vb_stack.dynamics_state_minus = (
             cp.Variable((N - 1, self.n.state), name="vb_dyn_state_minus")
             if method.flags.buff_dyn != "term" and method.flags.dynamics_nonconvex != 0 and self.n.state > 0
             else cp.Constant(np.zeros((N - 1, self.n.state))) if self.n.state > 0
             else None
         )
-        # --- Time dynamics (always zero - no time buffering) ---
-        self.vb_dyn_time_p = cp.Constant(np.zeros((N - 1, self.n.time)))
-        self.vb_dyn_time_m = cp.Constant(np.zeros((N - 1, self.n.time)))
-        
-        # --- CTCS dynamics (self.indices.z.ctcs) ---
-        self.vb_dyn_ctcs_p = (
+
+        # Time dynamics are always zero (no time buffering)
+        self.vb_stack.dynamics_time_plus = cp.Constant(np.zeros((N - 1, self.n.time)))
+        self.vb_stack.dynamics_time_minus = cp.Constant(np.zeros((N - 1, self.n.time)))
+
+        self.vb_stack.dynamics_ctcs_plus = (
             cp.Variable((N - 1, n_ctcs), name="vb_dyn_ctcs_plus")
             if method.flags.ctcs not in {"none", "term"} and n_ctcs > 0
             else cp.Constant(np.zeros((N - 1, n_ctcs))) if n_ctcs > 0
             else None
         )
-        self.vb_dyn_ctcs_m = (
+        self.vb_stack.dynamics_ctcs_minus = (
             cp.Variable((N - 1, n_ctcs), name="vb_dyn_ctcs_minus")
             if method.flags.ctcs not in {"none", "term"} and n_ctcs > 0
             else cp.Constant(np.zeros((N - 1, n_ctcs))) if n_ctcs > 0
             else None
         )
-        # --- Unified composite buffers (always same shape for DPP) ---
-        self.vb_dyn_p = (
-            cp.hstack([self.vb_dyn_state_p, self.vb_dyn_time_p, self.vb_dyn_ctcs_p])
-            if n_ctcs>0 else cp.hstack([self.vb_dyn_state_p, self.vb_dyn_time_p])
+        self.vb_stack.dynamics_plus = (
+            cp.hstack([
+                self.vb_stack.dynamics_state_plus,
+                self.vb_stack.dynamics_time_plus,
+                self.vb_stack.dynamics_ctcs_plus,
+            ])
+            if n_ctcs > 0
+            else cp.hstack([
+                self.vb_stack.dynamics_state_plus,
+                self.vb_stack.dynamics_time_plus,
+            ])
         )
-        self.vb_dyn_m = (
-            cp.hstack([self.vb_dyn_state_m, self.vb_dyn_time_m, self.vb_dyn_ctcs_m])
-            if n_ctcs>0 else cp.hstack([self.vb_dyn_state_m, self.vb_dyn_time_m])
+        self.vb_stack.dynamics_minus = (
+            cp.hstack([
+                self.vb_stack.dynamics_state_minus,
+                self.vb_stack.dynamics_time_minus,
+                self.vb_stack.dynamics_ctcs_minus,
+            ])
+            if n_ctcs > 0
+            else cp.hstack([
+                self.vb_stack.dynamics_state_minus,
+                self.vb_stack.dynamics_time_minus,
+            ])
         )
+        self.vb_stack.dynamics = self.vb_stack.dynamics_plus - self.vb_stack.dynamics_minus
 
         # Aggregate buffers (optional)
-        self.vb_plus_real   = cp.Variable((self.N.pm_real, self.n.plus_real),  name="vb_plus_real")  if self.n.plus_real  > 0 else None
-        self.vb_minus_real  = cp.Variable((self.N.pm_real, self.n.minus_real), name="vb_minus_real") if self.n.minus_real > 0 else None
-        self.vb_plus_ctcs   = cp.Variable((self.N.pm_ctcs, self.n.plus_ctcs),  name="vb_plus_ctcs")  if self.n.plus_ctcs  > 0 else None
-        self.vb_minus_ctcs  = cp.Variable((self.N.pm_ctcs, self.n.minus_ctcs), name="vb_minus_ctcs") if self.n.minus_ctcs > 0 else None
+        self.vb_stack.plus_real = (
+            cp.Variable((self.N.pm_real, self.n.plus_real), name="vb_plus_real")
+            if self.n.plus_real > 0
+            else None
+        )
+        self.vb_stack.minus_real = (
+            cp.Variable((self.N.pm_real, self.n.minus_real), name="vb_minus_real")
+            if self.n.minus_real > 0
+            else None
+        )
+        self.vb_stack.plus_ctcs = (
+            cp.Variable((self.N.pm_ctcs, self.n.plus_ctcs), name="vb_plus_ctcs")
+            if self.n.plus_ctcs > 0
+            else None
+        )
+        self.vb_stack.minus_ctcs = (
+            cp.Variable((self.N.pm_ctcs, self.n.minus_ctcs), name="vb_minus_ctcs")
+            if self.n.minus_ctcs > 0
+            else None
+        )
 
         if problem.costs.has(type="nonconvex", minimax=1):
             self.minimax_epigraph_upperbound = cp.Variable((1,), name="minimax_epigraph_upperbound")
@@ -301,10 +339,10 @@ class Subproblem:
 
             if constraint.set == "state":
                 if constraint.boundary == "final":
-                    vb = self.vb_term[term_idx.eq] if self.vb_term is not None else 0.0
+                    vb_term = self.vb_stack.final_state[term_idx.eq] if self.vb_stack.final_state is not None else 0.0
                 else:
-                    vb = 0
-                C.append(self.dz[boundary_idx,cnst_idx] + self.z_ref[boundary_idx, cnst_idx] - vb == value)
+                    vb_term = 0
+                C.append(self.dz[boundary_idx,cnst_idx] + self.z_ref[boundary_idx, cnst_idx] - vb_term == value)
             elif constraint.set == "control":
                 C.append(self.dnu[boundary_idx,cnst_idx] + self.nu_ref[boundary_idx, cnst_idx] == value)
 
@@ -320,44 +358,44 @@ class Subproblem:
 
             if constraint.set == "state":
                 if constraint.boundary == "final":
-                    vb = self.vb_term[term_idx.ineq] if self.vb_term is not None else 0.0
+                    vb_term = self.vb_stack.final_state[term_idx.ineq] if self.vb_stack.final_state is not None else 0.0
                 else:
-                    vb = 0
-                C.append(M_select @ (self.dz[boundary_idx, cnst_idx] + self.z_ref[boundary_idx, cnst_idx]) - vb <= cp.hstack([-min_value, max_value]))
+                    vb_term = 0
+                C.append(M_select @ (self.dz[boundary_idx, cnst_idx] + self.z_ref[boundary_idx, cnst_idx]) - vb_term <= cp.hstack([-min_value, max_value]))
             
             elif constraint.set == "control":
                 C.append(M_select @ (self.dnu[boundary_idx, cnst_idx] + self.nu_ref[boundary_idx, cnst_idx]) <= cp.hstack([-min_value, max_value]))
         
         # CTCS terminal equalities
-        if problem.index_map.n.term_ctcs>0:
-            vbN_ctcs = self.vb_term[term_idx.ctcs] if self.vb_term is not None else 0.0
+        if problem.index_map.n.term_ctcs > 0:
+            vbN_ctcs = self.vb_stack.final_state[term_idx.ctcs] if self.vb_stack.final_state is not None else 0.0
             C.append(
                 self.dz[-1, self.indices.z.ctcs] + self.z_ref[-1, self.indices.z.ctcs] - vbN_ctcs == 0.0
             )
-        
+
         if self.flags.buff_dyn == "quad-1":
-            C.append(cp.sum(self.vb_dyn_p) == self.vb_plus_real)
-            C.append(cp.sum(self.vb_dyn_m) == self.vb_minus_real)
+            C.append(cp.sum(self.vb_stack.dynamics_plus) == self.vb_stack.plus_real)
+            C.append(cp.sum(self.vb_stack.dynamics_minus) == self.vb_stack.minus_real)
 
         if self.flags.ctcs == "quad-1":
-            C.append(cp.sum(self.vb_dyn_p) == self.vb_plus_ctcs)
-            C.append(cp.sum(self.vb_dyn_m) == self.vb_minus_ctcs)
+            C.append(cp.sum(self.vb_stack.dynamics_plus) == self.vb_stack.plus_ctcs)
+            C.append(cp.sum(self.vb_stack.dynamics_minus) == self.vb_stack.minus_ctcs)
 
         if self.flags.buff_dyn == "quad-2":
-            C.append(cp.sum(self.vb_dyn_state_p, axis=1) == self.vb_plus_real[:, 0])
-            C.append(cp.sum(self.vb_dyn_state_m, axis=1) == self.vb_minus_real[:, 0])
+            C.append(cp.sum(self.vb_stack.dynamics_state_plus, axis=1) == self.vb_stack.plus_real[:, 0])
+            C.append(cp.sum(self.vb_stack.dynamics_state_minus, axis=1) == self.vb_stack.minus_real[:, 0])
 
         if self.flags.ctcs == "quad-2":
-            C.append(cp.sum(self.vb_dyn_p[:, self.indices.z.ctcs], axis=1) == self.vb_plus_ctcs[:, 0])
-            C.append(cp.sum(self.vb_dyn_m[:, self.indices.z.ctcs], axis=1) == self.vb_minus_ctcs[:, 0])
+            C.append(cp.sum(self.vb_stack.dynamics_plus[:, self.indices.z.ctcs], axis=1) == self.vb_stack.plus_ctcs[:, 0])
+            C.append(cp.sum(self.vb_stack.dynamics_minus[:, self.indices.z.ctcs], axis=1) == self.vb_stack.minus_ctcs[:, 0])
 
         if self.flags.buff_dyn == "quad-3":
-            C.append(cp.sum(self.vb_dyn_p[:, self.indices.z.real], axis=0) == self.vb_plus_real[0, :])
-            C.append(cp.sum(self.vb_dyn_m[:, self.indices.z.real], axis=0) == self.vb_minus_real[0, :])
-        
+            C.append(cp.sum(self.vb_stack.dynamics_plus[:, self.indices.z.real], axis=0) == self.vb_stack.plus_real[0, :])
+            C.append(cp.sum(self.vb_stack.dynamics_minus[:, self.indices.z.real], axis=0) == self.vb_stack.minus_real[0, :])
+
         if self.flags.ctcs == "quad-3":
-            C.append(cp.sum(self.vb_dyn_p[:, self.indices.z.ctcs], axis=0) == self.vb_plus_ctcs[0, :])
-            C.append(cp.sum(self.vb_dyn_m[:, self.indices.z.ctcs], axis=0) == self.vb_minus_ctcs[0, :])
+            C.append(cp.sum(self.vb_stack.dynamics_plus[:, self.indices.z.ctcs], axis=0) == self.vb_stack.plus_ctcs[0, :])
+            C.append(cp.sum(self.vb_stack.dynamics_minus[:, self.indices.z.ctcs], axis=0) == self.vb_stack.minus_ctcs[0, :])
 
 
         # pseudospectral collocation
@@ -377,17 +415,17 @@ class Subproblem:
                 #     self.Ak_bwd[k] @ self.dz[k+1]
                 #     + self.Bk_bwd[k] @ self.dnu[k]
                 #     + self.Bkp_bwd[k] @ self.dnu[k + 1]
-                #     # + (self.vb_dyn_p[k] - self.vb_dyn_m[k])
+                #     # + (self.vb_stack.dynamics_plus[k] - self.vb_stack.dynamics_minus[k])
                 # )
                 # C.append(self.dz[k] + self.z_ref[k] - self.z_m_bwd[k] == rhs)
 
                 if self.flags.buff_dyn != "term":
-                    C.append(self.vb_dyn_p[k, self.indices.z.real] >= 0)
-                    C.append(self.vb_dyn_m[k, self.indices.z.real] >= 0)
+                    C.append(self.vb_stack.dynamics_plus[k, self.indices.z.real] >= 0)
+                    C.append(self.vb_stack.dynamics_minus[k, self.indices.z.real] >= 0)
 
                 if self.flags.ctcs != "term" and n_ctcs > 0:
-                    C.append(self.vb_dyn_p[k, self.indices.z.ctcs] >= 0)
-                    C.append(self.vb_dyn_m[k, self.indices.z.ctcs] >= 0)
+                    C.append(self.vb_stack.dynamics_plus[k, self.indices.z.ctcs] >= 0)
+                    C.append(self.vb_stack.dynamics_minus[k, self.indices.z.ctcs] >= 0)
                 
                 # CTCS coupling on extra components
                 if method.flags.ctcs != "none" and n_ctcs>0:
@@ -441,9 +479,9 @@ class Subproblem:
             # Linearized inequality constraints (path + nfz + custom)
             # if problem.constraints.has("nodal", "nonconvex_inequality","POLYTOPE_OUT","SOC_OUT"):  ### DAN: UPDATE BELOW LINE TO
             if problem.constraints.has(ct=0, type="nonconvex_inequality"):
-                C.append(self.dgdx[k] @ self.dz[k, self.indices.z.state] + self.dgdu[k] @ self.dnu[k, self.indices.nu.control] + self.g0[k] - self.vb_ineq[k] <= 0)
-                if str(self.flags.flag_autotune) in {"1", "3", "al-scvx"} and self.vb_ineq[k]:
-                    C.append(self.vb_ineq[k] >= 0)
+                C.append(self.dgdx[k] @ self.dz[k, self.indices.z.state] + self.dgdu[k] @ self.dnu[k, self.indices.nu.control] + self.g0[k] - self.vb_stack.nonconvex_inequality[k] <= 0)
+                if str(self.flags.flag_autotune) in {"1", "3", "al-scvx"} and self.vb_stack.nonconvex_inequality is not None:
+                    C.append(self.vb_stack.nonconvex_inequality[k] >= 0)
 
                 # TODO: TEMPORARY: force slack to zero for hard constraints
                 idx = 0
@@ -868,13 +906,13 @@ class Subproblem:
 
         # Convergence data (buffers, defects, TR cost, ref cost)
         conv = tools.AttrDict()
-        conv.vb_ineq         = tools.get_val(self.vb_ineq,  rows=self.N.time_grid, cols=self.n.nonconvex_inequality) if self.vb_ineq  is not None else np.zeros((self.N.time_grid,self.n.nonconvex_inequality))
-        conv.vb_terminal     = tools.get_val(self.vb_term,  rows=1, cols=self.n.term_total) if self.vb_term  is not None else np.zeros((1, self.n.term_total))
-        conv.vb_dyn          = tools.get_val(self.vb_dyn_p, rows=self.N.time_grid-1,  cols=self.n.dynamics) - tools.get_val(self.vb_dyn_m, rows=self.N.time_grid-1, cols=self.n.dynamics)
-        conv.vb_plus_real    = tools.get_val(self.vb_plus_real, rows=self.N.pm_real, cols=self.n.plus_real) if self.vb_plus_real  is not None else np.zeros((self.N.pm_real, self.n.plus_real))
-        conv.vb_minus_real   = tools.get_val(self.vb_minus_real, rows=self.N.pm_real, cols=self.n.minus_real) if self.vb_minus_real  is not None else np.zeros((self.N.pm_real, self.n.minus_real))
-        conv.vb_plus_ctcs    = tools.get_val(self.vb_plus_ctcs, rows=self.N.pm_ctcs, cols=self.n.plus_ctcs) if self.vb_plus_ctcs  is not None else np.zeros((self.N.pm_ctcs, self.n.plus_ctcs))
-        conv.vb_minus_ctcs   = tools.get_val(self.vb_minus_ctcs, rows=self.N.pm_ctcs, cols=self.n.minus_ctcs) if self.vb_minus_ctcs  is not None else np.zeros((self.N.pm_ctcs, self.n.minus_ctcs))
+        conv.vb_ineq         = tools.get_val(self.vb_stack.nonconvex_inequality, rows=self.N.time_grid, cols=self.n.nonconvex_inequality) if self.vb_stack.nonconvex_inequality is not None else np.zeros((self.N.time_grid, self.n.nonconvex_inequality))
+        conv.vb_terminal     = tools.get_val(self.vb_stack.final_state, rows=1, cols=self.n.term_total) if self.vb_stack.final_state is not None else np.zeros((1, self.n.term_total))
+        conv.vb_dyn          = tools.get_val(self.vb_stack.dynamics, rows=self.N.time_grid - 1, cols=self.n.dynamics) if self.vb_stack.dynamics is not None else np.zeros((self.N.time_grid - 1, self.n.dynamics))
+        conv.vb_plus_real    = tools.get_val(self.vb_stack.plus_real, rows=self.N.pm_real, cols=self.n.plus_real) if self.vb_stack.plus_real is not None else np.zeros((self.N.pm_real, self.n.plus_real))
+        conv.vb_minus_real   = tools.get_val(self.vb_stack.minus_real, rows=self.N.pm_real, cols=self.n.minus_real) if self.vb_stack.minus_real is not None else np.zeros((self.N.pm_real, self.n.minus_real))
+        conv.vb_plus_ctcs    = tools.get_val(self.vb_stack.plus_ctcs, rows=self.N.pm_ctcs, cols=self.n.plus_ctcs) if self.vb_stack.plus_ctcs is not None else np.zeros((self.N.pm_ctcs, self.n.plus_ctcs))
+        conv.vb_minus_ctcs   = tools.get_val(self.vb_stack.minus_ctcs, rows=self.N.pm_ctcs, cols=self.n.minus_ctcs) if self.vb_stack.minus_ctcs is not None else np.zeros((self.N.pm_ctcs, self.n.minus_ctcs))
         conv.ncvx_ineq       = g
 
         conv.defect  = tools.safe_val(self.dz, rows=N, cols=n_x) + input_for_iter.z_ref - self.z_m.value

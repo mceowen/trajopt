@@ -446,7 +446,7 @@ def build_ms_dyn_constraint(subproblem, k):
         subproblem.Ak[k] @ subproblem.dz[k]
         + subproblem.Bk[k] @ subproblem.dnu[k]
         + subproblem.Bkp[k] @ subproblem.dnu[k + 1]
-        + (subproblem.vb_dyn_p[k] - subproblem.vb_dyn_m[k])
+        + subproblem.vb_stack.dynamics[k]
     )
     return subproblem.dz[k + 1] + subproblem.z_ref[k + 1] - subproblem.z_m[k + 1] == rhs
 

@@ -182,16 +182,16 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
     # ------------------------------------------------------------
     # TERMINAL TERM (REAL + CTCS)
     # ------------------------------------------------------------
-    if subprob.vb_term is not None and subprob.vb_term.size > 0:
-        VB += cp.sum_squares(cp.diag(subprob.W_sqrt.final_state) @ subprob.vb_term)
+    if subprob.vb_stack.final_state is not None and subprob.vb_stack.final_state.size > 0:
+        VB += cp.sum_squares(cp.diag(subprob.W_sqrt.final_state) @ subprob.vb_stack.final_state)
 
     # ------------------------------------------------------------
     # STACKED NONLINEAR INEQUALITY BUFFERS
     # ------------------------------------------------------------
-    if subprob.vb_ineq is not None and subprob.n.nonconvex_inequality > 0:
+    if subprob.vb_stack.nonconvex_inequality is not None and subprob.n.nonconvex_inequality > 0:
         for k in range(N):
             VB += cp.sum_squares(
-                cp.diag(subprob.W_sqrt.nonconvex_inequality[k, :]) @ subprob.vb_ineq[k, :]
+                cp.diag(subprob.W_sqrt.nonconvex_inequality[k, :]) @ subprob.vb_stack.nonconvex_inequality[k, :]
             )
 
     # ============================================================
@@ -200,7 +200,7 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
     mode_real = method.flags.buff_dyn   # {"none","term","l1","l2","quad-1","quad-2"}
 
     if n_real > 0:
-        diff_real = subprob.vb_dyn_p[:, subprob.indices.z.real] - subprob.vb_dyn_m[:, subprob.indices.z.real]
+        diff_real = subprob.vb_stack.dynamics[:, subprob.indices.z.real]
 
         # --------------------------------------------------------
         # L1 penalty
@@ -222,28 +222,28 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
         # QUAD-1 or QUAD-3: k = 1 only
         # --------------------------------------------------------
         elif mode_real == "quad-1" or mode_real == "quad-3":
-            if subprob.vb_plus_real is not None:
+            if subprob.vb_stack.plus_real is not None:
                 VB += cp.sum_squares(
-                    cp.diag(subprob.W_sqrt.plus_real[0, :]) @ subprob.vb_plus_real[0, :]
+                    cp.diag(subprob.W_sqrt.plus_real[0, :]) @ subprob.vb_stack.plus_real[0, :]
                 )
-            if subprob.vb_minus_real is not None:
+            if subprob.vb_stack.minus_real is not None:
                 VB += cp.sum_squares(
-                    cp.diag(subprob.W_sqrt.minus_real[0, :]) @ subprob.vb_minus_real[0, :]
+                    cp.diag(subprob.W_sqrt.minus_real[0, :]) @ subprob.vb_stack.minus_real[0, :]
                 )
 
         # --------------------------------------------------------
         # QUAD-2 : Per-time-step quadratic penalties
         # --------------------------------------------------------
         elif mode_real == "quad-2":
-            if subprob.vb_plus_real is not None:
+            if subprob.vb_stack.plus_real is not None:
                 for k in range(subprob.N.pm_real):
                     VB += cp.sum_squares(
-                        cp.diag(subprob.W_sqrt.plus_real[k, :]) @ subprob.vb_plus_real[k, :]
+                        cp.diag(subprob.W_sqrt.plus_real[k, :]) @ subprob.vb_stack.plus_real[k, :]
                     )
-            if subprob.vb_minus_real is not None:
+            if subprob.vb_stack.minus_real is not None:
                 for k in range(subprob.N.pm_real):
                     VB += cp.sum_squares(
-                        cp.diag(subprob.W_sqrt.minus_real[k, :]) @ subprob.vb_minus_real[k, :]
+                        cp.diag(subprob.W_sqrt.minus_real[k, :]) @ subprob.vb_stack.minus_real[k, :]
                     )
 
     # ============================================================
@@ -251,8 +251,8 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
     # ============================================================
     mode_ctcs = method.flags.ctcs       # {"none","term","l1","l2","quad-1","quad-2"}
 
-    if subprob.vb_dyn_p is not None and n_ctcs > 0:
-        diff_ctcs = subprob.vb_dyn_p[:, subprob.indices.z.ctcs] - subprob.vb_dyn_m[:, subprob.indices.z.ctcs]
+    if subprob.vb_stack.dynamics_plus is not None and n_ctcs > 0:
+        diff_ctcs = subprob.vb_stack.dynamics[:, subprob.indices.z.ctcs]
 
         # --------------------------------------------------------
         # L1 penalty
@@ -274,28 +274,28 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
         # QUAD-1 or QUAD-3: k = 1 only
         # --------------------------------------------------------
         elif mode_ctcs == "quad-1" or mode_ctcs == "quad-3":
-            if subprob.vb_plus_ctcs is not None:
+            if subprob.vb_stack.plus_ctcs is not None:
                 VB += cp.sum_squares(
-                    cp.diag(subprob.W_sqrt.plus_ctcs[0, :]) @ subprob.vb_plus_ctcs[0, :]
+                    cp.diag(subprob.W_sqrt.plus_ctcs[0, :]) @ subprob.vb_stack.plus_ctcs[0, :]
                 )
-            if subprob.vb_minus_ctcs is not None:
+            if subprob.vb_stack.minus_ctcs is not None:
                 VB += cp.sum_squares(
-                    cp.diag(subprob.W_sqrt.minus_ctcs[0, :]) @ subprob.vb_minus_ctcs[0, :]
+                    cp.diag(subprob.W_sqrt.minus_ctcs[0, :]) @ subprob.vb_stack.minus_ctcs[0, :]
                 )
 
         # --------------------------------------------------------
         # QUAD-2 : Per-time-step quadratic penalties
         # --------------------------------------------------------
         elif mode_ctcs == "quad-2":
-            if subprob.vb_plus_ctcs is not None:
+            if subprob.vb_stack.plus_ctcs is not None:
                 for k in range(subprob.N.pm_ctcs):
                     VB += cp.sum_squares(
-                        cp.diag(subprob.W_sqrt.plus_ctcs[k, :]) @ subprob.vb_plus_ctcs[k, :]
+                        cp.diag(subprob.W_sqrt.plus_ctcs[k, :]) @ subprob.vb_stack.plus_ctcs[k, :]
                     )
-            if subprob.vb_minus_ctcs is not None:
+            if subprob.vb_stack.minus_ctcs is not None:
                 for k in range(subprob.N.pm_ctcs):
                     VB += cp.sum_squares(
-                        cp.diag(subprob.W_sqrt.minus_ctcs[k, :]) @ subprob.vb_minus_ctcs[k, :]
+                        cp.diag(subprob.W_sqrt.minus_ctcs[k, :]) @ subprob.vb_stack.minus_ctcs[k, :]
                     )
 
     # ------------------------------------------------------------
@@ -319,13 +319,13 @@ def build_dual_buffer_cost(subprob) -> cp.Expression:
     # ============================================================
     # Unified NONCONVEX_INEQUALITY DUAL COST
     # ============================================================
-    if subprob.vb_ineq is not None and subprob.n.nonconvex_inequality > 0:
-        DUAL += cp.sum(cp.multiply(subprob.vb_ineq, subprob.dual.nonconvex_inequality))
+    if subprob.vb_stack.nonconvex_inequality is not None and subprob.n.nonconvex_inequality > 0:
+        DUAL += cp.sum(cp.multiply(subprob.vb_stack.nonconvex_inequality, subprob.dual.nonconvex_inequality))
 
     # ============================================================
     # Dynamic dual: dual_dynamics .* (vb_dyn_plus - vb_dyn_minus)
     # ============================================================
-    diff = subprob.vb_dyn_p - subprob.vb_dyn_m
+    diff = subprob.vb_stack.dynamics
     DUAL += cp.sum(cp.multiply(diff, subprob.dual.dynamics))
 
     # ============================================================
@@ -338,21 +338,21 @@ def build_dual_buffer_cost(subprob) -> cp.Expression:
         # QUAD-1 or QUAD-3: k == 1 only
         # -----------------------
         if mode_real == "quad-1" or mode_real == "quad-3":
-            if subprob.vb_plus_real is not None and subprob.dual.plus_real is not None:
-                DUAL += subprob.dual.plus_real[0, :] @ subprob.vb_plus_real[0, :]
-            if subprob.vb_minus_real is not None and subprob.dual.minus_real is not None:
-                DUAL += subprob.dual.minus_real[0, :] @ subprob.vb_minus_real[0, :]
+            if subprob.vb_stack.plus_real is not None and subprob.dual.plus_real is not None:
+                DUAL += subprob.dual.plus_real[0, :] @ subprob.vb_stack.plus_real[0, :]
+            if subprob.vb_stack.minus_real is not None and subprob.dual.minus_real is not None:
+                DUAL += subprob.dual.minus_real[0, :] @ subprob.vb_stack.minus_real[0, :]
 
         # -----------------------
         # QUAD-2  (per time index)
         # -----------------------
         elif mode_real == "quad-2":
-            if subprob.vb_plus_real is not None and subprob.dual.plus_real is not None:
+            if subprob.vb_stack.plus_real is not None and subprob.dual.plus_real is not None:
                 for k in range(subprob.N.pm_real):
-                    DUAL += subprob.dual.plus_real[k, :] @ subprob.vb_plus_real[k, :]
-            if subprob.vb_minus_real is not None and subprob.dual.minus_real is not None:
+                    DUAL += subprob.dual.plus_real[k, :] @ subprob.vb_stack.plus_real[k, :]
+            if subprob.vb_stack.minus_real is not None and subprob.dual.minus_real is not None:
                 for k in range(subprob.N.pm_real):
-                    DUAL += subprob.dual.minus_real[k, :] @ subprob.vb_minus_real[k, :]
+                    DUAL += subprob.dual.minus_real[k, :] @ subprob.vb_stack.minus_real[k, :]
 
     # ============================================================
     # CTCS DUAL COST
@@ -364,27 +364,27 @@ def build_dual_buffer_cost(subprob) -> cp.Expression:
         # QUAD-1 or QUAD-3: k == 1 only
         # -----------------------
         if mode_ctcs == "quad-1" or mode_ctcs == "quad-3":
-            if subprob.vb_plus_ctcs is not None and subprob.dual.plus_ctcs is not None:
-                DUAL += subprob.dual.plus_ctcs[0, :] @ subprob.vb_plus_ctcs[0, :]
-            if subprob.vb_minus_ctcs is not None and subprob.dual.minus_ctcs is not None:
-                DUAL += subprob.dual.minus_ctcs[0, :] @ subprob.vb_minus_ctcs[0, :]
+            if subprob.vb_stack.plus_ctcs is not None and subprob.dual.plus_ctcs is not None:
+                DUAL += subprob.dual.plus_ctcs[0, :] @ subprob.vb_stack.plus_ctcs[0, :]
+            if subprob.vb_stack.minus_ctcs is not None and subprob.dual.minus_ctcs is not None:
+                DUAL += subprob.dual.minus_ctcs[0, :] @ subprob.vb_stack.minus_ctcs[0, :]
 
         # -----------------------
         # QUAD-2  (per time index)
         # -----------------------
         elif mode_ctcs == "quad-2":
-            if subprob.vb_plus_ctcs is not None and subprob.dual.plus_ctcs is not None:
+            if subprob.vb_stack.plus_ctcs is not None and subprob.dual.plus_ctcs is not None:
                 for k in range(subprob.N.pm_ctcs):
-                    DUAL += subprob.dual.plus_ctcs[k, :] @ subprob.vb_plus_ctcs[k, :]
-            if subprob.vb_minus_ctcs is not None and subprob.dual.minus_ctcs is not None:
+                    DUAL += subprob.dual.plus_ctcs[k, :] @ subprob.vb_stack.plus_ctcs[k, :]
+            if subprob.vb_stack.minus_ctcs is not None and subprob.dual.minus_ctcs is not None:
                 for k in range(subprob.N.pm_ctcs):
-                    DUAL += subprob.dual.minus_ctcs[k, :] @ subprob.vb_minus_ctcs[k, :]
+                    DUAL += subprob.dual.minus_ctcs[k, :] @ subprob.vb_stack.minus_ctcs[k, :]
 
     # ============================================================
     # Terminal dual cost
     # ============================================================
-    if subprob.vb_term is not None and subprob.n.final_state > 0:
-        DUAL += subprob.dual.final_state @ subprob.vb_term
+    if subprob.vb_stack.final_state is not None and subprob.n.final_state > 0:
+        DUAL += subprob.dual.final_state @ subprob.vb_stack.final_state
 
     return DUAL
 
