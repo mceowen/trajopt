@@ -38,8 +38,8 @@ guess:
 weights:
   alpha_z:        0.5
   alpha_u:        0.5
-  beta:           0.5
-  gamma:          0.1
+  # beta:           0.5
+  # gamma:          0.1
 
 conv:
   ctcs_fac_cnst:    0.5

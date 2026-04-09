@@ -17,16 +17,6 @@ flags:
   flag_conv:          0       # 0, 1, 2
   ignore_dpp:         0
 
-  flag_path:    1.0
-  flag_nfz:     1.0
-  flag_custom:  1.0
-  flag_term:    1.0
-  flag_dyn:     1.0
-  flag_tr:      1.0
-  flag_true:    1.0
-  flag_dual:    1.0
-  flag_vb:      1.0
-
 guess: {}
 
 conv:
@@ -38,14 +28,14 @@ conv:
   eps_dyn: null
   iter_max: 300
   fac_eps: 0.5
-  fac_target: 1.0
+  fac_target: 0.01
 
 weights:
   w_cost:         1.0
   alpha_z:        0.5
   alpha_u:        0.5
-  beta:           0.1
-  gamma:          0.1
+  beta:           al
+  gamma:          al
   eps_nonzero1:   0.0000000001
   eps_nonzero2:   0.0000000001
   config:
