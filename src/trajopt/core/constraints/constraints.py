@@ -128,9 +128,16 @@ class Constraints:
 
 
         # TODO(Skye/Carlos): verify scaling choice for CTCS dynamics - removed 100, check why not squared/nondim properly
+        # CTCS callback functions follow the same convention as other nonconvex
+        # constraints: they act on the physical state/control slices (x, u), not
+        # the full augmented algorithm vectors (z, nu) that also include time,
+        # beta, and dilation states.
         ctcs_constraints = tuple(self.get(ct=1))
         if ctcs_constraints:
-            ctcs_values = jnp.concatenate([constraint.fcn(t, z, nu, params) for constraint in ctcs_constraints])
+            ctcs_values = jnp.concatenate([
+                jnp.atleast_1d(self.index_map.evaluate_f_phys(constraint.fcn, z, nu, params))
+                for constraint in ctcs_constraints
+            ])
 
             dbeta_dt = jnp.maximum(ctcs_values, 0.0) # should be squared
         else:

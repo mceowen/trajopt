@@ -16,7 +16,7 @@ flags:
 constraints:
   obstacle:
     eps: [0.01]
-    ct: 0
+    ct: 1
   low_height_stc:
     eps: [0.1]
     scale: [1.0]
