@@ -451,12 +451,14 @@ def build_ms_dyn_constraint(subproblem, k):
     return subproblem.dz[k + 1] + subproblem.z_ref[k + 1] - subproblem.z_m[k + 1] == rhs
 
 
-def build_ps_dyn_constraints(subproblem, scale_ps=2.0):
+def build_ps_dyn_constraints(subproblem):
     """
     Build pseudospectral collocation dynamics constraints.
 
-    Note: This creates a symbolic constraint that will be properly configured
-    when the subproblem is updated with reference trajectory values.
+    The flipped-LGR differentiation matrix is defined on the normalized domain
+    `tau in [-1, 1]`, so it must be scaled by `2 / (t_f - t_0)` to represent
+    physical-time derivatives. We keep that scale as a CVXPY parameter updated
+    from the current reference trajectory each SCP iteration.
 
     Returns:
     --------
@@ -474,10 +476,11 @@ def build_ps_dyn_constraints(subproblem, scale_ps=2.0):
     # Create PS differentiation matrix (this doesn't depend on trajectory)
     tau, etau, w, D = compute_ps_differentiation_matrix(N_col)
 
-    # Store the differentiation matrix in the subproblem for later use
+    # Store the differentiation matrix and time-scaling parameter for later use.
     if not hasattr(subproblem, '_ps_diff_matrix'):
         subproblem._ps_diff_matrix = D
-        subproblem._ps_scale = scale_ps
+    if not hasattr(subproblem, '_ps_scale'):
+        subproblem._ps_scale = cp.Parameter(nonneg=True, name="ps_scale")
 
     # Create parameters for reference dynamics and Jacobians (to be updated later)
     if not hasattr(subproblem, '_ps_f_ref'):
@@ -487,11 +490,16 @@ def build_ps_dyn_constraints(subproblem, scale_ps=2.0):
 
     # Build symbolic constraint
     Z = subproblem.z_ref + subproblem.dz
-    lhs = scale_ps * (D @ Z)
+    lhs = cp.multiply(subproblem._ps_scale, D @ Z)
 
     rhs_list = []
     for k in range(N_col):
-        rhs_k = subproblem._ps_f_ref[k] + subproblem._ps_Ac[k] @ subproblem.dz[k + 1] + subproblem._ps_Bc[k] @ subproblem.dnu[k]
+        rhs_k = (
+            subproblem._ps_f_ref[k]
+            + subproblem._ps_Ac[k] @ subproblem.dz[k + 1]
+            + subproblem._ps_Bc[k] @ subproblem.dnu[k]
+            + subproblem.vb_stack.dynamics[k]
+        )
         rhs_list.append(rhs_k)
 
     rhs = cp.vstack(rhs_list)

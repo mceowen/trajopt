@@ -96,8 +96,12 @@ def check_convergence_tolerance(problem, method, iter_record):
 
     index_map = method.index_map
 
+    # Keep diagnostics numeric even if the convex subproblem returned no primal
+    # solution (e.g. `status == infeasible`).
+    dz_full = tools.safe_val(iter_record.dz, rows=N, cols=problem.index_map.n.z)
+
     # dz and dcost to measure optimality
-    dstate  = iter_record.dz[:, index_map.indices.z.state]
+    dstate  = dz_full[:, index_map.indices.z.state]
     dcost   = iter_record.cost - conv_data.cost_ref
     
     # linearized constraint violations
@@ -128,7 +132,7 @@ def check_convergence_tolerance(problem, method, iter_record):
     abs_vb_term = np.abs(vb_term) if np.asarray(vb_term).size > 0 else np.zeros(1)
 
     # absolute values nonconvex constraint violations
-    abs_ncvx_dyn = np.abs(defect[index_map.indices.z.state])
+    abs_ncvx_dyn = np.abs(defect[:, index_map.indices.z.state])
     abs_ncvx_ineq = np.abs(ncvx_ineq)
 
     bool_term = np.all(abs_vb_term <= 1.0*eps_term)
@@ -136,7 +140,7 @@ def check_convergence_tolerance(problem, method, iter_record):
     bool_dz = np.all(abs_dz <= 1.0*eps_state)
     bool_dcost = np.all(abs_dcost <= 1.0*eps_dcost)
     bool_vb_dyn = np.all(abs_vb_dyn <= 1.0*eps_dyn)
-    bool_ncvx_dyn_state = np.all(abs_ncvx_dyn[:, index_map.indices.z.state] <= 1.0*eps_defect[index_map.indices.z.state])
+    bool_ncvx_dyn_state = np.all(abs_ncvx_dyn <= 1.0*eps_defect)
     bool_ncvx_ineq = np.all(abs_ncvx_ineq <= 1.0*eps_ineq)
 
     # convergence criteria option 1: 
@@ -149,12 +153,15 @@ def check_convergence_tolerance(problem, method, iter_record):
     bool_opt2  = bool_dcost
     bool_feas2 = bool_term and bool_ncvx_ineq and bool_ncvx_dyn_state
 
+    solve_status = getattr(iter_record.cp_subprob, "status", None)
+    solver_ok = solve_status in {"optimal", "optimal_inaccurate"}
+
     if method.flags.flag_conv == 0:
-        bool_conv = (bool_opt1 and bool_feas1) or (bool_opt2 and bool_feas2) 
+        bool_conv = solver_ok and ((bool_opt1 and bool_feas1) or (bool_opt2 and bool_feas2))
     elif method.flags.flag_conv == 1:
-        bool_conv = (bool_opt1 and bool_feas1) 
+        bool_conv = solver_ok and (bool_opt1 and bool_feas1)
     elif method.flags.flag_conv == 2:
-        bool_conv = (bool_opt2 and bool_feas2) 
+        bool_conv = solver_ok and (bool_opt2 and bool_feas2)
 
     # === Populate convergence summary
     conv_data.bool_conv   = bool_conv
@@ -163,7 +170,7 @@ def check_convergence_tolerance(problem, method, iter_record):
     conv_data.chk_vb_term = np.max(abs_vb_term / eps_term)
     conv_data.chk_vb_ineq = np.max(abs_vb_ineq / eps_ineq)
     conv_data.chk_vb_dyn  = np.max(abs_vb_dyn / eps_dyn)
-    conv_data.status      = iter_record.cp_subprob.status
+    conv_data.status      = solve_status
 
     iter_record.converged = bool_conv
     iter_record.conv_data = conv_data

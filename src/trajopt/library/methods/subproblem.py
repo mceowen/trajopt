@@ -62,7 +62,7 @@ class Subproblem:
             "conv_data": {
                 "vb_ineq": np.zeros((self.N.time_grid, self.n.nonconvex_inequality)),
                 "vb_dyn":  np.zeros((self.N.time_grid - 1, self.n.dynamics)),
-                "vb_terminal": np.zeros((self.n.term_total, 1)),
+                "vb_terminal": np.zeros(self.n.term_total),
             },
             # W and dual are None initially - will be initialized by configure_penalty_weights on first iteration
             "W": None,
@@ -770,6 +770,12 @@ class Subproblem:
         if self.flags.discretize == "ps" and hasattr(self, '_ps_f_ref'):
             N_col = method.index_map.N.time_grid - 1
 
+            # Scale d/dtau to physical time using the current reference duration.
+            t_ref = np.asarray(inputs.z_ref[:, self.indices.z.time]).reshape(-1)
+            t_span = float(t_ref[-1] - t_ref[0]) if t_ref.size > 0 else 1.0
+            ps_scale = 2.0 / max(abs(t_span), 1e-9)
+            self._set_param(self._ps_scale, ps_scale)
+
             # For pseudospectral collocation, use controls at collocation points (first N_col points)
             nu_ref_col = inputs.nu_ref[:N_col]
 
@@ -877,14 +883,18 @@ class Subproblem:
         else:
             rec.solve_time = None
 
-        # raw solver variables (useful for diagnostics)
-        rec.dz = dz_val
-        rec.dnu = dnu_val
+        # Raw solver values can be `None` when the convex subproblem is infeasible.
+        # Keep those for diagnostics, but always expose numeric fallbacks in the
+        # unified iteration record so downstream analysis remains shape-safe.
+        rec.dz_raw = dz_val
+        rec.dnu_raw = dnu_val
+        rec.dz = tools.safe_val(dz_val, rows=N, cols=self.n.z)
+        rec.dnu = tools.safe_val(dnu_val, rows=N, cols=self.n.nu)
         rec.dt = dt_val
 
         # outputs (absolute trajectories)
-        rec.z_opt  = tools.safe_val(dz_val, rows=N, cols=self.n.z) + input_for_iter.z_ref
-        rec.nu_opt = tools.safe_val(dnu_val, rows=N, cols=self.n.nu) + input_for_iter.nu_ref
+        rec.z_opt  = rec.dz + input_for_iter.z_ref
+        rec.nu_opt = rec.dnu + input_for_iter.nu_ref
 
         # Unpack physical components from optimal trajectories
         rec.x_opt, rec.t_opt, rec.beta_opt, rec.u_opt, rec.s_opt \
@@ -922,7 +932,7 @@ class Subproblem:
         # Convergence data (buffers, defects, TR cost, ref cost)
         conv = tools.AttrDict()
         conv.vb_ineq         = tools.get_val(self.vb_stack.nonconvex_inequality, rows=self.N.time_grid, cols=self.n.nonconvex_inequality) if self.vb_stack.nonconvex_inequality is not None else np.zeros((self.N.time_grid, self.n.nonconvex_inequality))
-        conv.vb_terminal     = tools.get_val(self.vb_stack.final_state, rows=1, cols=self.n.term_total) if self.vb_stack.final_state is not None else np.zeros((1, self.n.term_total))
+        conv.vb_terminal     = np.asarray(tools.get_val(self.vb_stack.final_state, rows=self.n.term_total, cols=1)).reshape(-1) if self.vb_stack.final_state is not None else np.zeros(self.n.term_total)
         conv.vb_dyn          = tools.get_val(self.vb_stack.dynamics, rows=self.N.time_grid - 1, cols=self.n.dynamics) if self.vb_stack.dynamics is not None else np.zeros((self.N.time_grid - 1, self.n.dynamics))
         conv.vb_plus_real    = tools.get_val(self.vb_stack.plus_real, rows=self.N.pm_real, cols=self.n.plus_real) if self.vb_stack.plus_real is not None else np.zeros((self.N.pm_real, self.n.plus_real))
         conv.vb_minus_real   = tools.get_val(self.vb_stack.minus_real, rows=self.N.pm_real, cols=self.n.minus_real) if self.vb_stack.minus_real is not None else np.zeros((self.N.pm_real, self.n.minus_real))
@@ -930,8 +940,11 @@ class Subproblem:
         conv.vb_minus_ctcs   = tools.get_val(self.vb_stack.minus_ctcs, rows=self.N.pm_ctcs, cols=self.n.minus_ctcs) if self.vb_stack.minus_ctcs is not None else np.zeros((self.N.pm_ctcs, self.n.minus_ctcs))
         conv.ncvx_ineq       = g
 
-        conv.defect  = tools.safe_val(self.dz, rows=N, cols=n_x) + input_for_iter.z_ref - self.z_m.value
-        conv.Jtr     = ( self.w.tr_z.value * np.sum(tools.safe_val(self.dz, rows=N, cols=n_x)**2)
+        # `dz` is defined over the full augmented state `z = [x, t, beta]`,
+        # so convergence diagnostics must use `n_z` rather than the physical
+        # state size `n_x` when falling back before a solver value exists.
+        conv.defect  = tools.safe_val(self.dz, rows=N, cols=n_z) + input_for_iter.z_ref - self.z_m.value
+        conv.Jtr     = ( self.w.tr_z.value * np.sum(tools.safe_val(self.dz, rows=N, cols=n_z)**2)
                         + self.w.tr_u.value * np.sum(tools.safe_val(self.dnu, rows=N, cols=n_nu)**2) )
         ref_cost = discretize.compute_nonconvex_costs(input_for_iter.z_ref, input_for_iter.nu_ref, self.problem, self.method)[0].sum().item()
         conv.cost_ref = ref_cost

@@ -3,7 +3,7 @@ inherit: trajopt/library/methods/configs/autoscvx.yaml
 'time_grid': 10
 
 flags:
-  free_final_time:  1
+  free_final_time:  0
   equal_dt:         0
   flag_autotune:    "3"     # '0', '1', '2', '3'
   buff_dyn:         l2  # "none", 'term', 'l1', 'l2', 'quad-1', 'quad-2', 'quad-3', 'l1_dual'
@@ -11,7 +11,7 @@ flags:
   ctcs:             l2 #quad-2
   ctcs_dual:        none #l1
   flag_conv:        1
-  discretize:       "ms"
+  discretize:       "ps"
 
 constraints:
   obstacle:

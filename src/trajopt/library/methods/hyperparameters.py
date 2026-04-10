@@ -401,7 +401,7 @@ def autotune1(subproblem, conv_data, conv_data_prev, iter_num):
 
     # Extract primal buffers
     vb_ineq  = np.array(conv_data.vb_ineq)
-    vb_term  = np.array(conv_data.vb_terminal)
+    vb_term  = np.array(conv_data.vb_terminal).reshape(-1)
     vb_dyn   = np.array(conv_data.vb_dyn)
     
     vb_plus_real  = np.array(conv_data.vb_plus_real)
@@ -520,7 +520,7 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
     N = method.index_map.N.time_grid
     vb_ineq = np.array(conv_data.vb_ineq)
     vb_dyn  = np.array(conv_data.vb_dyn)
-    vb_term = np.array(conv_data.vb_terminal)
+    vb_term = np.array(conv_data.vb_terminal).reshape(-1)
 
     vb_plus_real = np.array(conv_data.vb_plus_real)
     vb_minus_real = np.array(conv_data.vb_minus_real)
@@ -545,7 +545,7 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
     eps_feas_term = conv.eps_term
     eps_feas_dyn  = conv.eps_dyn
 
-    eps_target_term =  np.maximum(conv.fac_target * eps_feas_term, conv.fac_eps * np.abs(conv_data.vb_terminal))
+    eps_target_term =  np.maximum(conv.fac_target * eps_feas_term, conv.fac_eps * np.abs(np.asarray(conv_data.vb_terminal).reshape(-1)))
     eps_target_ineq =  np.maximum(conv.fac_target * eps_feas_ineq, conv.fac_eps * np.abs(conv_data.vb_ineq))
     eps_target_dyn  =  np.maximum(conv.fac_target * eps_feas_dyn , conv.fac_eps * np.abs(conv_data.vb_dyn))
 
