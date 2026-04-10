@@ -2,12 +2,11 @@ import trajopt.core.constraints.constraints_library as constraints_library
 import inspect
 import jax.numpy as jnp
 from functools import partial
-import trajopt.utils.tools as tools
 
 class Constraints:
     def __init__(self, config, index_map, fcns=None):
 
-        print(f"constraints:")
+        print("constraints:")
 
         self.index_map = index_map
         self.constraints_list = []

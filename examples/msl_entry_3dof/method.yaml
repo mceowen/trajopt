@@ -10,7 +10,7 @@ time_grid: 40
 # METHOD FLAGS
 # ==============================
 flags:
-  flag_conv: 1
+  flag_conv: 0
 
 # ===============================
 # INITIAL GUESS SETTINGS

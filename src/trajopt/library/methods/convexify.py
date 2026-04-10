@@ -1,8 +1,6 @@
-import numpy as np
 import sympy as sp
 import jax
 import jax.numpy as jnp
-import cvxpy as cp
 
 # jax autodiff for affine approximations
 def linearize_jax(fcn):

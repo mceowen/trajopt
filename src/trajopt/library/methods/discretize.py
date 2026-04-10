@@ -2,18 +2,12 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-from trajopt.core.indexing import index_map
 jax.config.update("jax_enable_x64", True)
-import scipy as sp
-from scipy.integrate import solve_ivp
 import diffrax
 
 
-import trajopt.library.methods.convexify as convexify
 import trajopt.library.methods.pseudospectral as pseudospectral
 import trajopt.utils.tools as tools
-import time
-import diffrax
 
 jax.config.update("jax_compilation_cache_dir", "/tmp/jax_cache")
 jax.config.update("jax_persistent_cache_min_entry_size_bytes", -1)

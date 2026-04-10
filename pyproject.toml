@@ -7,7 +7,7 @@ name = "trajopt"
 version = "0.0.1"
 description = "Trajectory optimization research and development framework"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 
 authors = [
@@ -50,3 +50,12 @@ Repository =    "https://github.com/skye/trajopt"
 [tool.scikit-build]
 install.components = ["python"]
 wheel.install-dir = "trajopt"
+
+[dependency-groups]
+dev = [
+    "black>=26.3.1",
+    "ipykernel>=7.2.0",
+    "mypy>=1.20.0",
+    "pytest>=9.0.3",
+    "ruff>=0.15.10",
+]

@@ -1,6 +1,4 @@
 import numpy as np
-import jax.numpy as jnp
-from types import SimpleNamespace
 from trajopt.utils.tools import AttrDict
 
 

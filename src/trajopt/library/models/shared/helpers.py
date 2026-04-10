@@ -1,6 +1,4 @@
 import numpy as np
-import jax
-import jax.numpy as jnp
 
 def polar_to_cartesian(r, theta, phi):
     x = r * np.sin(theta) * np.cos(phi)
