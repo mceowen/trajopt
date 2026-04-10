@@ -1,8 +1,6 @@
 import trajopt.core.trajectories.trajectory_library as trajectory_library
 import inspect
 from functools import partial
-import trajopt.library.methods.convexify as convexify
-import trajopt.utils.tools as tools
 
 class Trajectories:
     def __init__(self, config, index_map, fcns=None):

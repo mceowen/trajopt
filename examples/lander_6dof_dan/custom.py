@@ -18,12 +18,12 @@ vertices2faces = [[0,1,3,2], #bottom face
                   
 
 # ['up','east','north']
-upper_out = np.array([ 6., 3., 1.5]);
-lower_out = np.array([-1., 1., -2.5]);
+upper_out = np.array([ 6., 3., 1.5])
+lower_out = np.array([-1., 1., -2.5])
 
 # # keep in region - not buffered
-upper_in_convex = np.array([10., 4.,1.]);
-lower_in_convex = np.array([-1.,-1.,-1.]);
+upper_in_convex = np.array([10., 4.,1.])
+lower_in_convex = np.array([-1.,-1.,-1.])
 
-upper_in_buffer = np.array([4., 4.,0.0]);
-lower_in_buffer = np.array([-1.,-1.,-1.]);
+upper_in_buffer = np.array([4., 4.,0.0])
+lower_in_buffer = np.array([-1.,-1.,-1.])

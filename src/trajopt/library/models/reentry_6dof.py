@@ -2,7 +2,6 @@ import numpy as np
 import jax 
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
-import trajopt.core.constraints.stl as stl
     
 def dynamics(t, z, nu, params, fcns):
     # extract states

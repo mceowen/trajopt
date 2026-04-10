@@ -1,5 +1,4 @@
 import numpy as np
-import cvxpy as cp
 import jax
 import jax.numpy as jnp
 from trajopt.utils.config_loader import resolve_function_from_path

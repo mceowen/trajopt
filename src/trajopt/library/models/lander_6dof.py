@@ -1,6 +1,4 @@
-import jax 
 import jax.numpy as jnp
-import cvxpy as cp
 
 # Direction Cosine Matrix Function
 def DCM(q): 

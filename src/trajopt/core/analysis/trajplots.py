@@ -1,13 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib
 import trajopt.utils.tools as tools
 # matplotlib.rcParams['text.usetex'] = True
 plt.rcParams['text.usetex'] = True
 
 class SCVXPLOTS:
     def __init__(self,data):
-        self.data = data;
+        self.data = data
         
         self.base_pen = {'frgba':[0,0,0,0.1],
                          'lrgba':[0,0,0,0.1],
@@ -165,49 +164,49 @@ class SCVXPLOTS:
 
     ######## LABELS AND LEGENDS ############
     def setTicks(self,ax,x=False,y=False,ins={}):
-        if x==True:  ax.tick_params(**ins);
-        if y==True:  ax.tick_params(**ins);
+        if x==True:  ax.tick_params(**ins)
+        if y==True:  ax.tick_params(**ins)
 
     def setLabels(self,ax,xlabel='',ylabel='',ins={}):
         ax.set_xlabel(xlabel,**ins)
-        ax.set_ylabel(ylabel,**ins);
+        ax.set_ylabel(ylabel,**ins)
     
     def setTitle(self,ax,title = '',ins={}):
         ax.set_title(title,**ins)
 
     def addLegend(self,ax,leg,labels=[],ins={}):
-        if len(labels) == 0: labels = list(self.legends[leg]);
-        handles = [self.legends[leg][label] for label in labels];
+        if len(labels) == 0: labels = list(self.legends[leg])
+        handles = [self.legends[leg][label] for label in labels]
         ax.legend(handles,labels,**ins)
 
     def dumpLegend(self,leg):
-        self.legends[leg] = {};
+        self.legends[leg] = {}
 
     ########## CONSTRUCT SUBPLOTS ##########
     def genGridTags(self,fig,typ=None,params={}):
-        return self.createGrid(fig,typ=typ,grid=self.specGrid(typ=typ,params=params));
+        return self.createGrid(fig,typ=typ,grid=self.specGrid(typ=typ,params=params))
 
 
     def createGrid(self,fig,typ='manual',grid={},ins={}):
-        plt_typ = '2D';
-        if 'plt_typ' in ins: plttyp = ins['plt_typ'];
+        plt_typ = '2D'
+        if 'plt_typ' in ins: plttyp = ins['plt_typ']
         if typ=='manual':
-            axs = {};
+            axs = {}
             for tag in grid:
                 if plt_typ == '3d': axs[tag] = fig.add_axes(grid[tag],projection='3d')
                 else: axs[tag] = fig.add_axes(grid[tag])
-        return axs;
+        return axs
 
     def createGrid2(self,fig,typ='manual',grid={},ins={}):
-        plttyps = {};
+        plttyps = {}
         if 'plt_typs' in ins: 
-            plttyps = ins['plt_typs'];
+            plttyps = ins['plt_typs']
         
         if typ=='manual':
-            axs = {};
+            axs = {}
             for tag in grid:
                 if tag in plttyps and plttyps[tag] == '3D':
                     axs[tag] = fig.add_axes(grid[tag],projection='3d')
                 else:
                     axs[tag] = fig.add_axes(grid[tag])
-        return axs;
+        return axs

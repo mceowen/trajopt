@@ -1,4 +1,3 @@
-import numpy as np
 from trajopt.core.constraints.constraints import Constraints
 from trajopt.core.costs.costs import Costs
 from trajopt.core.trajectories.trajectories import Trajectories

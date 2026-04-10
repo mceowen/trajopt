@@ -2,7 +2,6 @@ import copy
 import numpy as np
 import trajopt.utils.tools as tools
 import jax
-import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 import trajopt.library.methods.integrators as integrators
 from trajopt.core.indexing.index_map import IndexMap

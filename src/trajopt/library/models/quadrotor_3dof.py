@@ -1,7 +1,4 @@
-import numpy as np
-import jax 
 import jax.numpy as jnp
-import sympy as sp
 
 def dynamics_jax(t, z, nu, params, fcns):
 

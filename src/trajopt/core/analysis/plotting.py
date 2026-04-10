@@ -1,4 +1,3 @@
-import enum
 import numpy as np
 import matplotlib.pyplot as plt
 from trajopt.core.analysis.trajplots import SCVXPLOTS

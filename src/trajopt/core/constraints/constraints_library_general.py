@@ -1,8 +1,5 @@
 import numpy as np
-import cvxpy as cp
-import jax
 import jax.numpy as jnp
-import trajopt.library.methods.convexify as convexify
 from trajopt.utils.config_loader import resolve_function
 
 # ===============================================================
@@ -108,61 +105,61 @@ class AFFINE: ## IMPLEMENTED
     # -- defines affine constraint of the form Ax = b with A = linear and b = offset
     def __init__(self,ins={},config=None):
         # implements: Ax = b
-        self.name = ins['name']; ## unique identifier
-        self.b_dim = ins['b'];
-        self.A_dim = ins['A'];
-        self.n = self.A.shape[1];
-        self.n_nu = self.A.shape[0];
+        self.name = ins['name'] ## unique identifier
+        self.b_dim = ins['b']
+        self.A_dim = ins['A']
+        self.n = self.A.shape[1]
+        self.n_nu = self.A.shape[0]
         #############################################
         self.type = 'AFFINE'
         self.implement_type = 'AFFINE'
         self.subtype = 'AFFINE'
-        self.set = 'state' ; ## from ['state','control']
-        self.idx = list(range(self.n)); ## index 
-        self.convex = True;
-        if 'type' in ins: self.type = ins['type'];
-        if 'set' in ins: self.set = ins['set'];
-        if 'idx' in ins: self.idx = ins['idx'];
-        self.eps = 0.0001;
-        if 'eps' in ins: self.eps = ins['eps'];
+        self.set = 'state'  ## from ['state','control']
+        self.idx = list(range(self.n)) ## index 
+        self.convex = True
+        if 'type' in ins: self.type = ins['type']
+        if 'set' in ins: self.set = ins['set']
+        if 'idx' in ins: self.idx = ins['idx']
+        self.eps = 0.0001
+        if 'eps' in ins: self.eps = ins['eps']
 
         self.A = self.A_dim.copy()
-        self.b = self.b_dim.copy();        
-        self.nondimmed = False;
+        self.b = self.b_dim.copy()        
+        self.nondimmed = False
         
         # Set dimension from matrix size
-        self.dimension = int(self.A_dim.shape[0]);
+        self.dimension = int(self.A_dim.shape[0])
     ### non dimensionalized version... 
     def nondim_constraint(self,nondim):
         ### update something with nondim...
         ########################################
-        self.M_out = np.eye(self.m);
-        self.M_in = np.eye(self.n);
+        self.M_out = np.eye(self.m)
+        self.M_in = np.eye(self.n)
         # if 'M_out' in ins: self.M_out = ins['M_out'];
         # if 'M_in' in ins: self.M_in = ins['M_in'];
-        self.M_out_inv = np.linalg.inv(self.M_out);
+        self.M_out_inv = np.linalg.inv(self.M_out)
         #########################################
         self.A = self.M_out_inv@self.A_dim@self.M_in
-        self.b = self.M_out_inv@self.b_dim;
-        self.nondimmed = True; 
+        self.b = self.M_out_inv@self.b_dim
+        self.nondimmed = True 
 
-    def g(self,x): return self.A@x - self.b;
-    def dgdx(self,x): return self.A;
+    def g(self,x): return self.A@x - self.b
+    def dgdx(self,x): return self.A
     def g_jax(self,x): return self.A@x - self.b
     def dgdx_jax(self,x): return self.A
     ################################################
     def g_aff(self,t,z,nu):
-        dgdz = np.zeros([self.dimension,len(z)]);
+        dgdz = np.zeros([self.dimension,len(z)])
         dgdu = np.zeros([self.dimension,len(nu)])
-        if self.set == 'state': g = self.g(z[self.idx]); dgdz[:,self.idx] = self.dgdx(z[self.idx]);
-        if self.set == 'control': g = self.g(nu[self.idx]); dgdu[:,self.idx] = self.dgdx(nu[self.idx]);
+        if self.set == 'state': g = self.g(z[self.idx]); dgdz[:,self.idx] = self.dgdx(z[self.idx])
+        if self.set == 'control': g = self.g(nu[self.idx]); dgdu[:,self.idx] = self.dgdx(nu[self.idx])
         return g,dgdz,dgdu
     ################################################
     def g_aff_jax(self,t,z,nu):
-        dgdz = jnp.zeros([self.dimension,len(z)]);
+        dgdz = jnp.zeros([self.dimension,len(z)])
         dgdu = jnp.zeros([self.dimension,len(nu)])
-        if self.set == 'state': g = self.g_jax(z[self.idx]); dgdz[:,self.idx] = self.dgdx_jax(z[self.idx]);
-        if self.set == 'control': g = self.g_jax(nu[self.idx]); dgdu[:,self.idx] = self.dgdx_jax(nu[self.idx]);
+        if self.set == 'state': g = self.g_jax(z[self.idx]); dgdz[:,self.idx] = self.dgdx_jax(z[self.idx])
+        if self.set == 'control': g = self.g_jax(nu[self.idx]); dgdu[:,self.idx] = self.dgdx_jax(nu[self.idx])
         return g,dgdz,dgdu
     ################################################
 
@@ -180,89 +177,89 @@ class POLYTOPE: ## IMPLEMENTED
     def __init__(self,ins={},config=None):
 
         self.name = ins['name'] ## unique identifier
-        self.b_dim = ins['b'];
-        self.A_dim = ins['A'];
-        self.version = ins['version'];
-        self.n = self.A_dim.shape[1];
-        self.n_nu = self.A_dim.shape[0];
+        self.b_dim = ins['b']
+        self.A_dim = ins['A']
+        self.version = ins['version']
+        self.n = self.A_dim.shape[1]
+        self.n_nu = self.A_dim.shape[0]
         
-        self.type = 'POLYTOPE';
+        self.type = 'POLYTOPE'
         #############################################
 
-        self.set = 'state' ; ## from ['state','control']
-        self.idx = list(range(self.n)); ## index 
-        if 'name' in ins: self.name = ins['name'];
-        if 'set' in ins: self.set = ins['set'];
-        if 'idx' in ins: self.idx = ins['idx'];
+        self.set = 'state'  ## from ['state','control']
+        self.idx = list(range(self.n)) ## index 
+        if 'name' in ins: self.name = ins['name']
+        if 'set' in ins: self.set = ins['set']
+        if 'idx' in ins: self.idx = ins['idx']
         
-        self.time_steps = 'all';
-        if 'tsteps' in ins: self.time_steps = ins['tsteps'];
-        if 'time_steps' in ins: self.time_steps = ins['time_steps'];
+        self.time_steps = 'all'
+        if 'tsteps' in ins: self.time_steps = ins['tsteps']
+        if 'time_steps' in ins: self.time_steps = ins['time_steps']
         ################################################
         self.A = self.A_dim.copy()
-        self.b = self.b_dim.copy();        
-        self.nondimmed = False;
+        self.b = self.b_dim.copy()        
+        self.nondimmed = False
 
-        self.eps = np.array([0.1]);
-        if 'eps' in ins: self.eps = ins['eps'];
+        self.eps = np.array([0.1])
+        if 'eps' in ins: self.eps = ins['eps']
 
 
-        sharp = 2;
-        if 'sharp' in ins: sharp = ins['sharp'];
+        sharp = 2
+        if 'sharp' in ins: sharp = ins['sharp']
         if self.version == 'in_convex':
-            self.sharp = sharp;
+            self.sharp = sharp
             self.implement_type = 'POLYTOPE'
-            self.subtype = 'POLYTOPE_IN_CONVEX';
-            self.dimension = self.n;
-            self.convex = True;
+            self.subtype = 'POLYTOPE_IN_CONVEX'
+            self.dimension = self.n
+            self.convex = True
 
         if self.version == 'in_buffer':
-            self.sharp = sharp;
-            self.convex = False;
-            self.dimension = 1;
-            self.subtype = 'POLYTOPE_IN_BUFFER';
+            self.sharp = sharp
+            self.convex = False
+            self.dimension = 1
+            self.subtype = 'POLYTOPE_IN_BUFFER'
             self.implement_type = 'nonconvex_inequality'
             self.group = ins['group']
 
         ################################################
         if self.version == 'out':
             self.implement_type = 'nonconvex_inequality'
-            self.subtype = 'POLYTOPE_OUT';
-            self.convex = False;
-            self.dimension = 1;
-            self.sharp = -sharp;
+            self.subtype = 'POLYTOPE_OUT'
+            self.convex = False
+            self.dimension = 1
+            self.sharp = -sharp
             self.group = ins['group']
 
         ## epsilon nondim logic...
         # M_out_inv @ A @ M_in @x_nodim - M_out_inv @ b  <= eps_scalar*1 <= M_out_inv @ eps 
         # where eps_scalar = min_j [M_out_inv@eps]_j
 
-        self.affine2vertices = [];
-        self.vertices = []; self.edges = []; self.faces = [];
-        self.vertices2edges = [];
-        self.vertices2faces = [];
+        self.affine2vertices = []
+        self.vertices = []; self.edges = []; self.faces = []
+        self.vertices2edges = []
+        self.vertices2faces = []
         if 'affine2vertices' in ins: self.affine2vertices = ins['affine2vertices']
         if 'vertices2edges' in ins: self.vertices2edges = ins['vertices2edges']
         if 'vertices2faces' in ins: self.vertices2faces = ins['vertices2faces']
 
-        if len(self.affine2vertices)>0: self.calcVertices();
-        if len(self.vertices2edges)>0: self.calcEdges();
-        if len(self.vertices2faces)>0: self.calcFaces();
+        if len(self.affine2vertices)>0: self.calcVertices()
+        if len(self.vertices2edges)>0: self.calcEdges()
+        if len(self.vertices2faces)>0: self.calcFaces()
 
 
     ### non dimensionalized version... 
     def nondim_constraint(self,nondim):
         ### update something with nondim...
         ########################################
-        self.M_out = np.eye(self.m);
-        self.M_in = np.eye(self.n);
+        self.M_out = np.eye(self.m)
+        self.M_in = np.eye(self.n)
         # if 'M_out' in ins: self.M_out = ins['M_out'];
         # if 'M_in' in ins: self.M_in = ins['M_in'];
-        self.M_out_inv = np.linalg.inv(self.M_out);
+        self.M_out_inv = np.linalg.inv(self.M_out)
         #########################################
         self.A = self.M_out_inv@self.A_dim@self.M_in
-        self.b = self.M_out_inv@self.b_dim;
-        self.nondimmed = True; 
+        self.b = self.M_out_inv@self.b_dim
+        self.nondimmed = True 
 
         # #### needs to be fixed... 
         # if self.version == 'in':
@@ -274,56 +271,56 @@ class POLYTOPE: ## IMPLEMENTED
         #         temp = self.M_out_inv@self.eps; self.eps = np.min(temp);
 
     def g(self,x):
-        if self.version == 'in_convex': return self.A@x - self.b; # g(x) # NEVER USED - CONVEX
+        if self.version == 'in_convex': return self.A@x - self.b # g(x) # NEVER USED - CONVEX
         if self.version in ['out','in_buffer']: # max_j g_j(x)
-            z = self.A@x - self.b; 
+            z = self.A@x - self.b 
             exps = np.exp(self.sharp*z) # softmax: implements approximation of exps = np.max(Cx - d); 
             return (1./np.sum(exps))*np.sum(exps*z)
     def dgdx(self,x):
         if self.version == 'in_convex': return self.A
         if self.version in ['out','in_buffer']:
-            z = self.A@x - self.b;
+            z = self.A@x - self.b
             exps = np.exp(self.sharp*z)
-            summ = np.sum(exps);
-            dzdx = self.A;
+            summ = np.sum(exps)
+            dzdx = self.A
             dgdz = (1./summ)*exps
             dgdz = dgdz + (1./summ)*z*exps*self.sharp
             dgdz = dgdz + (z@exps)*(-1./summ**2)*self.sharp*exps
-            dgdx = dgdz@dzdx;
+            dgdx = dgdz@dzdx
             return dgdx
     ################################################
     def g_jax(self,x):
-        if self.version == 'in_convex': return self.A@x - self.b;
+        if self.version == 'in_convex': return self.A@x - self.b
         if self.version in ['out','in_buffer']:
-            z = self.A@x - self.b; 
+            z = self.A@x - self.b 
             exps = jnp.exp(self.sharp*z) # softmax: implements approximation of exps = np.max(Cx - d); 
             return (1./jnp.sum(exps))*jnp.sum(exps*z)
     def dgdx_jax(self,x):
         if self.version == 'in_convex': return self.A
         if self.version in ['out','in_buffer']:
-            z = self.A@x - self.b;
+            z = self.A@x - self.b
             exps = jnp.exp(self.sharp*z)
-            summ = jnp.sum(exps);
-            dzdx = self.A;
+            summ = jnp.sum(exps)
+            dzdx = self.A
             dgdz = (1./summ)*exps
             dgdz = dgdz + (1./summ)*z*exps*self.sharp
             dgdz = dgdz + (z@exps)*(-1./summ**2)*self.sharp*exps
-            dgdx = dgdz@dzdx;
+            dgdx = dgdz@dzdx
             return dgdx
     ################################################
     def g_aff(self,t,z,nu):
         ## g(x) + dgdx delta x <= 0
-        dgdz = np.zeros([self.dimension,len(z)]);
+        dgdz = np.zeros([self.dimension,len(z)])
         dgdu = np.zeros([self.dimension,len(nu)])
-        if self.set == 'state': g = self.g(z[self.idx]); dgdz[:,self.idx] = self.dgdx(z[self.idx]);
-        if self.set == 'control': g = self.g(nu[self.idx]); dgdu[:,self.idx] = self.dgdx(nu[self.idx]);
+        if self.set == 'state': g = self.g(z[self.idx]); dgdz[:,self.idx] = self.dgdx(z[self.idx])
+        if self.set == 'control': g = self.g(nu[self.idx]); dgdu[:,self.idx] = self.dgdx(nu[self.idx])
         return g,dgdz,dgdu
     ################################################
     def g_aff_jax(self,t,z,nu):
-        dgdz = jnp.zeros([self.dimension,len(z)]);
+        dgdz = jnp.zeros([self.dimension,len(z)])
         dgdu = jnp.zeros([self.dimension,len(nu)])
-        if self.set == 'state': g = self.g_jax(z[self.idx]); dgdz[:,self.idx] = self.dgdx_jax(z[self.idx]);
-        if self.set == 'control': g = self.g_jax(nu[self.idx]); dgdu[:,self.idx] = self.dgdx_jax(nu[self.idx]);
+        if self.set == 'state': g = self.g_jax(z[self.idx]); dgdz[:,self.idx] = self.dgdx_jax(z[self.idx])
+        if self.set == 'control': g = self.g_jax(nu[self.idx]); dgdu[:,self.idx] = self.dgdx_jax(nu[self.idx])
         return g,dgdz,dgdu
     ################################################    
     ################################################    
@@ -331,12 +328,12 @@ class POLYTOPE: ## IMPLEMENTED
     def calcVertex(self,inds): return np.linalg.inv(self.A_dim[inds])@self.b_dim[inds]
     def calcVertices(self):        
         for i,inds in enumerate(self.affine2vertices):
-            self.vertices.append(self.calcVertex(inds));
-        self.vertices = np.array(self.vertices);
+            self.vertices.append(self.calcVertex(inds))
+        self.vertices = np.array(self.vertices)
     def calcEdges(self):
-        for i,inds in enumerate(self.vertices2edges): self.edges.append(self.vertices[inds]);
+        for i,inds in enumerate(self.vertices2edges): self.edges.append(self.vertices[inds])
     def calcFaces(self):
-        for i,inds in enumerate(self.vertices2faces): self.faces.append(self.vertices[inds]);
+        for i,inds in enumerate(self.vertices2faces): self.faces.append(self.vertices[inds])
 
 
 
@@ -346,39 +343,39 @@ class SOC: ## IMPLEMENTED
     # note here that C must be 1 x n
     def __init__(self,ins={},config=None):
         self.name = ins['name'] ## unique identifier
-        self.A_dim = ins['A'];
-        self.b_dim = ins['b'];
-        self.C_dim = ins['C'];
-        self.d_dim = ins['d'];
-        version = ins['version'];
-        self.version = version; 
+        self.A_dim = ins['A']
+        self.b_dim = ins['b']
+        self.C_dim = ins['C']
+        self.d_dim = ins['d']
+        version = ins['version']
+        self.version = version 
 
-        self.n = self.A_dim.shape[1];
-        self.n_nu = self.A_dim.shape[0];
-        self.type = 'SOC';
+        self.n = self.A_dim.shape[1]
+        self.n_nu = self.A_dim.shape[0]
+        self.type = 'SOC'
         #############################################
-        if version == 'in':  self.subtype = 'SOC_IN';  self.convex = True;
-        if version == 'out': self.subtype = 'SOC_OUT'; self.convex = False;
+        if version == 'in':  self.subtype = 'SOC_IN';  self.convex = True
+        if version == 'out': self.subtype = 'SOC_OUT'; self.convex = False
         
-        self.set = 'state' ; ## from ['state','control']
-        self.idx = list(range(self.n)); ## index 
-        if 'name' in ins: self.name = ins['name'];
-        if 'set' in ins: self.set = ins['set'];
-        if 'idx' in ins: self.idx = ins['idx'];
-        self.eps = np.array([0.0001]);
-        if 'eps' in ins: self.eps = ins['eps'];
+        self.set = 'state'  ## from ['state','control']
+        self.idx = list(range(self.n)) ## index 
+        if 'name' in ins: self.name = ins['name']
+        if 'set' in ins: self.set = ins['set']
+        if 'idx' in ins: self.idx = ins['idx']
+        self.eps = np.array([0.0001])
+        if 'eps' in ins: self.eps = ins['eps']
         ################################################
-        self.time_steps = 'all';
-        if 'tsteps' in ins: self.time_steps = ins['tsteps'];
-        if 'time_steps' in ins: self.time_steps = ins['time_steps'];
+        self.time_steps = 'all'
+        if 'tsteps' in ins: self.time_steps = ins['tsteps']
+        if 'time_steps' in ins: self.time_steps = ins['time_steps']
 
         ################################################
-        self.epsilon_grad = 0.0000001;
+        self.epsilon_grad = 0.0000001
         self.A = self.A_dim.copy()
         self.b = self.b_dim.copy()
         self.C = self.C_dim.copy()
         self.d = self.d_dim.copy()
-        self.nondimmed = False;
+        self.nondimmed = False
         
         # Set dimension for SOC constraint (single scalar output)
         self.dimension = 1 
@@ -387,37 +384,37 @@ class SOC: ## IMPLEMENTED
 
     def nondim_constraint(self,nondim):
         ################################################
-        self.M_out = 1;
-        self.M_in = np.eye(self.n);
+        self.M_out = 1
+        self.M_in = np.eye(self.n)
         # if 'M_out' in ins: self.M_out = ins['M_out'];
         # if 'M_in' in ins: self.M_in = ins['M_in'];
-        self.M_out_inv = 1./self.M_out;
+        self.M_out_inv = 1./self.M_out
         ## for a second order cone M_out must be a positive scalar
         #############################################
         #############################################
         self.A = self.M_out_inv*self.A_dim@self.M_in
-        self.b = self.M_out_inv*self.b_dim;
+        self.b = self.M_out_inv*self.b_dim
         self.C = self.M_out_inv*self.C_dim@self.M_in
-        self.d = self.M_out_inv*self.d_dim;
-        self.nondimmed = True; 
+        self.d = self.M_out_inv*self.d_dim
+        self.nondimmed = True 
 
-    def g(self,x): return np.linalg.norm(self.A@x + self.b) - (self.C@x + self.d);
-    def dgdx(self,x): return (1./(np.linalg.norm(self.A@x + self.b)+self.epsilon_grad))*(self.A@x+self.b).T@self.A - self.C;
-    def g_jax(self,x): return jnp.linalg.norm(self.A@x + self.b) - (self.C@x + self.d);
-    def dgdx_jax(self,x): return (1./(jnp.linalg.norm(self.A@x + self.b)+self.epsilon_grad))*(self.A@x+self.b).T@self.A - self.C;
+    def g(self,x): return np.linalg.norm(self.A@x + self.b) - (self.C@x + self.d)
+    def dgdx(self,x): return (1./(np.linalg.norm(self.A@x + self.b)+self.epsilon_grad))*(self.A@x+self.b).T@self.A - self.C
+    def g_jax(self,x): return jnp.linalg.norm(self.A@x + self.b) - (self.C@x + self.d)
+    def dgdx_jax(self,x): return (1./(jnp.linalg.norm(self.A@x + self.b)+self.epsilon_grad))*(self.A@x+self.b).T@self.A - self.C
     ################################################
     def g_aff(self,t,z,nu):
-        dgdz = np.zeros([self.dimension,len(z)]);
+        dgdz = np.zeros([self.dimension,len(z)])
         dgdu = np.zeros([self.dimension,len(nu)])
-        if self.set == 'state': g = self.g(z[self.idx]); dgdz[:,self.idx] = self.dgdx(z[self.idx]);
-        if self.set == 'control': g = self.g(nu[self.idx]); dgdu[:,self.idx] = self.dgdx(nu[self.idx]);
+        if self.set == 'state': g = self.g(z[self.idx]); dgdz[:,self.idx] = self.dgdx(z[self.idx])
+        if self.set == 'control': g = self.g(nu[self.idx]); dgdu[:,self.idx] = self.dgdx(nu[self.idx])
         return g,dgdz,dgdu
     ################################################
     def g_aff_jax(self,t,z,nu):
-        dgdz = jnp.zeros([self.dimension,len(z)]);
+        dgdz = jnp.zeros([self.dimension,len(z)])
         dgdu = jnp.zeros([self.dimension,len(nu)])
-        if self.set == 'state': g = self.g_jax(z[self.idx]); dgdz[:,self.idx] = self.dgdx_jax(z[self.idx]);
-        if self.set == 'control': g = self.g_jax(nu[self.idx]); dgdu[:,self.idx] = self.dgdx_jax(nu[self.idx]);
+        if self.set == 'state': g = self.g_jax(z[self.idx]); dgdz[:,self.idx] = self.dgdx_jax(z[self.idx])
+        if self.set == 'control': g = self.g_jax(nu[self.idx]); dgdu[:,self.idx] = self.dgdx_jax(nu[self.idx])
         return g,dgdz,dgdu
     ################################################        
 
@@ -430,19 +427,19 @@ class SOC: ## IMPLEMENTED
 # =========================================================
 class BOX(POLYTOPE):
     def __init__(self,ins={},config=None):    
-        upper = ins['upper'];
-        lower = ins['lower'];
-        version = ins['version'];
+        upper = ins['upper']
+        lower = ins['lower']
+        version = ins['version']
         # lower <= I x <= upper;
         # I x - upper <= 0;
         # lower <= I x;
-        n = len(upper);
-        if version in ['in_convex','in_buffer']: b = np.hstack([upper,-lower]); A = np.vstack([np.eye(n),-np.eye(n)]);
-        if version == 'out': b = np.hstack([-upper,lower]); A = np.vstack([-np.eye(n),np.eye(n)]);
+        n = len(upper)
+        if version in ['in_convex','in_buffer']: b = np.hstack([upper,-lower]); A = np.vstack([np.eye(n),-np.eye(n)])
+        if version == 'out': b = np.hstack([-upper,lower]); A = np.vstack([-np.eye(n),np.eye(n)])
         POLYTOPE.__init__(self,ins={'A':A,'b':b,**ins},params=params)
         self.n = n
-        self.lower = lower;
-        self.upper = upper;                
+        self.lower = lower
+        self.upper = upper                
         if self.version == 'in_convex': self.subtype = 'BOX_IN_CONVEX'
         if self.version == 'in_buffer': self.subtype = 'BOX_IN_BUFFER'
         if self.version == 'out': self.subtype = 'BOX_OUT'
@@ -451,20 +448,20 @@ class UPPER(POLYTOPE):
     def __init__(self,ins={},config=None):
         # x <= up;
         upper = ins['upper']
-        version = ins['version'];
+        version = ins['version']
         n = len(upper)
-        if version in ['in_convex','in_buffer']:  A = np.eye(n); b = upper;
-        if version == 'out': A = -np.eye(n); b = -upper;
+        if version in ['in_convex','in_buffer']:  A = np.eye(n); b = upper
+        if version == 'out': A = -np.eye(n); b = -upper
         POLYTOPE.__init__(self,ins={'A':A,'b':b,**ins},params=params)
         self.n = n 
-        self.upper = upper;
+        self.upper = upper
         if self.version == 'in_convex': self.subtype = 'UPPER_IN_CONVEX'
         if self.version == 'in_buffer': self.subtype = 'UPPER_IN_BUFFER'
         if self.version == 'out': self.subtype = 'UPPER_OUT'
 class LOWER(POLYTOPE):
     def __init__(self,ins={},config=None):
         # low <= x
-        lower = ins['lower'];
+        lower = ins['lower']
         n = len(lower)
         if version in ['in_convex','in_buffer']:  A = -np.eye(n); b = -lower
         if version == 'out': A = np.eye(n); b = lower
@@ -506,11 +503,11 @@ class SPHERE(SOC):
         radius = ins['radius']
         ################################
         n = len(center)
-        A = np.eye(n); b = -center;
-        C = np.zeros(n); d = radius;
-        SOC.__init__(self,ins={'A':A,'b':b,'C':C,'d':d,**ins},params=params);
-        self.center = center;
-        self.radius = radius;
+        A = np.eye(n); b = -center
+        C = np.zeros(n); d = radius
+        SOC.__init__(self,ins={'A':A,'b':b,'C':C,'d':d,**ins},params=params)
+        self.center = center
+        self.radius = radius
         self.n = n
         if self.version == 'in': self.subtype = 'SPHERE_IN'
         if self.version == 'out': self.subtype = 'SPHERE_OUT'
@@ -523,22 +520,22 @@ class ELLIPSOID(SOC):
         U = ins['U']
         ########################
         diag = []
-        if 'diag' in ins: diag = ins['diag'];
-        if len(diag)==0: diag = np.ones(len(U));
+        if 'diag' in ins: diag = ins['diag']
+        if len(diag)==0: diag = np.ones(len(U))
         n = len(center)
-        D = np.diag(diag);
-        Dinv = np.diag(1./diag);
-        A = Dinv@U;
+        D = np.diag(diag)
+        Dinv = np.diag(1./diag)
+        A = Dinv@U
         b = -Dinv@U@center
-        C = np.zeros(n);
-        d = 1.;
-        SOC.__init__(self,ins={'A':A,'b':b,'C':C,'d':d,**ins},params=params);
-        self.center = center;
-        self.U = U;
-        self.diag = diag;
+        C = np.zeros(n)
+        d = 1.
+        SOC.__init__(self,ins={'A':A,'b':b,'C':C,'d':d,**ins},params=params)
+        self.center = center
+        self.U = U
+        self.diag = diag
         self.D = D
-        self.Dinv = Dinv;
-        self.n = n;
+        self.Dinv = Dinv
+        self.n = n
         if self.version == 'in': self.subtype = 'ELLIPSOID_IN'
         if self.version == 'out': self.subtype = 'ELLIPSOID_OUT'
 
@@ -546,21 +543,21 @@ class CYLINDER(ELLIPSOID,SOC):
     ## -- defines a ellipsoidal keep in region
     def __init__(self,ins={},config=None): 
         #### REQUIRED #### 
-        center = ins['center'];
-        U = ins['U'];
+        center = ins['center']
+        U = ins['U']
         ### OPTIONAL ####
-        radius = None; diag = [];
-        if 'radius' in ins: radius = ins['radius'];
-        if 'diag' in ins: diag = ins['diag'];
+        radius = None; diag = []
+        if 'radius' in ins: radius = ins['radius']
+        if 'diag' in ins: diag = ins['diag']
         ############################
-        if radius == None: radius = 1;
-        temp = radius*np.ones(len(U));
-        if len(diag)==0: diag = temp;
+        if radius == None: radius = 1
+        temp = radius*np.ones(len(U))
+        if len(diag)==0: diag = temp
 
-        ELLIPSOID.__init__(self,ins={'center':center,'U':U,'diag':diag,**ins},params=params);
-        self.radius = radius;
-        if self.version == 'in': self.subtype = 'CYLINDER_IN';
-        if self.version == 'out': self.subtype = 'CYLINDER_OUT';
+        ELLIPSOID.__init__(self,ins={'center':center,'U':U,'diag':diag,**ins},params=params)
+        self.radius = radius
+        if self.version == 'in': self.subtype = 'CYLINDER_IN'
+        if self.version == 'out': self.subtype = 'CYLINDER_OUT'
 
 class CONE(SOC):
     def __init__(self,ins={},config=None):
@@ -570,67 +567,67 @@ class CONE(SOC):
         N = ins['time_grid']
         theta = ins['theta']
         ### OPTIONAL ####
-        radius = None; diag = [];
-        if 'radius' in ins: radius = ins['radius'];
-        if 'diag' in ins: diag = ins['diag'];
+        radius = None; diag = []
+        if 'radius' in ins: radius = ins['radius']
+        if 'diag' in ins: diag = ins['diag']
         ##########################
 
-        if radius == None: radius = 1;
-        temp = radius*np.ones(len(U));
-        if len(diag)==0: diag = temp;
-        n = len(U);
-        D = np.diag(diag);
-        Dinv = np.diag(1./diag);
-        A = Dinv@U;
+        if radius == None: radius = 1
+        temp = radius*np.ones(len(U))
+        if len(diag)==0: diag = temp
+        n = len(U)
+        D = np.diag(diag)
+        Dinv = np.diag(1./diag)
+        A = Dinv@U
         b = -Dinv@U@center
         C = np.tan(theta)*N
-        d = -np.tan(theta)*N@center;
-        SOC.__init__(self,ins={'A':A,'b':b,'C':C,'d':d,**ins},params=params);
-        self.center = center;
-        self.U = U;
-        self.diag = diag;
+        d = -np.tan(theta)*N@center
+        SOC.__init__(self,ins={'A':A,'b':b,'C':C,'d':d,**ins},params=params)
+        self.center = center
+        self.U = U
+        self.diag = diag
         self.D = D
-        self.Dinv = Dinv;
-        self.n = n;
-        self.theta = theta;
-        self.N = N;
-        self.radius = radius;
+        self.Dinv = Dinv
+        self.n = n
+        self.theta = theta
+        self.N = N
+        self.radius = radius
         if self.version == 'in': self.subtype = 'CONE_IN'
         if self.version == 'out': self.subtype = 'CONE_OUT'
 
 class PROXIMITY(SOC):
     ## -- defines a ellipsoidal keep in region
     def __init__(self,ins={},config=None):
-        U=[]; radius=None; idx1=[]; diag=[];
+        U=[]; radius=None; idx1=[]; diag=[]
         if 'U' in ins: U = ins['U']
-        if 'radius' in ins: radius = ins['radius'];
-        if 'idx1' in ins: idx1 = ins['idx1'];
-        if 'diag' in ins: diag = ins['diag'];
+        if 'radius' in ins: radius = ins['radius']
+        if 'idx1' in ins: idx1 = ins['idx1']
+        if 'diag' in ins: diag = ins['diag']
 
-        if len(U) == 0: nx = len(idx1); U = np.eye(nx);
-        if radius == None: radius = 1;
-        if len(diag)==0: diag = radius*np.ones(len(U));
-        nx = len(U[0]); EYE = np.eye(nx);
-        if len(idx1)==0: idx1 = list(range(int(nx)));
-        totinds = list(range(int(nx*2)));
-        idx2 = totinds.copy();
-        [idx2.remove(ind) for ind in idx1];
-        DIFF = np.zeros([nx,nx2]);
-        DIFF[:,idx1] = EYE; DIFF[:,idx2] = EYE;
-        n = len(U);
-        D = np.diag(diag);
-        Dinv = np.diag(1./diag);
-        A = Dinv@U@DIFF;
-        b = np.zeros(len(U));
-        C = np.zeros(n);
-        d = 1.;
-        SOC.__init__(self,ins={'A':A,'b':b,'C':C,'d':d,**ins},params=params);
-        self.center = center;
-        self.U = U;
-        self.diag = diag;
+        if len(U) == 0: nx = len(idx1); U = np.eye(nx)
+        if radius == None: radius = 1
+        if len(diag)==0: diag = radius*np.ones(len(U))
+        nx = len(U[0]); EYE = np.eye(nx)
+        if len(idx1)==0: idx1 = list(range(int(nx)))
+        totinds = list(range(int(nx*2)))
+        idx2 = totinds.copy()
+        [idx2.remove(ind) for ind in idx1]
+        DIFF = np.zeros([nx,nx2])
+        DIFF[:,idx1] = EYE; DIFF[:,idx2] = EYE
+        n = len(U)
+        D = np.diag(diag)
+        Dinv = np.diag(1./diag)
+        A = Dinv@U@DIFF
+        b = np.zeros(len(U))
+        C = np.zeros(n)
+        d = 1.
+        SOC.__init__(self,ins={'A':A,'b':b,'C':C,'d':d,**ins},params=params)
+        self.center = center
+        self.U = U
+        self.diag = diag
         self.D = D
-        self.Dinv = Dinv;
-        self.n = n;
+        self.Dinv = Dinv
+        self.n = n
         if self.version == 'in': self.subtype = 'PROXIMITY_IN'
         if self.version == 'out': self.subtype = 'PROXIMITY_OUT'
 
@@ -685,7 +682,7 @@ class dan_equality_bc(AFFINE):
         self.x = None
         ### NEW 
         A = np.eye(len(x))
-        b = self.x;
+        b = self.x
         AFFINE.__init__(self,name,A,b,version=version,ins=ins)
     # written for nondim input
     def fcn(self, x):

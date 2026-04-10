@@ -39,7 +39,7 @@ class Nondim:
 
         provided_scale = problem.config.problem.time.get("scale", None)
         if provided_scale is None:
-            print(f"Warning: no time scale provided in 'model.nondim.t_scale', defaulting to 1.0.")
+            print("Warning: no time scale provided in 'model.nondim.t_scale', defaulting to 1.0.")
             self.time_scale = 1.0
         else:
             self.time_scale = provided_scale

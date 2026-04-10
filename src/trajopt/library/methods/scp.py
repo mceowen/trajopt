@@ -3,14 +3,11 @@ Subproblem module: SCP with DPP updates
 """
 
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any
 import time
 import numpy as np
 
 # trajopt imports
-from trajopt.library.methods.subproblem import Subproblem
-from trajopt.library.methods import hyperparameters as hp
 
 
 # =====================================================================================

@@ -1,33 +1,31 @@
-import jax 
 import jax.numpy as jnp
-import cvxpy as cp
 
 #####################################################################
 ##################  ------- IN DEVELOPMENT ------- ##################
   
 def qhatx(q,realloc=0):
-    q1 = q[0]; q2 = q[1]; q3 = q[2]; q4 = q[3];
+    q1 = q[0]; q2 = q[1]; q3 = q[2]; q4 = q[3]
     if realloc == 0 or realloc == 1: ### not sure this is right
         out = np.array([[ q1, -q2,-q3,-q4 ],
 
                         [ q2,  q1,-q4, q3 ],
                         [ q3,  q4, q1,-q2 ],
-                        [ q4, -q3, q2, q1 ]]);
+                        [ q4, -q3, q2, q1 ]])
 
     if realloc == 3 or realloc == 4:
         out = np.array([[ q4, q3,-q2, q1 ],
                         [-q3, q4, q1, q2 ],
                         [ q2,-q1, q4, q3 ],
-                        [-q1,-q2,-q3, q4 ]]);
+                        [-q1,-q2,-q3, q4 ]])
     return out
 
 def qhato(q,realloc=3):
-    q1 = q[0]; q2 = q[1]; q3 = q[2]; q4 = q[3]; 
+    q1 = q[0]; q2 = q[1]; q3 = q[2]; q4 = q[3] 
     if realloc == 3 or realloc == 4:
         out = np.array([[ q4,-q3, q2, q1 ],
                         [ q3, q4,-q1, q2 ],
                         [-q2, q1, q4, q3 ],
-                        [-q1,-q2,-q3, q4 ]]);
+                        [-q1,-q2,-q3, q4 ]])
     return out
 
 ##############################################################################
