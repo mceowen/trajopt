@@ -35,7 +35,7 @@ def dynamics(t, z, nu, params, fcns):
 
     # rotational kinematics and dynamics (body sees control + aero moments)
     q_dot = (1/2) * omega(w) @ q
-    w_dot = jnp.rad2deg(Jbinv @ ( torque - cr(w) @ Jb @ w))
+    w_dot = jnp.rad2deg(Jbinv @ (torque - cr(w) @ Jb @ w))
 
     # translational accelerations
     v_body_dot = a_aero_trans + DCM(q) @ a_grav_inertial - cr(w) @ v_body
@@ -299,4 +299,3 @@ def r_v(t, z, nu, params, fcns):
     v = jnp.linalg.norm(z[3:6])
 
     return jnp.array([r, v])
-

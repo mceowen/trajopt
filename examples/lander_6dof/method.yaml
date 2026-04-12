@@ -1,6 +1,6 @@
 inherit: trajopt/library/methods/configs/autoscvx.yaml
 
-time_grid: 20 
+time_grid: 15
 
 guess:
   type: straight_line
@@ -18,24 +18,7 @@ guess:
   line_guess_u_init: "${np.tile([2.0, 0.5, 0], (time_grid, 1))}"
 
 conv:
-  #ctcs_mult_state: 1.0
-  ctcs_fac_cnst: 0.5
-  eps_ctcs: 1e-8
-  eps_state: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
+  eps_state: 0.01
+  eps_dyn: 0.00001
+  eps_defect: 1.0
   eps_cost: 1
-  eps_defect: [1]
-  eps_dyn: [0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001]
-  iter_max: 200
-  #fac_target: 0.01
-
-flags:
-  ignore_dpp: 0
-  flag_conv: 1
-  buff_dyn: l2
-  buff_dyn_dual: none
-  ctcs: l2
-  free_final_time:    1
-  equal_dt:           1
-
-solver_opts:
-  solver: CLARABEL

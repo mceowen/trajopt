@@ -18,12 +18,12 @@ params.vehicle.inherit: trajopt/library/missions/shared/vehicle/vtol.yaml
 state.r.scale: 1000000
 state.theta.scale: 1
 state.phi.scale: 1
-state.v.scale: 3000
+state.v.scale: 1000
 state.gamma.scale: 1
 state.psi.scale: 1
 
 control.bank.scale: 1
-time.scale: 1700
+time.scale: 1.0
 
 # ===============================
 # CONSTRAINT/COST PARAMS
@@ -94,3 +94,11 @@ constraint_list:
 cost_list: 
   - min_terminal_velocity
   # - control_rate_regularization
+
+trajectories:
+  heat_rate:
+    upper_limit: 33300
+  dynamic_pressure:
+    upper_limit: 18000
+  aero_load:
+    upper_limit: 24.525

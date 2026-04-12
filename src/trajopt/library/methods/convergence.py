@@ -21,27 +21,20 @@ def set_convergence_tolerance(problem, method):
         method.conv.eps_t = np.asarray(eps_t_cfg).reshape(-1) / nondim.time_scale
 
     # --- Multiple-shooting state defect (monitoring only) ---
-    eps_defect = tools.expand_to_array_if_scalar(method.conv.eps_defect, n.state)
-    method.conv.eps_defect = nondim.M.state.d2nd @ eps_defect
+    eps_defect_cfg = method.conv.eps_defect
+    if eps_defect_cfg is None:
+        method.conv.eps_defect = np.full(n.state, np.inf)
+    else:
+        eps_defect = tools.expand_to_array_if_scalar(eps_defect_cfg, n.state)
+        method.conv.eps_defect = nondim.M.state.d2nd @ eps_defect
 
     # nondim dynamics convergence epsilon
-
-    # method.conv.eps_dyn is still in dimensional units here
-    eps_dyn = tools.expand_to_array_if_scalar(method.conv.eps_dyn, method.index_map.n.z)
-    eps_dyn_real = nondim.M.state.d2nd @ eps_dyn
-    
-    # augment epsilon with ctcs contributions
-    if problem.constraints.has(ct=1):
-        # constraint epsilons have already been nondimensionalized with "nondim_constraints()"
-        eps_dyn_ctcs = np.concatenate([c.eps for c in problem.constraints.get(ct=1)])
-        
-        # approximation of constraint violation integral
-        eps_dyn_ctcs = (1* eps_dyn_ctcs)**2 * method.dt_min * 0.25
-        eps_dyn = np.concatenate([eps_dyn_real, eps_dyn_ctcs])
+    eps_dyn_cfg = method.conv.eps_dyn
+    if eps_dyn_cfg is None:
+        method.conv.eps_dyn = np.full(method.index_map.n.state, np.inf)
     else:
-        eps_dyn = eps_dyn_real
-
-    method.conv.eps_dyn = eps_dyn
+        eps_dyn = tools.expand_to_array_if_scalar(eps_dyn_cfg, method.index_map.n.state)
+        method.conv.eps_dyn = nondim.M.state.d2nd @ eps_dyn
 
     # set nodal nonconvex inequality constraint tolerances
     if problem.constraints.has(ct=0, type='nonconvex_inequality'):
@@ -72,13 +65,13 @@ def augment_convergence_tolerance(problem, method):
 
     # Build eps_dyn indexed over the full z vector
     eps_dyn              = np.empty(n.z)
-    eps_dyn[idx.z.state] = method.conv.eps_state
+    eps_dyn[idx.z.state] = method.conv.eps_dyn
     eps_dyn[idx.z.time]  = method.conv.eps_t
 
     if problem.constraints.has(ct=1):
         eps_ctcs = np.concatenate([c.eps for c in problem.constraints.get(ct=1)])
         # Approximation of constraint violation integral
-        eps_dyn[idx.z.ctcs]  = eps_ctcs * method.dt_min * 0.25
+        eps_dyn[idx.z.ctcs]  = (eps_ctcs)**2 * method.dt_min * 0.25
         method.conv.eps_term = np.concatenate([method.conv.eps_term, eps_ctcs])
 
     method.conv.eps_dyn = eps_dyn

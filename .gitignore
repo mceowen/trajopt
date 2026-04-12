@@ -6,3 +6,4 @@ local
 __pycache__/
 local
 local/
+**/plots/

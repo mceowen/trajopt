@@ -22,6 +22,10 @@ class spatial:
         self.name       = cnstr_config["name"]
         self.group      = cnstr_config.get("group", None)
         self.units      = cnstr_config.get("units", None)
+        self.title      = cnstr_config.get("title", None)
+        self.xlabel     = cnstr_config.get("xlabel", None)
+        self.ylabel     = cnstr_config.get("ylabel", None)
+        self.tick_nbins = cnstr_config.get("tick_nbins", None)
 
         self.fcn_string = cnstr_config["fcn"]
 
@@ -50,11 +54,17 @@ class time_series:
         self.name       = cnstr_config["name"]
         self.group      = cnstr_config.get("group", None)
         self.units      = cnstr_config.get("units", None)
+        self.title      = cnstr_config.get("title", None)
+        self.xlabel     = cnstr_config.get("xlabel", None)
+        self.ylabel     = cnstr_config.get("ylabel", None)
+        self.tick_nbins = cnstr_config.get("tick_nbins", None)
 
         self.fcn_string = cnstr_config["fcn"]
 
         # optional configs
-        self.backend    = cnstr_config.get("backend", "jax")
+        self.backend      = cnstr_config.get("backend", "jax")
+        self.upper_limit  = cnstr_config.get("upper_limit", None)
+        self.lower_limit  = cnstr_config.get("lower_limit", None)
 
         self.fcn_dim = _resolve_fcn(self.fcn_string, fcns)
 
@@ -69,4 +79,5 @@ class time_series:
             nu_jax = jnp.asarray(nu)
             values = np.asarray(self.fcn_batched(t_jax, z_jax, nu_jax, params))
 
-        return {"values": values, "limits": None}
+        limits = {"upper": self.upper_limit, "lower": self.lower_limit}
+        return {"values": values, "limits": limits}

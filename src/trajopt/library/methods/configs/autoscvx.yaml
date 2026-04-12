@@ -46,3 +46,6 @@ weights:
       dyn:     10000.0
       term:    1000.0
   w_ctcs: 100.0
+
+solver_opts:
+  solver: QOCO

@@ -2,3 +2,6 @@ mass: 2900
 LD: 0.24
 bc: 120
 sref: 15.9
+
+# this is taken from vtol for now
+kQ: 1.2035e-5

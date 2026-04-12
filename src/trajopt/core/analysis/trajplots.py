@@ -202,11 +202,14 @@ class SCVXPLOTS:
         if 'plt_typs' in ins: 
             plttyps = ins['plt_typs']
         
+        pad_3d = ins.get('pad_3d', 0.08)
+
         if typ=='manual':
             axs = {}
             for tag in grid:
                 if tag in plttyps and plttyps[tag] == '3D':
-                    axs[tag] = fig.add_axes(grid[tag],projection='3d')
+                    x, y, w, h = grid[tag]
+                    axs[tag] = fig.add_axes([x - pad_3d, y, w + pad_3d, h], projection='3d')
                 else:
                     axs[tag] = fig.add_axes(grid[tag])
         return axs
