@@ -53,16 +53,14 @@ pens = recursive_attrdict({
     # TODO: make these not hardcoded lol, or put them in a config file or something
 })
 
-def plot_default(trajopt_obj, show_iters=False):
-    data = trajopt_obj.results
-    
+def plot_default(trajopt_obj, data, analysis_type, show_iters=False):
     # create trajplots object
     PLTS = SCVXPLOTS(data)
 
-    method_keys = list(trajopt_obj.results.keys())
+    method_keys = list(data.keys())
     first_method = method_keys[0]
 
-    nominal_iter_data = trajopt_obj.results[method_keys[0]]["runs"][-1]["iters"][-1]
+    nominal_iter_data = data[method_keys[0]]["runs"][-1]["iters"][-1]
 
     # decide whether or not to plot the iterations
     if show_iters:
@@ -186,7 +184,7 @@ def plot_default(trajopt_obj, show_iters=False):
         axs_weights_iters[weight_name]  = PLTS.createGrid(figs_weights_iters[weight_name], grid=create_grid(len(weight_group)))
 
     # plot the data onto the figs and axes created above
-    if trajopt_obj.analysis_type == 'standalone':
+    if analysis_type == 'standalone':
         standalone_pens = AttrDict({"opt": pens.opt, "nl": pens.nl, "itr_opt": pens.itr_opt, "itr_nl": pens.itr_nl, "init": pens.init})
         
         # plot states, controls, trajectories, and constraints on their respective figures
@@ -197,8 +195,8 @@ def plot_default(trajopt_obj, show_iters=False):
         plot_weights_time(PLTS, axs_weights_time, weight_groups_time, method=first_method, run=0, iters=iters, pens=standalone_pens)
         plot_weights_iters(PLTS, axs_weights_iters, weight_groups_iters, method=first_method, run=0, pens=standalone_pens)
 
-    elif trajopt_obj.analysis_type == 'mc':
-        for i, (method_name, method_data) in enumerate(trajopt_obj.results.items()):
+    elif analysis_type == 'mc':
+        for i, (method_name, method_data) in enumerate(data.items()):
             current_method_pens = AttrDict({"opt": pens[f"opt{i+1}"], "nl": pens[f"nl{i+1}"], "itr_opt": pens.itr_opt, "itr_nl": pens.itr_nl, "init": pens.init})
             for run_number in range(len(method_data['runs'])):
                 plot_states(PLTS, axs_state, groups_state, method=method_name, run=run_number, iters=[-1], pens=current_method_pens)
@@ -220,11 +218,11 @@ def plot_default(trajopt_obj, show_iters=False):
         return Line2D([], [], color=p.lrgba[:3], alpha=p.lrgba[3], lw=p.lw,
                        ls=ls, marker=p.msty or None, markersize=p.msz, label=label)
 
-    if trajopt_obj.analysis_type == 'standalone':
+    if analysis_type == 'standalone':
         handles = [_handle('opt', 'Optimal'), _handle('nl', 'Nonlinear')]
         if show_iters:
             handles.append(_handle('itr_nl', 'Iterations'))
-    elif trajopt_obj.analysis_type == 'mc':
+    elif analysis_type == 'mc':
         handles = [_handle(f'nl{i+1}', name) for i, name in enumerate(method_keys)]
 
     for fig in all_figs.values():
@@ -232,7 +230,7 @@ def plot_default(trajopt_obj, show_iters=False):
         first_ax.legend(handles=handles, loc='best', fontsize=8, framealpha=0.8)
 
     # save all figures
-    atype = trajopt_obj.analysis_type
+    atype = analysis_type
     save_dir = os.path.join("plots", atype)
     os.makedirs(save_dir, exist_ok=True)
 

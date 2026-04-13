@@ -76,7 +76,7 @@ def aero_load(t, z, nu, params, fcns): # normal load
 
     aero = fcns['nonlinear_aero'](t, z, nu, params, fcns)
 
-    return jnp.linalg.norm(aero["f_trans"])
+    return jnp.array([jnp.linalg.norm(aero["f_trans"])])
 
 def quaternion_norm(t, z, nu, params, fcns):
     return jnp.array([jnp.linalg.norm(z[6:10])])

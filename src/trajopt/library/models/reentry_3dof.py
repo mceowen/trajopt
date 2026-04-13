@@ -1,6 +1,10 @@
 import jax 
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
+
+# ===============================
+# JAX MODEL
+# ===============================
     
 def dynamics(t, z, nu, params, fcns):
 
@@ -122,3 +126,7 @@ def heading(t, z, nu, params, fcns):
     psi = z[5]
 
     return jnp.array([psi])
+
+# ===============================
+# CASADI MODEL
+# ===============================
