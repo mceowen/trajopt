@@ -25,6 +25,7 @@ def DCM(q: Array) -> Array:
         ],
     )
 
+
 def omega(w: Array) -> Array:
     """Skew-symmetric quaternion kinematic matrix for angular velocity w."""
     return jnp.array(
@@ -36,13 +37,16 @@ def omega(w: Array) -> Array:
         ],
     )
 
+
 def cr(v: Array) -> Array:
     """Skew-symmetric cross-product matrix for vector v."""
     return jnp.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
 
+
 # =============================================================================
 # dynamics
 # =============================================================================
+
 
 def dynamics(t: float, z: Array, nu: Array, params: dict) -> Array:
     """6-DoF powered descent dynamics."""
@@ -64,14 +68,17 @@ def dynamics(t: float, z: Array, nu: Array, params: dict) -> Array:
 
     return x_dot
 
+
 # =============================================================================
 # nonconvex inequality constraint functions
 # (used with type: nonconvex_inequality constraints)
 # =============================================================================
 
+
 def thrust(t: float, z: Array, nu: Array, params: dict) -> Array:
     """Thrust magnitude."""
     return jnp.array([jnp.linalg.norm(nu[:3])])
+
 
 def glideslope(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Glideslope cone constraint: vehicle must stay above the glideslope angle."""
@@ -79,6 +86,7 @@ def glideslope(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array
     theta_gs = params["theta_gs"]
 
     return jnp.array([jnp.tan(jnp.deg2rad(theta_gs)) * jnp.linalg.norm(r_i[1:3]) - r_i[0]])
+
 
 def tilt(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Tilt angle constraint: limits the vehicle tilt from vertical."""
@@ -88,9 +96,11 @@ def tilt(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
 
     return jnp.array([jnp.cos(theta_tilt) - 1.0 + 2 * (q2**2 + q3**2)])
 
+
 def altitude(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Altitude state (x-position)."""
     return jnp.array([z[0]])
+
 
 def speed(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Speed (inertial velocity magnitude)."""

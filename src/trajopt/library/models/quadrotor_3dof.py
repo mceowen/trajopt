@@ -12,9 +12,11 @@ def dynamics_jax(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Arr
 
     return jnp.concatenate([v, T / mass + g_vec])
 
+
 def thrust_norm(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Thrust magnitude."""
     return jnp.array([jnp.linalg.norm(nu)])
+
 
 def obstacle(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Distance from circular obstacle centered at (5,5) in xy-plane."""
@@ -22,35 +24,43 @@ def obstacle(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     pos_obs = jnp.array([5, 5])
     return jnp.array([jnp.linalg.norm(r - pos_obs)])
 
+
 def xy_dist_from_term(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Distance from terminal position (10, 10) in xy-plane."""
     r = z[0:2]
     # return jnp.array([jnp.sqrt((r[0]-10.0)**2 + (r[1]-10.0)**2 + 0.00001)])
     return jnp.array([(r[0] - 10.0) ** 2 + (r[1] - 10.0) ** 2])
 
+
 def pos_x(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """x-position."""
     return jnp.array([z[0]])
+
 
 def pos_y(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """y-position."""
     return jnp.array([z[1]])
 
+
 def height(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Height (z-position)."""
     return jnp.array(z[2])
+
 
 def xy(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """xy-position."""
     return z[0:2]
 
+
 def xz(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """xz-position."""
     return jnp.array([z[0], z[2]])
 
+
 def yz(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """yz-position."""
     return jnp.array([z[1], z[2]])
+
 
 def xyz(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """xyz-position."""
