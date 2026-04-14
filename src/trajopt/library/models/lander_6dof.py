@@ -70,7 +70,7 @@ def dynamics(t: float, z: Array, nu: Array, params: dict) -> Array:
 # =============================================================================
 
 def thrust(t: float, z: Array, nu: Array, params: dict) -> Array:
-    """Thrust magnitude constraint."""
+    """Thrust magnitude."""
     return jnp.array([jnp.linalg.norm(nu[:3])])
 
 def glideslope(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
@@ -89,10 +89,10 @@ def tilt(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([jnp.cos(theta_tilt) - 1.0 + 2 * (q2**2 + q3**2)])
 
 def altitude(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
-    """Altitude (x-position) state output."""
+    """Altitude state (x-position)."""
     return jnp.array([z[0]])
 
 def speed(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
-    """Speed (inertial velocity magnitude) output."""
+    """Speed (inertial velocity magnitude)."""
     eps = 0.000001
     return jnp.array([jnp.sqrt(z[3] ** 2 + z[4] ** 2 + z[5] ** 2 + eps)])
