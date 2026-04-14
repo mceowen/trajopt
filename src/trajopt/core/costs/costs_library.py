@@ -38,6 +38,7 @@ class min_norm_terminal:
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
         self.idx = cost_config["idx"]
+        self.value = np.array(cost_config["value"]) if "value" in cost_config else None
     
     def nondim_cost(self, nondim):
         pass

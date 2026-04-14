@@ -190,24 +190,27 @@ def compile_jax_discretization(problem, method):
 
         return (A_jax_k, B_jax_k, Bp_jax_k, z_minus_k)
 
+    def _apply_phase_schedule(params_jax, k):
+        schedule = params_jax.get('_phase_schedule', None)
+        if schedule is None:
+            return params_jax
+        params_k = dict(params_jax)
+        for key, array in schedule.items():
+            params_k[key] = jnp.asarray(array)[k]
+        return params_k
+
     # propagation function for node k
     def propagate_k(k, z_ref, nu_ref, params_jax):
+
+        params_k = _apply_phase_schedule(params_jax, k)
 
         z_k  = z_ref[k]
         nu_k  = nu_ref[k]
         nu_kp = nu_ref[k+1]
-        # stack z, A, B, Bp for multiple shooting propagation
         lds0_k = pack_lds0(z_k)
 
         tau_k = k / (problem.index_map.N.time_grid - 1)
         tau_kp = (k+1) / (problem.index_map.N.time_grid - 1)
-
-        # # TODO(Skye): ensure dtk is computed from zk_ref correctly 
-        # # propagate stacked vector
-        # def rk4_step_jax_partial(lds, tau):
-        #     return rk4_step_jax_jit(tau, lds, nu_k, nu_kp, params_jax)
-
-        # ldsf_k, _ = jax.lax.scan(rk4_step_jax_partial, lds0_k, t[:-1])
 
         term = diffrax.ODETerm(f_dot)
 
@@ -221,12 +224,11 @@ def compile_jax_discretization(problem, method):
             0.0005,
             lds0_k,
             stepsize_controller=stepsize_controller,
-            args=(k, nu_k, nu_kp, params_jax)
+            args=(k, nu_k, nu_kp, params_k)
         )
 
         ldsf_k = sol.ys[-1]
 
-        # unpack the stacked vector back into appropriate shapes
         return unpack_ldsf(ldsf_k)
     
     propagate = jax.jit(jax.vmap(propagate_k, in_axes=(0, None, None, None)))

@@ -76,6 +76,15 @@ def propagate_jax_rk4_dense(z0, nu_ref, t_ref, t_nl, problem, method, compiled_a
 
     return t_nl, z_nl, nu_nl
 
+def _apply_phase_schedule(params, k):
+    schedule = params.get('_phase_schedule', None)
+    if schedule is None:
+        return params
+    params_k = dict(params)
+    for key, array in schedule.items():
+        params_k[key] = jnp.asarray(array)[k]
+    return params_k
+
 def compile_tau_propagator(problem, method, n_dense=1000):
     fcn_base  = problem.constraints.get(type="dynamics")[0].fcn_base
     N         = method.index_map.N.time_grid
@@ -95,7 +104,8 @@ def compile_tau_propagator(problem, method, n_dense=1000):
             nu_interp = a * nu[k] + (1 - a) * nu[k+1]
             u = nu_interp[:n_control]
             s = nu_interp[n_control:]
-            dx_dt = fcn_base(t_phys, x, u, params)
+            params_k = _apply_phase_schedule(params, k)
+            dx_dt = fcn_base(t_phys, x, u, params_k)
             dt_dt = jnp.ones(1, dtype=z_real.dtype)
             return s * jnp.concatenate([dx_dt, dt_dt])
         return diffrax.diffeqsolve(

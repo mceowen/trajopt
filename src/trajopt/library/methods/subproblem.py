@@ -457,11 +457,6 @@ class Subproblem:
         if self.flags.discretize == "ps":
             C.append(discretize.build_ps_dyn_constraints(self))
 
-        # Precompute proportional_dt ratios from initial time grid (plain floats for DPP)
-        if hasattr(self.flags, "proportional_dt") and bool(self.flags.proportional_dt):
-            t_grid = np.asarray(method.initial_guess.t).reshape(-1)
-            _prop_dt_ratios = t_grid / t_grid[-1]
-
         # Per-stage constraints
         for k in range(N):
             if k < N - 1:
@@ -524,9 +519,6 @@ class Subproblem:
                 C.append(self.t_ref[-1, 0] + self.dt[-1, 0] <= self.T_max)
                 if hasattr(self.flags, "equal_dt") and bool(self.flags.equal_dt) and k > 1:
                     C.append(self.dt[k, 0] == self.dt[1, 0])
-
-                if hasattr(self.flags, "proportional_dt") and bool(self.flags.proportional_dt) and 1 <= k < N - 1:
-                    C.append(self.dt[k, 0] == self.dt[-1, 0] * float(_prop_dt_ratios[k]))
 
             # State box constraints
             for constraint in problem.constraints.get(ct=0, type="box"):
@@ -716,7 +708,8 @@ class Subproblem:
             zf = self.z_ref[-1] + self.dz[-1]
             idx = cost.idx
             print(f"{zf.shape}, {idx}")
-            term_cost = self.w.cost * cp.norm(zf[idx])
+            target = cost.value if cost.value is not None else np.zeros(len(idx))
+            term_cost = self.w.cost * cp.norm(zf[idx] - target)
             self.TRUE += term_cost
 
         for cost in problem.costs.get(type="terminal_state"):
