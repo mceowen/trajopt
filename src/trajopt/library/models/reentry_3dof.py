@@ -4,7 +4,9 @@ from jax import Array
 
 jax.config.update("jax_enable_x64", True)
 
-
+# ===============================
+# JAX MODEL
+# ===============================
 def dynamics(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """3-DoF atmospheric reentry dynamics."""
     Om = jnp.deg2rad(params["planet"]["omega"])
@@ -118,3 +120,7 @@ def fpa(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
 def heading(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Heading angle (deg)."""
     return jnp.array([z[5]])
+
+# ===============================
+# CASADI MODEL
+# ===============================

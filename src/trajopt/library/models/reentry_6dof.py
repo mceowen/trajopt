@@ -69,7 +69,7 @@ def aero_load(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Aerodynamic translational force magnitude (N)."""
     aero = fcns["nonlinear_aero"](t, z, nu, params, fcns)
 
-    return jnp.linalg.norm(aero["f_trans"])
+    return jnp.array([jnp.linalg.norm(aero["f_trans"])])
 
 
 def quaternion_norm(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
