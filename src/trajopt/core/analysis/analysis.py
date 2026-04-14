@@ -4,6 +4,7 @@ import trajopt.utils.tools as tools
 import jax
 jax.config.update("jax_enable_x64", True)
 import trajopt.library.methods.integrators as integrators
+import trajopt.library.methods.initial_guess as guess
 from trajopt.core.indexing.index_map import IndexMap
 from trajopt.core.problem import Problem
 from trajopt.core.solution_method import SolutionMethod
@@ -122,7 +123,11 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
                     "type": traj_type,
                     "opt_vals": opt_vals,
                     "nl_vals": nl_vals,
-                    "init_vals": init_vals
+                    "init_vals": init_vals,
+                    "title": getattr(trajectory, "title", None),
+                    "xlabel": getattr(trajectory, "xlabel", None),
+                    "ylabel": getattr(trajectory, "ylabel", None),
+                    "tick_nbins": getattr(trajectory, "tick_nbins", None),
                 })
 
                 if trajectory_data.get(group) is None:
@@ -230,7 +235,6 @@ def run_mc_analysis(trajopt_obj):
         problem   = Problem(config_for_current_method, index_map=index_map)
         method    = SolutionMethod(problem, config_for_current_method, index_map=index_map)
         
-        method.get_initial_guess(problem)
         trajopt_obj.index_map = index_map
         trajopt_obj.problem = problem
         trajopt_obj.method  = method
@@ -269,7 +273,7 @@ def run_mc_analysis(trajopt_obj):
                     delta = np.random.normal(mu, sigma)
 
             update_problem_with_variations(problem, realized_mission_variations_flat, config_for_current_method, method.nondim)
-            method.get_initial_guess(problem)
+            guess.set_initial_guess(problem, method)
 
             n_N    = problem.index_map.N.time_grid
             n_neq  = problem.index_map.n.nonconvex_inequality
@@ -279,10 +283,8 @@ def run_mc_analysis(trajopt_obj):
             # Reset iter_data like the first run: W and dual None so first iteration uses configure_penalty_weights
             subprob.iter_data = [tools.recursive_attrdict({
                 "iter_num": 0,
-                "z_ref":  method.initial_guess.z,
-                "nu_ref": method.initial_guess.nu,
-                "dt_ref": method.initial_guess.dt,
-                "t_ref":  np.asarray(method.initial_guess.t).reshape(-1, 1),
+                "z_opt":  method.initial_guess.z,
+                "nu_opt": method.initial_guess.nu,
                 "conv_data": {
                     "vb_ineq": np.zeros((n_N, n_neq)),
                     "vb_dyn":  np.zeros((n_N - 1, n_dyn)),

@@ -52,66 +52,48 @@ def set_ltv_indices(problem, method):
     
 
 def compute_nonconvex_constraints(z, nu, problem, method):
-    n_ineq      = problem.index_map.n.nonconvex_inequality
-    n_x         = problem.index_map.n.state
-    index_map   = problem.index_map
-    idx         = problem.index_map.indices
-    n_u        = problem.index_map.n.control
-    N           = method.index_map.N.time_grid
-    z_jax       = jnp.asarray(z)
-    nu_jax      = jnp.asarray(nu)
-    params      = problem.params
-    params_jax  = tools.recursive_to_dict(params)
+    n_ineq    = problem.index_map.n.nonconvex_inequality
+    n_x       = problem.index_map.n.state
+    index_map = problem.index_map
+    n_u       = problem.index_map.n.control
+    N         = method.index_map.N.time_grid
+    z_jax     = jnp.asarray(z)
+    nu_jax    = jnp.asarray(nu)
+    params_jax = tools.recursive_to_dict(problem.params)
 
-    # Preallocate stacked arrays
-    g           = np.zeros((N, n_ineq))
-    dgdz        = np.zeros((N, n_ineq, n_x))
-    dgdnu       = np.zeros((N, n_ineq, n_u))
+    x_all, t_all, _, u_all, _ = index_map.unpack_znu(z_jax, nu_jax)
 
-    # Evaluate constraints at each timestep
-    for k in range(N):
-        col_start = 0
-        for constraint in problem.constraints.get(ct=0, type="nonconvex_inequality"):
-            col_end = col_start + constraint.dimension
-            if k in constraint.nodes:
-                f, dfcn_dz, dfcn_dnu = index_map.evaluate_f_phys(
-                    constraint.g_aff,
-                    z_jax[k],
-                    nu_jax[k],
-                    params_jax,
-                )
-                g_k     = np.asarray(f)
-                dgdz_k  = np.asarray(dfcn_dz)
+    g     = np.zeros((N, n_ineq))
+    dgdz  = np.zeros((N, n_ineq, n_x))
+    dgdnu = np.zeros((N, n_ineq, n_u))
 
-                dgdnu_k_u = np.asarray(dfcn_dnu)
-                dgdnu_k = np.zeros((constraint.dimension, n_u))
-                dgdnu_k[:, idx.nu.control] = dgdnu_k_u
-                
-                g[k, col_start:col_end]        = g_k
-                dgdz[k, col_start:col_end, :]  = dgdz_k
-                dgdnu[k, col_start:col_end, :] = dgdnu_k
-                # # condition constraints by row norms
-                # row_norms = np.linalg.norm(np.hstack([dgdz_k, dgdnu_k]), axis=1)
-                # # avoid division by zero
-                # row_norms[row_norms == 0] = 1.0
-                # g[k, col_start:col_end] /= row_norms
-                # dgdz[k, col_start:col_end, :] /= row_norms[:, np.newaxis]
-                # dgdnu[k, col_start:col_end, :] /= row_norms[:, np.newaxis]
-            
-            col_start = col_end
-    
+    col_start = 0
+    for constraint in problem.constraints.get(ct=0, type="nonconvex_inequality"):
+        col_end = col_start + constraint.dimension
+        nodes = np.asarray(constraint.nodes)
+
+        f_batch, dfdx_batch, dfdu_batch = constraint.g_aff_batched(
+            t_all[nodes], x_all[nodes], u_all[nodes], params_jax
+        )
+
+        g[nodes, col_start:col_end]      = np.asarray(f_batch)
+        dgdz[nodes, col_start:col_end, :] = np.asarray(dfdx_batch)
+        dgdnu[nodes, col_start:col_end, :] = np.asarray(dfdu_batch)
+
+        col_start = col_end
+
     return g, dgdz, dgdnu
 
 
 def compute_nonconvex_costs(z, nu, problem, method):
-    N = method.index_map.N.time_grid
-    n_x = problem.index_map.n.state
-    n_u = problem.index_map.n.control
-    idx = problem.index_map.indices
+    N         = method.index_map.N.time_grid
+    n_x       = problem.index_map.n.state
+    n_u       = problem.index_map.n.control
+    idx       = problem.index_map.indices
     index_map = problem.index_map
 
-    cost = np.zeros((N, 1))
-    dcostdz = np.zeros((N, 1, n_x))
+    cost     = np.zeros((N, 1))
+    dcostdz  = np.zeros((N, 1, n_x))
     dcostdnu = np.zeros((N, 1, n_u))
 
     params_jax = tools.recursive_to_dict(problem.params)
@@ -120,22 +102,22 @@ def compute_nonconvex_costs(z, nu, problem, method):
     if len(nonconvex_costs) == 0:
         return cost, dcostdz, dcostdnu
 
-    for k in range(N):
-        z_k = z[k]
-        nu_k = nu[k]
+    z_jax  = jnp.asarray(z)
+    nu_jax = jnp.asarray(nu)
+    x_all, t_all, _, u_all, _ = index_map.unpack_znu(z_jax, nu_jax)
 
-        x_k, t_k, _, u_k, _ = index_map.unpack_znu(z_k, nu_k)
+    for cost_fn in nonconvex_costs:
+        f_batch, dfdx_batch, dfdu_batch = cost_fn.g_aff_batched(
+            t_all, x_all, u_all, params_jax
+        )
 
-        for cost_k in nonconvex_costs:
-            f_k, dfdx_k, dfdu_k = cost_k.g_aff(t_k, x_k, u_k, params_jax)
+        f_np    = np.asarray(f_batch).reshape(N, -1)
+        dfdx_np = np.asarray(dfdx_batch).reshape(N, -1, n_x)
+        dfdu_np = np.asarray(dfdu_batch).reshape(N, -1, n_u)
 
-            f_arr = np.asarray(f_k).reshape(-1)
-            dfdx_arr = np.asarray(dfdx_k).reshape(-1, n_x)
-            dfdu_arr = np.asarray(dfdu_k).reshape(-1, n_u)
-
-            cost[k, 0] += np.sum(f_arr)
-            dcostdz[k, 0, :] += np.sum(dfdx_arr, axis=0)
-            dcostdnu[k, 0, idx.nu.control] += np.sum(dfdu_arr, axis=0)
+        cost[:, 0]                     += np.sum(f_np, axis=1)
+        dcostdz[:, 0, :]              += np.sum(dfdx_np, axis=1)
+        dcostdnu[:, 0, idx.nu.control] += np.sum(dfdu_np, axis=1)
 
     return cost, dcostdz, dcostdnu
 

@@ -214,9 +214,7 @@ def build_virtual_buffer_cost(subprob) -> cp.Expression:
         # --------------------------------------------------------
         elif mode_real == "l2":
             for k in range(N - 1):
-                VB += cp.sum_squares(
-                    cp.diag(subprob.W_sqrt.dynamics[k, idx_real]) @ diff_real[k, :]
-                )
+                VB += cp.sum_squares(cp.diag(subprob.W_sqrt.dynamics[k, idx_real]) @ diff_real[k, :])
 
         # --------------------------------------------------------
         # QUAD-1 or QUAD-3: k = 1 only
@@ -478,15 +476,6 @@ def autotune1(subproblem, conv_data, conv_data_prev, iter_num):
     dual_minus_plus_ctcs = beta.minus_ctcs * vb_minus_ctcs + dual_minus_ctcs
 
     # ==========================================
-    # Saturation thresholds
-    # ==========================================
-    conv = method.conv
-    eps_ineq = conv.get("eps_ineq", 1e-6)
-    eps_term = conv["eps_term"]
-    eps_dyn  = conv["eps_dyn"]
-    eps_quad = conv.get("eps_quad", eps_dyn)   # for vb_plus/vb_minus
-
-    # ==========================================
     # Update subproblem duals directly
     # ========================================== 
     subproblem.dual_stack.nonconvex_inequality = dual_ineq_plus
@@ -545,9 +534,9 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
     eps_feas_term = conv.eps_term
     eps_feas_dyn  = conv.eps_dyn
 
-    eps_target_term =  np.maximum(conv.fac_target * eps_feas_term, conv.fac_eps * np.abs(conv_data.vb_terminal))
-    eps_target_ineq =  np.maximum(conv.fac_target * eps_feas_ineq, conv.fac_eps * np.abs(conv_data.vb_ineq))
-    eps_target_dyn  =  np.maximum(conv.fac_target * eps_feas_dyn , conv.fac_eps * np.abs(conv_data.vb_dyn))
+    eps_target_term =  np.maximum(conv.fac_target * eps_feas_term , conv.fac_eps * np.abs(conv_data.vb_terminal))
+    eps_target_ineq =  np.maximum(conv.fac_target * eps_feas_ineq , conv.fac_eps * np.abs(conv_data.vb_ineq))
+    eps_target_dyn  =  np.maximum(conv.fac_target * eps_feas_dyn  , conv.fac_eps * np.abs(conv_data.vb_dyn))
 
     conv_data.eps_target_term = eps_target_term.copy()
     conv_data.eps_target_ineq = eps_target_ineq.copy()
@@ -599,9 +588,9 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
         dual_ineq_buff = np.diag(W_ineq[k, :]) @ vb_ineq[k, :].flatten()
 
         if problem.index_map.n['nonconvex_inequality'] > 0:
-            Wh_ineq[k, :] = np.abs(dual_ineq_buff / eps_target_ineq[k]) # rho*np.ones_like(W_ineq[k, :])
+            Wh_ineq[k, :] = np.abs(dual_ineq_buff / eps_target_ineq[k])
         else:
-            Wh_ineq[k, :] = np.abs(dual_ineq_buff) # rho*np.ones_like(Wh_ineq[k, :])
+            Wh_ineq[k, :] = np.abs(dual_ineq_buff)
 
         if k < N - 1:
             dual_dyn_buff = np.diag(W_dyn[k, :]) @ vb_dyn[k, :]
@@ -610,14 +599,11 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
                 Wh_dyn[k, z_state_idx] = np.sum(np.abs(dual_dyn_buff[z_state_idx]) / eps_feas_dyn[z_state_idx])
             if buff_dyn != "none":
                 Wh_dyn[k, z_real_idx] = np.abs(dual_dyn_buff[z_real_idx] / eps_target_dyn[k, z_real_idx])
-            # TODO(Skye): REVISIT
-            #if buff_dyn == "l2":
-            #     Wh_dyn[k, z_state_idx] = np.abs(dual_dyn_buff[z_state_idx] / eps_feas_dyn[z_state_idx])
 
             if ctcs == "l1":
                 Wh_dyn[k, z_ctcs_idx] = np.sum(np.abs(dual_dyn_buff[z_ctcs_idx]) / eps_target_dyn[k, z_ctcs_idx])
             elif ctcs != "none":
-                Wh_dyn[k, z_ctcs_idx] = np.abs(dual_dyn_buff[z_ctcs_idx] / eps_target_dyn[k, z_ctcs_idx]) #rho*np.ones_like(W_dyn[k, z_ctcs_idx])
+                Wh_dyn[k, z_ctcs_idx] = np.abs(dual_dyn_buff[z_ctcs_idx] / eps_target_dyn[k, z_ctcs_idx])
 
             # TODO: THINK ABOUT THIS (MAYBE ONE IF ELSE) COME BACK TO THIS, SINGLE EPSILON ETC
             if buff_dyn == "quad-2":
@@ -630,7 +616,7 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
 
     if problem.index_map.n.term_total > 0:
         dual_term_buff = np.diag(W_term) @ vb_term
-        Wh_term = np.abs(dual_term_buff / eps_target_term).flatten() # rho*np.ones_like(W_term)
+        Wh_term = np.abs(dual_term_buff / eps_target_term).flatten()
 
     # ==========================================
     # UPDATE WEIGHTS WITH COMPUTED AUTOTUNE UPDATES

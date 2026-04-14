@@ -7,12 +7,6 @@ inherit: trajopt/library/methods/configs/autoscvx-term.yaml
 time_grid: 40
 
 # ===============================
-# METHOD FLAGS
-# ==============================
-flags:
-  flag_conv: 1
-
-# ===============================
 # INITIAL GUESS SETTINGS
 # ==============================
 guess:
@@ -29,49 +23,5 @@ guess:
 # ==============================
 conv:
   eps_state: [500, 1, 1, 50, 1, 1]
+  eps_dyn: [50, 0.01, 0.01, 10, 0.01, 0.01]
   eps_cost: 1
-  eps_defect: [0.01]
-  eps_dyn: [10.0, 0.1, 0.1, 30.0, 0.1, 0.1]
-  iter_max: 100
-
-# ===============================
-# CONSTRAINT CONFIGURATIONS
-# ==============================
-constraints:
-  types: 
-    nonconvex_inequality:
-      W:
-        penalty: True
-        autotune: True
-        init: 1.0
-      dual: 
-        penalty: True
-        autotune: True
-        init: 0.0
-      
-      vb: 'standard'
-      eps: [0.01]
-      ct: True
-    
-    dynamics:
-      W:
-        penalty: True
-        autotune: True
-        init: 1.0
-      dual: 
-        penalty: True
-        autotune: True
-        init: 0.0
-      vb: 'standard'
-
-  names: 
-    final_state:
-      W:
-        penalty: True
-        autotune: True
-        init: 1.0
-      dual: 
-        penalty: True
-        autotune: True
-        init: 0.0
-      vb: 'standard'

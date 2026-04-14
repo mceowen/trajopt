@@ -22,14 +22,14 @@ guess: {}
 
 conv:
   ctcs_fac_cnst: 0.5
-  eps_ctcs: 1e-8
+  eps_ctcs: 1e-5
   eps_state: [0.001]
   eps_cost: 1
   eps_defect: [0.0001]
   eps_dyn: null
   iter_max: 300
-  fac_eps: 0.5
-  fac_target: 0.01
+  fac_eps: 0.3
+  fac_target: 0.001
 
 weights:
   w_cost:         1.0
@@ -46,3 +46,6 @@ weights:
       dyn:     10000.0
       term:    1000.0
   w_ctcs: 100.0
+
+solver_opts:
+  solver: QOCO

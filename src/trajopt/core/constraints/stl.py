@@ -158,13 +158,29 @@ class stl_expr:
     def __init__(self, fcn):
         self._fcn = fcn
 
-    def __le__(self, threshold):
+    def __mul__(self, other):
         f = self._fcn
-        return stl_expr(lambda t, z, nu, params: f(t, z, nu, params)[0] - threshold)
+        if isinstance(other, stl_expr):
+            g = other._fcn
+            return stl_expr(lambda t, z, nu, params: f(t, z, nu, params) * g(t, z, nu, params))
+        return stl_expr(lambda t, z, nu, params: f(t, z, nu, params) * other)
 
-    def __ge__(self, threshold):
+    def __rmul__(self, other):
+        return self.__mul__(other)
+
+    def __le__(self, other):
         f = self._fcn
-        return stl_expr(lambda t, z, nu, params: threshold - f(t, z, nu, params)[0])
+        if isinstance(other, stl_expr):
+            g = other._fcn
+            return stl_expr(lambda t, z, nu, params: f(t, z, nu, params)[0] - g(t, z, nu, params)[0])
+        return stl_expr(lambda t, z, nu, params: f(t, z, nu, params)[0] - other)
+
+    def __ge__(self, other):
+        f = self._fcn
+        if isinstance(other, stl_expr):
+            g = other._fcn
+            return stl_expr(lambda t, z, nu, params: g(t, z, nu, params)[0] - f(t, z, nu, params)[0])
+        return stl_expr(lambda t, z, nu, params: other - f(t, z, nu, params)[0])
 
     def __and__(self, other):
         f1, f2 = self._fcn, other._fcn

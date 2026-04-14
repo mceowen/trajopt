@@ -105,8 +105,6 @@ constraints:
     scale: [1.0]
     dimension: 1
 
-  
-
 costs:
   min_time:
     type: min_time
@@ -121,8 +119,6 @@ trajectories:
     type: spatial
     fcn: fcns.yz
     group: stc_check
-
-
 
 # ===============================
 # ACTIVE CONSTRAINTS AND COSTS

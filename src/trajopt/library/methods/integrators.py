@@ -91,8 +91,8 @@ def compile_tau_propagator(problem, method, n_dense=1000):
             return fcn(t, z, a * nu[k] + (1 - a) * nu[k+1], params)
         return diffrax.diffeqsolve(
             diffrax.ODETerm(rhs), diffrax.Dopri5(), 0.0, 1.0, 1e-4, z0,
-            stepsize_controller=diffrax.PIDController(rtol=1e-8, atol=1e-8),
-            saveat=diffrax.SaveAt(ts=tau_d), max_steps=100000,
+            stepsize_controller=diffrax.PIDController(rtol=1e-6, atol=1e-6),
+            saveat=diffrax.SaveAt(ts=tau_d), max_steps=10000,
         ).ys
 
     method.propagate_tau_jit = solve

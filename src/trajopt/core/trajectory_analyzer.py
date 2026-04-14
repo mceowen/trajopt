@@ -24,20 +24,23 @@ class TrajectoryAnalyzer:
     def solve(self):
         scp.run_scp(self)
 
-    def analyze(self, analysis_type="standalone", animate=False, show_iters = False):
+    def analyze(self, analysis_type="standalone", compute_iters=False):
+        self.analysis_type = analysis_type
 
         # run standalone anaylsis by default or method/parameter variations if specified
         if analysis_type == "standalone":
-            self.results = analysis.run_standalone_analysis(self, show_iters=show_iters)
+            self.results = analysis.run_standalone_analysis(self, show_iters=compute_iters)
         
         elif analysis_type == "mc":
             self.results = analysis.run_mc_analysis(self)
 
+        return self.results
+
+    def plot(self, data, analysis_type="standalone", show_iters = False, animate=False):
+
         # plot the results (use MC-style plots when analysis_type is "mc")
-        plotting.plot_default(self, analysis_type=analysis_type)
+        plotting.plot_default(self, data, analysis_type, show_iters=show_iters)
 
         # animate the results if specified
         if animate:
             plotting.plot_animated(self)
-
-        return self.results

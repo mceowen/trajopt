@@ -32,7 +32,7 @@ def dynamics(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     v_inertial = DCM(q).T @ v_body
 
     # rotational kinematics and dynamics (body sees control + aero moments)
-    q_dot = (1 / 2) * omega(w) @ q
+    q_dot = (1/2) * omega(w) @ q
     w_dot = jnp.rad2deg(Jbinv @ (torque - cr(w) @ Jb @ w))
 
     # translational accelerations

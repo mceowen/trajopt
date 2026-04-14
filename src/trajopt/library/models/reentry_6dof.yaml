@@ -14,22 +14,41 @@ fcns.dynamic_pressure: trajopt/library/models/reentry_6dof.py:dynamic_pressure
 state.pos:
   idx: [0, 1, 2]
   units: d
+  title: "Position vs Time"
+  xlabel: "Time (s)"
+  ylabel: "Position (m)"
 
 state.vel:
   idx: [3, 4, 5]
   units: v
+  title: "Velocity vs Time"
+  xlabel: "Time (s)"
+  ylabel: "Velocity (m/s)"
 
 state.quat:
   idx: [6, 7, 8, 9]
   units: none
+  title: "Quaternion vs Time"
+  xlabel: "Time (s)"
+  ylabel: "Quaternion"
 
 state.omega:
   idx: [10, 11, 12]
   units: angv
+  title: "Angular Velocity vs Time"
+  xlabel: "Time (s)"
+  ylabel: "Angular Velocity (rad/s)"
 
 control.torque:
   idx: [0, 1, 2]
   units: mom
+  title: "Torque vs Time"
+  xlabel: "Time (s)"
+  ylabel: "Torque (N·m)"
+
+# control.flap_deflections:
+#   idx: [3, 4]
+#   units: ang
 
 # ===============================
 # CONSTRAINT MODELS
@@ -140,28 +159,123 @@ trajectories:
     type: spatial
     fcn: trajopt/library/models/reentry_6dof.py:long_lat
     group: state_trajplots
+    title: "Longitude vs Latitude"
+    xlabel: "Longitude (deg)"
+    ylabel: "Latitude (deg)"
   
   long_lat_alt_trajectory_plot:
     type : spatial
     fcn: trajopt/library/models/reentry_6dof.py:long_lat_alt
     group: state_trajplots
+    title: "Ground Track (3D)"
+    xlabel: "Longitude (deg)"
+    ylabel: "Latitude (deg)"
+    tick_nbins: 4
 
   rv_plot:
     type: spatial
     fcn: trajopt/library/models/reentry_6dof.py:r_v
     group: rv
+    title: "Position vs Velocity"
+    xlabel: "Position (m)"
+    ylabel: "Velocity (m/s)"
 
   lut_density:
     type: time_series
     fcn: trajopt/local/aero/cobra_aero_6dof.py:lut_density_jax
     group: density_comparison
+    title: "LUT Density vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Density (kg/m³)"
   
   exp_density:
     type: time_series
     fcn: trajopt/local/aero/cobra_aero_6dof.py:exp_density_jax
     group: density_comparison
+    title: "Exponential Density vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Density (kg/m³)"
 
-  dynamic_pressure:
+  heat_rate:
+    type: time_series
+    fcn: trajopt/library/models/reentry_6dof.py:heat_rate
+    group: path
+    title: "Heat Rate vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Heat Rate (W/m²)"
+
+  dynamic_pressure_path:
     type: time_series
     fcn: trajopt/library/models/reentry_6dof.py:dynamic_pressure
-    group: dynamic_pressure
+    group: path
+    title: "Dynamic Pressure vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Dynamic Pressure (Pa)"
+
+  aero_load:
+    type: time_series
+    fcn: trajopt/library/models/reentry_6dof.py:aero_load
+    group: path
+    title: "Aerodynamic Load vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Aerodynamic Load (g)"
+
+# ===============================
+# PLOT CONFIGURATION
+# ===============================
+# per-group figure and layout settings (override defaults)
+# figsize: [width, height] in inches
+# grid_gap_x / grid_gap_y: horizontal / vertical gap between subplots (fraction of figure)
+# width_ratios: relative widths of subplots (list, one per subplot)
+# margins: [left, right, top, bottom] as fractions of figure
+
+plot_config:
+  state:
+    figsize: [10, 3.5]
+    grid_gap_x: 0.06
+    grid_gap_y: 0.18
+    margins: [0.06, 0.02, 0.06, 0.14]
+
+  control:
+    figsize: [6, 3.5]
+    grid_gap_x: 0.08
+    grid_gap_y: 0.18
+    margins: [0.10, 0.02, 0.06, 0.14]
+
+  trajectory_groups:
+    state_trajplots:
+      figsize: [10, 4]
+      width_ratios: [1, 2.5]
+      grid_gap_x: 0.02
+      margins: [0.08, 0.02, 0.06, 0.14]
+
+    rv:
+      figsize: [5, 4]
+      margins: [0.12, 0.02, 0.06, 0.14]
+
+    path:
+      figsize: [12, 3.5]
+      grid_gap_x: 0.10
+      margins: [0.06, 0.02, 0.06, 0.14]
+
+    density_comparison:
+      figsize: [10, 3.5]
+      grid_gap_x: 0.08
+      margins: [0.06, 0.02, 0.06, 0.14]
+
+    dynamic_pressure:
+      figsize: [5, 3.5]
+      margins: [0.12, 0.02, 0.06, 0.14]
+
+    mach:
+      figsize: [5, 3.5]
+      margins: [0.12, 0.02, 0.06, 0.14]
+
+    bank_angle:
+      figsize: [5, 3.5]
+      margins: [0.12, 0.02, 0.06, 0.14]
+
+    body_torque_bounds:
+      figsize: [12, 3.5]
+      grid_gap_x: 0.10
+      margins: [0.06, 0.02, 0.06, 0.14]

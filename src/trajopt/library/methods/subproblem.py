@@ -717,7 +717,7 @@ class Subproblem:
             zf = self.z_ref[-1] + self.dz[-1]
 
             idx = cost.idx
-            self.TRUE += zf[idx]
+            self.TRUE += self.w.cost * zf[idx]
 
         for cost in problem.costs.get(type="rate_regularization"):
             if cost.set == "control":
@@ -729,7 +729,7 @@ class Subproblem:
                     self.TRUE += cost.w * cp.sum_squares(nu_plus - nu_minus) * (1 / self.N.time_grid)
 
                 if cost.norm_type == "l1":
-                    self.TRUE += cost.w * cp.norm1(nu_plus - nu_minus) * (1 / self.N.time_grid)
+                    self.TRUE += cost.w * cp.norm1(nu) * (1 / self.N.time_grid)
 
             elif cost.set == "state":
                 z = self.z_ref + self.dz
