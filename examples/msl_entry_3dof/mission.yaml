@@ -41,18 +41,18 @@ constraints:
     idx: [0, 1, 2, 3, 4, 5]
 
   final_state:
-    value: ["${params.planet.r + 5e3}"]
+    value: ["${params.planet.r + 3e3}"]
     idx: [0]
     eps: [500]
 
   state_limits:
-    min_value: ["${params.planet.r + 1e3}", 100.0]
+    min_value: ["${params.planet.r + 1e3}", 10.0]
     min_value_idx: [0, 3]
 
   bank_aoa_angle_limits:
-    min_value: [-170.0, -5.0]
+    min_value: [-178.0, -10.0]
     min_value_idx: [0, 1]
-    max_value: [170.0, 5.0]
+    max_value: [178.0, 10.0]
     max_value_idx: [0, 1]
 
   chute_deploy:
@@ -66,12 +66,6 @@ constraints:
     dimension: 1
 
 costs:
-  control_rate_regularization:
-    type: rate_regularization
-    set: control
-    norm: l2
-    w: 1
-
   min_lonlat_error:
     type: min_norm_terminal
     idx: [1, 2]
