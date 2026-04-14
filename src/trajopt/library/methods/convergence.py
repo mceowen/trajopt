@@ -121,7 +121,7 @@ def check_convergence_tolerance(problem, method, iter_record):
     abs_vb_term = np.abs(vb_term) if np.asarray(vb_term).size > 0 else np.zeros(1)
 
     # absolute values nonconvex constraint violations
-    abs_ncvx_dyn = np.abs(defect[index_map.indices.z.state])
+    abs_ncvx_dyn = np.abs(defect)
     abs_ncvx_ineq = np.abs(ncvx_ineq)
 
     bool_term = np.all(abs_vb_term <= 1.0*eps_term)
@@ -129,13 +129,13 @@ def check_convergence_tolerance(problem, method, iter_record):
     bool_dz = np.all(abs_dz <= 1.0*eps_state)
     bool_dcost = np.all(abs_dcost <= 1.0*eps_dcost)
     bool_vb_dyn = np.all(abs_vb_dyn <= 1.0*eps_dyn)
-    bool_ncvx_dyn_state = np.all(abs_ncvx_dyn[:, index_map.indices.z.state] <= 1.0*eps_defect[index_map.indices.z.state])
+    bool_ncvx_dyn_state = np.all(abs_ncvx_dyn <= 1.0*eps_dyn)
     bool_ncvx_ineq = np.all(abs_ncvx_ineq <= 1.0*eps_ineq)
 
     # convergence criteria option 1: 
-    # check optimality with dz and feasibility with linearized constraint violations
+    # check optimality with dz and feasibility with linearized + nonlinear constraint violations
     bool_opt1  = bool_dz
-    bool_feas1 = bool_term and bool_vb_ineq and bool_vb_dyn
+    bool_feas1 = bool_term and bool_vb_ineq and bool_vb_dyn and bool_ncvx_dyn_state
 
     # convergence criteria option 2: 
     # check optimality with dcost and feasibility with nonlinear constraint violations

@@ -118,7 +118,7 @@ def propagate_scipy_rk45(z0, nu_ref, t_ref, t_nl, problem, method, dynamics=None
         nu = nu_interp(t)
         return np.array(_call_dynamics(dynamics, t, z, nu, params))
 
-    sol = solve_ivp(ode_func, [t_nl[0], t_nl[-1]], z0, t_eval=t_nl, method='RK45', rtol=1e-6, atol=1e-8)
+    sol = solve_ivp(ode_func, [t_nl[0], t_nl[-1]], z0, t_eval=t_nl, method='RK45', rtol=1e-8, atol=1e-8)
 
     t_out = sol.t
     z_out = sol.y.T
