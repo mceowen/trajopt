@@ -1,59 +1,57 @@
 import jax.numpy as jnp
-
-def dynamics_jax(t, z, nu, params, fcns):
-
-    # extract parameters
-    g     = params["planet"]["g"]
-    mass  = params["vehicle"]["mass"]
-    g_vec = jnp.array([0,0, -g])
+from jax import Array
 
 
-    r = z[0:3]
+def dynamics_jax(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """3-DoF quadrotor dynamics (double integrator with gravity)."""
+    g = params["planet"]["g"]
+    mass = params["vehicle"]["mass"]
+    g_vec = jnp.array([0, 0, -g])
     v = z[3:6]
-    
     T = nu
 
-    x_dot = jnp.concatenate([v, T/mass + g_vec])
+    return jnp.concatenate([v, T / mass + g_vec])
 
-    return x_dot
-
-def thrust_norm(t, z, nu, params, fcns):
+def thrust_norm(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """Thrust magnitude."""
     return jnp.array([jnp.linalg.norm(nu)])
 
-def obstacle(t, z, nu, params, fcns):
+def obstacle(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """Distance from circular obstacle centered at (5,5) in xy-plane."""
     r = z[0:2]
     pos_obs = jnp.array([5, 5])
     return jnp.array([jnp.linalg.norm(r - pos_obs)])
 
-def xy_dist_from_term(t, z, nu, params, fcns):
+def xy_dist_from_term(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """Distance from terminal position (10, 10) in xy-plane."""
     r = z[0:2]
     # return jnp.array([jnp.sqrt((r[0]-10.0)**2 + (r[1]-10.0)**2 + 0.00001)])
-    return jnp.array([(r[0]-10.0)**2 + (r[1]-10.0)**2])
+    return jnp.array([(r[0] - 10.0) ** 2 + (r[1] - 10.0) ** 2])
 
-def pos_x(t, z, nu, params, fcns):
+def pos_x(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """x-position."""
     return jnp.array([z[0]])
 
-def pos_y(t, z, nu, params, fcns):
+def pos_y(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """y-position."""
     return jnp.array([z[1]])
 
-def height(t, z, nu, params, fcns):
-    h = z[2]
-    return jnp.array([h])
+def height(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """Height (z-position)."""
+    return jnp.array(z[2])
 
-def xy(t, z, nu, params, fcns):
-    pos_xy = z[0:2]
-    return pos_xy
+def xy(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """xy-position."""
+    return z[0:2]
 
-def xz(t, z, nu, params, fcns):
-    x = z[0]
-    z = z[2]
-    return jnp.array([x, z])
+def xz(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """xz-position."""
+    return jnp.array([z[0], z[2]])
 
-def yz(t, z, nu, params, fcns):
-    y = z[1]
-    z = z[2]
-    return jnp.array([y, z])
+def yz(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """yz-position."""
+    return jnp.array([z[1], z[2]])
 
-def xyz(t, z, nu, params, fcns):
-    pos_xyz = z[0:3]
-    return pos_xyz
+def xyz(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """xyz-position."""
+    return z[0:3]
