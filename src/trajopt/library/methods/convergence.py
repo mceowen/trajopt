@@ -133,9 +133,9 @@ def check_convergence_tolerance(problem, method, iter_record):
     bool_ncvx_ineq = np.all(abs_ncvx_ineq <= 1.0*eps_ineq)
 
     # convergence criteria option 1: 
-    # check optimality with dz and feasibility with linearized + nonlinear constraint violations
+    # check optimality with dz and feasibility with linearized constraint violations
     bool_opt1  = bool_dz
-    bool_feas1 = bool_term and bool_vb_ineq and bool_vb_dyn and bool_ncvx_dyn_state
+    bool_feas1 = bool_term and bool_vb_ineq and bool_vb_dyn
 
     # convergence criteria option 2: 
     # check optimality with dcost and feasibility with nonlinear constraint violations
