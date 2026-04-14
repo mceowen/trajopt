@@ -55,7 +55,7 @@ def dynamic_pressure(t: float, z: Array, nu: Array, params: dict, fcns: dict) ->
 
 
 def aero_load(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
-    """Aerodynamic load magnitude sqrt(L²+D²) (m/s²). Uses JAX aero model."""
+    """Aerodynamic load magnitude (m/s²). Uses JAX aero model."""
     aero = fcns["nonlinear_aero_jax"](t, z, nu, params)
     L = aero["L"]
     D = aero["D"]
@@ -82,7 +82,7 @@ def dynamic_pressure_nonjax(t: float, z: Array, nu: Array, params: dict, fcns: d
 
 
 def aero_load_nonjax(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> float:
-    """Aerodynamic load magnitude sqrt(L²+D²) (m/s²). Uses non-JAX aero model."""
+    """Aerodynamic load magnitude sqrt (m/s²). Uses non-JAX aero model."""
     r = jnp.linalg.norm(z[0:3])
     v = jnp.linalg.norm(z[3:6])
     aero = fcns["nonlinear_aero_nonjax"](t, z, nu, params)
