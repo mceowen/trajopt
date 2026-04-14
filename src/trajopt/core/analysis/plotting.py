@@ -456,11 +456,15 @@ def plot_time_series_trajectories(PLTS, method, run, iters, current_traj_data, n
     PLTS.addPlot2D(ax, pen=pens.opt, ins=ins_opt)
 
     # plot limits if specified
-    limits = current_traj_data.opt_vals.get("limits", {})
+    limits = current_traj_data.nl_vals.get("limits", {})
     if limits:
         for val in [limits.get("upper"), limits.get("lower")]:
             if val is not None:
-                ax.axhline(val, color='k', ls='--', lw=1, alpha=0.5)
+                if isinstance(val, np.ndarray):
+                    t_nl = np.array(PLTS.data[method]['runs'][run]['iters'])[-1]['t_nl']
+                    ax.plot(t_nl[:len(val)], val, color='k', ls='--', lw=1, alpha=0.5)
+                else:
+                    ax.axhline(val, color='k', ls='--', lw=1, alpha=0.5)
 
 WEIGHT_DISPLAY_NAMES = {"W": "Penalty Weights", "dual": "Dual Weights"}
 

@@ -457,6 +457,11 @@ class Subproblem:
         if self.flags.discretize == "ps":
             C.append(discretize.build_ps_dyn_constraints(self))
 
+        # Precompute proportional_dt ratios from initial time grid (plain floats for DPP)
+        if hasattr(self.flags, "proportional_dt") and bool(self.flags.proportional_dt):
+            t_grid = np.asarray(method.initial_guess.t).reshape(-1)
+            _prop_dt_ratios = t_grid / t_grid[-1]
+
         # Per-stage constraints
         for k in range(N):
             if k < N - 1:
@@ -517,10 +522,11 @@ class Subproblem:
             if bool(self.flags.free_final_time):
                 C.append(self.T_min <= self.t_ref[-1, 0] + self.dt[-1, 0])
                 C.append(self.t_ref[-1, 0] + self.dt[-1, 0] <= self.T_max)
-                # Equal time step perturbations: force all dt[k] = dt[1] for k >= 1
-                # (dt[0] is always 0, so we want dt[1] = dt[2] = ... = dt[N-1])
                 if hasattr(self.flags, "equal_dt") and bool(self.flags.equal_dt) and k > 1:
                     C.append(self.dt[k, 0] == self.dt[1, 0])
+
+                if hasattr(self.flags, "proportional_dt") and bool(self.flags.proportional_dt) and 1 <= k < N - 1:
+                    C.append(self.dt[k, 0] == self.dt[-1, 0] * float(_prop_dt_ratios[k]))
 
             # State box constraints
             for constraint in problem.constraints.get(ct=0, type="box"):
@@ -777,10 +783,11 @@ class Subproblem:
 
         # Solve subproblem
         solver_name = self.method.solver_opts.get("solver", "CLARABEL")
+        solver_kwargs = {k: v for k, v in self.method.solver_opts.items() if k != "solver"}
         ignore_dpp = self.method.flags.ignore_dpp
         self.cp_subproblem.solve(
-            solver=solver_name, warm_start=False, ignore_dpp=ignore_dpp
-        )  # ignore_dpp=True if desired
+            solver=solver_name, warm_start=False, ignore_dpp=ignore_dpp, **solver_kwargs
+        )
 
         # Create unified record for this iteration and append
         iter_record = self._load_outputs(input_for_iter, prop_time_ms)

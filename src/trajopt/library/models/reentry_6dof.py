@@ -275,3 +275,60 @@ def r_v(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     v = jnp.linalg.norm(z[3:6])
 
     return jnp.array([r, v])
+
+
+def polar_radius(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """Polar radius / distance from planet center (m)."""
+    return jnp.array([jnp.linalg.norm(z[0:3])])
+
+
+def polar_longitude(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """Polar longitude (deg)."""
+    return jnp.array([jnp.rad2deg(jnp.arctan2(z[1], z[0]))])
+
+
+def polar_latitude(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """Polar latitude (deg)."""
+    return jnp.array([jnp.rad2deg(jnp.arctan2(z[2], jnp.sqrt(z[0] ** 2 + z[1] ** 2)))])
+
+
+def polar_velocity(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """Polar velocity magnitude (m/s)."""
+    return jnp.array([jnp.linalg.norm(z[3:6])])
+
+
+def polar_fpa(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """Polar flight-path angle (deg), derived from 6-DoF Cartesian state."""
+    r = z[0:3]
+    v_body = z[3:6]
+    q = z[6:10]
+
+    v_inertial = DCM(q).T @ v_body
+    r_hat = r / jnp.linalg.norm(r)
+    v_mag = jnp.maximum(jnp.linalg.norm(v_inertial), 1e-10)
+    gamma = jnp.rad2deg(jnp.arcsin(jnp.dot(v_inertial, r_hat) / v_mag))
+
+    return jnp.array([gamma])
+
+
+def polar_heading(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """Polar heading angle (deg), measured from north (increasing latitude)."""
+    r = z[0:3]
+    v_body = z[3:6]
+    q = z[6:10]
+
+    v_inertial = DCM(q).T @ v_body
+    r_hat = r / jnp.linalg.norm(r)
+
+    v_horiz = v_inertial - jnp.dot(v_inertial, r_hat) * r_hat
+
+    theta = jnp.arctan2(r[1], r[0])
+    phi = jnp.arctan2(r[2], jnp.sqrt(r[0] ** 2 + r[1] ** 2))
+    e_north = jnp.array(
+        [-jnp.sin(phi) * jnp.cos(theta), -jnp.sin(phi) * jnp.sin(theta), jnp.cos(phi)]
+    )
+    e_east = jnp.array([-jnp.sin(theta), jnp.cos(theta), 0.0])
+
+    psi = jnp.rad2deg(jnp.arctan2(jnp.dot(v_horiz, e_east), jnp.dot(v_horiz, e_north)))
+
+    return jnp.array([psi])
