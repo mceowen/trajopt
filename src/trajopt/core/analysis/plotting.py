@@ -433,6 +433,51 @@ def plot_spatial_trajectories(PLTS, method, run, iters, current_traj_data, nl_va
         ins_opt = {'label': 'Optimal Soltution', 'x': opt_vals_path, 'x_idx': 0, 'y': opt_vals_path, 'y_idx': 1, 'method': method, 'run': run, 'iters': [-1], 'legend': "legend1"}
         PLTS.addPlot2D(ax, pen=pens.opt, ins=ins_opt)
 
+    plot_markers(ax, current_traj_data, dim)
+
+MARKER_DEFAULTS = {
+    'marker': '*',
+    'color': [0.8, 0.0, 0.0],
+    'size': 80,
+    'edgecolor': 'k',
+    'edgewidth': 0.4,
+    'zorder': 10,
+    'fontsize': 7,
+    'text_offset': [0.0, 0.0],
+}
+
+def plot_markers(ax, traj_data, dim):
+    markers = traj_data.get("markers", None)
+    if not markers:
+        return
+
+    for m in markers:
+        xy = m["xy"]
+        label = m.get("label", None)
+
+        mkr     = m.get("marker", MARKER_DEFAULTS['marker'])
+        color   = m.get("color", MARKER_DEFAULTS['color'])
+        sz      = m.get("size", MARKER_DEFAULTS['size'])
+        ec      = m.get("edgecolor", MARKER_DEFAULTS['edgecolor'])
+        ew      = m.get("edgewidth", MARKER_DEFAULTS['edgewidth'])
+        zo      = m.get("zorder", MARKER_DEFAULTS['zorder'])
+        fs      = m.get("fontsize", MARKER_DEFAULTS['fontsize'])
+        t_off   = m.get("text_offset", MARKER_DEFAULTS['text_offset'])
+
+        if dim == 3 and len(xy) >= 3:
+            ax.scatter(xy[0], xy[1], xy[2], marker=mkr, s=sz, c=[color],
+                       edgecolors=ec, linewidths=ew, zorder=zo)
+            if label:
+                ax.text(xy[0] + t_off[0], xy[1] + t_off[1], xy[2] + (t_off[2] if len(t_off) > 2 else 0),
+                        label, fontsize=fs, ha='left', va='bottom')
+        else:
+            ax.scatter(xy[0], xy[1], marker=mkr, s=sz, c=[color],
+                       edgecolors=ec, linewidths=ew, zorder=zo)
+            if label:
+                ax.annotate(label, (xy[0], xy[1]), textcoords="offset points",
+                            xytext=(t_off[0] + 4, t_off[1] + 4), fontsize=fs,
+                            ha='left', va='bottom')
+
 def plot_time_series_trajectories(PLTS, method, run, iters, current_traj_data, nl_vals_path, opt_vals_path, ax, pens):
     # plot iters if specified
     if iters != [-1]:

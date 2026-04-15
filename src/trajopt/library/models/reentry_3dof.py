@@ -121,6 +121,14 @@ def heading(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Heading angle (deg)."""
     return jnp.array([z[5]])
 
+def bank(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """Banke angle (deg)."""
+    return jnp.array([nu[0]])
+
+def aoa(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """Angle of attack (deg)."""
+    return jnp.array([nu[1]])
+
 # ===============================
 # CASADI MODEL
 # ===============================

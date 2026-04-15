@@ -193,29 +193,29 @@ trajectories:
     ylabel: "Latitude (deg)"
     tick_nbins: 4
 
-  heat_rate:
-    type: time_series
-    fcn: trajopt/library/models/reentry_3dof.py:heat_rate
-    group: path
-    title: "Heat Rate vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Heat Rate (W/m²)"
+  # heat_rate:
+  #   type: time_series
+  #   fcn: trajopt/library/models/reentry_3dof.py:heat_rate
+  #   group: path
+  #   title: "Heat Rate vs Time"
+  #   xlabel: "Time (s)"
+  #   ylabel: "Heat Rate (W/m²)"
 
-  dynamic_pressure:
-    type: time_series
-    fcn: trajopt/library/models/reentry_3dof.py:dynamic_pressure
-    group: path
-    title: "Dynamic Pressure vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Dynamic Pressure (Pa)"
+  # dynamic_pressure:
+  #   type: time_series
+  #   fcn: trajopt/library/models/reentry_3dof.py:dynamic_pressure
+  #   group: path
+  #   title: "Dynamic Pressure vs Time"
+  #   xlabel: "Time (s)"
+  #   ylabel: "Dynamic Pressure (Pa)"
 
-  aero_load:
-    type: time_series
-    fcn: trajopt/library/models/reentry_3dof.py:aero_load
-    group: path
-    title: "Aerodynamic Load vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Aerodynamic Load (g)"
+  # aero_load:
+  #   type: time_series
+  #   fcn: trajopt/library/models/reentry_3dof.py:aero_load
+  #   group: path
+  #   title: "Aerodynamic Load vs Time"
+  #   xlabel: "Time (s)"
+  #   ylabel: "Aerodynamic Load (g)"
 
 # ===============================
 # PLOT CONFIGURATION

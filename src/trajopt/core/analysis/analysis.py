@@ -178,6 +178,7 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
                     "xlabel": getattr(trajectory, "xlabel", None),
                     "ylabel": getattr(trajectory, "ylabel", None),
                     "tick_nbins": getattr(trajectory, "tick_nbins", None),
+                    "markers": getattr(trajectory, "markers", None),
                 })
 
                 if trajectory_data.get(group) is None:

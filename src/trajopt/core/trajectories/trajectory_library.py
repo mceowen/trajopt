@@ -61,6 +61,7 @@ class spatial:
         self.xlabel     = cnstr_config.get("xlabel", None)
         self.ylabel     = cnstr_config.get("ylabel", None)
         self.tick_nbins = cnstr_config.get("tick_nbins", None)
+        self.markers    = cnstr_config.get("markers", None)
 
         self.fcn_string = cnstr_config["fcn"]
 
