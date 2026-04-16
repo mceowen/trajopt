@@ -1,5 +1,3 @@
-from typing import Any
-
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -12,13 +10,13 @@ jax.config.update("jax_enable_x64", True)
 # =============================================================================
 
 
-def terminal_cost(t: float, z: np.ndarray, nu: np.ndarray, trajopt_obj: Any) -> float:
+def terminal_cost(t: float, z: np.ndarray, nu: np.ndarray, trajopt_obj: dict) -> float:
     """Terminal cost: maximize altitude (minimize -z[2])."""
     return -z[2]
 
 
 def analytical_affine_approximation_terminal_cost(
-    t: float, z: np.ndarray, nu: np.ndarray, trajopt_obj: Any
+    t: float, z: np.ndarray, nu: np.ndarray, trajopt_obj: dict,
 ) -> tuple[float, np.ndarray, np.ndarray]:
     """Affine approximation of terminal cost with state and control gradients."""
     model = trajopt_obj.model
@@ -36,13 +34,16 @@ def analytical_affine_approximation_terminal_cost(
 # =============================================================================
 
 
-def running_cost(t: float, z: np.ndarray, nu: np.ndarray, trajopt_obj: Any) -> float:
+def running_cost(t: float, z: np.ndarray, nu: np.ndarray, trajopt_obj: dict) -> float:
     """No running penalty."""
     return 0.0
 
 
 def analytical_affine_approximation_running_cost(
-    t: float, z: np.ndarray, nu: np.ndarray, trajopt_obj: Any
+    t: float,
+    z: np.ndarray,
+    nu: np.ndarray,
+    trajopt_obj: dict,
 ) -> tuple[float, np.ndarray, np.ndarray]:
     """Affine approximation of running cost (zero gradient)."""
     model = trajopt_obj.model
@@ -55,7 +56,7 @@ def analytical_affine_approximation_running_cost(
     return cost, dcostdz, dcostdnu
 
 
-def get_cost_cnstr_nondim(trajopt_obj: Any) -> tuple[float, np.ndarray]:
+def get_cost_cnstr_nondim(trajopt_obj: dict) -> tuple[float, np.ndarray]:
     """Return nondimensionalization scales for cost and inequality constraints."""
     mission = trajopt_obj.mission
     method = trajopt_obj.method
@@ -66,7 +67,7 @@ def get_cost_cnstr_nondim(trajopt_obj: Any) -> tuple[float, np.ndarray]:
     return ncost, np_ineq
 
 
-def atmosphere_model_jax(rs: Array, trajopt_obj: Any) -> Array:
+def atmosphere_model_jax(rs: Array, trajopt_obj: dict) -> Array:
     """Atmospheric density at nondimensional orbital radius rs (kg/m³), JAX version."""
     mission = trajopt_obj.mission
     model = trajopt_obj.model
@@ -86,7 +87,7 @@ def atmosphere_model_jax(rs: Array, trajopt_obj: Any) -> Array:
     return rho
 
 
-def atmosphere_model_nonjax(rs: np.ndarray, trajopt_obj: Any) -> np.ndarray:
+def atmosphere_model_nonjax(rs: np.ndarray, trajopt_obj: dict) -> np.ndarray:
     """Atmospheric density at nondimensional orbital radius rs (kg/m³), non-JAX version."""
     mission = trajopt_obj.mission
     model = trajopt_obj.model
@@ -106,7 +107,7 @@ def atmosphere_model_nonjax(rs: np.ndarray, trajopt_obj: Any) -> np.ndarray:
     return rho
 
 
-def nonlinear_aero_jax(t: float, z: Array, nu: Array, trajopt_obj: Any) -> dict:
+def nonlinear_aero_jax(t: float, z: Array, nu: Array, trajopt_obj: dict) -> dict:
     """Nonlinear aerodynamic force coefficients and state for GHAME, JAX version."""
     mission = trajopt_obj.mission
     model = trajopt_obj.model
@@ -153,7 +154,7 @@ def nonlinear_aero_jax(t: float, z: Array, nu: Array, trajopt_obj: Any) -> dict:
     return {"L": L, "D": D, "Cl": Cl, "Cd": Cd, "alpha": alpha, "rho": rho}
 
 
-def nonlinear_aero_nonjax(t: float, z: np.ndarray, nu: np.ndarray, trajopt_obj: Any) -> dict:
+def nonlinear_aero_nonjax(t: float, z: np.ndarray, nu: np.ndarray, trajopt_obj: dict) -> dict:
     """Nonlinear aerodynamic force coefficients and state for GHAME, non-JAX version."""
     mission = trajopt_obj.mission
     model = trajopt_obj.model
@@ -200,16 +201,16 @@ def nonlinear_aero_nonjax(t: float, z: np.ndarray, nu: np.ndarray, trajopt_obj: 
     return {"L": L, "D": D, "Cl": Cl, "Cd": Cd, "alpha": alpha, "rho": rho}
 
 
-def custom_constraints(subtrajopt_obj: Any) -> None:
+def custom_constraints(subtrajopt_obj: dict) -> None:
     """GHAME-specific custom constraints (placeholder)."""
     pass
 
 
-def custom_cost(subtrajopt_obj: Any) -> None:
+def custom_cost(subtrajopt_obj: dict) -> None:
     """GHAME-specific custom cost terms (placeholder)."""
     pass
 
 
-def set_custom_params(trajopt_obj: Any) -> None:
+def set_custom_params(trajopt_obj: dict) -> None:
     """GHAME-specific custom parameters (placeholder)."""
     pass
