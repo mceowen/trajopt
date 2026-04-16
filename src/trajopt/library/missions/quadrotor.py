@@ -7,7 +7,7 @@ import numpy as np
 
 
 def terminal_cost(t: float, z: np.ndarray, nu: np.ndarray, trajopt_obj: dict) -> float:
-    """Terminal cost: squared control norm."""
+    """Calculate terminal cost as squared control norm."""
     return np.dot(np.transpose(nu), nu)
 
 
@@ -31,7 +31,7 @@ def analytical_affine_approximation_terminal_cost(
 
 
 def running_cost(t: float, z: np.ndarray, nu: np.ndarray, trajopt_obj: dict) -> float:
-    """Squared control norm."""
+    """Calculate running cost as squared control norm."""
     return np.dot(np.transpose(nu), nu)
 
 
