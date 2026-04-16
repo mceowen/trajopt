@@ -45,7 +45,7 @@ def analytical_affine_approximation_running_cost(
     nu: np.ndarray,
     trajopt_obj: dict,
 ) -> tuple[float, np.ndarray, np.ndarray]:
-    """Affine approximation of running cost (zero gradient)."""
+    """Affine approximation of running cost."""
     model = trajopt_obj.model
 
     cost = running_cost(t, z, nu, trajopt_obj)
