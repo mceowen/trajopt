@@ -42,8 +42,8 @@ def nonlinear_aero_jax(t: float, z: Array, nu: Array, params: dict, fcns: dict) 
 
     return {"L": L, "D": D, "alpha": 0, "rho": rho}
 
-def lift_drag(t, z, nu, params, fcns):
-
+def lift_drag(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """Lift and drag forces for MSL."""
     aero = nonlinear_aero_jax(t, z, nu, params, fcns)
 
     L = aero["L"]
