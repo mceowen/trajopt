@@ -517,8 +517,6 @@ class Subproblem:
             if bool(self.flags.free_final_time):
                 C.append(self.T_min <= self.t_ref[-1, 0] + self.dt[-1, 0])
                 C.append(self.t_ref[-1, 0] + self.dt[-1, 0] <= self.T_max)
-                # Equal time step perturbations: force all dt[k] = dt[1] for k >= 1
-                # (dt[0] is always 0, so we want dt[1] = dt[2] = ... = dt[N-1])
                 if hasattr(self.flags, "equal_dt") and bool(self.flags.equal_dt) and k > 1:
                     C.append(self.dt[k, 0] == self.dt[1, 0])
 
@@ -710,7 +708,8 @@ class Subproblem:
             zf = self.z_ref[-1] + self.dz[-1]
             idx = cost.idx
             print(f"{zf.shape}, {idx}")
-            term_cost = self.w.cost * cp.norm(zf[idx])
+            target = cost.value if cost.value is not None else np.zeros(len(idx))
+            term_cost = self.w.cost * cp.norm(zf[idx] - target)
             self.TRUE += term_cost
 
         for cost in problem.costs.get(type="terminal_state"):
@@ -777,10 +776,11 @@ class Subproblem:
 
         # Solve subproblem
         solver_name = self.method.solver_opts.get("solver", "CLARABEL")
+        solver_kwargs = {k: v for k, v in self.method.solver_opts.items() if k != "solver"}
         ignore_dpp = self.method.flags.ignore_dpp
         self.cp_subproblem.solve(
-            solver=solver_name, warm_start=False, ignore_dpp=ignore_dpp
-        )  # ignore_dpp=True if desired
+            solver=solver_name, warm_start=False, ignore_dpp=ignore_dpp, **solver_kwargs
+        )
 
         # Create unified record for this iteration and append
         iter_record = self._load_outputs(input_for_iter, prop_time_ms)

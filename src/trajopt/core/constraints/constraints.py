@@ -138,7 +138,7 @@ class Constraints:
                 for constraint in ctcs_constraints
             ])
 
-            dbeta_dt = jnp.maximum(ctcs_values, 0.0)**2 # should be squared
+            dbeta_dt = jnp.maximum(ctcs_values, 0.0)
         else:
             dbeta_dt = jnp.zeros_like(beta)
 

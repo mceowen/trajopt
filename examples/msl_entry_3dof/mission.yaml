@@ -3,6 +3,7 @@
 # ===============================
 fcns.density_model: trajopt/library/missions/msl.py:exp_density_jax
 fcns.nonlinear_aero: trajopt/library/missions/msl.py:nonlinear_aero_jax
+fcns.altitude: trajopt/library/models/reentry_3dof.py:altitude
 
 # ===============================
 # FUNCTION PARAMETERS
@@ -20,7 +21,16 @@ state.psi.scale: 1
 control.bank.scale: 1
 control.aoa.scale: 1
 
-time.scale: 100
+time.scale: 1.0
+
+phases:
+  entry:
+    start: 0
+    p: 0
+  
+  descent:
+    start: 70
+    p: 1
 
 # ===============================
 # CONSTRAINT/COST PARAMS
@@ -31,19 +41,41 @@ constraints:
     idx: [0, 1, 2, 3, 4, 5]
 
   final_state:
-    value: ["${params.planet.r + 1e3}", 0.0, 10.5768]
-    idx: [0, 1, 2]
-    eps: [50, 0.0001, 0.0001]
+    value: ["${params.planet.r + 3e3}"]
+    idx: [0]
+    eps: [500]
 
   state_limits:
-    min_value: ["${params.planet.r + 1e3}", 100.0]
+    min_value: ["${params.planet.r + 1e3}", 10.0]
     min_value_idx: [0, 3]
 
   bank_aoa_angle_limits:
-    min_value: [-170.0, -5.0]
+    min_value: [-178.0, -10.0]
     min_value_idx: [0, 1]
-    max_value: [170.0, 5.0]
+    max_value: [178.0, 10.0]
     max_value_idx: [0, 1]
+
+  chute_deploy:
+    type: nonconvex_inequality
+    fcn: trajopt/library/models/reentry_3dof.py:altitude
+    nodes: ["${phases.descent.start}"]
+    min_value: [8000]
+    max_value: [12000]
+    scale: [10000]
+    eps: [100]
+    dimension: 1
+
+costs:
+  min_lonlat_error:
+    type: min_norm_terminal
+    idx: [1, 2]
+    value: [0.0, 10.5768]
+
+trajectories:
+  lift_drag:
+    type: time_series
+    fcn: trajopt/library/missions/msl.py:lift_drag
+    group: lift_drag
 
 # ===============================
 # ACTIVE CONSTRAINTS AND COSTS
@@ -55,6 +87,7 @@ constraint_list:
   - final_state
   - state_limits
   - bank_aoa_angle_limits
+  - chute_deploy
 
-cost_list:
-  - min_terminal_velocity
+cost_list: 
+  - min_lonlat_error

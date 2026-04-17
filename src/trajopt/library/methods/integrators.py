@@ -76,23 +76,42 @@ def propagate_jax_rk4_dense(z0, nu_ref, t_ref, t_nl, problem, method, compiled_a
 
     return t_nl, z_nl, nu_nl
 
+def _apply_phase_schedule(params, k):
+    schedule = params.get('_phase_schedule', None)
+    if schedule is None:
+        return params
+    params_k = dict(params)
+    for key, array in schedule.items():
+        params_k[key] = jnp.asarray(array)[k]
+    return params_k
+
 def compile_tau_propagator(problem, method, n_dense=1000):
-    fcn    = problem.constraints.get(type="dynamics")[0].fcn
-    N      = method.index_map.N.time_grid
-    params = tools.recursive_to_dict(problem.params)
-    tau    = jnp.linspace(0.0, 1.0, N)
-    tau_d  = jnp.linspace(0.0, 1.0, n_dense)
+    fcn_base  = problem.constraints.get(type="dynamics")[0].fcn_base
+    N         = method.index_map.N.time_grid
+    n_state   = problem.index_map.n.state
+    n_control = problem.index_map.n.control
+    params    = tools.recursive_to_dict(problem.params)
+    tau       = jnp.linspace(0.0, 1.0, N)
+    tau_d     = jnp.linspace(0.0, 1.0, n_dense)
 
     @jax.jit
-    def solve(z0, nu):
-        def rhs(t, z, _):
+    def solve(z0_real, nu):
+        def rhs(t, z_real, _):
+            x = z_real[:n_state]
+            t_phys = z_real[n_state:n_state + 1]
             k = jnp.clip(jnp.searchsorted(tau, t, side='right') - 1, 0, N - 2)
             a = (tau[k+1] - t) / (tau[k+1] - tau[k])
-            return fcn(t, z, a * nu[k] + (1 - a) * nu[k+1], params)
+            nu_interp = a * nu[k] + (1 - a) * nu[k+1]
+            u = nu_interp[:n_control]
+            s = nu_interp[n_control:]
+            params_k = _apply_phase_schedule(params, k)
+            dx_dt = fcn_base(t_phys, x, u, params_k)
+            dt_dt = jnp.ones(1, dtype=z_real.dtype)
+            return s * jnp.concatenate([dx_dt, dt_dt])
         return diffrax.diffeqsolve(
-            diffrax.ODETerm(rhs), diffrax.Dopri5(), 0.0, 1.0, 1e-4, z0,
-            stepsize_controller=diffrax.PIDController(rtol=1e-6, atol=1e-6),
-            saveat=diffrax.SaveAt(ts=tau_d), max_steps=10000,
+            diffrax.ODETerm(rhs), diffrax.Dopri5(), 0.0, 1.0, 0.0005, z0_real,
+            stepsize_controller=diffrax.PIDController(rtol=1e-8, atol=1e-8),
+            saveat=diffrax.SaveAt(ts=tau_d), max_steps=500000,
         ).ys
 
     method.propagate_tau_jit = solve
@@ -102,7 +121,8 @@ def compile_tau_propagator(problem, method, n_dense=1000):
 
 def propagate_tau(z0, nu_ref, problem, method):
     idx  = problem.index_map.indices
-    z_nl = np.asarray(method.propagate_tau_jit(jnp.array(z0), jnp.array(nu_ref)))
+    z0_real = z0[idx.z.real]
+    z_nl = np.asarray(method.propagate_tau_jit(jnp.array(z0_real), jnp.array(nu_ref)))
     tau_n, tau_d = np.asarray(method.tau_nodes), np.asarray(method.tau_dense)
     u_nl = np.column_stack([np.interp(tau_d, tau_n, nu_ref[:, c]) for c in idx.nu.control])
     return z_nl[:, idx.z.time].reshape(-1), z_nl[:, idx.z.state], u_nl

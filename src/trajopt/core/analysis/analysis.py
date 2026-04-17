@@ -10,6 +10,54 @@ from trajopt.core.problem import Problem
 from trajopt.core.solution_method import SolutionMethod
 from trajopt.utils.tools import recursive_attrdict, AttrDict
 
+
+def _eval_per_phase(eval_fn, t, z, nu, problem, params_dict, t_nodes=None):
+    """Evaluate eval_fn per-phase with correct params, stitch results."""
+    if problem.phases is None:
+        return eval_fn(t, z, nu, params_dict)
+
+    N_pts = t.shape[0]
+
+    if t_nodes is None:
+        ranges = [(phase.start, min(phase.end, N_pts)) for phase in problem.phases]
+    else:
+        ranges = []
+        for phase in problem.phases:
+            t_s = t_nodes[phase.start]
+            t_e = t_nodes[min(phase.end, len(t_nodes) - 1)] if phase.end < len(t_nodes) else t[-1] + 1
+            s = int(np.searchsorted(t, t_s))
+            e = int(np.searchsorted(t, t_e)) if phase.end < len(t_nodes) else N_pts
+            ranges.append((s, e))
+
+    parts = []
+    for (s, e), phase in zip(ranges, problem.phases):
+        if e <= s:
+            continue
+        p = dict(params_dict)
+        for key, val in phase.params.items():
+            p[key] = val
+        result = eval_fn(t[s:e], z[s:e], nu[s:e], p)
+        parts.append((s, e, result))
+
+    if not parts:
+        return eval_fn(t, z, nu, params_dict)
+
+    first = parts[0][2]
+    stitched = {}
+    for key, val in first.items():
+        if val is None:
+            stitched[key] = None
+        elif isinstance(val, np.ndarray) and val.ndim >= 1 and val.shape[0] == (parts[0][1] - parts[0][0]):
+            full = np.zeros((N_pts, *val.shape[1:]))
+            for s, e, r in parts:
+                full[s:e] = r[key]
+            stitched[key] = full
+        else:
+            stitched[key] = val
+
+    return stitched
+
+
 '''
 outline of solution_data structure:
 results = {
@@ -82,9 +130,10 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
                 if group == None:
                     group = name
                 
-                opt_vals  = constraint.compute_constraint_values(t_opt,  x_opt,  u_opt,  params_dict)
-                nl_vals   = constraint.compute_constraint_values(t_nl,   x_nl,   u_nl,   params_dict)
-                init_vals = constraint.compute_constraint_values(t_init, x_init, u_init, params_dict)
+                eval_fn   = constraint.compute_constraint_values
+                opt_vals  = _eval_per_phase(eval_fn, t_opt,  x_opt,  u_opt,  problem, params_dict)
+                nl_vals   = _eval_per_phase(eval_fn, t_nl,   x_nl,   u_nl,   problem, params_dict, t_nodes=t_opt)
+                init_vals = _eval_per_phase(eval_fn, t_init, x_init, u_init, problem, params_dict)
 
                 output = AttrDict({
                     "name": name,
@@ -114,9 +163,10 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
                 M_state = nondim.M.state.nd2d
                 M_ctrl = nondim.M.control.nd2d
                 
-                opt_vals  = trajectory.compute_trajectory_values(nt*t_opt,  x_opt @ M_state,  u_opt @ M_ctrl,  params_dict)
-                nl_vals   = trajectory.compute_trajectory_values(nt*t_nl,   x_nl  @ M_state,   u_nl @ M_ctrl,   params_dict)
-                init_vals = trajectory.compute_trajectory_values(nt*t_init, x_init@ M_state, u_init @ M_ctrl, params_dict)
+                eval_fn   = trajectory.compute_trajectory_values
+                opt_vals  = _eval_per_phase(eval_fn, nt*t_opt,  x_opt @ M_state,  u_opt @ M_ctrl,  problem, params_dict)
+                nl_vals   = _eval_per_phase(eval_fn, nt*t_nl,   x_nl  @ M_state,   u_nl @ M_ctrl,   problem, params_dict, t_nodes=nt*t_opt)
+                init_vals = _eval_per_phase(eval_fn, nt*t_init, x_init@ M_state, u_init @ M_ctrl, problem, params_dict)
 
                 output = AttrDict({
                     "name": name,
@@ -128,6 +178,7 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
                     "xlabel": getattr(trajectory, "xlabel", None),
                     "ylabel": getattr(trajectory, "ylabel", None),
                     "tick_nbins": getattr(trajectory, "tick_nbins", None),
+                    "markers": getattr(trajectory, "markers", None),
                 })
 
                 if trajectory_data.get(group) is None:

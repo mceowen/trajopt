@@ -297,6 +297,25 @@ class IndexMap:
         else:
             raise ValueError("Invalid ctcs flag.")
 
+        phase_idx_all = np.arange(
+                                self.mission_config.phases.entry.start,
+                                self.mission_config.phases.descent.end+1
+                                    )
+
+        entry_idx_all = np.arange(
+                            self.mission_config.phases.entry.start,
+                            self.mission_config.phases.entry.end+1
+                                    )
+        descent_idx_all = np.arange(
+                            self.mission_config.phases.descent.start,
+                            self.mission_config.phases.descent.end+1
+                                    )
+        phase_indices = AttrDict({
+            "all":          phase_idx_all,
+            "entry":        entry_idx_all,
+            "descent":      descent_idx_all,
+        })
+
         z_indices = AttrDict({
             "all":          z_idx_all,
             "state":        z_idx_state,
@@ -342,7 +361,8 @@ class IndexMap:
                 "final_state":          terminal,
                 "dynamics":             dynamics_indices,
             }),
-            "ctcs":         ctcs_indices,
+            "ctcs":     ctcs_indices,
+            "phases":   phase_indices
         })
 
         self.n = AttrDict({
@@ -365,6 +385,12 @@ class IndexMap:
             "minus_ctcs":           int(n_minus_ctcs),
         })
 
+        phase_dim = AttrDict({
+            "all":          len(phase_idx_all),
+            "entry":        len(entry_idx_all),
+            "descent":      len(descent_idx_all),
+        })
+
         self.N = AttrDict({
             "nonconvex_inequality": time_grid,
             "dynamics":             time_grid - 1,
@@ -383,6 +409,7 @@ class IndexMap:
             "real":                 time_grid,
             "pm_real":              int(Npm_real),
             "pm_ctcs":              int(Npm_ctcs),
+            "phases":               phase_dim
         })
 
     # TODO(Skye): Update this summary
