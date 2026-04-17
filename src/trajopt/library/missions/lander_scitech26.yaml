@@ -62,9 +62,9 @@ constraints.altitude_triggered_tilt:
 
 # time index where alt goes below 1, 
 
-constraints.altitude_triggered_angular_velocity:
+constraints.altitude_triggered_angular_speed:
   type: nonconvex_inequality
-  fcn: "(fcns.altitude <= 1.0) implies (fcns.angular_velocity <= 5.0)"
+  fcn: "(fcns.altitude <= 1.0) implies (fcns.angular_speed <= 5.0)"
   eps: [0.001]
   scale: [1.0]
   dimension: 1
@@ -97,11 +97,6 @@ constraint_list:
   - gimbal_limit
   - max_thrust
   - min_thrust
-  # - altitude_triggered_angular_velocity
-  # - altitude_triggered_glideslope
-  # - altitude_triggered_los
-  # - altitude_triggered_speed
-  # - altitude_triggered_tilt
 
 
 cost_list:
