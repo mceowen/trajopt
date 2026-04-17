@@ -199,18 +199,3 @@ def nonlinear_aero_nonjax(t: float, z: np.ndarray, nu: np.ndarray, trajopt_obj: 
     D = 0.5 * (1 / mass_nd) * rho_s * sref_s * Cd * vs**2
 
     return {"L": L, "D": D, "Cl": Cl, "Cd": Cd, "alpha": alpha, "rho": rho}
-
-
-def custom_constraints(subtrajopt_obj: dict) -> None:
-    """GHAME-specific custom constraints (placeholder)."""
-    pass
-
-
-def custom_cost(subtrajopt_obj: dict) -> None:
-    """GHAME-specific custom cost terms (placeholder)."""
-    pass
-
-
-def set_custom_params(trajopt_obj: dict) -> None:
-    """GHAME-specific custom parameters (placeholder)."""
-    pass
