@@ -66,7 +66,7 @@ control.aoa:
 
 constraints.dynamics:
   type: dynamics
-  fcn: trajopt/library/models/reentry_3dof.py:dynamics
+  fcn: trajopt/models/reentry_3dof.py:dynamics
 
 constraints.initial_state:
   type: equality_bc
@@ -135,7 +135,7 @@ constraints.bank_aoa_rate_limit:
 constraints.max_Q:
   type: nonconvex_inequality
   group: path
-  fcn: trajopt/library/models/reentry_3dof.py:heat_rate
+  fcn: trajopt/models/reentry_3dof.py:heat_rate
   eps: null
   dimension: 1
   ct: 0
@@ -143,7 +143,7 @@ constraints.max_Q:
 constraints.max_q:
   type: nonconvex_inequality
   group: path
-  fcn: trajopt/library/models/reentry_3dof.py:dynamic_pressure
+  fcn: trajopt/models/reentry_3dof.py:dynamic_pressure
   eps: null
   dimension: 1
   ct: 0
@@ -151,7 +151,7 @@ constraints.max_q:
 constraints.max_load:
   type: nonconvex_inequality
   group: path
-  fcn: trajopt/library/models/reentry_3dof.py:aero_load
+  fcn: trajopt/models/reentry_3dof.py:aero_load
   eps: null
   dimension: 1
   ct: 0
@@ -171,14 +171,14 @@ costs.min_terminal_velocity:
 costs.min_max_heat_rate:
     type: nonconvex
     minimax: 1
-    fcn: trajopt/library/models/reentry_3dof.py:heat_rate
+    fcn: trajopt/models/reentry_3dof.py:heat_rate
     units: [{none: 1}]
     ct: 0
 
 trajectories:
   long_lat_trajectory_plot:
     type: spatial
-    fcn: trajopt/library/models/reentry_3dof.py:long_lat
+    fcn: trajopt/models/reentry_3dof.py:long_lat
     group: state_trajplots
     title: "Longitude vs Latitude"
     xlabel: "Longitude (deg)"
@@ -186,7 +186,7 @@ trajectories:
   
   long_lat_alt_trajectory_plot:
     type : spatial
-    fcn: trajopt/library/models/reentry_3dof.py:long_lat_alt
+    fcn: trajopt/models/reentry_3dof.py:long_lat_alt
     group: state_trajplots
     title: "Ground Track (3D)"
     xlabel: "Longitude (deg)"
@@ -195,7 +195,7 @@ trajectories:
 
   # heat_rate:
   #   type: time_series
-  #   fcn: trajopt/library/models/reentry_3dof.py:heat_rate
+  #   fcn: trajopt/models/reentry_3dof.py:heat_rate
   #   group: path
   #   title: "Heat Rate vs Time"
   #   xlabel: "Time (s)"
@@ -203,7 +203,7 @@ trajectories:
 
   # dynamic_pressure:
   #   type: time_series
-  #   fcn: trajopt/library/models/reentry_3dof.py:dynamic_pressure
+  #   fcn: trajopt/models/reentry_3dof.py:dynamic_pressure
   #   group: path
   #   title: "Dynamic Pressure vs Time"
   #   xlabel: "Time (s)"
@@ -211,7 +211,7 @@ trajectories:
 
   # aero_load:
   #   type: time_series
-  #   fcn: trajopt/library/models/reentry_3dof.py:aero_load
+  #   fcn: trajopt/models/reentry_3dof.py:aero_load
   #   group: path
   #   title: "Aerodynamic Load vs Time"
   #   xlabel: "Time (s)"

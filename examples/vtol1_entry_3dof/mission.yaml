@@ -1,15 +1,15 @@
 # ===============================
 # FUNCTIONS
 # ===============================
-fcns.density_model: trajopt/library/missions/vtol.py:exp_density_jax
-fcns.nonlinear_aero: trajopt/library/missions/vtol.py:nonlinear_aero_jax
+fcns.density_model: trajopt/missions/vtol.py:exp_density_jax
+fcns.nonlinear_aero: trajopt/missions/vtol.py:nonlinear_aero_jax
 
 # ===============================
 # FUNCTION PARAMETERS
 # ===============================
 
-params.planet.inherit: trajopt/library/missions/shared/planet/earth.yaml
-params.vehicle.inherit: trajopt/library/missions/shared/vehicle/vtol.yaml
+params.planet.inherit: trajopt/missions/shared/planet/earth.yaml
+params.vehicle.inherit: trajopt/missions/shared/vehicle/vtol.yaml
 
 # ===============================
 # PROBLEM SCALES

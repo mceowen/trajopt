@@ -3,7 +3,7 @@ import numpy as np
 from trajopt.core.constraints.constraints import Constraints
 from trajopt.utils import tools
 
-from trajopt.library.methods.scp import hyperparameters as hp
+from trajopt.methods.scp import hyperparameters as hp
 
 
 class SubproblemConstraints(Constraints):

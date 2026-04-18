@@ -2,12 +2,12 @@
 # PARAMETERS
 # ===============================
 
-fcns.altitude: trajopt/library/models/lander_6dof.py:altitude
-fcns.speed: trajopt/library/models/lander_6dof.py:speed
-fcns.tilt: trajopt/library/models/lander_6dof.py:tilt
+fcns.altitude: trajopt/models/lander_6dof.py:altitude
+fcns.speed: trajopt/models/lander_6dof.py:speed
+fcns.tilt: trajopt/models/lander_6dof.py:tilt
 
-params.planet.inherit: trajopt/library/missions/shared/planet/nondim_planet.yaml
-params.vehicle.inherit: trajopt/library/missions/shared/vehicle/mikilander.yaml
+params.planet.inherit: trajopt/missions/shared/planet/nondim_planet.yaml
+params.vehicle.inherit: trajopt/missions/shared/vehicle/mikilander.yaml
 params.theta_tilt: 5
 
 params.zi: [4, 4, 0, 0.0, -4.0, 4.0, 0, 0, 0]

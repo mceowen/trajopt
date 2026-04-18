@@ -18,7 +18,7 @@ control:
 
 constraints.dynamics:
   type: dynamics
-  fcn: trajopt/library/models/lander_6dof.py:dynamics
+  fcn: trajopt/models/lander_6dof.py:dynamics
 
 constraints.initial_state:
   type: equality_bc
@@ -69,7 +69,7 @@ constraints.tilt_limit:
 constraints.min_thrust:
   type: nonconvex_inequality
   group: path
-  fcn: trajopt/library/models/lander_6dof.py:thrust
+  fcn: trajopt/models/lander_6dof.py:thrust
   dimension: 1
   ct: 0
 

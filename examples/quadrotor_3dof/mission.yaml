@@ -1,21 +1,21 @@
 # ===============================
 # FUNCTIONS
 # ===============================
-fcns.thrust_norm: trajopt/library/models/quadrotor_3dof.py:thrust_norm
-fcns.obstacle: trajopt/library/models/quadrotor_3dof.py:obstacle
-fcns.dynamics: trajopt/library/models/quadrotor_3dof.py:dynamics_jax
-fcns.height: trajopt/library/models/quadrotor_3dof.py:height
-fcns.pos_x: trajopt/library/models/quadrotor_3dof.py:pos_x
-fcns.pos_y: trajopt/library/models/quadrotor_3dof.py:pos_y
+fcns.thrust_norm: trajopt/models/quadrotor_3dof.py:thrust_norm
+fcns.obstacle: trajopt/models/quadrotor_3dof.py:obstacle
+fcns.dynamics: trajopt/models/quadrotor_3dof.py:dynamics_jax
+fcns.height: trajopt/models/quadrotor_3dof.py:height
+fcns.pos_x: trajopt/models/quadrotor_3dof.py:pos_x
+fcns.pos_y: trajopt/models/quadrotor_3dof.py:pos_y
 
-fcns.xz: trajopt/library/models/quadrotor_3dof.py:xz
-fcns.yz: trajopt/library/models/quadrotor_3dof.py:yz
+fcns.xz: trajopt/models/quadrotor_3dof.py:xz
+fcns.yz: trajopt/models/quadrotor_3dof.py:yz
 
 # ===============================
 # FUNCTION PARAMETERS
 # ===============================
-params.planet.inherit: trajopt/library/missions/shared/planet/earth.yaml
-params.vehicle.inherit: trajopt/library/missions/shared/vehicle/quadrotor.yaml
+params.planet.inherit: trajopt/missions/shared/planet/earth.yaml
+params.vehicle.inherit: trajopt/missions/shared/vehicle/quadrotor.yaml
 
 state.pos.scale: 1.0
 state.vel.scale: 1.0

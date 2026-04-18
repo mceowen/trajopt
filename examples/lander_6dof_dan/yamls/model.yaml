@@ -1,6 +1,6 @@
 # model yaml for lander_6dof model
 
-inherit: trajopt/library/models/lander_6dof.yaml
+inherit: trajopt/models/lander_6dof.yaml
 
 dimensions:
   n: 14
@@ -75,7 +75,7 @@ constraint_models:
 ### OLD
 - type: dynamics
   name: dynamics
-  fcn: trajopt/library/models/lander_6dof.py:dynamics
+  fcn: trajopt/models/lander_6dof.py:dynamics
 
 - type: equality_bc
   name: initial_state
@@ -139,7 +139,7 @@ constraint_models:
 - type: nonconvex_inequality
   name: height_triggered_pitch
   group: path
-  fcn: trajopt/library/models/lander_6dof.py:height_triggered_pitch
+  fcn: trajopt/models/lander_6dof.py:height_triggered_pitch
   eps: null
   dimension: 1
   ct: 0
@@ -147,7 +147,7 @@ constraint_models:
 - type: nonconvex_inequality
   name: min_thrust_norm
   group: path
-  fcn: trajopt/library/models/lander_6dof.py:min_thrust_norm
+  fcn: trajopt/models/lander_6dof.py:min_thrust_norm
   eps: null
   dimension: 1
   ct: 0

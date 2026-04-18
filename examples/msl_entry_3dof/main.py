@@ -8,7 +8,7 @@ np.random.seed(0)  # for reproducibility
 
 # create trajectroy analyzer object
 mission    = "mission.yaml"
-model      = "trajopt/library/models/reentry_3dof.yaml"
+model      = "trajopt/models/reentry_3dof.yaml"
 method     = "method.yaml"
 variations = "variations.yaml"
 

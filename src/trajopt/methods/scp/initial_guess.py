@@ -1,6 +1,6 @@
 import numpy as np
-from trajopt.library.methods.scp import discretize
-from trajopt.library.methods.scp import integrators
+from trajopt.methods.scp import discretize
+from trajopt.methods.scp import integrators
 from scipy.interpolate import interp1d
 from trajopt.utils.tools import AttrDict
 

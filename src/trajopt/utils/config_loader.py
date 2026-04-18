@@ -111,7 +111,7 @@ def load_trajopt_config(mission_path, model_path, method_path, variations_path=N
 def resolve_path(path_str):
     """Resolve a path string to a Path object. Handles local and package paths."""
     
-    # Package path: trajopt/library/... -> importlib.resources
+    # Package path: trajopt/... -> importlib.resources
     if path_str.startswith('trajopt/') or path_str.startswith('/trajopt/'):
         path_str = path_str.lstrip('/')
         parts    = path_str.split('/')

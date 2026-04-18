@@ -1,4 +1,4 @@
-inherit: trajopt/library/methods/autoscvx/method.yaml
+inherit: trajopt/methods/autoscvx/method.yaml
 
 guess:
   # time initialization

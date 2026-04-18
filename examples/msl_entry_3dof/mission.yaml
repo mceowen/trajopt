@@ -1,15 +1,15 @@
 # ===============================
 # FUNCTIONS
 # ===============================
-fcns.density_model: trajopt/library/missions/msl.py:exp_density_jax
-fcns.nonlinear_aero: trajopt/library/missions/msl.py:nonlinear_aero_jax
-fcns.altitude: trajopt/library/models/reentry_3dof.py:altitude
+fcns.density_model: trajopt/missions/msl.py:exp_density_jax
+fcns.nonlinear_aero: trajopt/missions/msl.py:nonlinear_aero_jax
+fcns.altitude: trajopt/models/reentry_3dof.py:altitude
 
 # ===============================
 # FUNCTION PARAMETERS
 # ===============================
-params.planet.inherit: trajopt/library/missions/shared/planet/mars.yaml
-params.vehicle.inherit: trajopt/library/missions/shared/vehicle/msl.yaml
+params.planet.inherit: trajopt/missions/shared/planet/mars.yaml
+params.vehicle.inherit: trajopt/missions/shared/vehicle/msl.yaml
 
 state.r.scale: 1000000
 state.theta.scale: 1.0
@@ -57,7 +57,7 @@ constraints:
 
   chute_deploy:
     type: nonconvex_inequality
-    fcn: trajopt/library/models/reentry_3dof.py:altitude
+    fcn: trajopt/models/reentry_3dof.py:altitude
     nodes: ["${phases.descent.start}"]
     min_value: [8000]
     max_value: [12000]
@@ -74,7 +74,7 @@ costs:
 trajectories:
   lift_drag:
     type: time_series
-    fcn: trajopt/library/missions/msl.py:lift_drag
+    fcn: trajopt/missions/msl.py:lift_drag
     group: lift_drag
 
 # ===============================
