@@ -5,9 +5,9 @@ from typing import Any, Dict, List, Optional
 import cvxpy as cp
 import numpy as np
 
-from trajopt.library.methods import convergence, discretize
-from trajopt.library.methods import hyperparameters as hp
-from trajopt.library.methods.subproblem_constraints import SubproblemConstraints, configure_penalty_weights
+from trajopt.library.methods.scp import convergence, discretize
+from trajopt.library.methods.scp import hyperparameters as hp
+from trajopt.library.methods.scp.subproblem_constraints import SubproblemConstraints, configure_penalty_weights
 from trajopt.utils import tools
 from trajopt.utils.tools import recursive_attrdict
 

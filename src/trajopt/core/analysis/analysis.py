@@ -3,8 +3,8 @@ import numpy as np
 import trajopt.utils.tools as tools
 import jax
 jax.config.update("jax_enable_x64", True)
-import trajopt.library.methods.integrators as integrators
-import trajopt.library.methods.initial_guess as guess
+import trajopt.library.methods.scp.integrators as integrators
+import trajopt.library.methods.scp.initial_guess as guess
 from trajopt.core.indexing.index_map import IndexMap
 from trajopt.core.problem import Problem
 from trajopt.core.solution_method import SolutionMethod

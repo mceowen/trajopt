@@ -2,7 +2,7 @@ from trajopt.core.indexing.index_map import IndexMap
 from trajopt.core.problem import Problem
 from trajopt.core.solution_method import SolutionMethod
 import trajopt.utils.config_loader as cfg
-import trajopt.library.methods.scp as scp
+import trajopt.library.methods.scp.scp as scp
 import trajopt.core.analysis.analysis as analysis
 import trajopt.core.analysis.plotting as plotting
 from trajopt.core.analysis.trajplots import *

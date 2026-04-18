@@ -1,10 +1,10 @@
 import numpy as np
-from trajopt.library.methods    import initial_guess as guess
-from trajopt.library.methods    import convergence
-from trajopt.library.methods    import hyperparameters
-from trajopt.library.methods    import discretize
-from trajopt.library.methods    import integrators
-from trajopt.library.methods.subproblem import Subproblem
+from trajopt.library.methods.scp    import initial_guess as guess
+from trajopt.library.methods.scp    import convergence
+from trajopt.library.methods.scp    import hyperparameters
+from trajopt.library.methods.scp    import discretize
+from trajopt.library.methods.scp    import integrators
+from trajopt.library.methods.scp.subproblem import Subproblem
 from trajopt.core.scaling.nondim import Nondim
 
 from trajopt.utils.tools import AttrDict, recursive_attrdict

@@ -1,7 +1,7 @@
 import numpy as np
 import jax
 import jax.numpy as jnp
-import trajopt.library.methods.convexify as convexify
+import trajopt.library.methods.scp.convexify as convexify
 from trajopt.utils.config_loader import resolve_function_from_path
 
 def _resolve_fcn(fcn_string, fcns=None):

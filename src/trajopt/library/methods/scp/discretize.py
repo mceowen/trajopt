@@ -6,7 +6,7 @@ jax.config.update("jax_enable_x64", True)
 import diffrax
 
 
-import trajopt.library.methods.pseudospectral as pseudospectral
+import trajopt.library.methods.scp.pseudospectral as pseudospectral
 import trajopt.utils.tools as tools
 
 jax.config.update("jax_compilation_cache_dir", "/tmp/jax_cache")
