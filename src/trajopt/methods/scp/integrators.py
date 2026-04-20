@@ -6,144 +6,105 @@ import trajopt.utils.tools as tools
 from scipy.integrate import solve_ivp
 from scipy.interpolate import interp1d
 
-def _call_dynamics(dynamics, t, y, v, params):
-    try:
-        return dynamics(t, y, v, params)
-    except TypeError:
-        return dynamics(y, v, params)
+
+def _foh(t, t_ref, vals):
+    k = jnp.clip(jnp.searchsorted(t_ref, t, side='right') - 1, 0, t_ref.shape[0] - 2)
+    a = (t_ref[k + 1] - t) / (t_ref[k + 1] - t_ref[k])
+    return a * vals[k] + (1 - a) * vals[k + 1]
 
 
-def compile_dense_jax_propagator(problem, method, params, dynamics=None, compiled_attr_name="propagate_rk4_dense_jit"):
+def _barycentric_weights(t_ref):
+    n    = t_ref.shape[0]
+    diff = t_ref[:, None] - t_ref[None, :]
+    diff = diff.at[jnp.arange(n), jnp.arange(n)].set(1.0)
+    return 1.0 / jnp.prod(diff, axis=1)
 
-    dynamics = problem.constraints.get(type="dynamics")[0].fcn if dynamics is None else dynamics
 
-    def rk4_step(yi, ti, dt, v_ref, t_ref, params):
-        k1 = y_dot(yi, ti, v_ref, t_ref, params)
-        k2 = y_dot(yi + 0.5*dt*k1, ti + 0.5*dt, v_ref, t_ref, params)
-        k3 = y_dot(yi + 0.5*dt*k2, ti + 0.5*dt, v_ref, t_ref, params)
-        k4 = y_dot(yi + dt*k3, ti + dt, v_ref, t_ref, params)
-        return yi + (dt/6.0) * (k1 + 2*k2 + 2*k3 + k4)
+def _lagrange(t, t_ref, vals, w):
+    diffs = jnp.where(t - t_ref == 0.0, 1e-30, t - t_ref)
+    terms = w / diffs
+    return (terms @ vals) / jnp.sum(terms)
 
-    def y_dot(y, t, v_ref, t_ref, params):
-        k = jnp.searchsorted(t_ref, t, side='right') - 1
-        k = jnp.clip(k, 0, len(t_ref) - 2)
 
-        v_ref_k = v_ref[k]
-        v_ref_kp = v_ref[k+1]
-        t_ref_k = t_ref[k]
-        t_ref_kp = t_ref[k+1]
+def _jit_cached(method, name, fn):
+    if not hasattr(method, name):
+        setattr(method, name, jax.jit(fn))
+    return getattr(method, name)
 
-        # FOH interpolation of controls
-        a = 1 - (t - t_ref_k) / (t_ref_kp - t_ref_k)
-        b = (t - t_ref_k) / (t_ref_kp - t_ref_k)
-        v = a * v_ref_k + b * v_ref_kp
 
-        return _call_dynamics(dynamics, t, y, v, params)
+def propagate_znu(z0, nu, problem, method, compiled_attr_name="_jit_propagate_znu"):
+    dynamics    = problem.constraints.get(type="dynamics")[0].fcn
+    params      = tools.recursive_to_dict(problem.params)
+    idx         = problem.index_map.indices
+    N           = nu.shape[0]
+    use_ps      = getattr(method.flags, 'discretize', 'ms') == 'ps'
+    z0_jax      = jnp.asarray(z0)
+    nu_jax      = jnp.asarray(nu)
+    tau_dense   = jnp.linspace(0.0, 1.0, 1000)
+    phase_sched = {k: jnp.asarray(v) for k, v in params.pop('_phase_schedule', {}).items()}
 
-    rk4_step_jit = rk4_step
+    if use_ps:
+        from trajopt.methods.scp.discretize import compute_ps_differentiation_matrix
+        _, etau, _, _      = compute_ps_differentiation_matrix(N - 1)
+        tau_ref            = jnp.asarray((etau + 1.0) / 2.0)
+        bary_w             = _barycentric_weights(tau_ref)
+        compiled_attr_name = "_jit_propagate_znu_ps"
+    else:
+        tau_ref = jnp.linspace(0.0, 1.0, N)
+        bary_w  = None
 
-    def propagate(y0, v_ref, t_ref, t_nl, params):
-        dt = t_nl[1] - t_nl[0]
+    def interp(tau, nu, tau_ref, bary_w):
+        return _lagrange(tau, tau_ref, nu, bary_w) if bary_w is not None else _foh(tau, tau_ref, nu)
 
-        def rk4_step_partial(yi, ti):
-            yi_next = rk4_step_jit(yi, ti, dt, v_ref, t_ref, params)
-            return yi_next, yi_next
+    def _solve(z0, nu, tau_ref, tau_dense, bary_w):
+        def f_dot(tau, z, _):
+            k = jnp.clip(jnp.round(tau * (N - 1)).astype(jnp.int32), 0, N - 1)
+            p = {**params, **{key: arr[k] for key, arr in phase_sched.items()}}
+            return dynamics(z, interp(tau, nu, tau_ref, bary_w), p)
+        return diffrax.diffeqsolve(
+            diffrax.ODETerm(f_dot), diffrax.Dopri5(),
+            t0=0.0, t1=1.0, dt0=None, y0=z0,
+            stepsize_controller=diffrax.PIDController(rtol=1e-6, atol=1e-6),
+            saveat=diffrax.SaveAt(ts=tau_dense),
+        )
 
-        yf, ys = jax.lax.scan(rk4_step_partial, y0, t_nl[:-1])
-
-        y_full = jnp.vstack([y0[None, :], ys])
-
-        return y_full
-
-    setattr(method, compiled_attr_name, jax.jit(propagate))
-
-def propagate_jax_rk4_dense(z0, nu_ref, t_ref, t_nl, problem, method, compiled_attr_name="propagate_rk4_dense_jit"):
-
-    z0_jax = jnp.array(z0)
-    nu_ref_jax = jnp.array(nu_ref)
-    t_ref_jax = jnp.array(t_ref)
-    t_nl_jax = jnp.array(t_nl)
-    
-    params = problem.params
-    params_jax = tools.recursive_to_dict(params)
-
-    propagate_jit = getattr(method, compiled_attr_name)
-    z_full_jax = propagate_jit(z0_jax, nu_ref_jax, t_ref_jax, t_nl_jax, params_jax)
-
-    t_nl = np.asarray(t_nl_jax)
-    z_nl = np.asarray(z_full_jax)
-    nu_nl = np.hstack([np.interp(t_nl, t_ref, nu_ref[:, i]).reshape((-1, 1)) for i in range(nu_ref.shape[1])])
+    sol   = _jit_cached(method, compiled_attr_name, _solve)(z0_jax, nu_jax, tau_ref, tau_dense, bary_w)
+    z_nl  = np.asarray(sol.ys)
+    nu_nl = np.asarray(jax.vmap(lambda tau: interp(tau, nu_jax, tau_ref, bary_w))(tau_dense))
+    t_nl  = z_nl[:, idx.z.time].squeeze(-1)
 
     return t_nl, z_nl, nu_nl
 
-def _apply_phase_schedule(params, k):
-    schedule = params.get('_phase_schedule', None)
-    if schedule is None:
-        return params
-    params_k = dict(params)
-    for key, array in schedule.items():
-        params_k[key] = jnp.asarray(array)[k]
-    return params_k
 
-def compile_tau_propagator(problem, method, n_dense=1000):
-    fcn_base  = problem.constraints.get(type="dynamics")[0].fcn_base
-    N         = method.index_map.N.time_grid
-    n_state   = problem.index_map.n.state
-    n_control = problem.index_map.n.control
+def propagate_txu(x0, u, t_ref, t_nl, problem, method, compiled_attr_name=None):
+    dynamics  = problem.constraints.get(type="dynamics")[0].fcn_base
     params    = tools.recursive_to_dict(problem.params)
-    tau       = jnp.linspace(0.0, 1.0, N)
-    tau_d     = jnp.linspace(0.0, 1.0, n_dense)
+    x0_jax    = jnp.asarray(x0)
+    u_jax     = jnp.asarray(u)
+    t_ref_jax = jnp.asarray(t_ref)
+    t_nl_jax  = jnp.asarray(t_nl)
 
-    @jax.jit
-    def solve(z0_real, nu):
-        def rhs(t, z_real, _):
-            x = z_real[:n_state]
-            t_phys = z_real[n_state:n_state + 1]
-            k = jnp.clip(jnp.searchsorted(tau, t, side='right') - 1, 0, N - 2)
-            a = (tau[k+1] - t) / (tau[k+1] - tau[k])
-            nu_interp = a * nu[k] + (1 - a) * nu[k+1]
-            u = nu_interp[:n_control]
-            s = nu_interp[n_control:]
-            params_k = _apply_phase_schedule(params, k)
-            dx_dt = fcn_base(t_phys, x, u, params_k)
-            dt_dt = jnp.ones(1, dtype=z_real.dtype)
-            return s * jnp.concatenate([dx_dt, dt_dt])
+    def _solve(x0, u, t_ref, t_nl):
+        def f_dot(t, x, _):
+            return dynamics(t, x, _foh(t, t_ref, u), params)
         return diffrax.diffeqsolve(
-            diffrax.ODETerm(rhs), diffrax.Dopri5(), 0.0, 1.0, 0.0005, z0_real,
-            stepsize_controller=diffrax.PIDController(rtol=1e-8, atol=1e-8),
-            saveat=diffrax.SaveAt(ts=tau_d), max_steps=500000,
-        ).ys
+            diffrax.ODETerm(f_dot), diffrax.Dopri5(),
+            t0=t_ref[0], t1=t_ref[-1], dt0=None, y0=x0,
+            stepsize_controller=diffrax.PIDController(rtol=1e-6, atol=1e-6),
+            saveat=diffrax.SaveAt(ts=t_nl),
+        )
 
-    method.propagate_tau_jit = solve
-    method.tau_nodes = tau
-    method.tau_dense = tau_d
+    sol   = _jit_cached(method, compiled_attr_name, _solve)(x0_jax, u_jax, t_ref_jax, t_nl_jax) \
+            if compiled_attr_name else _solve(x0_jax, u_jax, t_ref_jax, t_nl_jax)
+    u_out = np.asarray(jax.vmap(lambda t: _foh(t, t_ref_jax, u_jax))(t_nl_jax))
 
-
-def propagate_tau(z0, nu_ref, problem, method):
-    idx  = problem.index_map.indices
-    z0_real = z0[idx.z.real]
-    z_nl = np.asarray(method.propagate_tau_jit(jnp.array(z0_real), jnp.array(nu_ref)))
-    tau_n, tau_d = np.asarray(method.tau_nodes), np.asarray(method.tau_dense)
-    u_nl = np.column_stack([np.interp(tau_d, tau_n, nu_ref[:, c]) for c in idx.nu.control])
-    return z_nl[:, idx.z.time].reshape(-1), z_nl[:, idx.z.state], u_nl
+    return np.asarray(t_nl_jax), np.asarray(sol.ys), u_out
 
 
-def propagate_scipy_rk45(z0, nu_ref, t_ref, t_nl, problem, method, dynamics=None):
-
-    dynamics = problem.constraints.get(type="dynamics")[0].fcn if dynamics is None else dynamics
-    nu_interp = interp1d(t_ref, nu_ref, axis=0, fill_value="extrapolate")
-    params = tools.recursive_to_dict(problem.params)
-
-    def ode_func(t, z):
-        nu = nu_interp(t)
-        return np.array(_call_dynamics(dynamics, t, z, nu, params))
-
-    sol = solve_ivp(ode_func, [t_nl[0], t_nl[-1]], z0, t_eval=t_nl, method='RK45', rtol=1e-8, atol=1e-8)
-
-    t_out = sol.t
-    z_out = sol.y.T
-    nu_out = nu_interp(t_out)
-
-    return t_out, z_out, nu_out
-
-
+def propagate_scipy_rk45(x0, u_ref, t_ref, t_nl, problem, method, dynamics=None):
+    dynamics = problem.constraints.get(type="dynamics")[0].fcn_base if dynamics is None else dynamics
+    params   = tools.recursive_to_dict(problem.params)
+    u_interp = interp1d(t_ref, u_ref, axis=0, fill_value="extrapolate")
+    def f_dot(t, x): return np.array(dynamics(t, x, u_interp(t), params))
+    sol      = solve_ivp(f_dot, [t_nl[0], t_nl[-1]], x0, t_eval=t_nl, method='RK45', rtol=1e-8, atol=1e-8)
+    return sol.t, sol.y.T, u_interp(sol.t)

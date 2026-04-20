@@ -74,7 +74,7 @@ costs:
   control_rate_regularization:
     type: rate_regularization
     set: control
-    w: 0.1
+    w: 0.001
 
 # ===============================
 # ACTIVE CONSTRAINTS AND COSTS
@@ -93,12 +93,21 @@ constraint_list:
 
 cost_list: 
   - min_terminal_velocity
-  # - control_rate_regularization
+  - control_rate_regularization
 
 trajectories:
   heat_rate:
+    type: time_series
+    fcn: trajopt/models/reentry_3dof.py:heat_rate
+    group: path
     upper_limit: 33300
   dynamic_pressure:
+    type: time_series
+    fcn: trajopt/models/reentry_3dof.py:dynamic_pressure
+    group: path
     upper_limit: 18000
   aero_load:
+    type: time_series
+    fcn: trajopt/models/reentry_3dof.py:aero_load
+    group: path
     upper_limit: 24.525

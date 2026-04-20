@@ -17,9 +17,15 @@ fcns.yz: trajopt/models/quadrotor_3dof.py:yz
 params.planet.inherit: trajopt/missions/shared/planet/earth.yaml
 params.vehicle.inherit: trajopt/missions/shared/vehicle/quadrotor.yaml
 
-state.pos.scale: 1.0
-state.vel.scale: 1.0
-control.thrust.scale: 1.0
+state.x.scale: 1.0
+state.y.scale: 1.0
+state.z.scale: 1.0
+state.vx.scale: 1.0
+state.vy.scale: 1.0
+state.vz.scale: 1.0
+control.Tx.scale: 1.0
+control.Ty.scale: 1.0
+control.Tz.scale: 1.0
 time.scale: 1.0
 
 # ===============================

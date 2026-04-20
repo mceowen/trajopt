@@ -2,52 +2,44 @@ import copy
 import numpy as np
 import trajopt.utils.tools as tools
 import jax
-jax.config.update("jax_enable_x64", True)
 import trajopt.methods.scp.integrators as integrators
 import trajopt.methods.scp.initial_guess as guess
 from trajopt.core.indexing.index_map import IndexMap
 from trajopt.core.problem import Problem
 from trajopt.core.solution_method import SolutionMethod
 from trajopt.utils.tools import recursive_attrdict, AttrDict
+jax.config.update("jax_enable_x64", True)
 
 
-def _eval_per_phase(eval_fn, t, z, nu, problem, params_dict, t_nodes=None):
-    """Evaluate eval_fn per-phase with correct params, stitch results."""
+def _eval_per_phase(eval_fn, z, nu, problem, params_dict, t_nodes=None):
     if problem.phases is None:
-        return eval_fn(t, z, nu, params_dict)
+        return eval_fn(z, nu, params_dict)
 
-    N_pts = t.shape[0]
-
-    if t_nodes is None:
-        ranges = [(phase.start, min(phase.end, N_pts)) for phase in problem.phases]
-    else:
-        ranges = []
-        for phase in problem.phases:
-            t_s = t_nodes[phase.start]
-            t_e = t_nodes[min(phase.end, len(t_nodes) - 1)] if phase.end < len(t_nodes) else t[-1] + 1
-            s = int(np.searchsorted(t, t_s))
-            e = int(np.searchsorted(t, t_e)) if phase.end < len(t_nodes) else N_pts
-            ranges.append((s, e))
+    N_pts = z.shape[0]
+    _, t, _ = problem.index_map.unpack_z(z)
+    t = np.asarray(t).reshape(-1)
 
     parts = []
-    for (s, e), phase in zip(ranges, problem.phases):
+    for phase in problem.phases:
+        if t_nodes is None:
+            s, e = phase.start, min(phase.end, N_pts)
+        else:
+            t_s = t_nodes[phase.start]
+            t_e = t_nodes[min(phase.end, len(t_nodes) - 1)] if phase.end < len(t_nodes) else t[-1] + 1
+            s   = int(np.searchsorted(t, t_s))
+            e   = int(np.searchsorted(t, t_e)) if phase.end < len(t_nodes) else N_pts
+
         if e <= s:
             continue
-        p = dict(params_dict)
-        for key, val in phase.params.items():
-            p[key] = val
-        result = eval_fn(t[s:e], z[s:e], nu[s:e], p)
-        parts.append((s, e, result))
+        parts.append((s, e, eval_fn(z[s:e], nu[s:e], {**params_dict, **phase.params})))
 
     if not parts:
-        return eval_fn(t, z, nu, params_dict)
+        return eval_fn(z, nu, params_dict)
 
-    first = parts[0][2]
+    first, N0 = parts[0][2], parts[0][1] - parts[0][0]
     stitched = {}
     for key, val in first.items():
-        if val is None:
-            stitched[key] = None
-        elif isinstance(val, np.ndarray) and val.ndim >= 1 and val.shape[0] == (parts[0][1] - parts[0][0]):
+        if isinstance(val, np.ndarray) and val.ndim >= 1 and val.shape[0] == N0:
             full = np.zeros((N_pts, *val.shape[1:]))
             for s, e, r in parts:
                 full[s:e] = r[key]
@@ -103,18 +95,23 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
 
     for data in selected_iter_data:
         
-        t_opt = np.asarray(data['t_opt']).reshape(-1)
-        x_opt = np.asarray(data['x_opt'])
-        u_opt = np.asarray(data['u_opt'])
         z_opt = np.asarray(data['z_opt'])
         nu_opt = np.asarray(data['nu_opt'])
 
-        t_nl, x_nl, u_nl = integrators.propagate_tau(z_opt[0], nu_opt, problem, method)
+        idx = problem.index_map.indices
+        x_opt = z_opt[:, idx.z.state]
+        t_opt = z_opt[:, idx.z.time].squeeze(-1)
+        u_opt = nu_opt[:, idx.nu.control]
 
+        t_nl, z_nl, nu_nl = integrators.propagate_znu(z_opt[0], nu_opt, problem, method)
+        x_nl = z_nl[:, idx.z.state]
+        u_nl = nu_nl[:, idx.nu.control]
 
-        t_init = np.asarray(method.initial_guess.t).reshape(-1)
-        x_init = method.initial_guess.x
-        u_init = method.initial_guess.u
+        z_init = method.initial_guess.z
+        nu_init = method.initial_guess.nu
+        x_init = z_init[:, idx.z.state]
+        t_init = z_init[:, idx.z.time].squeeze(-1)
+        u_init = nu_init[:, idx.nu.control]
 
         # compute constraints for z_nl, z_opt, name = SUBPLOT , TYPE, group = FIGURE, units
         constraint_data = AttrDict({})
@@ -131,9 +128,9 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
                     group = name
                 
                 eval_fn   = constraint.compute_constraint_values
-                opt_vals  = _eval_per_phase(eval_fn, t_opt,  x_opt,  u_opt,  problem, params_dict)
-                nl_vals   = _eval_per_phase(eval_fn, t_nl,   x_nl,   u_nl,   problem, params_dict, t_nodes=t_opt)
-                init_vals = _eval_per_phase(eval_fn, t_init, x_init, u_init, problem, params_dict)
+                opt_vals  = _eval_per_phase(eval_fn,z_opt,  nu_opt,  problem, params_dict)
+                nl_vals   = _eval_per_phase(eval_fn, z_nl,   nu_nl,   problem, params_dict, t_nodes=t_opt)
+                init_vals = _eval_per_phase(eval_fn,z_init, nu_init, problem, params_dict)
 
                 output = AttrDict({
                     "name": name,
@@ -157,16 +154,11 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
 
                 if group == None:
                     group = name
-
-                # trajectory functions are not nondimensionalized so need to pass in dimensional state
-                nt = nondim.time_scale
-                M_state = nondim.M.state.nd2d
-                M_ctrl = nondim.M.control.nd2d
                 
                 eval_fn   = trajectory.compute_trajectory_values
-                opt_vals  = _eval_per_phase(eval_fn, nt*t_opt,  x_opt @ M_state,  u_opt @ M_ctrl,  problem, params_dict)
-                nl_vals   = _eval_per_phase(eval_fn, nt*t_nl,   x_nl  @ M_state,   u_nl @ M_ctrl,   problem, params_dict, t_nodes=nt*t_opt)
-                init_vals = _eval_per_phase(eval_fn, nt*t_init, x_init@ M_state, u_init @ M_ctrl, problem, params_dict)
+                opt_vals  = _eval_per_phase(eval_fn, z_opt,  nu_opt,  problem, params_dict)
+                nl_vals   = _eval_per_phase(eval_fn, z_nl,   nu_nl,   problem, params_dict, t_nodes=t_opt)
+                init_vals = _eval_per_phase(eval_fn, z_init, nu_init, problem, params_dict)
 
                 output = AttrDict({
                     "name": name,

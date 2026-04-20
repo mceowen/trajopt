@@ -18,19 +18,10 @@ state.v.scale: 1000
 state.gamma.scale: 1
 state.psi.scale: 1
 
-control.bank.scale: 1
+control.bank.scale: 0.01
 control.aoa.scale: 1
 
 time.scale: 1.0
-
-phases:
-  entry:
-    start: 0
-    p: 0
-  
-  descent:
-    start: 70
-    p: 1
 
 # ===============================
 # CONSTRAINT/COST PARAMS
@@ -41,9 +32,9 @@ constraints:
     idx: [0, 1, 2, 3, 4, 5]
 
   final_state:
-    value: ["${params.planet.r + 3e3}"]
-    idx: [0]
-    eps: [500]
+    value: ["${params.planet.r + 10e3}", 0.0, 10.5768]
+    idx: [0, 1, 2]
+    eps: [1, 0.0001, 0.0001]
 
   state_limits:
     min_value: ["${params.planet.r + 1e3}", 10.0]
@@ -54,16 +45,6 @@ constraints:
     min_value_idx: [0, 1]
     max_value: [178.0, 10.0]
     max_value_idx: [0, 1]
-
-  chute_deploy:
-    type: nonconvex_inequality
-    fcn: trajopt/models/reentry_3dof.py:altitude
-    nodes: ["${phases.descent.start}"]
-    min_value: [8000]
-    max_value: [12000]
-    scale: [10000]
-    eps: [100]
-    dimension: 1
 
 costs:
   min_lonlat_error:
@@ -87,7 +68,6 @@ constraint_list:
   - final_state
   - state_limits
   - bank_aoa_angle_limits
-  - chute_deploy
 
 cost_list: 
-  - min_lonlat_error
+  - min_terminal_velocity

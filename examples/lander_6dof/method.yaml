@@ -1,12 +1,17 @@
 inherit: trajopt/methods/configs/autoscvx.yaml
 
-time_grid: 15
+time_grid: 20
+
+flags:
+  free_final_time: 0
+  equal_dt: 0
+  discretize: ps
 
 guess:
   type: straight_line
   # time initialization
   T_init: 5
-  T_min: 1
+  T_min: 0.01
   T_max: 10
   dT_max: 0.5 # 5.0
 
@@ -18,7 +23,7 @@ guess:
   line_guess_u_init: "${np.tile([2.0, 0.5, 0], (time_grid, 1))}"
 
 conv:
-  eps_state: 0.01
+  eps_state: 0.0001
   eps_dyn: 0.00001
   eps_defect: 1.0
   eps_cost: 1

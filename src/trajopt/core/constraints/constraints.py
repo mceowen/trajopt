@@ -114,34 +114,41 @@ class Constraints:
     # TODO(Skye): Verify nondim (specifically time)
     # Move this to subproblem constraints
     # Generalize dynamics augmentation so users can add arbitrary states/controls
-    def augment_dynamics_jax(self, f_phys, z, nu, params):
+    
+    def augment_dynamics_jax(self, f_phys):
         """
         Build augmented dynamics zdot = [xdot_tau, s, dbeta_dtau].
         """
-        x, t, beta  = self.index_map.unpack_z(z)
-        u, s        = self.index_map.unpack_nu(nu)
+        # generate f(z, nu) function given f(t, x, u)
+        def dynamics_z_nu(z, nu, params):
+            x, t, beta  = self.index_map.unpack_z(z)
+            u, s        = self.index_map.unpack_nu(nu)
 
-        dx_dt       = self.index_map.evaluate_f_phys(f_phys, z, nu, params)
+            dx_dt       = self.index_map.evaluate_f_phys(f_phys, z, nu, params)
 
-        dt_dt       = jnp.asarray([1.0], dtype=z.dtype)
+            dt_dt       = jnp.asarray([1.0], dtype=z.dtype)
 
+            ctcs_constraints = tuple(self.get(ct=1))
+            if ctcs_constraints:
+                ctcs_values = jnp.concatenate([
+                    jnp.atleast_1d(self.index_map.evaluate_f_phys(constraint.fcn, z, nu, params))
+                    for constraint in ctcs_constraints
+                ])
 
-        # TODO(Skye/Carlos): verify scaling choice for CTCS dynamics - removed 100, check why not squared/nondim properly
-        # CTCS callback functions follow the same convention as other nonconvex
-        # constraints: they act on the physical state/control slices (x, u), not
-        # the full augmented algorithm vectors (z, nu) that also include time,
-        # beta, and dilation states.
-        ctcs_constraints = tuple(self.get(ct=1))
-        if ctcs_constraints:
-            ctcs_values = jnp.concatenate([
-                jnp.atleast_1d(self.index_map.evaluate_f_phys(constraint.fcn, z, nu, params))
-                for constraint in ctcs_constraints
-            ])
+                dbeta_dt = jnp.maximum(ctcs_values, 0.0)
+            else:
+                dbeta_dt = jnp.zeros_like(beta)
 
-            dbeta_dt = jnp.maximum(ctcs_values, 0.0)
-        else:
-            dbeta_dt = jnp.zeros_like(beta)
+            return s * jnp.concatenate([dx_dt, dt_dt, dbeta_dt])
 
-        dz_dtau = s * jnp.concatenate([dx_dt, dt_dt, dbeta_dt])
+        return dynamics_z_nu
+    
+    def augment_txu_to_znu(self, fcn):
 
-        return dz_dtau
+        def fcn_znu(z, nu, params):
+            x, t, beta  = self.index_map.unpack_z(z)
+            u, s        = self.index_map.unpack_nu(nu)
+
+            return fcn(t, x, u, params)
+
+        return fcn_znu

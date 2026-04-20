@@ -5,8 +5,8 @@ import jax.numpy as jnp
 # jax autodiff for affine approximations
 def linearize_jax(fcn):
 
-    dfcn_dz = jax.jit(jax.jacfwd(fcn, argnums=1))
-    dfcn_dnu = jax.jit(jax.jacfwd(fcn, argnums=2))
+    dfcn_dz = jax.jit(jax.jacfwd(fcn, argnums=0))
+    dfcn_dnu = jax.jit(jax.jacfwd(fcn, argnums=1))
     f = jax.jit(fcn)
 
     return f, dfcn_dz, dfcn_dnu

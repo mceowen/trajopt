@@ -1,24 +1,65 @@
 state:
-  pos:
-    idx: [0, 1, 2]
-    label: "Position"
-  
-  vel:
-    idx: [3, 4, 5]
-    label: "Velocity"
+  x:
+    idx: [0]
+    title: "X Position vs Time"
+    xlabel: "Time (s)"
+    ylabel: "X (m)"
+  y:
+    idx: [1]
+    title: "Y Position vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Y (m)"
+  z:
+    idx: [2]
+    title: "Z Position vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Z (m)"
+  vx:
+    idx: [3]
+    title: "X Velocity vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Vx (m/s)"
+  vy:
+    idx: [4]
+    title: "Y Velocity vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Vy (m/s)"
+  vz:
+    idx: [5]
+    title: "Z Velocity vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Vz (m/s)"
 
 control:
-  thrust:
-    idx: [0, 1, 2]
-    label: "Thrust"
+  Tx:
+    idx: [0]
+    title: "X Thrust vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Tx (N)"
+  Ty:
+    idx: [1]
+    title: "Y Thrust vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Ty (N)"
+  Tz:
+    idx: [2]
+    title: "Z Thrust vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Tz (N)"
 
 trajectories:
   xy_trajectory:
     type: spatial
     fcn: trajopt/models/quadrotor_3dof.py:xy
     group: position_trajectories
+    title: "XY Trajectory"
+    xlabel: "X (m)"
+    ylabel: "Y (m)"
 
   xyz_trajectory:
     type: spatial
     fcn: trajopt/models/quadrotor_3dof.py:xyz
     group: position_trajectories
+    title: "XYZ Trajectory"
+    xlabel: "X (m)"
+    ylabel: "Y (m)"

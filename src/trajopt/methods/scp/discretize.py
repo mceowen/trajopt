@@ -1,6 +1,7 @@
 import numpy as np
 import jax
 import jax.numpy as jnp
+import cvxpy as cp
 
 jax.config.update("jax_enable_x64", True)
 import diffrax
@@ -53,28 +54,23 @@ def set_ltv_indices(problem, method):
 
 def compute_nonconvex_constraints(z, nu, problem, method):
     n_ineq    = problem.index_map.n.nonconvex_inequality
-    n_x       = problem.index_map.n.state
-    index_map = problem.index_map
-    n_u       = problem.index_map.n.control
+    n_z       = problem.index_map.n.z
+    n_nu       = problem.index_map.n.nu
     N         = method.index_map.N.time_grid
     z_jax     = jnp.asarray(z)
     nu_jax    = jnp.asarray(nu)
     params_jax = tools.recursive_to_dict(problem.params)
 
-    x_all, t_all, _, u_all, _ = index_map.unpack_znu(z_jax, nu_jax)
-
     g     = np.zeros((N, n_ineq))
-    dgdz  = np.zeros((N, n_ineq, n_x))
-    dgdnu = np.zeros((N, n_ineq, n_u))
+    dgdz  = np.zeros((N, n_ineq, n_z))
+    dgdnu = np.zeros((N, n_ineq, n_nu))
 
     col_start = 0
     for constraint in problem.constraints.get(ct=0, type="nonconvex_inequality"):
         col_end = col_start + constraint.dimension
         nodes = np.asarray(constraint.nodes)
 
-        f_batch, dfdx_batch, dfdu_batch = constraint.g_aff_batched(
-            t_all[nodes], x_all[nodes], u_all[nodes], params_jax
-        )
+        f_batch, dfdx_batch, dfdu_batch = constraint.g_aff_batched(z_jax[nodes], nu_jax[nodes], params_jax)
 
         g[nodes, col_start:col_end]      = np.asarray(f_batch)
         dgdz[nodes, col_start:col_end, :] = np.asarray(dfdx_batch)
@@ -104,12 +100,9 @@ def compute_nonconvex_costs(z, nu, problem, method):
 
     z_jax  = jnp.asarray(z)
     nu_jax = jnp.asarray(nu)
-    x_all, t_all, _, u_all, _ = index_map.unpack_znu(z_jax, nu_jax)
 
     for cost_fn in nonconvex_costs:
-        f_batch, dfdx_batch, dfdu_batch = cost_fn.g_aff_batched(
-            t_all, x_all, u_all, params_jax
-        )
+        f_batch, dfdx_batch, dfdu_batch = cost_fn.g_aff_batched(z_jax, nu_jax, params_jax)
 
         f_np    = np.asarray(f_batch).reshape(N, -1)
         dfdx_np = np.asarray(dfdx_batch).reshape(N, -1, n_x)
@@ -155,10 +148,7 @@ def compile_jax_discretization(problem, method):
         b = (tau - tau_k) / (tau_kp - tau_k)
         nu = a * nu_k + b * nu_kp
 
-        # TODO(Skye): Modify lin_dyn to take in just z,nu 
-        # TODO(Skye): Verify that fc,Ac,Bc correct for given timestep using z
-        t_node       = z[z_time_idx][0] if len(z_time_idx) > 0 else tau
-        fc, Ac, Bc    = lin_dyn(t_node, z, nu, params_jax)
+        fc, Ac, Bc    = lin_dyn(z, nu, params_jax)
 
         P1_dot = fc
         P2_dot = (Ac @ phi_a).reshape((n_z*n_z,))
@@ -429,38 +419,25 @@ def build_ms_dyn_constraint(subproblem, k):
     return subproblem.dz[k + 1] + subproblem.z_ref[k + 1] - subproblem.z_m[k + 1] == rhs
 
 
-def build_ps_dyn_constraints(subproblem, scale_ps=2.0):
+def build_ps_dyn_constraints(subproblem):
     """
     Build pseudospectral dynamics constraints as a single block matrix equation.
-
-    Computes D, f_ref_col, Ac_col, Bc_col internally.
+    At collocation node k: state is z[k+1], control is nu[k+1] (both at etau[k+1]).
 
     Returns:
     --------
     cp.Constraint
         Single constraint for all collocation nodes, shape (N_col, n_z)
     """
-    import cvxpy as cp
-
-    problem = subproblem.problem
     method = subproblem.method
+    N_col  = method.index_map.N.time_grid - 1
 
-    N_col = method.index_map.N.time_grid - 1
-
-    tau, etau, w, D = compute_ps_differentiation_matrix(N_col)
-
-    z_ref_np = np.asarray(subproblem.z_ref.value) if hasattr(subproblem.z_ref, 'value') else np.asarray(subproblem.z_ref)
-    nu_ref_np = np.asarray(subproblem.nu_ref.value) if hasattr(subproblem.nu_ref, 'value') else np.asarray(subproblem.nu_ref)
-
-    f_ref_col, Ac_col, Bc_col = compute_ps_dynamics_and_jacobians(z_ref_np, nu_ref_np, problem, method)
-
-    Z = subproblem.z_ref + subproblem.dz
-
-    lhs = scale_ps * (D @ Z)
+    Z   = subproblem.z_ref + subproblem.dz
+    lhs = 2.0 * (subproblem.ps_D @ Z)
 
     rhs_list = []
     for k in range(N_col):
-        rhs_k = f_ref_col[k] + Ac_col[k] @ subproblem.dz[k + 1] + Bc_col[k] @ subproblem.dnu[k]
+        rhs_k = subproblem.ps_f_ref[k] + subproblem.ps_Ac[k] @ subproblem.dz[k + 1] + subproblem.ps_Bc[k] @ subproblem.dnu[k + 1]
         rhs_list.append(rhs_k)
 
     rhs = cp.vstack(rhs_list)
@@ -471,31 +448,28 @@ def build_ps_dyn_constraints(subproblem, scale_ps=2.0):
 def compute_ps_dynamics_and_jacobians(z_ref, nu_ref, problem, method):
     """
     Compute dynamics and Jacobians at reference trajectory for pseudospectral collocation.
+    State and control at collocation node k are both at etau[k+1]: z[k+1], nu[k+1].
     """
-    N_col = nu_ref.shape[0]
+    N_col = problem.index_map.N.time_grid - 1
     n_z = problem.index_map.n.z
-    n_u = problem.index_map.n.control
+    n_nu = problem.index_map.n.nu
 
     lin_dyn = problem.constraints.get(type='dynamics')[0].lin_dyn
     params_jax = tools.recursive_to_dict(problem.params)
 
-    z_time_idx = problem.index_map.indices.z.time
-
     f_ref_col = np.zeros((N_col, n_z))
     Ac_col = np.zeros((N_col, n_z, n_z))
-    Bc_col = np.zeros((N_col, n_z, n_u))
+    Bc_col = np.zeros((N_col, n_z, n_nu))
 
     for k in range(N_col):
         z_k = np.asarray(z_ref[k + 1])
-        nu_k = np.asarray(nu_ref[k])
+        nu_k = np.asarray(nu_ref[k + 1])
 
-        t_k = z_k[z_time_idx][0] if len(z_time_idx) > 0 else k / (N_col - 1) if N_col > 1 else 0
-
-        fc_k, Ac_k, Bc_k = lin_dyn(t_k, z_k, nu_k, params_jax)
+        fc_k, Ac_k, Bc_k = lin_dyn(z_k, nu_k, params_jax)
 
         f_ref_col[k, :] = np.asarray(fc_k)
         Ac_col[k, :, :] = np.asarray(Ac_k)
-        Bc_col[k, :, :n_u] = np.asarray(Bc_k)
+        Bc_col[k, :, :] = np.asarray(Bc_k)
 
     return f_ref_col, Ac_col, Bc_col
 

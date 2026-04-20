@@ -1,0 +1,6 @@
+inherit: trajopt/methods/configs/autoscvx.yaml
+
+flags:
+  free_final_time: 0
+  equal_dt: 0
+  discretize: ps

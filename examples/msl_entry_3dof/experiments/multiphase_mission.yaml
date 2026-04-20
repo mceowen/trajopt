@@ -1,0 +1,37 @@
+inherit: mission.yaml
+
+phases:
+  entry:
+    start: 0
+    p: 0
+  
+  descent:
+    start: 70
+    p: 1.0
+
+constraints:
+  final_state:
+    value: ["${params.planet.r + 3e3}"]
+    idx: [0]
+    eps: [500]
+  
+  chute_deploy:
+    type: nonconvex_inequality
+    fcn: trajopt/models/reentry_3dof.py:altitude
+    nodes: ["${phases.descent.start}"]
+    min_value: [8000]
+    max_value: [12000]
+    scale: [10000]
+    eps: [100]
+    dimension: 1
+
+constraint_list: 
+  - dynamics
+  - initial_state
+  - final_state
+  - state_limits
+  - bank_aoa_angle_limits
+  - chute_deploy
+
+cost_list: 
+  - min_terminal_velocity

@@ -2,17 +2,7 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 import trajopt.methods.scp.convexify as convexify
-from trajopt.utils.config_loader import resolve_function_from_path
-
-def _resolve_fcn(fcn_string, fcns=None):
-    """Resolve a function reference: look up from fcns dict if 'fcns.X', otherwise import from path."""
-    if fcns and isinstance(fcn_string, str) and fcn_string.startswith('fcns.'):
-        key = fcn_string.split('.', 1)[1]
-        if key not in fcns:
-            raise KeyError(f"Function reference '{fcn_string}' not found in fcns dict. "
-                           f"Available: {list(fcns.keys())}")
-        return fcns[key]
-    return resolve_function_from_path(fcn_string)
+import trajopt.utils.tools as tools
 
 class min_time:
     def __init__(self, cost_config, index_map, **kwargs):
@@ -75,7 +65,7 @@ class nonconvex:
 
         # symbolic function in dimensional units provided by user
         # (jax or sympy)
-        self.fcn_dim = _resolve_fcn(self.fcn_string, fcns)
+        self.fcn_dim = tools.resolve_fcn(self.fcn_string, fcns)
         self.fcn_nd = None
 
         # this is the symbolic nondimmed version of fcn_fim, it will 

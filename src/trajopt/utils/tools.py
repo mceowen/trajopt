@@ -1,5 +1,52 @@
+import inspect
+from functools import partial
+
 import numpy as np
 import cvxpy as cp
+
+
+class _FcnExpr:
+    """Lightweight wrapper enabling arithmetic on (t, x, u, params) callables."""
+    def __init__(self, fcn):
+        self._fcn = fcn
+
+    def __mul__(self, other):
+        f = self._fcn
+        if isinstance(other, _FcnExpr):
+            g = other._fcn
+            return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) * g(t, x, u, params))
+        return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) * other)
+
+    def __rmul__(self, other):
+        return self.__mul__(other)
+
+    def __truediv__(self, other):
+        f = self._fcn
+        if isinstance(other, _FcnExpr):
+            g = other._fcn
+            return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) / g(t, x, u, params))
+        return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) / other)
+
+    def __add__(self, other):
+        f = self._fcn
+        if isinstance(other, _FcnExpr):
+            g = other._fcn
+            return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) + g(t, x, u, params))
+        return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) + other)
+
+    def __radd__(self, other):
+        return self.__add__(other)
+
+    def __sub__(self, other):
+        f = self._fcn
+        if isinstance(other, _FcnExpr):
+            g = other._fcn
+            return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) - g(t, x, u, params))
+        return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) - other)
+
+    def __neg__(self):
+        f = self._fcn
+        return _FcnExpr(lambda t, x, u, params: -f(t, x, u, params))
 
 class AttrDict(dict):
     """Dictionary that allows attribute access to keys.
@@ -137,6 +184,24 @@ def expand_to_array_if_scalar(x, n):
         return np.full(n, x)
     
     return x
+
+def resolve_fcn(fcn_string, fcns=None):
+    if fcns and isinstance(fcn_string, str):
+        if any(op in fcn_string for op in ('<=', '>=', ' and ', ' or ', ' implies ')):
+            from trajopt.core.constraints.stl import parse_stl_expression
+            return parse_stl_expression(fcn_string, fcns)
+
+        if 'fcns.' in fcn_string:
+            ns = {}
+            for name, fn in fcns.items():
+                if 'fcns' in inspect.signature(fn).parameters:
+                    fn = partial(fn, fcns=fcns)
+                ns[name] = _FcnExpr(fn)
+            result = eval(fcn_string.replace('fcns.', ''), {'__builtins__': {}}, ns)
+            return result._fcn if isinstance(result, _FcnExpr) else result
+
+        from trajopt.utils.config_loader import resolve_function_from_path
+        return resolve_function_from_path(fcn_string)
 
 def safe_val(var, rows=1, cols=1, fallback=0.0):
     """

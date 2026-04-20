@@ -22,50 +22,47 @@ def set_initial_guess(problem,method):
 
 ##################################################################################################################################
 
-def _ensure_initial_guess(method):
-    if not hasattr(method, "initial_guess") or method.initial_guess is None:
-        method.initial_guess = AttrDict({})
-
-    for key in ("t", "dt", "x", "u", "z", "nu"):
-        if not hasattr(method.initial_guess, key):
-            setattr(method.initial_guess, key, None)
-
-    if method.initial_guess.t is not None:
-        method.initial_guess.t = np.asarray(method.initial_guess.t).reshape(-1)
-        method.initial_guess.dt = np.diff(method.initial_guess.t.reshape(-1, 1), axis=0)
-
-    return method.initial_guess
-
 
 # TODO(Skye): Possibly add actual computation of beta using index_map helpers
 def augment_initial_guess(problem, method):
     idx     = problem.index_map.indices
     N       = method.index_map.N.time_grid
-    init    = _ensure_initial_guess(method)
 
-    if init.t is None or init.x is None or init.u is None:
-        raise ValueError("method.initial_guess.t, x, and u must be set before calling augment_initial_guess")
+    init                        = method.initial_guess
 
     t_init                      = np.asarray(init.t).reshape(-1)
-
     x_init                      = np.asarray(init.x)
     u_init                      = np.asarray(init.u)
+
+    if getattr(method.flags, 'discretize', 'ms') == 'ps':
+        _, etau, _, _ = discretize.compute_ps_differentiation_matrix(N - 1)
+        t0, tf = t_init[0], t_init[-1]
+        t_lgr  = t0 + (etau + 1.0) / 2.0 * (tf - t0)
+        x_init = interp1d(t_init, x_init, axis=0, fill_value='extrapolate')(t_lgr)
+        u_init = interp1d(t_init, u_init, axis=0, fill_value='extrapolate')(t_lgr)
+        t_init = t_lgr
+        init.t = t_init
 
     z_init                      = np.zeros((N, problem.index_map.n.z))
     z_init[:, idx.z.state]      = x_init
     z_init[:, idx.z.time]       = t_init.reshape(-1, 1)
-    z_init[:, idx.z.ctcs]       = 0.0 
+    z_init[:, idx.z.ctcs]       = 0.0
 
     nu_init                     = np.zeros((N, problem.index_map.n.nu))
     nu_init[:, idx.nu.control]  = u_init
 
-    delta_tau                   = 1.0 / (N - 1)
-    dt_init                     = np.zeros((N, 1))
     dt_ref                      = np.diff(t_init.reshape(-1, 1), axis=0)
     init.dt                     = dt_ref
-    dt_init[:-1, 0]             = dt_ref[:, 0]
-    dt_init[-1, 0]              = dt_ref[-1, 0]
-    nu_init[:, idx.nu.dilation_factor] = dt_init / delta_tau
+
+    if getattr(method.flags, 'discretize', 'ms') == 'ps':
+        T                           = float(t_init[-1] - t_init[0])
+        nu_init[:, idx.nu.dilation_factor] = T
+    else:
+        delta_tau                   = 1.0 / (N - 1)
+        dt_init                     = np.zeros((N, 1))
+        dt_init[:-1, 0]             = dt_ref[:, 0]
+        dt_init[-1, 0]              = dt_ref[-1, 0]
+        nu_init[:, idx.nu.dilation_factor] = dt_init / delta_tau
 
     init.z  = z_init
     init.nu = nu_init
@@ -74,7 +71,7 @@ def augment_initial_guess(problem, method):
 
 def straight_line_initial_guess(problem, method):
 
-    init                        = _ensure_initial_guess(method)
+    init = method.initial_guess
 
     line_init_u_init            = method.initial_guess.line_guess_u_init @ method.nondim.M.control["d2nd"]
     t_init                      = np.asarray(init.t).reshape(-1)
@@ -118,7 +115,7 @@ def straight_line_initial_guess(problem, method):
     return t_init, x_init, u_init
 
 def nonlinear_initial_guess(problem, method):
-    init                = _ensure_initial_guess(method)
+    init                = method.initial_guess
 
     x0                  = problem.constraints.get(type="equality_bc", boundary="init")[0].value
     dynamics_cnstr      = problem.constraints.get(type="dynamics")[0]
@@ -138,7 +135,7 @@ def nonlinear_initial_guess(problem, method):
 
     # Propagate physical dynamics dx/dt = f(t, x, u) directly over real time
     if dynamics_cnstr.backend == "jax":
-        t_nl_out, x_nl, _ = integrators.propagate_jax_rk4_dense(
+        t_nl_out, x_nl, _ = integrators.propagate_txu(
             x0,
             u_init,
             t_init,

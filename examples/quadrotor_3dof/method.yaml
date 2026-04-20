@@ -1,4 +1,5 @@
-inherit: trajopt/methods/configs/autoscvx.yaml
+# inherit: trajopt/methods/configs/autoscvx.yaml
+inherit: trajopt/methods/configs/autoscvx-ps.yaml
 
 time_grid: 20
 
@@ -14,7 +15,7 @@ guess:
   type: propagation
   T_init:   7.0
   T_min:    1.0
-  T_max:    15.0
+  T_max:    10
   dT_max:   0.1
 
   nl_guess_u_start: "${(np.array([0, 0, params.planet.g]) * params.vehicle.mass) + np.array([0.08, 0.08, 0.0])}"
@@ -23,5 +24,8 @@ guess:
   line_guess_u_init: "${np.tile(np.array([0, 0, params.planet.g]) * params.vehicle.mass, (time_grid, 1))}"
 
 conv:
-  eps_state: 0.01
+  eps_state: 0.00001
   eps_dyn: 0.000001
+
+solver_opts:
+  solver: CLARABEL

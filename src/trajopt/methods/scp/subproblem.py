@@ -89,6 +89,15 @@ class Subproblem:
         self.Bkp = cp.Parameter((N - 1, n_z, n_nu), name="Bkp")
         self.z_m = cp.Parameter((N, n_z), name="z_minus")
 
+        # Pseudospectral collocation parameters
+        if self.flags.discretize == "ps":
+            N_col = N - 1
+            _, _, _, D_np = discretize.compute_ps_differentiation_matrix(N_col)
+            self.ps_D = D_np
+            self.ps_f_ref = cp.Parameter((N_col, n_z), name="ps_f_ref")
+            self.ps_Ac = cp.Parameter((N_col, n_z, n_z), name="ps_Ac")
+            self.ps_Bc = cp.Parameter((N_col, n_z, n_nu), name="ps_Bc")
+
         # self.Ak_bwd                = cp.Parameter((N - 1, n_z, n_z),     name="Ak_bwd")
         # self.Bk_bwd                = cp.Parameter((N - 1, n_z, n_nu),   name="Bk_bwd")
         # self.Bkp_bwd               = cp.Parameter((N - 1, n_z, n_nu),   name="Bkp_bwd")
@@ -104,13 +113,13 @@ class Subproblem:
 
         self.nu_ref_sq = cp.Parameter((N,), name="nu_ref_sq")
 
-        # Path/NFZ/AUX linearized constraints
+        # nonconvex inequality constraints
         if problem.constraints.get(ct=0, type="nonconvex_inequality"):
-            self.dgdx = cp.Parameter((N, problem.index_map.n.nonconvex_inequality, n_x), name="dgdx")
-            self.dgdu = cp.Parameter((N, problem.index_map.n.nonconvex_inequality, n_u), name="dgdu")
+            self.dgdz = cp.Parameter((N, problem.index_map.n.nonconvex_inequality, n_z), name="dgdz")
+            self.dgdnu = cp.Parameter((N, problem.index_map.n.nonconvex_inequality, n_nu), name="dgdnu")
             self.g0 = cp.Parameter((N, problem.index_map.n.nonconvex_inequality), name="g0")
         else:
-            self.dgdx = self.dgdu = self.g0 = None
+            self.dgdz = self.dgdnu = self.g0 = None
 
         # time-step scalar bounds
         if bool(self.flags.free_final_time):
@@ -542,8 +551,8 @@ class Subproblem:
             # if problem.constraints.has("nodal", "nonconvex_inequality","POLYTOPE_OUT","SOC_OUT"):  ### DAN: UPDATE BELOW LINE TO
             if problem.constraints.has(ct=0, type="nonconvex_inequality"):
                 C.append(
-                    self.dgdx[k] @ self.dz[k, self.indices.z.state]
-                    + self.dgdu[k] @ self.dnu[k, self.indices.nu.control]
+                    self.dgdz[k] @ self.dz[k, :]
+                    + self.dgdnu[k] @ self.dnu[k, :]
                     + self.g0[k]
                     - self.vb_stack.nonconvex_inequality[k]
                     <= 0
@@ -559,8 +568,8 @@ class Subproblem:
                 for c in problem.constraints.get(ct=0, type="nonconvex_inequality"):
                     if c.hard:
                         C.append(
-                            self.dgdx[k, idx : idx + c.dimension] @ self.dz[k, self.indices.z.state]
-                            + self.dgdu[k, idx : idx + c.dimension] @ self.dnu[k, self.indices.nu.control]
+                            self.dgdz[k, idx : idx + c.dimension] @ self.dz[k, self.indices.z.all]
+                            + self.dgdnu[k, idx : idx + c.dimension] @ self.dnu[k, self.indices.nu.all]
                             + self.g0[k, idx : idx + c.dimension]
                             <= 0
                         )
@@ -568,8 +577,8 @@ class Subproblem:
 
             for cost in problem.costs.get(type="nonconvex", minimax=1):
                 C.append(
-                    self.w_cost_times_dcostdx[k] @ self.dz[k, self.indices.z.state]
-                    + self.w_cost_times_dcostdu[k] @ self.dnu[k, self.indices.nu.control]
+                    self.w_cost_times_dcostdx[k] @ self.dz[k, :]
+                    + self.w_cost_times_dcostdu[k] @ self.dnu[k, :]
                     + self.w_cost_times_cost0[k]
                     <= self.minimax_epigraph_upperbound
                 )
@@ -853,29 +862,31 @@ class Subproblem:
 
         prop_time_ms = (time.time() - start) * 1000.0
 
-        start = time.time()
-
         # compute linearized terminal and running costs
         cost, dcostdx, dcostdu = discretize.compute_nonconvex_costs(inputs.z_ref, inputs.nu_ref, problem, method)
 
         if problem.constraints.has(ct=0, type="nonconvex_inequality"):
-            g, dgdx, dgdu = discretize.compute_nonconvex_constraints(inputs.z_ref, inputs.nu_ref, problem, method)
+            g, dgdz, dgdnu = discretize.compute_nonconvex_constraints(inputs.z_ref, inputs.nu_ref, problem, method)
         else:
-            g = dgdx = dgdu = None
+            g = dgdz = dgdnu = None
 
-        if dgdx is not None:
-            self.dgdx.value = dgdx
-            self.dgdu.value = dgdu
+        if dgdz is not None:
+            self.dgdz.value = dgdz
+            self.dgdnu.value = dgdnu
             self.g0.value = g
-
-        ncvx_cnstr_time = (time.time() - start) * 1000.0
-        # print(f"ncvx_cnstr_time: {ncvx_cnstr_time}")
 
         # Dynamics & references
         self._set_param(self.Ak, Ak)
         self._set_param(self.Bk, Bk)
         self._set_param(self.Bkp, Bkp)
         self._set_param(self.z_m, z_minus)
+
+        # Pseudospectral collocation linearisation
+        if self.flags.discretize == "ps":
+            f_ref_col, Ac_col, Bc_col = discretize.compute_ps_dynamics_and_jacobians(inputs.z_ref, inputs.nu_ref, problem, method)
+            self._set_param(self.ps_f_ref, f_ref_col)
+            self._set_param(self.ps_Ac, Ac_col)
+            self._set_param(self.ps_Bc, Bc_col)
 
         # # backwards shooting dynamics
         # self._set_param(self.Ak_bwd,   Ak_bwd)

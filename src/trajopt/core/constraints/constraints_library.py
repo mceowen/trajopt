@@ -2,30 +2,7 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 import trajopt.methods.scp.convexify as convexify
-from trajopt.utils.config_loader import resolve_function_from_path
-from trajopt.core.constraints.stl import parse_stl_expression
-
-def _resolve_fcn(fcn_string, fcns=None):
-    if fcns and isinstance(fcn_string, str):
-        # check if stl fcn string, use STL parser
-        if any(op in fcn_string for op in ('<=', '>=', ' and ', ' or ', ' implies ')):
-            return parse_stl_expression(fcn_string, fcns)
-        
-        # else look into shared fcns dict
-        elif fcn_string.startswith('fcns.'):
-            key = fcn_string.split('.', 1)[1]
-            if key not in fcns:
-                raise KeyError(f"Function reference '{fcn_string}' not found in fcns dict. "
-                               f"Available: {list(fcns.keys())}")
-            return fcns[key]
-        
-        # use raw function path function
-        else:
-            return resolve_function_from_path(fcn_string)
-
-# def resolve_stl(fcn_string, fcns=None):
-
-
+import trajopt.utils.tools as tools
 # ===============================================================
 # CONVEX CONSTRAINTS
 # ===============================================================
@@ -112,6 +89,8 @@ class box:
         self.dimension = len(self.min_value_idx) + len(self.max_value_idx)
         self.type = 'box'
 
+        self.index_map = index_map
+
         if self.set == "state":
             n_elem = index_map.n.state
         elif self.set == "control":
@@ -130,11 +109,15 @@ class box:
             self.min_value = nondim.M.control["d2nd"][np.ix_(self.min_value_idx, self.min_value_idx)] @ self.min_value
             self.max_value = nondim.M.control["d2nd"][np.ix_(self.max_value_idx, self.max_value_idx)] @ self.max_value
 
-    def compute_constraint_values(self, t, z, nu, params):
+    def compute_constraint_values(self, z, nu, params):
+
+        x, t, beta = self.index_map.unpack_z(z)
+        u, s = self.index_map.unpack_nu(nu)
+
         if self.set == "state":
-            values = z @ self.M_select.T
+            values = x @ self.M_select.T
         elif self.set == "control":
-            values = nu @ self.M_select.T
+            values = u @ self.M_select.T
 
         stacked_limits = np.hstack([self.min_value, self.max_value])
         limits = np.tile(stacked_limits, (values.shape[0], 1))
@@ -191,13 +174,13 @@ class axis_angle_cone:
     def nondim_constraint(self, nondim):
         pass
 
-    def compute_constraint_values(self, t, z, nu, params):
+    def compute_constraint_values(self, z, nu, params):
         if self.set == "state":
             theta = (z[:, self.idx] @ self.axis.T / np.linalg.norm(z[:, self.idx], axis=1)).reshape(-1, 1)
         elif self.set == "control":
             theta = (nu[:, self.idx] @ self.axis.T / np.linalg.norm(nu[:, self.idx], axis=1)).reshape(-1, 1)
 
-        limits = np.tile(self.theta_max, (t.shape[0], 1))
+        limits = np.tile(self.theta_max, (z.shape[0], 1))
         
         return {"values": np.rad2deg(np.arccos(theta)), "limits": limits}
 
@@ -218,13 +201,13 @@ class max_norm_cone:
         elif self.set == "control":
             self.max_value = self.max_value * nondim.M.state.d2nd[self.idx[0], self.idx[0]]
 
-    def compute_constraint_values(self, t, z, nu, params):
+    def compute_constraint_values(self, z, nu, params):
         if self.set == "state":
             values = np.linalg.norm(z[:, self.idx], axis=1).reshape(-1, 1)
         elif self.set == "control":
             values = np.linalg.norm(nu[:, self.idx], axis=1).reshape(-1, 1)
 
-        limits = np.tile(self.max_value, (t.shape[0], 1))
+        limits = np.tile(self.max_value, (z.shape[0], 1))
         
         
         return {"values": values, "limits": limits}
@@ -282,7 +265,7 @@ class nonconvex_inequality:
 
         # symbolic function in dimensional units provided by user
         # (jax or sympy)
-        self.fcn_dim = _resolve_fcn(self.fcn_string, fcns)
+        self.fcn_dim = tools.resolve_fcn(self.fcn_string, fcns)
         self.fcn_nd = None
 
         # this is the symbolic nondimmed version of fcn_fim, it will 
@@ -344,55 +327,58 @@ class nonconvex_inequality:
     def convexify_constraint(self):
         if self.backend == "jax":
             if self.upper_and_lower == True:
-                fcn_lb   = lambda t, z, nu, params: -self.fcn_nd(t, z, nu, params) + self.min_value
-                fcn_ub   = lambda t, z, nu, params: self.fcn_nd(t, z, nu, params)  - self.max_value
+                fcn_lb_txu   = lambda t, x, u, params: -self.fcn_nd(t, x, u, params) + self.min_value
+                fcn_ub_txu   = lambda t, x, u, params: self.fcn_nd(t, x, u, params)  - self.max_value
                 
-                self.fcn = lambda t, z, nu, params: jnp.concatenate([fcn_lb(t, z, nu, params), fcn_ub(t, z, nu, params)])
+                fcn_txu = lambda t, x, u, params: jnp.concatenate([fcn_lb_txu(t, x, u, params), fcn_ub_txu(t, x, u, params)])
                 
             elif (self.max_value is not None) and (self.min_value is None):
-                self.fcn = lambda t, z, nu, params: self.fcn_nd(t, z, nu, params) - self.max_value
+                fcn_txu = lambda t, x, u, params: self.fcn_nd(t, x, u, params) - self.max_value
 
             elif (self.min_value is not None) and (self.max_value is None):
-                self.fcn = lambda t, z, nu, params: -self.fcn_nd(t, z, nu, params) + self.min_value
+                fcn_txu = lambda t, x, u, params: -self.fcn_nd(t, x, u, params) + self.min_value
                 
             else:
-                self.fcn = self.fcn_nd
+                fcn_txu = self.fcn_nd
 
-            vals_function = lambda t, z, nu, params: self.M_out_nd2d @ (self.fcn_nd(t, z, nu, params))
+            self.fcn = self.index_map.problem.constraints.augment_txu_to_znu(fcn_txu)
+
+            vals_function_txu = lambda t, z, nu, params: self.M_out_nd2d @ (self.fcn_nd(t, z, nu, params))
+
+            vals_function = self.index_map.problem.constraints.augment_txu_to_znu(vals_function_txu)
 
             self.fcn_compiled, self.dfcn_dz_compiled, self.dfcn_du_compiled = convexify.linearize_jax(self.fcn)
 
-            self.f_batched = jax.jit(jax.vmap(vals_function, in_axes=(0,0,0, None)))
+            self.f_batched = jax.jit(jax.vmap(vals_function, in_axes=(0,0, None)))
 
-            self.fcn_batched     = jax.jit(jax.vmap(self.fcn_compiled,     in_axes=(0, 0, 0, None)))
-            self.dfcn_dz_batched = jax.jit(jax.vmap(self.dfcn_dz_compiled, in_axes=(0, 0, 0, None)))
-            self.dfcn_du_batched = jax.jit(jax.vmap(self.dfcn_du_compiled, in_axes=(0, 0, 0, None)))
+            self.fcn_batched     = jax.jit(jax.vmap(self.fcn_compiled,     in_axes=(0, 0, None)))
+            self.dfcn_dz_batched = jax.jit(jax.vmap(self.dfcn_dz_compiled, in_axes=(0, 0, None)))
+            self.dfcn_du_batched = jax.jit(jax.vmap(self.dfcn_du_compiled, in_axes=(0, 0, None)))
         
         elif self.backend == "sympy":
             pass
 
-    def g_aff(self, t, z, nu, params):
+    def g_aff(self, z, nu, params):
         return (
-            self.fcn_compiled(t, z, nu, params),
-            self.dfcn_dz_compiled(t, z, nu, params),
-            self.dfcn_du_compiled(t, z, nu, params)
+            self.fcn_compiled(z, nu, params),
+            self.dfcn_dz_compiled(z, nu, params),
+            self.dfcn_du_compiled(z, nu, params)
         )
 
-    def g_aff_batched(self, t, z, nu, params):
+    def g_aff_batched(self, z, nu, params):
         return (
-            self.fcn_batched(t, z, nu, params),
-            self.dfcn_dz_batched(t, z, nu, params),
-            self.dfcn_du_batched(t, z, nu, params)
+            self.fcn_batched(z, nu, params),
+            self.dfcn_dz_batched(z, nu, params),
+            self.dfcn_du_batched(z, nu, params)
         )
 
-    def compute_constraint_values(self, t, z, nu, params):
+    def compute_constraint_values(self, z, nu, params):
         if self.backend == "jax":
-            t_jax = jnp.asarray(t)
             z_jax = jnp.asarray(z)
             nu_jax = jnp.asarray(nu)
-            values = np.asarray(self.f_batched(t_jax, z_jax, nu_jax, params))
+            values = np.asarray(self.f_batched(z_jax, nu_jax, params))
 
-            n_t = t_jax.shape[0]
+            n_t = z_jax.shape[0]
 
             if self.min_value is not None:
                 self.limits = np.tile(np.asarray(self.M_out_nd2d @ self.min_value), (n_t, self.dimension))
@@ -441,7 +427,7 @@ class nonconvex_equality:
 
         # symbolic function in dimensional units provided by user
         # (jax or sympy)
-        self.fcn_dim = _resolve_fcn(self.fcn_string, fcns)
+        self.fcn_dim = tools.resolve_fcn(self.fcn_string, fcns)
         self.fcn_nd = None
 
         # this is the symbolic nondimmed version of fcn_fim, it will 
@@ -523,7 +509,7 @@ class nonconvex_equality:
             self.dfcn_du_batched(t, z, nu, params)
         )
 
-    def compute_constraint_values(self, t, z, nu, params):
+    def compute_constraint_values(self, z, nu, params):
         if self.backend == "jax":
             t_jax = jnp.asarray(t)
             z_jax = jnp.asarray(z)
@@ -541,32 +527,6 @@ class nonconvex_equality:
         elif self.backend == "sympy":
             pass
         return {"values": values, 'limits': self.limits}
-    
-# class stl(nonconvex_equality):
-#     def __init__(self, cnstr_config, index_map, fcns=None, **kwargs):
-#         super().__init__(cnstr_config, index_map, fcns, **kwargs)
-
-
-#         self.trigger_function    = 
-#         self.constraint_function = 
-
-#     def compute_constraint_values(self, t, z, nu, params):
-#         if self.backend == "jax":
-#             t_jax = jnp.asarray(t)
-#             z_jax = jnp.asarray(z)
-#             nu_jax = jnp.asarray(nu)
-#             values = np.asarray(self.f_batched(t_jax, z_jax, nu_jax, params))
-
-#             n_t = t_jax.shape[0]
-
-#             if self.value is not None:
-#                 self.limits = np.tile(np.asarray(self.M_out_nd2d @ self.value), (n_t, self.dimension))
-#             else: 
-#                 self.limits = None
-
-#         elif self.backend == "sympy":
-#             pass
-#         return {"values": values, 'limits': self.limits, ""}
 
 class dynamics:
     def __init__(self, cnstr_config, index_map, fcns=None, **kwargs):
@@ -577,7 +537,7 @@ class dynamics:
 
         self.index_map  = index_map
 
-        self.fcn_dim = _resolve_fcn(self.fcn_string, fcns)
+        self.fcn_dim = tools.resolve_fcn(self.fcn_string, fcns)
 
         self.backend    = cnstr_config.get("backend", "jax")
         
@@ -601,21 +561,9 @@ class dynamics:
             pass # analytical
 
         # fcn_dim is already bound with params/fcns by resolve_functions
+        # fcn_base is f(t, x, u, params), - > fcn is f(z, nu, params)
         self.fcn_base   = nondim.nondim_function(self.fcn_dim, M_state_nd2d_jax, M_ctrl_nd2d_jax, M_out_d2nd_jax)
-        self.fcn        = self._augmented_dynamics
-
-    # TODO(Skye): Verify nondim of augmented dynamics (specifically time)
-    # Also why tf is this in the index
-    # Potentially move this to subproblem constraints
-    def _augmented_dynamics(self, *args):
-        if len(args) == 4:
-            _, z, nu, params = args
-        elif len(args) == 3:
-            z, nu, params = args
-        else:
-            raise TypeError("_augmented_dynamics expects (t, z, nu, params) or (z, nu, params)")
-
-        return self.index_map.problem.constraints.augment_dynamics_jax(self.fcn_base, z, nu, params)
+        self.fcn        = self.index_map.problem.constraints.augment_dynamics_jax(self.fcn_base)
 
 
     def convexify_constraint(self):
@@ -629,9 +577,9 @@ class dynamics:
             pass # analytical
 
 
-    def lin_dyn(self, t, z, nu, params):
+    def lin_dyn(self, z, nu, params):
         return (
-            self.fcn_compiled(t, z, nu, params),
-            self.dfcn_dz_compiled(t, z, nu, params),
-            self.dfcn_du_compiled(t, z, nu, params)
+            self.fcn_compiled(z, nu, params),
+            self.dfcn_dz_compiled(z, nu, params),
+            self.dfcn_du_compiled(z, nu, params)
         )

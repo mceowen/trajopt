@@ -53,17 +53,6 @@ class SolutionMethod:
         self.initial_guess.nu = None
 
         discretize.compile_jax_discretization(problem, self)
-        # discretize.compile_jax_discretization_bwd(problem, self)
-        integrators.compile_dense_jax_propagator(problem, self, problem.params)
-        # TODO(SKYE): Verify compilation below
-        integrators.compile_dense_jax_propagator(
-            problem,
-            self,
-            problem.params,
-            dynamics=problem.constraints.get(type="dynamics")[0].fcn_base,
-            compiled_attr_name="propagate_rk4_physical_jit",
-        )
-        integrators.compile_tau_propagator(problem, self)
 
         ### Time of flight constraints ###
         self.Ts_min       = self.initial_guess.T_min / self.nondim.time_scale
