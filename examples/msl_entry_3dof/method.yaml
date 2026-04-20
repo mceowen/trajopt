@@ -1,15 +1,10 @@
-# INHERIT THE AUTOSCVX METHOD CONFIGS
-inherit: trajopt/methods/configs/autoscvx-term.yaml
+# inherit: trajopt/methods/configs/autoscvx-term.yaml
+inherit: trajopt/methods/configs/autoscvx-term-ps.yaml
 
 # ===============================
 # GRID SETTINGS
 # ==============================
 time_grid: 50
-
-flags:
-  free_final_time: 0
-  equal_dt: 0
-  discretize: ps
 
 # ===============================
 # INITIAL GUESS SETTINGS
@@ -32,10 +27,6 @@ conv:
   eps_defect: [0.01]
   eps_dyn: [10.0, 0.1, 0.1, 30.0, 0.1, 0.1]
   iter_max: 100
-
-weights:
-  alpha_z: 0.5
-  alpha_u: 0.5
 
 solver_opts:
   solver: CLARABEL
