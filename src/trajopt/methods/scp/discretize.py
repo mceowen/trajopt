@@ -83,14 +83,13 @@ def compute_nonconvex_constraints(z, nu, problem, method):
 
 def compute_nonconvex_costs(z, nu, problem, method):
     N         = method.index_map.N.time_grid
-    n_x       = problem.index_map.n.state
-    n_u       = problem.index_map.n.control
+    n_z       = problem.index_map.n.z
+    n_nu       = problem.index_map.n.nu
     idx       = problem.index_map.indices
-    index_map = problem.index_map
 
     cost     = np.zeros((N, 1))
-    dcostdz  = np.zeros((N, 1, n_x))
-    dcostdnu = np.zeros((N, 1, n_u))
+    dcostdz  = np.zeros((N, 1, n_z))
+    dcostdnu = np.zeros((N, 1, n_nu))
 
     params_jax = tools.recursive_to_dict(problem.params)
     nonconvex_costs = problem.costs.get(type="nonconvex")
@@ -105,12 +104,12 @@ def compute_nonconvex_costs(z, nu, problem, method):
         f_batch, dfdx_batch, dfdu_batch = cost_fn.g_aff_batched(z_jax, nu_jax, params_jax)
 
         f_np    = np.asarray(f_batch).reshape(N, -1)
-        dfdx_np = np.asarray(dfdx_batch).reshape(N, -1, n_x)
-        dfdu_np = np.asarray(dfdu_batch).reshape(N, -1, n_u)
+        dfdx_np = np.asarray(dfdx_batch).reshape(N, -1, n_z)
+        dfdu_np = np.asarray(dfdu_batch).reshape(N, -1, n_nu)
 
         cost[:, 0]                     += np.sum(f_np, axis=1)
         dcostdz[:, 0, :]              += np.sum(dfdx_np, axis=1)
-        dcostdnu[:, 0, idx.nu.control] += np.sum(dfdu_np, axis=1)
+        dcostdnu[:, 0, :] += np.sum(dfdu_np, axis=1)
 
     return cost, dcostdz, dcostdnu
 

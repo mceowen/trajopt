@@ -131,7 +131,7 @@ class Constraints:
             ctcs_constraints = tuple(self.get(ct=1))
             if ctcs_constraints:
                 ctcs_values = jnp.concatenate([
-                    jnp.atleast_1d(self.index_map.evaluate_f_phys(constraint.fcn, z, nu, params))
+                    jnp.atleast_1d(constraint.fcn(z, nu, params))
                     for constraint in ctcs_constraints
                 ])
 

@@ -19,18 +19,18 @@ def configure_penalty_weights(problem, method, subconstraints=None):
     W_stack.nonconvex_inequality        = np.zeros((method.index_map.N.time_grid, n_ineq))
     W_stack.final_state                 = np.zeros(problem.index_map.n.final_state + problem.index_map.n.term_ineq + problem.index_map.n.term_ctcs)
     W_stack.dynamics                    = np.zeros((method.index_map.N.time_grid - 1, problem.index_map.n.z))
-    W_stack.plus_real                   = np.zeros((method.index_map.N.pm_real, method.index_map.n.plus_real))
-    W_stack.minus_real                  = np.zeros((method.index_map.N.pm_real, method.index_map.n.minus_real))
-    W_stack.plus_ctcs                   = np.zeros((method.index_map.N.pm_ctcs, method.index_map.n.plus_ctcs))
-    W_stack.minus_ctcs                  = np.zeros((method.index_map.N.pm_ctcs, method.index_map.n.minus_ctcs))
+    W_stack.plus_real                   = np.zeros((max(method.index_map.N.pm_real, 1), max(method.index_map.n.plus_real, 1)))
+    W_stack.minus_real                  = np.zeros((max(method.index_map.N.pm_real, 1), max(method.index_map.n.minus_real, 1)))
+    W_stack.plus_ctcs                   = np.zeros((max(method.index_map.N.pm_ctcs, 1), max(method.index_map.n.plus_ctcs, 1)))
+    W_stack.minus_ctcs                  = np.zeros((max(method.index_map.N.pm_ctcs, 1), max(method.index_map.n.minus_ctcs, 1)))
 
     dual_stack.nonconvex_inequality     = np.zeros((method.index_map.N.time_grid, n_ineq))
     dual_stack.final_state              = np.zeros(problem.index_map.n.final_state + problem.index_map.n.term_ineq + problem.index_map.n.term_ctcs)
     dual_stack.dynamics                 = np.zeros((method.index_map.N.time_grid - 1, problem.index_map.n.z))
-    dual_stack.plus_real                = np.zeros((method.index_map.N.pm_real, method.index_map.n.plus_real))
-    dual_stack.minus_real               = np.zeros((method.index_map.N.pm_real, method.index_map.n.minus_real))
-    dual_stack.plus_ctcs                = np.zeros((method.index_map.N.pm_ctcs, method.index_map.n.plus_ctcs))
-    dual_stack.minus_ctcs               = np.zeros((method.index_map.N.pm_ctcs, method.index_map.n.minus_ctcs))
+    dual_stack.plus_real                = np.zeros((max(method.index_map.N.pm_real, 1), max(method.index_map.n.plus_real, 1)))
+    dual_stack.minus_real               = np.zeros((max(method.index_map.N.pm_real, 1), max(method.index_map.n.minus_real, 1)))
+    dual_stack.plus_ctcs                = np.zeros((max(method.index_map.N.pm_ctcs, 1), max(method.index_map.n.plus_ctcs, 1)))
+    dual_stack.minus_ctcs               = np.zeros((max(method.index_map.N.pm_ctcs, 1), max(method.index_map.n.minus_ctcs, 1)))
 
     # local block arrays
     W_ineq                            = np.zeros((method.index_map.N.time_grid, problem.index_map.n.nonconvex_inequality))
@@ -552,10 +552,10 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
     Wh_dyn  = np.zeros((N - 1, problem.index_map.n.z))
     Wh_term = np.zeros(problem.index_map.n.term_total)
 
-    Wh_plus_real  = np.zeros((method.index_map.N.pm_real, method.index_map.n.plus_real))
-    Wh_minus_real = np.zeros((method.index_map.N.pm_real, method.index_map.n.minus_real))
-    Wh_plus_ctcs  = np.zeros((method.index_map.N.pm_ctcs, method.index_map.n.plus_ctcs))
-    Wh_minus_ctcs = np.zeros((method.index_map.N.pm_ctcs, method.index_map.n.minus_ctcs))
+    Wh_plus_real  = np.zeros((max(method.index_map.N.pm_real, 1), max(method.index_map.n.plus_real, 1)))
+    Wh_minus_real = np.zeros((max(method.index_map.N.pm_real, 1), max(method.index_map.n.minus_real, 1)))
+    Wh_plus_ctcs  = np.zeros((max(method.index_map.N.pm_ctcs, 1), max(method.index_map.n.plus_ctcs, 1)))
+    Wh_minus_ctcs = np.zeros((max(method.index_map.N.pm_ctcs, 1), max(method.index_map.n.minus_ctcs, 1)))
 
     z_real_idx = method.index_map.indices.z.real
     z_state_idx = method.index_map.indices.z.state

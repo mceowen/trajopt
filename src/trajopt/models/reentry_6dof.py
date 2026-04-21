@@ -66,10 +66,12 @@ def dynamic_pressure(t: float, z: Array, nu: Array, params: dict, fcns: dict) ->
 
 
 def aero_load(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
-    """Aerodynamic translational force magnitude (N)."""
+    """Aerodynamic translational acceleration magnitude (m / (s^2))."""
     aero = fcns["nonlinear_aero"](t, z, nu, params, fcns)
 
-    return jnp.array([jnp.linalg.norm(aero["f_trans"])])
+    mass = params["vehicle"]["mass"]
+
+    return jnp.array([jnp.linalg.norm(aero["f_trans"] / mass)])
 
 
 def quaternion_norm(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:

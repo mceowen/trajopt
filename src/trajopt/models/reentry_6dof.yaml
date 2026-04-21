@@ -1,11 +1,27 @@
 # ===============================
 # PARAMETERS AND FUNCTIONS
 # ===============================
+params:
+  planet.inherit: trajopt/missions/shared/planet/mars.yaml
+  vehicle.inherit: trajopt/local/vehicles/cobra.yaml
 
-params.planet.inherit: trajopt/missions/shared/planet/mars.yaml
-params.vehicle.inherit: trajopt/local/vehicles/cobra.yaml
+fcns:
+  # aero angles
+  aoa: trajopt/models/reentry_6dof.py:aoa
+  sideslip: trajopt/models/reentry_6dof.py:sideslip
 
-fcns.dynamic_pressure: trajopt/models/reentry_6dof.py:dynamic_pressure
+  # path constraints
+  heat_rate: trajopt/models/reentry_6dof.py:heat_rate
+  dynamic_pressure: trajopt/models/reentry_6dof.py:dynamic_pressure
+  aero_load: trajopt/models/reentry_6dof.py:aero_load
+  
+  # polar coordinate trajectories
+  polar_radius: trajopt/models/reentry_6dof.py:polar_radius
+  polar_longitude: trajopt/models/reentry_6dof.py:polar_longitude
+  polar_latitude: trajopt/models/reentry_6dof.py:polar_latitude
+  polar_velocity: trajopt/models/reentry_6dof.py:polar_velocity
+  polar_fpa: trajopt/models/reentry_6dof.py:polar_fpa
+  polar_heading: trajopt/models/reentry_6dof.py:polar_heading
 
 # ===============================
 # STATE AND CONTROL DEFINITIONS
@@ -84,56 +100,48 @@ constraints.max_Q:
   group: path
   fcn: trajopt/models/reentry_6dof.py:heat_rate
   dimension: 1
-  ct: 0
 
 constraints.max_q:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/models/reentry_6dof.py:dynamic_pressure
   dimension: 1
-  ct: 0
 
 constraints.max_load:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/models/reentry_6dof.py:aero_load
   dimension: 1
-  ct: 0
 
 constraints.minimum_velocity:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/models/reentry_6dof.py:velocity
   dimension: 1
-  ct: 0
 
 constraints.minimum_altitude:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/models/reentry_6dof.py:altitude
   dimension: 1
-  ct: 0
 
 constraints.aoa_limits:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/models/reentry_6dof.py:aoa
   dimension: 1
-  ct: 0
 
 constraints.sideslip_limits:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/models/reentry_6dof.py:sideslip
   dimension: 1
-  ct: 0
 
 constraints.terminal_altitude:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/models/reentry_6dof.py:altitude
   dimension: 1
-  ct: 0
 
 costs.min_time:
   type: min_time
@@ -198,23 +206,26 @@ trajectories:
 
   heat_rate:
     type: time_series
-    fcn: trajopt/models/reentry_6dof.py:heat_rate
+    fcn: "fcns.heat_rate * 0.0001"
+    upper_limit: 30.0
     group: path
     title: "Heat Rate vs Time"
     xlabel: "Time (s)"
-    ylabel: "Heat Rate (W/m²)"
+    ylabel: "Heat Rate (W/(cm)²)"
 
   dynamic_pressure_path:
     type: time_series
-    fcn: trajopt/models/reentry_6dof.py:dynamic_pressure
+    fcn: "fcns.dynamic_pressure * 0.001"
+    upper_limit: 10.0
     group: path
     title: "Dynamic Pressure vs Time"
     xlabel: "Time (s)"
-    ylabel: "Dynamic Pressure (Pa)"
+    ylabel: "Dynamic Pressure (kPa)"
 
   aero_load:
     type: time_series
-    fcn: trajopt/models/reentry_6dof.py:aero_load
+    fcn: fcns.aero_load
+    upper_limit: 30.0
     group: path
     title: "Aerodynamic Load vs Time"
     xlabel: "Time (s)"

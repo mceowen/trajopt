@@ -145,6 +145,27 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
                 
                 constraint_data[group][name] = output
         
+        # dimensional augmented z/nu for trajectory value evaluation
+        z_opt_d  = z_opt.copy()
+        z_opt_d[:, idx.z.state] = x_opt @ nondim.M.state.nd2d
+        z_opt_d[:, idx.z.time]  = z_opt[:, idx.z.time] * nondim.time_scale
+        nu_opt_d = nu_opt.copy()
+        nu_opt_d[:, idx.nu.control] = u_opt @ nondim.M.control.nd2d
+
+        z_nl_d  = z_nl.copy()
+        z_nl_d[:, idx.z.state] = x_nl @ nondim.M.state.nd2d
+        z_nl_d[:, idx.z.time]  = z_nl[:, idx.z.time] * nondim.time_scale
+        nu_nl_d = nu_nl.copy()
+        nu_nl_d[:, idx.nu.control] = u_nl @ nondim.M.control.nd2d
+
+        z_init_d  = z_init.copy()
+        z_init_d[:, idx.z.state] = x_init @ nondim.M.state.nd2d
+        z_init_d[:, idx.z.time]  = z_init[:, idx.z.time] * nondim.time_scale
+        nu_init_d = nu_init.copy()
+        nu_init_d[:, idx.nu.control] = u_init @ nondim.M.control.nd2d
+
+        t_opt_d = t_opt * nondim.time_scale
+
         # compute general trajectory values (not necessarily constraints as specified in the problem)
         for trajectory in problem.trajectories.get():
             if hasattr(trajectory, "compute_trajectory_values"):
@@ -154,11 +175,11 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
 
                 if group == None:
                     group = name
-                
+
                 eval_fn   = trajectory.compute_trajectory_values
-                opt_vals  = _eval_per_phase(eval_fn, z_opt,  nu_opt,  problem, params_dict)
-                nl_vals   = _eval_per_phase(eval_fn, z_nl,   nu_nl,   problem, params_dict, t_nodes=t_opt)
-                init_vals = _eval_per_phase(eval_fn, z_init, nu_init, problem, params_dict)
+                opt_vals  = _eval_per_phase(eval_fn, z_opt_d,  nu_opt_d,  problem, params_dict)
+                nl_vals   = _eval_per_phase(eval_fn, z_nl_d,   nu_nl_d,   problem, params_dict, t_nodes=t_opt_d)
+                init_vals = _eval_per_phase(eval_fn, z_init_d, nu_init_d, problem, params_dict)
 
                 output = AttrDict({
                     "name": name,

@@ -83,11 +83,12 @@ class Subproblem:
             self.n.ctcs,
         )
 
-        # Linearized dynamics & trajectory references
-        self.Ak = cp.Parameter((N - 1, n_z, n_z), name="Ak")
-        self.Bk = cp.Parameter((N - 1, n_z, n_nu), name="Bk")
-        self.Bkp = cp.Parameter((N - 1, n_z, n_nu), name="Bkp")
-        self.z_m = cp.Parameter((N, n_z), name="z_minus")
+        if self.flags.discretize == "ms":
+            # Linearized dynamics & trajectory references
+            self.Ak = cp.Parameter((N - 1, n_z, n_z), name="Ak")
+            self.Bk = cp.Parameter((N - 1, n_z, n_nu), name="Bk")
+            self.Bkp = cp.Parameter((N - 1, n_z, n_nu), name="Bkp")
+            self.z_m = cp.Parameter((N, n_z), name="z_minus")
 
         # Pseudospectral collocation parameters
         if self.flags.discretize == "ps":
@@ -97,11 +98,6 @@ class Subproblem:
             self.ps_f_ref = cp.Parameter((N_col, n_z), name="ps_f_ref")
             self.ps_Ac = cp.Parameter((N_col, n_z, n_z), name="ps_Ac")
             self.ps_Bc = cp.Parameter((N_col, n_z, n_nu), name="ps_Bc")
-
-        # self.Ak_bwd                = cp.Parameter((N - 1, n_z, n_z),     name="Ak_bwd")
-        # self.Bk_bwd                = cp.Parameter((N - 1, n_z, n_nu),   name="Bk_bwd")
-        # self.Bkp_bwd               = cp.Parameter((N - 1, n_z, n_nu),   name="Bkp_bwd")
-        # self.z_m_bwd               = cp.Parameter((N, n_z),             name="z_minus_bwd")
 
         self.z_ref = cp.Parameter((N, n_z), name="z_ref")
         self.nu_ref = cp.Parameter((N, n_nu), name="nu_ref")
@@ -115,9 +111,9 @@ class Subproblem:
 
         # nonconvex inequality constraints
         if problem.constraints.get(ct=0, type="nonconvex_inequality"):
-            self.dgdz = cp.Parameter((N, problem.index_map.n.nonconvex_inequality, n_z), name="dgdz")
+            self.dgdz  = cp.Parameter((N, problem.index_map.n.nonconvex_inequality, n_z), name="dgdz")
             self.dgdnu = cp.Parameter((N, problem.index_map.n.nonconvex_inequality, n_nu), name="dgdnu")
-            self.g0 = cp.Parameter((N, problem.index_map.n.nonconvex_inequality), name="g0")
+            self.g0    = cp.Parameter((N, problem.index_map.n.nonconvex_inequality), name="g0")
         else:
             self.dgdz = self.dgdnu = self.g0 = None
 
@@ -136,8 +132,8 @@ class Subproblem:
         self.w.tr_z = cp.Parameter(nonneg=True, name="tr_z")
         self.w.tr_u = cp.Parameter(nonneg=True, name="tr_u")
 
-        self.w_cost_times_dcostdx = cp.Parameter((N, 1, n_x), name="w_cost_times_dcostdx")
-        self.w_cost_times_dcostdu = cp.Parameter((N, 1, n_u), name="w_cost_times_dcostdu")
+        self.w_cost_times_dcostdx = cp.Parameter((N, 1, n_z), name="w_cost_times_dcostdx")
+        self.w_cost_times_dcostdu = cp.Parameter((N, 1, n_nu), name="w_cost_times_dcostdu")
         self.w_cost_times_cost0 = cp.Parameter((N, 1), name="w_cost_times_cost0")
 
         # Build W_sqrt as attribute dictionary with CVXPY parameters, initialized to zeros
@@ -397,8 +393,6 @@ class Subproblem:
                 C.append(self.dnu[boundary_idx, cnst_idx] + self.nu_ref[boundary_idx, cnst_idx] == value)
 
         for constraint in problem.constraints.get(ct=0, type="inequality_bc"):
-            min_value_idx = constraint.min_value_idx
-            max_value_idx = constraint.max_value_idx
             min_value = constraint.min_value
             max_value = constraint.max_value
             cnst_idx = constraint.idx
@@ -472,15 +466,6 @@ class Subproblem:
                 # multiple shooting discretization
                 if self.flags.discretize == "ms":
                     C.append(discretize.build_ms_dyn_constraint(self, k))
-
-                # #backwards shooting dynamics constraints:
-                # rhs = (
-                #     self.Ak_bwd[k] @ self.dz[k+1]
-                #     + self.Bk_bwd[k] @ self.dnu[k]
-                #     + self.Bkp_bwd[k] @ self.dnu[k + 1]
-                #     # + (self.vb_stack.dynamics_plus[k] - self.vb_stack.dynamics_minus[k])
-                # )
-                # C.append(self.dz[k] + self.z_ref[k] - self.z_m_bwd[k] == rhs)
 
                 if self.flags.buff_dyn != "term":
                     C.append(self.vb_stack.dynamics_plus[k, self.indices.z.real] >= 0)
@@ -805,8 +790,6 @@ class Subproblem:
         if param is None:
             return
         arr = np.asarray(val)
-        if param is self.z_m and arr.shape != (self.N.time_grid, self.n.z):
-            arr = arr.reshape(self.N.time_grid, self.n.z)
         param.value = arr
 
     def _load_inputs(self) -> Dict[str, Any]:
@@ -852,13 +835,13 @@ class Subproblem:
         )
 
         start = time.time()
-        Ak, Bk, Bkp, z_minus = discretize.compute_linsys_discrete(inputs.z_ref, inputs.nu_ref, problem, method)
+        if self.flags.discretize == "ms":
+            Ak, Bk, Bkp, z_minus = discretize.compute_linsys_discrete(inputs.z_ref, inputs.nu_ref, problem, method)
 
-        # inputs.z_ref = z_minus
-
-        # Ak_bwd, Bk_bwd, Bkp_bwd, Sk_bwd, z_minus_bwd = discretize.compute_linsys_discrete_bwd(
-        #     inputs.z_ref, inputs.nu_ref, inputs.dt_ref, problem, method
-        # )
+            self._set_param(self.Ak, Ak)
+            self._set_param(self.Bk, Bk)
+            self._set_param(self.Bkp, Bkp)
+            self._set_param(self.z_m, z_minus)
 
         prop_time_ms = (time.time() - start) * 1000.0
 
@@ -875,25 +858,12 @@ class Subproblem:
             self.dgdnu.value = dgdnu
             self.g0.value = g
 
-        # Dynamics & references
-        self._set_param(self.Ak, Ak)
-        self._set_param(self.Bk, Bk)
-        self._set_param(self.Bkp, Bkp)
-        self._set_param(self.z_m, z_minus)
-
         # Pseudospectral collocation linearisation
         if self.flags.discretize == "ps":
             f_ref_col, Ac_col, Bc_col = discretize.compute_ps_dynamics_and_jacobians(inputs.z_ref, inputs.nu_ref, problem, method)
             self._set_param(self.ps_f_ref, f_ref_col)
             self._set_param(self.ps_Ac, Ac_col)
             self._set_param(self.ps_Bc, Bc_col)
-
-        # # backwards shooting dynamics
-        # self._set_param(self.Ak_bwd,   Ak_bwd)
-        # self._set_param(self.Bk_bwd,   Bk_bwd)
-        # self._set_param(self.Bkp_bwd,  Bkp_bwd)
-        # self._set_param(self.Sk_bwd,   Sk_bwd)
-        # self._set_param(self.z_m_bwd, z_minus_bwd)
 
         if inputs.get("W") is None or inputs.get("dual") is None:
             W_stack, dual_stack = configure_penalty_weights(self.problem, self.method, subconstraints=self.constraints)
@@ -926,40 +896,33 @@ class Subproblem:
         self.nu_ref_sq.value = np.sum(inputs.nu_ref * inputs.nu_ref, axis=1)
 
         if bool(self.flags.free_final_time):
-            self.dt_min.value = float(method.dt_min)
-            self.dt_max.value = float(method.dt_max)
+            self.dt_min.value  = float(method.dt_min)
+            self.dt_max.value  = float(method.dt_max)
             self.ddt_max.value = float(method.ddt_max)
-            self.T_min.value = float(method.Ts_min)
-            self.T_max.value = float(method.Ts_max)
+            self.T_min.value   = float(method.Ts_min)
+            self.T_max.value   = float(method.Ts_max)
 
         # 1. Refresh W_sqrt CVXPY parameter values from stacked constraint weights
-        self.W_sqrt.nonconvex_inequality.value = tools.ensure_shape(
-            np.sqrt(W_stack.nonconvex_inequality), self.W_sqrt.nonconvex_inequality.shape
-        )
-        self.W_sqrt.final_state.value = tools.ensure_shape(np.sqrt(W_stack.final_state), self.W_sqrt.final_state.shape)
-        self.W_sqrt.dynamics.value = tools.ensure_shape(np.sqrt(W_stack.dynamics), self.W_sqrt.dynamics.shape)
-        self.W_sqrt.plus_real.value = tools.ensure_shape(np.sqrt(W_stack.plus_real), self.W_sqrt.plus_real.shape)
-        self.W_sqrt.minus_real.value = tools.ensure_shape(np.sqrt(W_stack.minus_real), self.W_sqrt.minus_real.shape)
-        self.W_sqrt.plus_ctcs.value = tools.ensure_shape(np.sqrt(W_stack.plus_ctcs), self.W_sqrt.plus_ctcs.shape)
-        self.W_sqrt.minus_ctcs.value = tools.ensure_shape(np.sqrt(W_stack.minus_ctcs), self.W_sqrt.minus_ctcs.shape)
+        self.W_sqrt.nonconvex_inequality.value = np.sqrt(W_stack.nonconvex_inequality)
+        self.W_sqrt.final_state.value          = np.sqrt(W_stack.final_state)
+        self.W_sqrt.dynamics.value             = np.sqrt(W_stack.dynamics)
+        self.W_sqrt.plus_real.value            = np.sqrt(W_stack.plus_real)
+        self.W_sqrt.minus_real.value           = np.sqrt(W_stack.minus_real)
+        self.W_sqrt.plus_ctcs.value            = np.sqrt(W_stack.plus_ctcs)
+        self.W_sqrt.minus_ctcs.value           = np.sqrt(W_stack.minus_ctcs)
 
         # 2. Update dual CVXPY parameter values from stacked constraint duals
-        self.dual.nonconvex_inequality.value = tools.ensure_shape(
-            dual_stack.nonconvex_inequality, self.dual.nonconvex_inequality.shape
-        )
-        self.dual.final_state.value = tools.ensure_shape(dual_stack.final_state, self.dual.final_state.shape)
-        self.dual.dynamics.value = tools.ensure_shape(dual_stack.dynamics, self.dual.dynamics.shape)
-        self.dual.plus_real.value = tools.ensure_shape(dual_stack.plus_real, self.dual.plus_real.shape)
-        self.dual.minus_real.value = tools.ensure_shape(dual_stack.minus_real, self.dual.minus_real.shape)
-        self.dual.plus_ctcs.value = tools.ensure_shape(dual_stack.plus_ctcs, self.dual.plus_ctcs.shape)
-        self.dual.minus_ctcs.value = tools.ensure_shape(dual_stack.minus_ctcs, self.dual.minus_ctcs.shape)
+        self.dual.nonconvex_inequality.value = dual_stack.nonconvex_inequality
+        self.dual.final_state.value          = dual_stack.final_state
+        self.dual.dynamics.value             = dual_stack.dynamics
+        self.dual.plus_real.value            = dual_stack.plus_real
+        self.dual.minus_real.value           = dual_stack.minus_real
+        self.dual.plus_ctcs.value            = dual_stack.plus_ctcs
+        self.dual.minus_ctcs.value           = dual_stack.minus_ctcs
 
         # ctcs eps
         self.eps_ctcs.value = float(method.conv.eps_ctcs)
 
-        # cache for optional debug
-        inputs._linsys_cache = (Ak, Bk, Bkp, z_minus)
-        # inputs._linsys_cache_bwd = (Ak_bwd, Bk_bwd, Bkp_bwd, z_minus_bwd)
         return prop_time_ms
 
     # ============================================================
@@ -1000,27 +963,14 @@ class Subproblem:
         rec.dt = dt_val
 
         # outputs (absolute trajectories)
-        rec.z_opt = tools.safe_val(dz_val, rows=N, cols=self.n.z) + input_for_iter.z_ref
-        rec.nu_opt = tools.safe_val(dnu_val, rows=N, cols=self.n.nu) + input_for_iter.nu_ref
+        rec.z_opt = dz_val + input_for_iter.z_ref
+        rec.nu_opt = dnu_val + input_for_iter.nu_ref
 
         # Unpack physical components from optimal trajectories
         rec.x_opt, rec.t_opt, rec.beta_opt, rec.u_opt, rec.s_opt = self.index_map.unpack_znu(rec.z_opt, rec.nu_opt)
 
-        rec.dt_opt = np.diff(tools.reshape_1d(rec.t_opt))
-        rec.T_opt = float(tools.reshape_1d(rec.t_opt)[-1]) if tools.reshape_1d(rec.t_opt).size > 0 else 0.0
-
-        # Discretization model (expose for debug/analysis)
-        Ak, Bk, Bkp, z_minus = input_for_iter.get("_linsys_cache", (None, None, None, None))
-        rec.z_minus = self.z_m.value if z_minus is None else z_minus
-        rec.Ak = self.Ak.value if Ak is None else Ak
-        rec.Bk = self.Bk.value if Bk is None else Bk
-        rec.Bkp = self.Bkp.value if Bkp is None else Bkp
-
-        # Ak_bwd, Bk_bwd, Bkp_bwd, z_minus_bwd = input_for_iter.get("_linsys_cache_bwd", (None, None, None, None))
-        # rec.z_minus_bwd = self.z_m_bwd.value if z_minus_bwd is None else z_minus_bwd
-        # rec.Ak_bwd = self.Ak_bwd.value if Ak_bwd is None else Ak_bwd
-        # rec.Bk_bwd = self.Bk_bwd.value if Bk_bwd is None else Bk_bwd
-        # rec.Bkp_bwd = self.Bkp_bwd.value if Bkp_bwd is None else Bkp_bwd
+        rec.dt_opt = np.diff(rec.t_opt)
+        rec.T_opt = float(rec.t_opt[-1]) if rec.t_opt.size > 0 else 0.0
 
         # Path residuals and reference cost
         g, _, _ = discretize.compute_nonconvex_constraints(rec.z_opt, rec.nu_opt, self.problem, self.method)
@@ -1038,53 +988,48 @@ class Subproblem:
         # Convergence data (buffers, defects, TR cost, ref cost)
         conv = tools.AttrDict()
         conv.vb_ineq = (
-            tools.get_val(self.vb_stack.nonconvex_inequality, rows=self.N.time_grid, cols=self.n.nonconvex_inequality)
+            self.vb_stack.nonconvex_inequality.value
             if self.vb_stack.nonconvex_inequality is not None
             else np.zeros((self.N.time_grid, self.n.nonconvex_inequality))
         )
         conv.vb_terminal = (
-            tools.get_val(self.vb_stack.final_state, rows=1, cols=self.n.term_total)
+            self.vb_stack.final_state.value
             if self.vb_stack.final_state is not None
             else np.zeros((1, self.n.term_total))
         )
         conv.vb_dyn = (
-            tools.get_val(self.vb_stack.dynamics, rows=self.N.time_grid - 1, cols=self.n.dynamics)
+            self.vb_stack.dynamics.value
             if self.vb_stack.dynamics is not None
             else np.zeros((self.N.time_grid - 1, self.n.dynamics))
         )
         conv.vb_plus_real = (
-            tools.get_val(self.vb_stack.plus_real, rows=self.N.pm_real, cols=self.n.plus_real)
+            self.vb_stack.plus_real.value
             if self.vb_stack.plus_real is not None
-            else np.zeros((self.N.pm_real, self.n.plus_real))
+            else np.zeros((max(self.N.pm_real, 1), max(self.n.plus_real, 1)))
         )
         conv.vb_minus_real = (
-            tools.get_val(self.vb_stack.minus_real, rows=self.N.pm_real, cols=self.n.minus_real)
+            self.vb_stack.minus_real.value
             if self.vb_stack.minus_real is not None
-            else np.zeros((self.N.pm_real, self.n.minus_real))
+            else np.zeros((max(self.N.pm_real, 1), max(self.n.minus_real, 1)))
         )
         conv.vb_plus_ctcs = (
-            tools.get_val(self.vb_stack.plus_ctcs, rows=self.N.pm_ctcs, cols=self.n.plus_ctcs)
+            self.vb_stack.plus_ctcs.value
             if self.vb_stack.plus_ctcs is not None
-            else np.zeros((self.N.pm_ctcs, self.n.plus_ctcs))
+            else np.zeros((max(self.N.pm_ctcs, 1), max(self.n.plus_ctcs, 1)))
         )
         conv.vb_minus_ctcs = (
-            tools.get_val(self.vb_stack.minus_ctcs, rows=self.N.pm_ctcs, cols=self.n.minus_ctcs)
+            self.vb_stack.minus_ctcs.value
             if self.vb_stack.minus_ctcs is not None
-            else np.zeros((self.N.pm_ctcs, self.n.minus_ctcs))
+            else np.zeros((max(self.N.pm_ctcs, 1), max(self.n.minus_ctcs, 1)))
         )
         conv.ncvx_ineq = g
 
-        conv.defect = tools.safe_val(self.dz, rows=N, cols=n_x) + input_for_iter.z_ref - self.z_m.value
-        conv.Jtr = self.w.tr_z.value * np.sum(
-            tools.safe_val(self.dz, rows=N, cols=n_x) ** 2
-        ) + self.w.tr_u.value * np.sum(tools.safe_val(self.dnu, rows=N, cols=n_nu) ** 2)
-        ref_cost = (
-            discretize.compute_nonconvex_costs(input_for_iter.z_ref, input_for_iter.nu_ref, self.problem, self.method)[
-                0
-            ]
-            .sum()
-            .item()
-        )
+        if self.flags.discretize == "ms":
+            conv.defect = self.dz + input_for_iter.z_ref - self.z_m.value
+        else:
+            conv.defect = 0.0
+        conv.Jtr = self.w.tr_z.value * np.sum(self.dz.value ** 2) + self.w.tr_u.value * np.sum(self.dnu.value ** 2)
+        ref_cost = (discretize.compute_nonconvex_costs(input_for_iter.z_ref, input_for_iter.nu_ref, self.problem, self.method)[0].sum().item())
         conv.cost_ref = ref_cost
 
         rec.conv_data = conv

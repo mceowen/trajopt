@@ -56,6 +56,8 @@ class nonconvex:
         self.units      = cnstr_config.get("units", None)
         self.scale      = cnstr_config.get("scale", None)
 
+        self.index_map = index_map
+
         self.fcn_string = cnstr_config["fcn"]
         self.minimax     = cnstr_config.get("minimax", 0)
 
@@ -87,30 +89,30 @@ class nonconvex:
             M_state_nd2d = nondim.M.state["nd2d"]
             M_ctrl_nd2d  = nondim.M.control["nd2d"]
 
-            self.fcn_nd = nondim.nondim_function(self.fcn_dim, M_state_nd2d, M_ctrl_nd2d, M_out_d2nd)
+            self.fcn_txu = nondim.nondim_function(self.fcn_dim, M_state_nd2d, M_ctrl_nd2d, M_out_d2nd)
 
     def convexify_cost(self):
         if self.backend == "jax":
-            self.fcn = self.fcn_nd
+            self.fcn = self.index_map.problem.constraints.augment_txu_to_znu(self.fcn_txu)
             self.fcn_compiled, self.dfcn_dz_compiled, self.dfcn_du_compiled = convexify.linearize_jax(self.fcn)
 
-            self.fcn_batched     = jax.jit(jax.vmap(self.fcn_compiled,     in_axes=(0, 0, 0, None)))
-            self.dfcn_dz_batched = jax.jit(jax.vmap(self.dfcn_dz_compiled, in_axes=(0, 0, 0, None)))
-            self.dfcn_du_batched = jax.jit(jax.vmap(self.dfcn_du_compiled, in_axes=(0, 0, 0, None)))
+            self.fcn_batched     = jax.jit(jax.vmap(self.fcn_compiled,     in_axes=(0, 0, None)))
+            self.dfcn_dz_batched = jax.jit(jax.vmap(self.dfcn_dz_compiled, in_axes=(0, 0, None)))
+            self.dfcn_du_batched = jax.jit(jax.vmap(self.dfcn_du_compiled, in_axes=(0, 0, None)))
         
         elif self.backend == "sympy":
             pass
 
-    def g_aff(self, t, z, nu, params):
+    def g_aff(self, z, nu, params):
         return (
-            self.fcn_compiled(t, z, nu, params),
-            self.dfcn_dz_compiled(t, z, nu, params),
-            self.dfcn_du_compiled(t, z, nu, params)
+            self.fcn_compiled(z, nu, params),
+            self.dfcn_dz_compiled(z, nu, params),
+            self.dfcn_du_compiled(z, nu, params)
         )
 
-    def g_aff_batched(self, t, z, nu, params):
+    def g_aff_batched(self, z, nu, params):
         return (
-            self.fcn_batched(t, z, nu, params),
-            self.dfcn_dz_batched(t, z, nu, params),
-            self.dfcn_du_batched(t, z, nu, params)
+            self.fcn_batched(z, nu, params),
+            self.dfcn_dz_batched(z, nu, params),
+            self.dfcn_du_batched(z, nu, params)
         )

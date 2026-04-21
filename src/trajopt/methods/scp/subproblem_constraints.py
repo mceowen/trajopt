@@ -119,15 +119,15 @@ class SubproblemConstraints(Constraints):
                 dual_stack.names[name_key]  = self._stack_constraint_attr(constraints_of_name, "dual")
 
         # Initialize plus/minus buffers as zeros (will be populated by configure_penalty_weights)
-        W_stack.plus_real     = np.zeros((idx.N.pm_real, idx.n.plus_real))
-        W_stack.minus_real    = np.zeros((idx.N.pm_real, idx.n.minus_real))
-        W_stack.plus_ctcs     = np.zeros((idx.N.pm_ctcs, idx.n.plus_ctcs))
-        W_stack.minus_ctcs    = np.zeros((idx.N.pm_ctcs, idx.n.minus_ctcs))
+        W_stack.plus_real     = np.zeros((max(idx.N.pm_real, 1), max(idx.n.plus_real, 1)))
+        W_stack.minus_real    = np.zeros((max(idx.N.pm_real, 1), max(idx.n.minus_real, 1)))
+        W_stack.plus_ctcs     = np.zeros((max(idx.N.pm_ctcs, 1), max(idx.n.plus_ctcs, 1)))
+        W_stack.minus_ctcs    = np.zeros((max(idx.N.pm_ctcs, 1), max(idx.n.minus_ctcs, 1)))
 
-        dual_stack.plus_real  = np.zeros((idx.N.pm_real, idx.n.plus_real))
-        dual_stack.minus_real = np.zeros((idx.N.pm_real, idx.n.minus_real))
-        dual_stack.plus_ctcs  = np.zeros((idx.N.pm_ctcs, idx.n.plus_ctcs))
-        dual_stack.minus_ctcs = np.zeros((idx.N.pm_ctcs, idx.n.minus_ctcs))
+        dual_stack.plus_real  = np.zeros((max(idx.N.pm_real, 1), max(idx.n.plus_real, 1)))
+        dual_stack.minus_real = np.zeros((max(idx.N.pm_real, 1), max(idx.n.minus_real, 1)))
+        dual_stack.plus_ctcs  = np.zeros((max(idx.N.pm_ctcs, 1), max(idx.n.plus_ctcs, 1)))
+        dual_stack.minus_ctcs = np.zeros((max(idx.N.pm_ctcs, 1), max(idx.n.minus_ctcs, 1)))
 
         return W_stack, dual_stack
 
@@ -138,14 +138,12 @@ class SubproblemConstraints(Constraints):
         idx = method.index_map
         N = idx.N.time_grid
 
-        W_ineq      = tools.ensure_shape(W_stack.get("nonconvex_inequality", 0.0), (N, max(idx.n.nonconvex_inequality, 1))) if idx.n.nonconvex_inequality > 0 else np.zeros((N, 0))
-        dual_ineq   = tools.ensure_shape(dual_stack.get("nonconvex_inequality", 0.0), (N, max(idx.n.nonconvex_inequality, 1))) if idx.n.nonconvex_inequality > 0 else np.zeros((N, 0))
-
-        W_term      = tools.ensure_shape(W_stack.get("final_state", 0.0), (max(idx.n.term_total, 1),)) if idx.n.term_total > 0 else np.zeros((0,))
-        dual_term   = tools.ensure_shape(dual_stack.get("final_state", 0.0), (max(idx.n.term_total, 1),)) if idx.n.term_total > 0 else np.zeros((0,))
-
-        W_dyn       = tools.ensure_shape(W_stack.get("dynamics", 0.0), (max(N - 1, 1), max(idx.n.z, 1))) if idx.n.z > 0 else np.zeros((max(N - 1, 0), 0))
-        dual_dyn    = tools.ensure_shape(dual_stack.get("dynamics", 0.0), (max(N - 1, 1), max(idx.n.z, 1))) if idx.n.z > 0 else np.zeros((max(N - 1, 0), 0))
+        W_ineq      = W_stack.get("nonconvex_inequality", 0.0) if idx.n.nonconvex_inequality > 0 else np.zeros((N, 0))
+        dual_ineq   = dual_stack.get("nonconvex_inequality", 0.0) if idx.n.nonconvex_inequality > 0 else np.zeros((N, 0))
+        W_term      = W_stack.get("final_state", 0.0) if idx.n.term_total > 0 else np.zeros((0,))
+        dual_term   = dual_stack.get("final_state", 0.0) if idx.n.term_total > 0 else np.zeros((0,))
+        W_dyn       = W_stack.get("dynamics", 0.0) if idx.n.z > 0 else np.zeros((max(N - 1, 0), 0))
+        dual_dyn    = dual_stack.get("dynamics", 0.0) if idx.n.z > 0 else np.zeros((max(N - 1, 0), 0))
 
 
         # get group names for constraints, if not provided, default to constraint name
@@ -159,20 +157,9 @@ class SubproblemConstraints(Constraints):
             offsets[group_name] = current_offset
             current_offset += idx.n[group_name] if group_name in idx.n else 0
 
-        # print("offset keys: ")
-        # print(offsets.keys())
-
-        
-        # offsets = {
-        #     "path": 0,
-        #     "nfz": idx.n.path,
-        #     "custom": idx.n.path + idx.n.nfz,
-        # }
-
         term_offset = 0
 
         for c in self.constraints_list:
-            c_name = c.name
             c_type = getattr(c, "type", None)
             c_group = getattr(c, "group", None)
             dim = int(getattr(c, "dimension", 0))
