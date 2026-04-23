@@ -83,3 +83,181 @@ costs.min_time:
 costs.control_effort:
   type: control_effort
   idx: [0, 1, 2]
+
+# ===============================
+# TRAJECTORIES
+# ===============================
+
+trajectories:
+  position:
+    type: time_series
+    fcn: trajopt/models/lander_6dof.py:pos_vec
+    group: state
+    title: "Position vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Position (m)"
+
+  velocity:
+    type: time_series
+    fcn: trajopt/models/lander_6dof.py:vel_vec
+    group: state
+    title: "Velocity vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Velocity (m/s)"
+
+  quaternion:
+    type: time_series
+    fcn: trajopt/models/lander_6dof.py:quat_vec
+    group: state
+    title: "Quaternion vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Quaternion"
+
+  angular_velocity:
+    type: time_series
+    fcn: trajopt/models/lander_6dof.py:ang_vel_vec
+    group: state
+    title: "Angular Velocity vs Time"
+    xlabel: "Time (s)"
+    ylabel: "ω (rad/s)"
+
+  thrust_x:
+    type: time_series
+    fcn: trajopt/models/lander_6dof.py:thrust_x
+    group: control
+    title: "Tx vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Tx (N)"
+
+  thrust_y:
+    type: time_series
+    fcn: trajopt/models/lander_6dof.py:thrust_y
+    group: control
+    title: "Ty vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Ty (N)"
+
+  thrust_z:
+    type: time_series
+    fcn: trajopt/models/lander_6dof.py:thrust_z
+    group: control
+    title: "Tz vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Tz (N)"
+
+  thrust_mag:
+    type: time_series
+    fcn: trajopt/models/lander_6dof.py:thrust_mag
+    group: control
+    title: "Thrust Magnitude vs Time"
+    xlabel: "Time (s)"
+    ylabel: "‖T‖ (N)"
+
+  mass:
+    type: time_series
+    fcn: trajopt/models/lander_6dof.py:mass
+    group: state_mass
+    title: "Mass vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Mass (kg)"
+
+  traj_yz:
+    type: spatial
+    fcn: trajopt/models/lander_6dof.py:traj_yz
+    group: position_traj_yz
+    title: "Y-Z Footprint"
+    xlabel: "Y (m)"
+    ylabel: "Z (m)"
+    quivers:
+      body_x:
+        fcn: trajopt/models/lander_6dof.py:body_x_dir_yz
+        scale: 0.25
+        color: [0, 0, 0]
+        alpha: 1.0
+        stride: 1
+        linewidth: 2.5
+      thrust:
+        fcn: trajopt/models/lander_6dof.py:thrust_dir_yz
+        scale: 0.25
+        color: [0.95, 0.45, 0.0]
+        alpha: 0.9
+        stride: 1
+        linewidth: 1.5
+        negate: true
+
+  traj_y_alt:
+    type: spatial
+    fcn: trajopt/models/lander_6dof.py:traj_y_alt
+    group: position_traj_y_alt
+    title: "Altitude vs Y"
+    xlabel: "Y (m)"
+    ylabel: "Altitude (m)"
+    quivers:
+      body_x:
+        fcn: trajopt/models/lander_6dof.py:body_x_dir_y_alt
+        scale: 0.25
+        color: [0, 0, 0]
+        alpha: 1.0
+        stride: 1
+        linewidth: 2.5
+      thrust:
+        fcn: trajopt/models/lander_6dof.py:thrust_dir_y_alt
+        scale: 0.25
+        color: [0.95, 0.45, 0.0]
+        alpha: 0.9
+        stride: 1
+        linewidth: 1.5
+        negate: true
+
+  traj_3d:
+    type: spatial
+    fcn: trajopt/models/lander_6dof.py:traj_3d
+    group: position_traj_3d
+    title: "3D Trajectory"
+    xlabel: "Y (m)"
+    ylabel: "Z (m)"
+    zlabel: "Altitude (m)"
+    quivers:
+      body_x:
+        fcn: trajopt/models/lander_6dof.py:body_x_dir_3d
+        scale: 0.6
+        color: [0, 0, 0]
+        alpha: 1.0
+        stride: 1
+        linewidth: 1.2
+      thrust:
+        fcn: trajopt/models/lander_6dof.py:thrust_dir_3d
+        scale: 0.6
+        color: [0.95, 0.45, 0.0]
+        alpha: 0.9
+        stride: 1
+        linewidth: 0.8
+        negate: true
+
+# ===============================
+# PLOT CONFIGURATION
+# ===============================
+
+plot_config:
+  trajectory_groups:
+    state_mass:
+      figsize: [5, 2.8]
+      margins: [0.14, 0.02, 0.08, 0.14]
+
+    state:
+      figsize: [12, 5.5]
+      grid_gap_x: 0.10
+      grid_gap_y: 0.20
+      margins: [0.08, 0.02, 0.06, 0.12]
+
+    control:
+      figsize: [12, 2.8]
+      grid_gap_x: 0.08
+      margins: [0.08, 0.02, 0.06, 0.14]
+
+    # position_traj:
+    #   figsize: [12, 3.2]
+    #   width_ratios: [1, 1, 2]
+    #   grid_gap_x: -0.04
+    #   pad_3d: 0.0
+    #   margins: [0.06, 0.02, 0.06, 0.14]

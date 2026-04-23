@@ -65,3 +65,22 @@ def yz(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
 def xyz(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """xyz-position."""
     return z[0:3]
+
+
+def vel_x(t: float, z: Array, nu: Array, params: dict) -> Array:
+    return jnp.array([z[3]])
+
+def vel_y(t: float, z: Array, nu: Array, params: dict) -> Array:
+    return jnp.array([z[4]])
+
+def vel_z(t: float, z: Array, nu: Array, params: dict) -> Array:
+    return jnp.array([z[5]])
+
+def thrust_x(t: float, z: Array, nu: Array, params: dict) -> Array:
+    return jnp.array([nu[0]])
+
+def thrust_y(t: float, z: Array, nu: Array, params: dict) -> Array:
+    return jnp.array([nu[1]])
+
+def thrust_z(t: float, z: Array, nu: Array, params: dict) -> Array:
+    return jnp.array([nu[2]])

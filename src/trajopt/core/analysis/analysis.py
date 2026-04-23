@@ -66,7 +66,7 @@ results = {
 ITER_DATA_KEYS_TO_KEEP = {
     "iter_num", "converged", "cost", "solve_time", "prop_time", "parse_time", "t_full",
     "t_opt", "z_opt", "nu_opt", "dt_opt", "T_opt",
-    "t_nl", "z_nl", "nu_nl", "t_init", "z_init", "nu_init",
+    "t_nl", "z_nl", "nu_nl", "t_init", "z_init", "nu_init", "t_init_nl", "z_init_nl", "nu_init_nl",
     "constraint_data", "trajectory_data", "conv_data", "W", "dual", "penalty",
 }
 
@@ -89,7 +89,7 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
     nondim      = method.nondim
 
     if compute_iters == True:
-        selected_iter_data = iter_data[1:]
+        selected_iter_data = iter_data
     else:
         selected_iter_data = [iter_data[-1]]
 
@@ -112,6 +112,12 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
         x_init = z_init[:, idx.z.state]
         t_init = z_init[:, idx.z.time].squeeze(-1)
         u_init = nu_init[:, idx.nu.control]
+
+        z_init_dense = method.initial_guess.z_dense
+        nu_init_dense = method.initial_guess.nu_dense
+        x_init_dense = z_init_dense[:, idx.z.state]
+        t_init_dense = z_init_dense[:, idx.z.time].squeeze(-1)
+        u_init_dense = nu_init_dense[:, idx.nu.control]
 
         # compute constraints for z_nl, z_opt, name = SUBPLOT , TYPE, group = FIGURE, units
         constraint_data = AttrDict({})
@@ -164,7 +170,15 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
         nu_init_d = nu_init.copy()
         nu_init_d[:, idx.nu.control] = u_init @ nondim.M.control.nd2d
 
-        t_opt_d = t_opt * nondim.time_scale
+        z_init_dense_d  = z_init_dense.copy()
+        z_init_dense_d[:, idx.z.state] = x_init_dense @ nondim.M.state.nd2d
+        z_init_dense_d[:, idx.z.time]  = z_init_dense[:, idx.z.time] * nondim.time_scale
+        nu_init_dense_d = nu_init_dense.copy()
+        nu_init_dense_d[:, idx.nu.control] = u_init_dense @ nondim.M.control.nd2d
+        t_init_dense_d  = t_init_dense * nondim.time_scale
+
+        t_opt_d   = t_opt * nondim.time_scale
+        t_init_d  = t_init * nondim.time_scale
 
         # compute general trajectory values (not necessarily constraints as specified in the problem)
         for trajectory in problem.trajectories.get():
@@ -177,9 +191,10 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
                     group = name
 
                 eval_fn   = trajectory.compute_trajectory_values
-                opt_vals  = _eval_per_phase(eval_fn, z_opt_d,  nu_opt_d,  problem, params_dict)
-                nl_vals   = _eval_per_phase(eval_fn, z_nl_d,   nu_nl_d,   problem, params_dict, t_nodes=t_opt_d)
-                init_vals = _eval_per_phase(eval_fn, z_init_d, nu_init_d, problem, params_dict)
+                opt_vals      = _eval_per_phase(eval_fn, z_opt_d,        nu_opt_d,        problem, params_dict)
+                nl_vals       = _eval_per_phase(eval_fn, z_nl_d,         nu_nl_d,         problem, params_dict, t_nodes=t_opt_d)
+                init_vals     = _eval_per_phase(eval_fn, z_init_d,       nu_init_d,       problem, params_dict)
+                init_nl_vals  = _eval_per_phase(eval_fn, z_init_dense_d, nu_init_dense_d, problem, params_dict, t_nodes=t_init_d)
 
                 output = AttrDict({
                     "name": name,
@@ -187,11 +202,14 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
                     "opt_vals": opt_vals,
                     "nl_vals": nl_vals,
                     "init_vals": init_vals,
+                    "init_nl_vals": init_nl_vals,
                     "title": getattr(trajectory, "title", None),
                     "xlabel": getattr(trajectory, "xlabel", None),
                     "ylabel": getattr(trajectory, "ylabel", None),
+                    "zlabel": getattr(trajectory, "zlabel", None),
                     "tick_nbins": getattr(trajectory, "tick_nbins", None),
                     "markers": getattr(trajectory, "markers", None),
+                    "invert_x": getattr(trajectory, "invert_x", False),
                 })
 
                 if trajectory_data.get(group) is None:
@@ -204,9 +222,13 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
         data['z_nl']  = x_nl @ nondim.M.state.nd2d
         data['nu_nl'] = u_nl @ nondim.M.control.nd2d
 
-        data['t_init']  = t_init * nondim.time_scale
-        data['z_init']  = x_init @ nondim.M.state.nd2d
-        data['nu_init'] = u_init @ nondim.M.control.nd2d
+        data['t_init']     = t_init * nondim.time_scale
+        data['z_init']     = x_init @ nondim.M.state.nd2d
+        data['nu_init']    = u_init @ nondim.M.control.nd2d
+
+        data['t_init_nl']  = t_init_dense * nondim.time_scale
+        data['z_init_nl']  = x_init_dense @ nondim.M.state.nd2d
+        data['nu_init_nl'] = u_init_dense @ nondim.M.control.nd2d
 
         data['t_opt']  = t_opt * nondim.time_scale
         data['z_opt']  = x_opt @ nondim.M.state.nd2d

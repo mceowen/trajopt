@@ -2,63 +2,41 @@
 # MODEL CONFIGURATION
 # ===============================
 
-# state vector definition
+fcns:
+  lift_drag: trajopt/models/reentry_3dof.py:lift_drag
+  heat_rate: trajopt/models/reentry_3dof.py:heat_rate
+  dynamic_pressure: trajopt/models/reentry_3dof.py:dynamic_pressure
+  aero_load: trajopt/models/reentry_3dof.py:aero_load
+  dynamics: trajopt/models/reentry_3dof.py:dynamics
+  long_lat: trajopt/models/reentry_3dof.py:long_lat
+  long_lat_alt: trajopt/models/reentry_3dof.py:long_lat_alt
+  density_model: trajopt/models/reentry_3dof.py:exp_density
+  altitude: trajopt/models/reentry_3dof.py:altitude
+  longitude: trajopt/models/reentry_3dof.py:longitude
+  latitude: trajopt/models/reentry_3dof.py:latitude
+  velocity: trajopt/models/reentry_3dof.py:velocity
+  fpa: trajopt/models/reentry_3dof.py:fpa
+  heading: trajopt/models/reentry_3dof.py:heading
+  bank: trajopt/models/reentry_3dof.py:bank
+  aoa: trajopt/models/reentry_3dof.py:aoa
+
 state.r:
     idx: [0]
-    units: d
-    title: "Radius vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Radius (m)"
-  
 state.theta:
     idx: [1]
-    units: deg
-    title: "Longitude vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Longitude (deg)"
-  
 state.phi:
     idx: [2]
-    units: deg
-    title: "Latitude vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Latitude (deg)"
-  
 state.v:
     idx: [3]
-    units: v
-    title: "Velocity vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Velocity (m/s)"
-  
 state.gamma:
     idx: [4]
-    units: deg
-    title: "Flight Path Angle vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Flight Path Angle (deg)"
-  
 state.psi:
     idx: [5]
-    units: deg
-    title: "Heading Angle vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Heading Angle (deg)"
 
-# control vector definition
 control.bank:
     idx: [0]
-    units: deg
-    title: "Bank Angle vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Bank Angle (deg)"
-
 control.aoa:
     idx: [1]
-    units: deg
-    title: "Angle of Attack vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Angle of Attack (deg)"
 
 # ===============================
 # CONSTRAINT MODELS
@@ -66,7 +44,7 @@ control.aoa:
 
 constraints.dynamics:
   type: dynamics
-  fcn: trajopt/models/reentry_3dof.py:dynamics
+  fcn: fcns.dynamics
 
 constraints.initial_state:
   type: equality_bc
@@ -135,7 +113,7 @@ constraints.bank_aoa_rate_limit:
 constraints.max_Q:
   type: nonconvex_inequality
   group: path
-  fcn: trajopt/models/reentry_3dof.py:heat_rate
+  fcn: fcns.heat_rate
   eps: null
   dimension: 1
   ct: 0
@@ -143,7 +121,7 @@ constraints.max_Q:
 constraints.max_q:
   type: nonconvex_inequality
   group: path
-  fcn: trajopt/models/reentry_3dof.py:dynamic_pressure
+  fcn: fcns.dynamic_pressure
   eps: null
   dimension: 1
   ct: 0
@@ -151,7 +129,7 @@ constraints.max_q:
 constraints.max_load:
   type: nonconvex_inequality
   group: path
-  fcn: trajopt/models/reentry_3dof.py:aero_load
+  fcn: fcns.aero_load
   eps: null
   dimension: 1
   ct: 0
@@ -171,92 +149,153 @@ costs.min_terminal_velocity:
 costs.min_max_heat_rate:
     type: nonconvex
     minimax: 1
-    fcn: trajopt/models/reentry_3dof.py:heat_rate
+    fcn: fcns.heat_rate
     units: [{none: 1}]
     ct: 0
 
 trajectories:
+  altitude:
+    type: time_series
+    fcn: "fcns.altitude * 0.001"
+    group: state
+    title: "Altitude vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Altitude (km)"
+
+  longitude:
+    type: time_series
+    fcn: fcns.longitude
+    group: state
+    title: "Longitude vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Longitude (deg)"
+
+  latitude:
+    type: time_series
+    fcn: fcns.latitude
+    group: state
+    title: "Latitude vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Latitude (deg)"
+
+  velocity:
+    type: time_series
+    fcn: fcns.velocity
+    group: state
+    title: "Velocity vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Velocity (m/s)"
+
+  fpa:
+    type: time_series
+    fcn: fcns.fpa
+    group: state
+    title: "Flight Path Angle vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Flight Path Angle (deg)"
+
+  heading:
+    type: time_series
+    fcn: fcns.heading
+    group: state
+    title: "Heading Angle vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Heading Angle (deg)"
+
+  bank_angle:
+    type: time_series
+    fcn: fcns.bank
+    group: control
+    title: "Bank Angle vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Bank Angle (deg)"
+
+  angle_of_attack:
+    type: time_series
+    fcn: fcns.aoa
+    group: control
+    title: "Angle of Attack vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Angle of Attack (deg)"
+
   long_lat_trajectory_plot:
     type: spatial
-    fcn: trajopt/models/reentry_3dof.py:long_lat
+    fcn: fcns.long_lat
     group: state_trajplots
     title: "Longitude vs Latitude"
     xlabel: "Longitude (deg)"
     ylabel: "Latitude (deg)"
+    tick_nbins: 4
   
   long_lat_alt_trajectory_plot:
     type : spatial
-    fcn: trajopt/models/reentry_3dof.py:long_lat_alt
+    fcn: "fcns.long_lat_alt * [1, 1, 0.001]"
     group: state_trajplots
-    title: "Ground Track (3D)"
+    title: "3D Trajectory"
     xlabel: "Longitude (deg)"
     ylabel: "Latitude (deg)"
+    zlabel: "Altitude (km)"
     tick_nbins: 4
 
-  # heat_rate:
-  #   type: time_series
-  #   fcn: trajopt/models/reentry_3dof.py:heat_rate
-  #   group: path
-  #   title: "Heat Rate vs Time"
-  #   xlabel: "Time (s)"
-  #   ylabel: "Heat Rate (W/m²)"
+  heat_rate:
+    type: time_series
+    fcn: "fcns.heat_rate * 0.0001"
+    group: path
+    title: "Heat Rate vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Heat Rate (W/cm²)"
 
-  # dynamic_pressure:
-  #   type: time_series
-  #   fcn: trajopt/models/reentry_3dof.py:dynamic_pressure
-  #   group: path
-  #   title: "Dynamic Pressure vs Time"
-  #   xlabel: "Time (s)"
-  #   ylabel: "Dynamic Pressure (Pa)"
+  dynamic_pressure:
+    type: time_series
+    fcn: "fcns.dynamic_pressure * 0.001"
+    group: path
+    title: "Dynamic Pressure vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Dynamic Pressure (kPa)"
 
-  # aero_load:
-  #   type: time_series
-  #   fcn: trajopt/models/reentry_3dof.py:aero_load
-  #   group: path
-  #   title: "Aerodynamic Load vs Time"
-  #   xlabel: "Time (s)"
-  #   ylabel: "Aerodynamic Load (g)"
+  aero_load:
+    type: time_series
+    fcn: "fcns.aero_load / 9.81"
+    group: path
+    title: "Aerodynamic Load vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Aerodynamic Load (g)"
 
 # ===============================
 # PLOT CONFIGURATION
 # ===============================
-# per-group figure and layout settings (override defaults)
-# figsize: [width, height] in inches
-# grid_gap_x / grid_gap_y: horizontal / vertical gap between subplots (fraction of figure)
-# width_ratios: relative widths of subplots (list, one per subplot)
-# margins: [left, right, top, bottom] as fractions of figure
 
 plot_config:
-  state:
-    figsize: [10, 3.5]
-    grid_gap_x: 0.06
-    grid_gap_y: 0.18
-    margins: [0.06, 0.02, 0.06, 0.14]
-
-  control:
-    figsize: [8, 3.5]
-    grid_gap_x: 0.08
-    grid_gap_y: 0.18
-    margins: [0.08, 0.02, 0.06, 0.14]
-
   trajectory_groups:
+    state:
+      figsize: [12, 4.5]
+      grid_gap_x: 0.06
+      grid_gap_y: 0.14
+      margins: [0.06, 0.02, 0.06, 0.12]
+
+    control:
+      figsize: [8, 2.8]
+      grid_gap_x: 0.08
+      margins: [0.08, 0.02, 0.06, 0.14]
+
     state_trajplots:
-      figsize: [10, 4]
-      width_ratios: [1, 2.5]
-      grid_gap_x: 0.02
+      figsize: [10, 3.2]
+      width_ratios: [1, 2]
+      grid_gap_x: -0.10
+      pad_3d: 0.0
       margins: [0.08, 0.02, 0.06, 0.14]
 
     path:
-      figsize: [12, 3.5]
+      figsize: [12, 2.8]
       grid_gap_x: 0.10
       margins: [0.06, 0.02, 0.06, 0.14]
 
     density_comparison:
-      figsize: [10, 3.5]
+      figsize: [10, 2.8]
       grid_gap_x: 0.08
       margins: [0.06, 0.02, 0.06, 0.14]
 
     density_vs_alt_comparison:
-      figsize: [10, 3.5]
+      figsize: [10, 2.8]
       grid_gap_x: 0.08
       margins: [0.06, 0.02, 0.06, 0.14]

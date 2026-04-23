@@ -82,6 +82,33 @@ def aero_load(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([jnp.sqrt(L**2 + D**2)])
 
 
+def vel_heat_rate(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """[velocity (m/s), heat rate (W/m²)]."""
+    v = z[3]
+    rho = fcns["density_model"](t, z, nu, params, fcns)
+    return jnp.array([v, params["vehicle"]["kQ"] * rho**0.5 * v**3])
+
+
+def vel_dynamic_pressure(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """[velocity (m/s), dynamic pressure (Pa)]."""
+    v = z[3]
+    rho = fcns["density_model"](t, z, nu, params, fcns)
+    return jnp.array([v, 0.5 * rho * v**2])
+
+
+def vel_aero_load(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """[velocity (m/s), aero load (m/s²)]."""
+    v = z[3]
+    aero = fcns["nonlinear_aero"](t, z, nu, params, fcns)
+    return jnp.array([v, jnp.sqrt(aero["L"]**2 + aero["D"]**2)])
+
+
+def vel_altitude(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """[velocity (m/s), altitude (m)]."""
+    return jnp.array([z[3], z[0] - params["planet"]["r"]])
+
+
+
 def long_lat(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Longitude and latitude [theta, phi] (deg, deg)."""
     return jnp.array([z[1], z[2]])
@@ -128,6 +155,20 @@ def bank(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
 def aoa(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Angle of attack (deg)."""
     return jnp.array([nu[1]])
+
+def exp_density(t: float, z: Array, nu: Array, params: dict, fcns: dict | None = None) -> Array:
+    """Exponential atmosphere density model (kg/m³), JAX version."""
+    h = z[0] - params["planet"]["r"]
+
+    return params["planet"]["rho"] * jnp.exp(-h / params["planet"]["H"])
+
+def lift_drag(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """Lift and drag forces for MSL."""
+    aero = fcns["nonlinear_aero"](t, z, nu, params, fcns)
+
+    L = aero["L"]
+    D = aero["D"]
+    return jnp.array([L, D])
 
 # ===============================
 # CASADI MODEL

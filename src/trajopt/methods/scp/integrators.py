@@ -58,7 +58,7 @@ def propagate_znu(z0, nu, problem, method, compiled_attr_name="_jit_propagate_zn
 
     def _solve(z0, nu, tau_ref, tau_dense, bary_w):
         def f_dot(tau, z, _):
-            k = jnp.clip(jnp.round(tau * (N - 1)).astype(jnp.int32), 0, N - 1)
+            k = jnp.clip(jnp.floor(tau * (N - 1)).astype(jnp.int32), 0, N - 1)
             p = {**params, **{key: arr[k] for key, arr in phase_sched.items()}}
             return dynamics(z, interp(tau, nu, tau_ref, bary_w), p)
         return diffrax.diffeqsolve(
@@ -66,6 +66,7 @@ def propagate_znu(z0, nu, problem, method, compiled_attr_name="_jit_propagate_zn
             t0=0.0, t1=1.0, dt0=None, y0=z0,
             stepsize_controller=diffrax.PIDController(rtol=1e-6, atol=1e-6),
             saveat=diffrax.SaveAt(ts=tau_dense),
+            max_steps=65536,
         )
 
     sol   = _jit_cached(method, compiled_attr_name, _solve)(z0_jax, nu_jax, tau_ref, tau_dense, bary_w)

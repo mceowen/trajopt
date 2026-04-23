@@ -15,6 +15,9 @@ class _FcnExpr:
         if isinstance(other, _FcnExpr):
             g = other._fcn
             return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) * g(t, x, u, params))
+        if isinstance(other, list):
+            import jax.numpy as jnp
+            other = jnp.array(other)
         return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) * other)
 
     def __rmul__(self, other):

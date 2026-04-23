@@ -41,10 +41,14 @@ class equality_bc:
         if self.set == "state":
             self.value = nondim.M.state.d2nd[np.ix_(self.idx, self.idx)] @ self.value
             self.eps = nondim.M.state.d2nd[np.ix_(self.idx, self.idx)] @ self.eps
+            if self.value_guess is not None:
+                self.value_guess = np.asarray(nondim.M.state.d2nd) @ np.atleast_1d(self.value_guess)
         
         elif self.set == "control":
             self.value = nondim.M.control.d2nd[np.ix_(self.idx, self.idx)] @ self.value
             self.eps   = nondim.M.control.d2nd[np.ix_(self.idx, self.idx)] @ self.eps
+            if self.value_guess is not None:
+                self.value_guess = np.asarray(nondim.M.control.d2nd) @ np.atleast_1d(self.value_guess)
 
 class inequality_bc:
     def __init__(self, cnstr_config, index_map, **kwargs):

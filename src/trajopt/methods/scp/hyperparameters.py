@@ -16,7 +16,7 @@ def configure_penalty_weights(problem, method, subconstraints=None):
     W_stack = tools.AttrDict()
     dual_stack = tools.AttrDict()
 
-    W_stack.nonconvex_inequality        = np.zeros((method.index_map.N.time_grid, n_ineq))
+    W_stack.nonconvex_inequality        = np.zeros((method.index_map.N.time_grid, max(n_ineq, 1)))
     W_stack.final_state                 = np.zeros(problem.index_map.n.final_state + problem.index_map.n.term_ineq + problem.index_map.n.term_ctcs)
     W_stack.dynamics                    = np.zeros((method.index_map.N.time_grid - 1, problem.index_map.n.z))
     W_stack.plus_real                   = np.zeros((max(method.index_map.N.pm_real, 1), max(method.index_map.n.plus_real, 1)))
@@ -24,7 +24,7 @@ def configure_penalty_weights(problem, method, subconstraints=None):
     W_stack.plus_ctcs                   = np.zeros((max(method.index_map.N.pm_ctcs, 1), max(method.index_map.n.plus_ctcs, 1)))
     W_stack.minus_ctcs                  = np.zeros((max(method.index_map.N.pm_ctcs, 1), max(method.index_map.n.minus_ctcs, 1)))
 
-    dual_stack.nonconvex_inequality     = np.zeros((method.index_map.N.time_grid, n_ineq))
+    dual_stack.nonconvex_inequality     = np.zeros((method.index_map.N.time_grid, max(n_ineq, 1)))
     dual_stack.final_state              = np.zeros(problem.index_map.n.final_state + problem.index_map.n.term_ineq + problem.index_map.n.term_ctcs)
     dual_stack.dynamics                 = np.zeros((method.index_map.N.time_grid - 1, problem.index_map.n.z))
     dual_stack.plus_real                = np.zeros((max(method.index_map.N.pm_real, 1), max(method.index_map.n.plus_real, 1)))
@@ -33,8 +33,8 @@ def configure_penalty_weights(problem, method, subconstraints=None):
     dual_stack.minus_ctcs               = np.zeros((max(method.index_map.N.pm_ctcs, 1), max(method.index_map.n.minus_ctcs, 1)))
 
     # local block arrays
-    W_ineq                            = np.zeros((method.index_map.N.time_grid, problem.index_map.n.nonconvex_inequality))
-    dual_ineq                         = np.zeros((method.index_map.N.time_grid, problem.index_map.n.nonconvex_inequality))
+    W_ineq                            = np.zeros((method.index_map.N.time_grid, max(n_ineq, 1)))
+    dual_ineq                         = np.zeros((method.index_map.N.time_grid, max(n_ineq, 1)))
 
     penalty.wtr_z = 1 / (2 * penalty.alpha_z) * (1 / (method.index_map.N.time_grid * (method.index_map.n.z)))
     penalty.wtr_u = 1 / (2 * penalty.alpha_u) * (1 / (method.index_map.N.time_grid * (method.index_map.n.control)))
@@ -459,8 +459,10 @@ def autotune1(subproblem, conv_data, conv_data_prev, iter_num):
     # Dual updates
     # ==========================================
 
-    # inequality
-    dual_ineq_plus = np.maximum(0, gamma.nonconvex_inequality * vb_ineq + dual_ineq)
+    if problem.constraints.has(type="nonconvex_inequality", ct=0):
+        dual_ineq_plus = np.maximum(0, gamma.nonconvex_inequality * vb_ineq + dual_ineq)
+    else:
+        dual_ineq_plus = dual_ineq
 
     # NOTE: testing the augmented lagrangian update rule for duals
     dual_dyn_plus = beta.dynamics * vb_dyn + dual_dyn
@@ -548,7 +550,7 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
     buff_dyn = method.flags.buff_dyn
     ctcs = method.flags.ctcs
 
-    Wh_ineq = np.zeros((N, problem.index_map.n.nonconvex_inequality))
+    Wh_ineq = np.zeros((N, max(problem.index_map.n.nonconvex_inequality, 1)))
     Wh_dyn  = np.zeros((N - 1, problem.index_map.n.z))
     Wh_term = np.zeros(problem.index_map.n.term_total)
 
@@ -585,12 +587,10 @@ def autotune2(subproblem, conv_data, conv_data_prev, iter_num):
             Wh_minus_ctcs[:, j] = np.sum(np.abs(np.diag(W_minus_ctcs[:, j]) @ vb_minus_ctcs[:, j] / np.min(eps_feas_dyn)))
 
     for k in range(N):
-        dual_ineq_buff = np.diag(W_ineq[k, :]) @ vb_ineq[k, :].flatten()
 
-        if problem.index_map.n['nonconvex_inequality'] > 0:
+        if problem.constraints.has(type="nonconvex_inequality", ct=0):
+            dual_ineq_buff = np.diag(W_ineq[k, :]) @ vb_ineq[k, :].flatten()
             Wh_ineq[k, :] = np.abs(dual_ineq_buff / eps_target_ineq[k])
-        else:
-            Wh_ineq[k, :] = np.abs(dual_ineq_buff)
 
         if k < N - 1:
             dual_dyn_buff = np.diag(W_dyn[k, :]) @ vb_dyn[k, :]

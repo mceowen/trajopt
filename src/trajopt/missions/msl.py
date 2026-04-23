@@ -4,14 +4,6 @@ from jax import Array
 
 jax.config.update("jax_enable_x64", True)
 
-
-def exp_density_jax(t: float, z: Array, nu: Array, params: dict, fcns: dict | None = None) -> Array:
-    """Exponential atmosphere density model (kg/m³), JAX version."""
-    h = z[0] - params["planet"]["r"]
-
-    return params["planet"]["rho"] * jnp.exp(-h / params["planet"]["H"])
-
-
 def nonlinear_aero_jax(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> dict:
     """Nonlinear aerodynamic force coefficients and state for MSL, JAX version."""
     v = z[3]
@@ -41,11 +33,3 @@ def nonlinear_aero_jax(t: float, z: Array, nu: Array, params: dict, fcns: dict) 
     D = (1 / mass) * 0.5 * rho * v**2 * Cd * sref
 
     return {"L": L, "D": D, "alpha": 0, "rho": rho}
-
-def lift_drag(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
-    """Lift and drag forces for MSL."""
-    aero = nonlinear_aero_jax(t, z, nu, params, fcns)
-
-    L = aero["L"]
-    D = aero["D"]
-    return jnp.array([L, D])

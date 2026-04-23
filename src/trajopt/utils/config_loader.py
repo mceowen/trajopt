@@ -73,7 +73,7 @@ def load_trajopt_config(mission_path, model_path, method_path, variations_path=N
 
     constraint_config = AttrDict({name: {'name': name, **constraint_config[name]} for name in active_constraint_list})
     cost_config       = AttrDict({name: {'name': name, **cost_config[name]} for name in active_cost_list})
-    trajectory_config = AttrDict({name: {'name': name, **trajectory_config[name]} for name in trajectory_config.keys()})
+    trajectory_config = AttrDict({name: {'name': name, **trajectory_config[name]} for name in trajectory_config.keys() if trajectory_config[name] is not None})
 
     # extract parameters and functions
     params_config = problem_config.get('params', {})
@@ -95,7 +95,9 @@ def load_trajopt_config(mission_path, model_path, method_path, variations_path=N
             'params': params_config,
             'fcns': fcns_config,
             'mission': mission_config,
-            'model': model_config
+            'model': model_config,
+            'diagnostics': problem_config.get('diagnostics', {}),
+            'plot_config': problem_config.get('plot_config', {}),
         },
         
         'method': method_config, 

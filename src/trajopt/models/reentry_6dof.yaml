@@ -14,7 +14,9 @@ fcns:
   heat_rate: trajopt/models/reentry_6dof.py:heat_rate
   dynamic_pressure: trajopt/models/reentry_6dof.py:dynamic_pressure
   aero_load: trajopt/models/reentry_6dof.py:aero_load
-  
+  altitude: trajopt/models/reentry_6dof.py:altitude
+  long_lat_alt: trajopt/models/reentry_6dof.py:long_lat_alt
+
   # polar coordinate trajectories
   polar_radius: trajopt/models/reentry_6dof.py:polar_radius
   polar_longitude: trajopt/models/reentry_6dof.py:polar_longitude
@@ -170,14 +172,16 @@ trajectories:
     title: "Longitude vs Latitude"
     xlabel: "Longitude (deg)"
     ylabel: "Latitude (deg)"
+    tick_nbins: 4
   
   long_lat_alt_trajectory_plot:
     type : spatial
-    fcn: trajopt/models/reentry_6dof.py:long_lat_alt
+    fcn: "fcns.long_lat_alt * [1, 1, 0.001]"
     group: state_trajplots
-    title: "Ground Track (3D)"
+    title: "3D Trajectory"
     xlabel: "Longitude (deg)"
     ylabel: "Latitude (deg)"
+    zlabel: "Altitude (km)"
     tick_nbins: 4
 
   rv_plot:
@@ -198,7 +202,7 @@ trajectories:
   
   exp_density:
     type: time_series
-    fcn: trajopt/local/aero/cobra_aero_6dof.py:exp_density_jax
+    fcn: trajopt/local/aero/cobra_aero_6dof.py:exp_density
     group: density_comparison
     title: "Exponential Density vs Time"
     xlabel: "Time (s)"
@@ -224,8 +228,8 @@ trajectories:
 
   aero_load:
     type: time_series
-    fcn: fcns.aero_load
-    upper_limit: 30.0
+    fcn: "fcns.aero_load / 9.81"
+    upper_limit: 3.0
     group: path
     title: "Aerodynamic Load vs Time"
     xlabel: "Time (s)"
@@ -241,52 +245,41 @@ trajectories:
 # margins: [left, right, top, bottom] as fractions of figure
 
 plot_config:
-  state:
-    figsize: [10, 3.5]
-    grid_gap_x: 0.06
-    grid_gap_y: 0.18
-    margins: [0.06, 0.02, 0.06, 0.14]
-
-  control:
-    figsize: [6, 3.5]
-    grid_gap_x: 0.08
-    grid_gap_y: 0.18
-    margins: [0.10, 0.02, 0.06, 0.14]
-
   trajectory_groups:
     state_trajplots:
-      figsize: [10, 4]
-      width_ratios: [1, 2.5]
-      grid_gap_x: 0.02
+      figsize: [10, 3.2]
+      width_ratios: [1, 2]
+      grid_gap_x: -0.10
+      pad_3d: 0.0
       margins: [0.08, 0.02, 0.06, 0.14]
 
     rv:
-      figsize: [5, 4]
+      figsize: [5, 2.8]
       margins: [0.12, 0.02, 0.06, 0.14]
 
     path:
-      figsize: [12, 3.5]
+      figsize: [12, 2.8]
       grid_gap_x: 0.10
       margins: [0.06, 0.02, 0.06, 0.14]
 
     density_comparison:
-      figsize: [10, 3.5]
+      figsize: [10, 2.8]
       grid_gap_x: 0.08
       margins: [0.06, 0.02, 0.06, 0.14]
 
     dynamic_pressure:
-      figsize: [5, 3.5]
+      figsize: [5, 2.8]
       margins: [0.12, 0.02, 0.06, 0.14]
 
     mach:
-      figsize: [5, 3.5]
+      figsize: [5, 2.8]
       margins: [0.12, 0.02, 0.06, 0.14]
 
     bank_angle:
-      figsize: [5, 3.5]
+      figsize: [5, 2.8]
       margins: [0.12, 0.02, 0.06, 0.14]
 
     body_torque_bounds:
-      figsize: [12, 3.5]
+      figsize: [12, 2.8]
       grid_gap_x: 0.10
       margins: [0.06, 0.02, 0.06, 0.14]

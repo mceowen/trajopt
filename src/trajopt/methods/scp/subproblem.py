@@ -712,6 +712,25 @@ class Subproblem:
             idx = cost.idx
             self.TRUE += self.w.cost * zf[idx]
 
+        for cost in problem.costs.get(type="regularization"):
+            if cost.set == "control":
+                nu = self.nu_ref + self.dnu
+
+                if cost.norm_type == "l2":
+                    self.TRUE += cost.w * cp.sum_squares(nu) * (1 / self.N.time_grid)
+
+                if cost.norm_type == "l1":
+                    self.TRUE += cost.w * cp.norm1(nu) * (1 / self.N.time_grid)
+
+            elif cost.set == "state":
+                z = self.z_ref + self.dz
+
+                if cost.norm_type == "l2":
+                    self.TRUE += cost.w * cp.sum_squares(z) * (1 / self.N.time_grid)
+
+                if cost.norm_type == "l1":
+                    self.TRUE += cost.w * cp.norm1(z) * (1 / self.N.time_grid)
+
         for cost in problem.costs.get(type="rate_regularization"):
             if cost.set == "control":
                 nu = self.nu_ref + self.dnu
@@ -722,7 +741,7 @@ class Subproblem:
                     self.TRUE += cost.w * cp.sum_squares(nu_plus - nu_minus) * (1 / self.N.time_grid)
 
                 if cost.norm_type == "l1":
-                    self.TRUE += cost.w * cp.norm1(nu) * (1 / self.N.time_grid)
+                    self.TRUE += cost.w * cp.norm1(nu_plus - nu_minus) * (1 / self.N.time_grid)
 
             elif cost.set == "state":
                 z = self.z_ref + self.dz
@@ -1025,7 +1044,7 @@ class Subproblem:
         conv.ncvx_ineq = g
 
         if self.flags.discretize == "ms":
-            conv.defect = self.dz + input_for_iter.z_ref - self.z_m.value
+            conv.defect = self.dz.value + input_for_iter.z_ref - self.z_m.value
         else:
             conv.defect = 0.0
         conv.Jtr = self.w.tr_z.value * np.sum(self.dz.value ** 2) + self.w.tr_u.value * np.sum(self.dnu.value ** 2)

@@ -6,14 +6,14 @@ from trajopt.utils.tools import AttrDict
 
 
 def set_initial_guess(problem,method):
+        
+        initial_guess_type = getattr(method.initial_guess, "type", "propagation")
 
-        if (getattr(method.initial_guess, "type", "propagation") == "propagation") or method.flags.buff_dyn == "term":
+        if initial_guess_type == "propagation":
             nonlinear_initial_guess(problem, method)
-        else:
+        
+        elif initial_guess_type == "straight_line":
             straight_line_initial_guess(problem, method)
-
-        method.initial_guess.t  = np.asarray(method.initial_guess.t).reshape(-1)
-        method.initial_guess.dt = np.diff(method.initial_guess.t.reshape(-1, 1), axis=0)
 
         augment_initial_guess(problem, method)
 
@@ -34,7 +34,9 @@ def augment_initial_guess(problem, method):
     x_init                      = np.asarray(init.x)
     u_init                      = np.asarray(init.u)
 
-    if getattr(method.flags, 'discretize', 'ms') == 'ps':
+    discretize_flag = getattr(method.flags, 'discretize', 'ms')
+
+    if  discretize_flag == 'ps':
         _, etau, _, _ = discretize.compute_ps_differentiation_matrix(N - 1)
         t0, tf = t_init[0], t_init[-1]
         t_lgr  = t0 + (etau + 1.0) / 2.0 * (tf - t0)
@@ -54,7 +56,7 @@ def augment_initial_guess(problem, method):
     dt_ref                      = np.diff(t_init.reshape(-1, 1), axis=0)
     init.dt                     = dt_ref
 
-    if getattr(method.flags, 'discretize', 'ms') == 'ps':
+    if discretize_flag == 'ps':
         T                           = float(t_init[-1] - t_init[0])
         nu_init[:, idx.nu.dilation_factor] = T
     else:
@@ -66,6 +68,22 @@ def augment_initial_guess(problem, method):
 
     init.z  = z_init
     init.nu = nu_init
+
+    if hasattr(init, 't_dense'):
+        t_d  = np.asarray(init.t_dense).reshape(-1)
+        x_d  = np.asarray(init.x_dense)
+        u_d  = np.asarray(init.u_dense)
+        N_d  = len(t_d)
+        z_dense              = np.zeros((N_d, problem.index_map.n.z))
+        z_dense[:, idx.z.state] = x_d
+        z_dense[:, idx.z.time]  = t_d.reshape(-1, 1)
+        nu_dense                = np.zeros((N_d, problem.index_map.n.nu))
+        nu_dense[:, idx.nu.control] = u_d
+        init.z_dense  = z_dense
+        init.nu_dense = nu_dense
+    else:
+        init.z_dense  = z_init
+        init.nu_dense = nu_init
 
     return z_init, nu_init
 
@@ -108,9 +126,12 @@ def straight_line_initial_guess(problem, method):
     u_init_interp_func  = interp1d(t_init, line_init_u_init, axis=0)
     u_init              = u_init_interp_func(t_init)
 
-    init.t = t_init
-    init.x = x_init
-    init.u = u_init
+    init.t       = t_init
+    init.x       = x_init
+    init.u       = u_init
+    init.t_dense = t_init
+    init.x_dense = x_init
+    init.u_dense = u_init
 
     return t_init, x_init, u_init
 
@@ -158,8 +179,14 @@ def nonlinear_initial_guess(problem, method):
     x_interp_func = interp1d(t_nl_out, x_nl, axis=0)
     x_init        = x_interp_func(t_init)
 
-    init.t = t_init
-    init.x = x_init
-    init.u = u_init
+    u_dense_func  = interp1d(t_init, u_init, axis=0, bounds_error=False,
+                             fill_value=(u_init[0], u_init[-1]))
+
+    init.t        = t_init
+    init.x        = x_init
+    init.u        = u_init
+    init.t_dense  = t_nl_out
+    init.x_dense  = x_nl
+    init.u_dense  = u_dense_func(t_nl_out)
 
     return t_init, x_init, u_init

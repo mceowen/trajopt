@@ -1,7 +1,6 @@
 # ===============================
 # FUNCTIONS
 # ===============================
-fcns.density_model: trajopt/missions/vtol.py:exp_density_jax
 fcns.nonlinear_aero: trajopt/missions/vtol.py:nonlinear_aero_jax
 
 # ===============================
@@ -74,7 +73,7 @@ costs:
   control_rate_regularization:
     type: rate_regularization
     set: control
-    w: 0.001
+    w: 0.1
 
 # ===============================
 # ACTIVE CONSTRAINTS AND COSTS
@@ -97,17 +96,10 @@ cost_list:
 
 trajectories:
   heat_rate:
-    type: time_series
-    fcn: trajopt/models/reentry_3dof.py:heat_rate
-    group: path
-    upper_limit: 33300
+    upper_limit: 3.33
+  
   dynamic_pressure:
-    type: time_series
-    fcn: trajopt/models/reentry_3dof.py:dynamic_pressure
-    group: path
-    upper_limit: 18000
+    upper_limit: 18.0
+  
   aero_load:
-    type: time_series
-    fcn: trajopt/models/reentry_3dof.py:aero_load
-    group: path
-    upper_limit: 24.525
+    upper_limit: "${24.525 / 9.81}"

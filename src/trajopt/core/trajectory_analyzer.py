@@ -36,11 +36,7 @@ class TrajectoryAnalyzer:
 
         return self.results
 
-    def plot(self, data, analysis_type="standalone", show_iters = False, animate=False):
-
-        # plot the results (use MC-style plots when analysis_type is "mc")
-        plotting.plot_default(self, data, analysis_type, show_iters=show_iters)
-
-        # animate the results if specified
+    def plot(self, data, analysis_type="standalone", show_iters=False, animate=False, show_runs=None):
+        plotting.plot_default(self, data, analysis_type, show_iters=show_iters, show_runs=show_runs)
         if animate:
-            plotting.plot_animated(self)
+            plotting.plot_animated(self, data, analysis_type)

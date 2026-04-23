@@ -64,17 +64,16 @@ class Trajectories:
         Returns:
             None.
         """
-        
+
         for trajectory in self.trajectories_list:
             if getattr(trajectory, 'fcn_dim', None) is not None:
                 sig = inspect.signature(trajectory.fcn_dim)
-                param_names = sig.parameters.keys()
+                if 'fcns' in sig.parameters:
+                    trajectory.fcn_dim = partial(trajectory.fcn_dim, fcns=fcns)
 
-                kwargs_to_bind = {}
-                if 'fcns' in param_names:
-                    kwargs_to_bind = {"fcns": fcns}
+            for i, qfcn in enumerate(getattr(trajectory, 'quiver_fcn_dims', [])):
+                sig = inspect.signature(qfcn)
+                if 'fcns' in sig.parameters:
+                    trajectory.quiver_fcn_dims[i] = partial(qfcn, fcns=fcns)
 
-                if kwargs_to_bind:
-                    trajectory.fcn_dim = partial(trajectory.fcn_dim, **kwargs_to_bind)
-
-                trajectory.compile_function()
+            trajectory.compile_function()

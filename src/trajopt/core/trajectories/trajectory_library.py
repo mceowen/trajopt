@@ -12,23 +12,40 @@ class spatial:
         self.title      = cnstr_config.get("title", None)
         self.xlabel     = cnstr_config.get("xlabel", None)
         self.ylabel     = cnstr_config.get("ylabel", None)
+        self.zlabel     = cnstr_config.get("zlabel", None)
         self.tick_nbins = cnstr_config.get("tick_nbins", None)
         self.markers    = cnstr_config.get("markers", None)
+        self.invert_x   = cnstr_config.get("invert_x", False)
         self.backend    = cnstr_config.get("backend", "jax")
         self.index_map  = index_map
         self.fcn_dim    = tools.resolve_fcn(cnstr_config["fcn"], fcns)
 
+        # quiver support: quivers is a dict of {name: config} in the yaml
+        raw_quivers = cnstr_config.get("quivers", {}) or {}
+        self.quiver_configs   = list(raw_quivers.values()) if isinstance(raw_quivers, dict) else list(raw_quivers)
+        self.quiver_fcn_dims  = [tools.resolve_fcn(qcfg["fcn"], fcns) for qcfg in self.quiver_configs]
+        self.quiver_fcns_batched = []
+
+    def _wrap(self, fn):
+        def fcn(z, nu, params):
+            x, t, beta = self.index_map.unpack_z(z)
+            u, s       = self.index_map.unpack_nu(nu)
+            return fn(t, x, u, params)
+        return jax.jit(jax.vmap(fcn, in_axes=(0, 0, None)))
+
     def compile_function(self):
         if self.backend == "jax":
-            def fcn(z, nu, params):
-                x, t, beta = self.index_map.unpack_z(z)
-                u, s       = self.index_map.unpack_nu(nu)
-                return self.fcn_dim(t, x, u, params)
-            self.fcn_batched = jax.jit(jax.vmap(fcn, in_axes=(0, 0, None)))
+            self.fcn_batched = self._wrap(self.fcn_dim)
+            self.quiver_fcns_batched = [self._wrap(f) for f in self.quiver_fcn_dims]
 
     def compute_trajectory_values(self, z, nu, params):
-        values = np.asarray(self.fcn_batched(jnp.asarray(z), jnp.asarray(nu), params))
-        return {"values": values, "limits": None}
+        z_jax, nu_jax = jnp.asarray(z), jnp.asarray(nu)
+        values = np.asarray(self.fcn_batched(z_jax, nu_jax, params))
+        quivers = [
+            {"dirs": np.asarray(qfn(z_jax, nu_jax, params)), "config": qcfg}
+            for qfn, qcfg in zip(self.quiver_fcns_batched, self.quiver_configs)
+        ]
+        return {"values": values, "limits": None, "quivers": quivers}
     
 class time_series:
     def __init__(self, cnstr_config, index_map, fcns=None, **kwargs):
@@ -39,6 +56,7 @@ class time_series:
         self.title      = cnstr_config.get("title", None)
         self.xlabel     = cnstr_config.get("xlabel", None)
         self.ylabel     = cnstr_config.get("ylabel", None)
+        self.zlabel     = cnstr_config.get("zlabel", None)
         self.tick_nbins = cnstr_config.get("tick_nbins", None)
         self.backend    = cnstr_config.get("backend", "jax")
         self.index_map  = index_map

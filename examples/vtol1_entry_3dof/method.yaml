@@ -19,3 +19,4 @@ conv:
   eps_cost: 1
   eps_defect: 0.01
   eps_dyn: [100.0, 0.1, 0.1, 30.0, 0.1, 0.1]
+  fac_eps: 0.6
