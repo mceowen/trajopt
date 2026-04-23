@@ -113,7 +113,7 @@ constraints.bank_aoa_rate_limit:
 constraints.max_Q:
   type: nonconvex_inequality
   group: path
-  fcn: fcns.heat_rate
+  fcn: "fcns.heat_rate * 0.0001"
   eps: null
   dimension: 1
   ct: 0
@@ -121,7 +121,7 @@ constraints.max_Q:
 constraints.max_q:
   type: nonconvex_inequality
   group: path
-  fcn: fcns.dynamic_pressure
+  fcn: "fcns.dynamic_pressure"
   eps: null
   dimension: 1
   ct: 0
@@ -129,7 +129,7 @@ constraints.max_q:
 constraints.max_load:
   type: nonconvex_inequality
   group: path
-  fcn: fcns.aero_load
+  fcn: "fcns.aero_load"
   eps: null
   dimension: 1
   ct: 0
