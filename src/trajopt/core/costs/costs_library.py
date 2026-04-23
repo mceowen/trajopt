@@ -19,6 +19,7 @@ class terminal_state:
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
         self.idx = cost_config["idx"]
+        self.sign = cost_config.get("sign", 1)
     def nondim_cost(self, nondim):
         pass
 

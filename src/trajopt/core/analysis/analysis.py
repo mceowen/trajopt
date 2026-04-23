@@ -244,6 +244,129 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
     return AttrDict({'iters': iters_out})
 
 # ======================================================================
+# NLP ANALYSIS (CasADi / IPOPT path)
+# ======================================================================
+
+def perform_nlp_analysis(trajopt_obj):
+    problem     = trajopt_obj.problem
+    sol         = trajopt_obj.solution
+    params      = problem.params
+    params_dict = tools.recursive_to_dict(params)
+
+    t  = sol['t']
+    X  = sol['x']
+    U  = sol['u']
+    N  = len(t)
+    nx = X.shape[1]
+    nu = U.shape[1]
+
+    U_pad = np.vstack([U, U[-1:]])
+
+    idx = problem.index_map.indices
+    z  = np.zeros((N, len(idx.z.all)))
+    z[:, idx.z.state] = X
+    z[:, idx.z.time]  = t[:, None]
+
+    nu_arr = np.zeros((N, len(idx.nu.all)))
+    nu_arr[:, idx.nu.control] = U_pad
+    nu_arr[:, idx.nu.dilation_factor] = 1.0
+
+    guess   = trajopt_obj.config.method.guess
+    x_start = np.array(guess.x_start)
+    x_end   = np.array(guess.x_end)
+    u_g     = np.array(guess.u)
+    tf_g    = float(guess.tf)
+
+    X_init  = np.array([x_start + (x_end - x_start) * k / (N - 1) for k in range(N)])
+    U_init  = np.tile(u_g, (N, 1))
+    t_init  = np.linspace(0.0, tf_g, N)
+
+    z_init  = np.zeros_like(z)
+    z_init[:, idx.z.state] = X_init
+    z_init[:, idx.z.time]  = t_init[:, None]
+
+    nu_init = np.zeros_like(nu_arr)
+    nu_init[:, idx.nu.control] = U_init
+    nu_init[:, idx.nu.dilation_factor] = 1.0
+
+    constraint_data = AttrDict({})
+    trajectory_data = AttrDict({})
+
+    for constraint in problem.constraints.get():
+        if hasattr(constraint, "compute_constraint_values"):
+            name  = constraint.name
+            group = constraint.group or name
+            eval_fn = constraint.compute_constraint_values
+            opt_vals  = eval_fn(z, nu_arr, params_dict)
+            output = AttrDict({
+                "name": name,
+                "type": constraint.type,
+                "opt_vals": opt_vals,
+                "nl_vals": opt_vals,
+                "init_vals": opt_vals,
+            })
+            if constraint_data.get(group) is None:
+                constraint_data[group] = AttrDict({})
+            constraint_data[group][name] = output
+
+    for trajectory in problem.trajectories.get():
+        name      = trajectory.name
+        traj_type = trajectory.type
+        group     = trajectory.group or name
+
+        eval_fn   = trajectory.compute_trajectory_values
+        opt_vals      = eval_fn(z, nu_arr, params_dict)
+        init_vals     = eval_fn(z_init, nu_init, params_dict)
+
+        output = AttrDict({
+            "name": name,
+            "type": traj_type,
+            "opt_vals": opt_vals,
+            "nl_vals": opt_vals,
+            "init_vals": init_vals,
+            "init_nl_vals": init_vals,
+            "title": getattr(trajectory, "title", None),
+            "xlabel": getattr(trajectory, "xlabel", None),
+            "ylabel": getattr(trajectory, "ylabel", None),
+            "zlabel": getattr(trajectory, "zlabel", None),
+            "tick_nbins": getattr(trajectory, "tick_nbins", None),
+            "markers": getattr(trajectory, "markers", None),
+            "invert_x": getattr(trajectory, "invert_x", False),
+        })
+        if trajectory_data.get(group) is None:
+            trajectory_data[group] = AttrDict({})
+        trajectory_data[group][name] = output
+
+    iter_data = AttrDict({
+        "t_opt": t,
+        "z_opt": X,
+        "nu_opt": U_pad,
+        "t_nl": t,
+        "z_nl": X,
+        "nu_nl": U_pad,
+        "t_init": t_init,
+        "z_init": X_init,
+        "nu_init": U_init,
+        "t_init_nl": t_init,
+        "z_init_nl": X_init,
+        "nu_init_nl": U_init,
+        "trajectory_data": trajectory_data,
+        "constraint_data": constraint_data,
+        "W": AttrDict({}),
+        "dual": AttrDict({}),
+        "penalty": AttrDict({}),
+    })
+
+    return AttrDict({"iters": [iter_data]})
+
+
+def run_nlp_analysis(trajopt_obj):
+    config = trajopt_obj.config.method
+    name   = config.get("name", "nlp")
+    return recursive_attrdict({name: {"runs": [perform_nlp_analysis(trajopt_obj)]}})
+
+
+# ======================================================================
 # STANDALONE ANALYSIS
 # ======================================================================
 

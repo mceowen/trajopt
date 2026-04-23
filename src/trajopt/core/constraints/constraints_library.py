@@ -283,8 +283,11 @@ class nonconvex_inequality:
         self.dfcn_du_compiled = None
 
     def nondim_constraint(self, nondim):
+        if self.backend == "casadi":
+            return
+
         if self.backend == "jax":
-            
+
             # get max and min values regardless
             if self.max_value is not None:
                 self.max_value = jnp.asarray(jnp.atleast_1d(self.max_value))
@@ -329,6 +332,9 @@ class nonconvex_inequality:
                 self.eps = jnp.concatenate((self.eps, self.eps))
 
     def convexify_constraint(self):
+        if self.backend == "casadi":
+            return
+
         if self.backend == "jax":
             if self.upper_and_lower == True:
                 fcn_lb_txu   = lambda t, x, u, params: -self.fcn_nd(t, x, u, params) + self.min_value
@@ -377,6 +383,27 @@ class nonconvex_inequality:
         )
 
     def compute_constraint_values(self, z, nu, params):
+        if self.backend == "casadi":
+            from trajopt.core.trajectories.trajectory_library import _eval_casadi_batched
+            x = z[:, self.index_map.indices.z.state]
+            t = z[:, self.index_map.indices.z.time].squeeze(-1)
+            u = nu[:, self.index_map.indices.nu.control]
+            values = _eval_casadi_batched(self.fcn_dim, t, x, u, params)
+            n_t = z.shape[0]
+            raw_dim = self.dimension // 2 if self.upper_and_lower else self.dimension
+            limits = None
+            if self.min_value is not None:
+                min_arr = np.atleast_1d(np.array(self.min_value, dtype=float))
+                limits = np.tile(min_arr, (n_t, 1))
+            if self.max_value is not None:
+                max_arr = np.atleast_1d(np.array(self.max_value, dtype=float))
+                max_limits = np.tile(max_arr, (n_t, 1))
+                if limits is not None:
+                    limits = np.hstack([limits, max_limits])
+                else:
+                    limits = max_limits
+            return {"values": values, "limits": limits}
+
         if self.backend == "jax":
             z_jax = jnp.asarray(z)
             nu_jax = jnp.asarray(nu)

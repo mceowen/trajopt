@@ -1,0 +1,132 @@
+fcns:
+  dynamics:  trajopt/models/rlv_entry_3dof.py:dynamics
+  altitude:  trajopt/models/rlv_entry_3dof.py:altitude
+  longitude: trajopt/models/rlv_entry_3dof.py:longitude
+  latitude:  trajopt/models/rlv_entry_3dof.py:latitude
+  velocity:  trajopt/models/rlv_entry_3dof.py:velocity
+  fpa:       trajopt/models/rlv_entry_3dof.py:fpa
+  heading:   trajopt/models/rlv_entry_3dof.py:heading
+  aoa:       trajopt/models/rlv_entry_3dof.py:aoa_out
+  bank:      trajopt/models/rlv_entry_3dof.py:bank_out
+  heat_rate: trajopt/models/rlv_entry_3dof.py:heat_rate
+  long_lat:  trajopt/models/rlv_entry_3dof.py:long_lat
+
+state:
+  r:
+    idx: [0]
+  theta:
+    idx: [1]
+  phi:
+    idx: [2]
+  v:
+    idx: [3]
+  gamma:
+    idx: [4]
+  psi:
+    idx: [5]
+
+control:
+  aoa:
+    idx: [0]
+  bank:
+    idx: [1]
+
+trajectories:
+  altitude:
+    type: time_series
+    backend: casadi
+    fcn: "fcns.altitude * 0.001"
+    group: state
+    title: "Altitude vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Altitude (km)"
+
+  velocity:
+    type: time_series
+    backend: casadi
+    fcn: "fcns.velocity * 0.001"
+    group: state
+    title: "Velocity vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Velocity (km/s)"
+
+  fpa:
+    type: time_series
+    backend: casadi
+    fcn: fcns.fpa
+    group: state
+    title: "Flight Path Angle vs Time"
+    xlabel: "Time (s)"
+    ylabel: "FPA (deg)"
+
+  longitude:
+    type: time_series
+    backend: casadi
+    fcn: fcns.longitude
+    group: state
+    title: "Longitude vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Longitude (deg)"
+
+  latitude:
+    type: time_series
+    backend: casadi
+    fcn: fcns.latitude
+    group: state
+    title: "Latitude vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Latitude (deg)"
+
+  heading:
+    type: time_series
+    backend: casadi
+    fcn: fcns.heading
+    group: state
+    title: "Heading Angle vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Heading (deg)"
+
+  angle_of_attack:
+    type: time_series
+    backend: casadi
+    fcn: fcns.aoa
+    group: control
+    title: "Angle of Attack vs Time"
+    xlabel: "Time (s)"
+    ylabel: "AoA (deg)"
+
+  bank_angle:
+    type: time_series
+    backend: casadi
+    fcn: fcns.bank
+    group: control
+    title: "Bank Angle vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Bank (deg)"
+
+  ground_track:
+    type: spatial
+    backend: casadi
+    fcn: fcns.long_lat
+    group: spatial
+    title: "Ground Track"
+    xlabel: "Longitude (deg)"
+    ylabel: "Latitude (deg)"
+    tick_nbins: 4
+
+plot_config:
+  trajectory_groups:
+    state:
+      figsize: [13, 5.5]
+      grid_gap_x: 0.06
+      grid_gap_y: 0.14
+      margins: [0.06, 0.02, 0.06, 0.10]
+
+    control:
+      figsize: [9, 2.8]
+      grid_gap_x: 0.08
+      margins: [0.08, 0.02, 0.06, 0.14]
+
+    spatial:
+      figsize: [5, 3.5]
+      margins: [0.12, 0.04, 0.06, 0.14]

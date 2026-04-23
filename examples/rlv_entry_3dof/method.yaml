@@ -1,0 +1,18 @@
+type: nlp
+time_grid: 150
+
+solver:
+  name: ipopt
+  max_iter: 3000
+  tol: 1.0e-6
+  print_level: 5
+
+bounds:
+  tf_lb: 0.0
+  tf_ub: 3000.0
+
+guess:
+  tf: 2000.0
+  x_start: ["${params.planet.r + 79248.0}", 0.0, 0.0, 7802.88, -1.0, 90.0]
+  x_end:   ["${params.planet.r + 24384.0}", 5.0, 15.0, 762.0, -5.0, 90.0]
+  u: [17.4, -30.0]
