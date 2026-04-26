@@ -239,6 +239,7 @@ trajectories:
 # ===============================
 
 plot_config:
+  limits_all_iters: true
   trajectory_groups:
     state_mass:
       figsize: [5, 2.8]

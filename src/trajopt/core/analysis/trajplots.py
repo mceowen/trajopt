@@ -47,9 +47,11 @@ class SCVXPLOTS:
         msz      = pen['msz']
 
         iter_data_list = np.array(self.data[method_name]['runs'][run]['iters'])
-            
-        for i, iter_data in enumerate(iter_data_list[iters]):
-            
+        selected_iters = iter_data_list[iters]
+        n_iters = len(selected_iters)
+
+        for i, iter_data in enumerate(selected_iters):
+
             # get x and y data from iter_data
             x_data = tools.get_from_path(iter_data, x_path)
             y_data = tools.get_from_path(iter_data, y_path)
@@ -65,7 +67,14 @@ class SCVXPLOTS:
             if y_data.shape[0] == x_data.shape[0] - 1:
                 x_data = x_data[:-1]
 
-            ax.plot(x_data[:, x_idx], y_data[:, y_idx], color=lrgba[:3], alpha=lrgba[3], linewidth=lw, linestyle=ls, marker=msty, markersize=msz)
+            first_frac = pen.get('first_frac', 0.2)
+            if n_iters > 1:
+                t = i / (n_iters - 1)
+                alpha = lrgba[3] * (first_frac + (1.0 - first_frac) * t)
+            else:
+                alpha = lrgba[3]
+
+            ax.plot(x_data[:, x_idx], y_data[:, y_idx], color=lrgba[:3], alpha=alpha, linewidth=lw, linestyle=ls, marker=msty, markersize=msz)
 
     ########### BASIC 3D-PLOTTING ###############
     def addPlot3D(self,ax,pen={},ins={}):
@@ -137,7 +146,7 @@ class SCVXPLOTS:
 
         iter_data_list = np.array(self.data[method_name]['runs'][run]['iters'][1:])
         last_iter_data = iter_data_list[-1]
-            
+
         # get x and y data from last iter_data
         y_data_last = tools.get_from_path(last_iter_data, y_path)
 
@@ -156,11 +165,18 @@ class SCVXPLOTS:
                 continue
             if iter_y_data.ndim == 1:
                 y_data[i, :] = iter_y_data
-            
+
             elif iter_y_data.ndim == 2:
                 y_data[i, :] = np.max(iter_y_data, axis=0)
 
-        ax.plot(np.arange(1, len(iter_data_list) + 1), y_data[:, y_idx], color=lrgba[:3], alpha=lrgba[3], linewidth=lw, linestyle=ls, marker=msty, markersize=msz)
+        n = len(iter_data_list)
+        xs = np.arange(1, n + 1)
+        for i in range(n - 1):
+            t = i / max(n - 2, 1)
+            alpha = lrgba[3] * (0.2 + 0.8 * t)
+            ax.plot(xs[i:i+2], y_data[i:i+2, y_idx], color=lrgba[:3], alpha=alpha, linewidth=lw, linestyle=ls, marker=msty, markersize=msz)
+        if n >= 1:
+            ax.plot(xs[-1:], y_data[-1:, y_idx], color=lrgba[:3], alpha=lrgba[3], linewidth=lw, linestyle=ls, marker=msty, markersize=msz)
 
     ######## LABELS AND LEGENDS ############
     def setTicks(self,ax,x=False,y=False,ins={}):

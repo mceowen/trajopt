@@ -103,7 +103,10 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
         t_opt = z_opt[:, idx.z.time].squeeze(-1)
         u_opt = nu_opt[:, idx.nu.control]
 
-        t_nl, z_nl, nu_nl = integrators.propagate_znu(z_opt[0], nu_opt, problem, method)
+        if getattr(method.flags, 'ode_fixed_dt', 0):
+            t_nl, z_nl, nu_nl = integrators.propagate_znu_rk4(z_opt[0], nu_opt, problem, method)
+        else:
+            t_nl, z_nl, nu_nl = integrators.propagate_znu(z_opt[0], nu_opt, problem, method)
         x_nl = z_nl[:, idx.z.state]
         u_nl = nu_nl[:, idx.nu.control]
 
@@ -210,6 +213,7 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
                     "tick_nbins": getattr(trajectory, "tick_nbins", None),
                     "markers": getattr(trajectory, "markers", None),
                     "invert_x": getattr(trajectory, "invert_x", False),
+                    "show_iters": getattr(trajectory, "show_iters", None),
                 })
 
                 if trajectory_data.get(group) is None:
@@ -332,6 +336,7 @@ def perform_nlp_analysis(trajopt_obj):
             "tick_nbins": getattr(trajectory, "tick_nbins", None),
             "markers": getattr(trajectory, "markers", None),
             "invert_x": getattr(trajectory, "invert_x", False),
+            "show_iters": getattr(trajectory, "show_iters", None),
         })
         if trajectory_data.get(group) is None:
             trajectory_data[group] = AttrDict({})

@@ -30,3 +30,7 @@ conv:
 
 solver_opts:
   solver: CLARABEL
+
+flags:
+  equal_dt: 1
+  ode_fixed_dt: 1 

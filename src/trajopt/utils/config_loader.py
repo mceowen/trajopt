@@ -203,8 +203,15 @@ def eval_values(obj, ctx, key=None):
     if isinstance(obj, str):
         # Expression: ${...}
         if '${' in obj:
-            expression = obj.split('${', 1)[1].rsplit('}', 1)[0]
-            result = eval_expr(expression, ctx)
-            return eval_values(result, ctx)
+            # If the whole string is a single ${...}, evaluate and return the result directly
+            m = re.fullmatch(r'\$\{([^}]+)\}', obj.strip())
+            if m:
+                result = eval_expr(m.group(1), ctx)
+                return eval_values(result, ctx)
+            # Mixed expression (e.g. "${params.x_ub} * fcns.q_s") — substitute the
+            # template parts but leave the rest as a string for resolve_fcn to handle
+            def _sub(match):
+                return str(eval_expr(match.group(1), ctx))
+            return re.sub(r'\$\{([^}]+)\}', _sub, obj)
     
     return obj

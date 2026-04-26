@@ -7,28 +7,32 @@ from trajopt.core.analysis.trajplots import SCVXPLOTS
 from trajopt.utils.tools import AttrDict, recursive_attrdict
 import trajopt.utils.tools as tools
 
-plt.rcParams["text.usetex"] = False
+plt.rcParams["text.usetex"] = True
 plt.rcParams.update({
-    'font.size': 8,
-    'axes.labelsize': 8,
-    'axes.titlesize': 9,
-    'xtick.labelsize': 7,
-    'ytick.labelsize': 7,
+    'font.size': 9,
+    'axes.labelsize': 9,
+    'axes.titlesize': 10,
+    'xtick.labelsize': 8,
+    'ytick.labelsize': 8,
     'xtick.direction': 'in',
     'ytick.direction': 'in',
     'xtick.major.size': 3,
     'ytick.major.size': 3,
     'lines.linewidth': 1.0,
+    'axes.formatter.useoffset': False,
+    'axes.formatter.limits': [-1, 3],
+    'path.simplify': True,
+    'path.simplify_threshold': 0.1,
 })
 
 plot_options = AttrDict({
-    'figsize': (10, 2.8),
+    'figsize': (10, 2.6),
     'dpi': 300,
     'grid_gap_x': 0.06,
-    'grid_gap_y': 0.18,
-    'margins': [0.07, 0.02, 0.08, 0.12],
-    'title_fontsize': 9,
-    'title_pad': 6,
+    'grid_gap_y': 0.12,
+    'margins': [0.08, 0.02, 0.04, 0.12],
+    'title_fontsize': 10,
+    'title_pad': 4,
 })
 
 # pen: frgba, lrgba, lw, ls, msty, msz
@@ -51,21 +55,43 @@ pens = recursive_attrdict({
     'wt3':     {'frgba': [0,0,0,.1], 'lrgba': [0,1,0,1.],   'lw': 1, 'ls': '-',  'msty': 'o', 'msz': 2},
 })
 
-def _set_trajectory_limits(axs_trajectories, nominal_trajectory_data, nominal_iter_data, pad=0.05):
-    t_opt = nominal_iter_data["t_opt"]
-    t_nl  = nominal_iter_data["t_nl"]
-    t_init_nl = nominal_iter_data.get("t_init_nl")
+def _set_trajectory_limits(axs_trajectories, nominal_trajectory_data, data, limits_all_iters=True, pad=0.05):
+    first_method = list(data.keys())[0]
+    all_iters = data[first_method]["runs"][-1]["iters"]
+
     for traj_group_name, traj_group_data in nominal_trajectory_data.items():
         for j, (traj_name, traj_data) in enumerate(traj_group_data.items()):
             ax = axs_trajectories[traj_group_name][j]
-            ov = traj_data.opt_vals["values"]
-            nv = traj_data.nl_vals["values"]
-            parts = [ov, nv]
-            iv = traj_data.get("init_nl_vals", {}).get("values") if traj_data.get("init_nl_vals") else None
-            if iv is not None:
-                parts.append(iv)
-            if traj_data.type == "spatial":
-                all_vals = np.concatenate(parts, axis=0)
+
+            iter_range = all_iters if limits_all_iters else all_iters[-1:]
+            spatial_parts = []
+            t_parts = []
+            y_parts = []
+
+            for it in iter_range:
+                it_td = it.get("trajectory_data", {}).get(traj_group_name, {}).get(traj_name)
+                if it_td is None:
+                    continue
+                ov = it_td.opt_vals["values"]
+                nv = it_td.nl_vals["values"]
+                if traj_data.type == "spatial":
+                    spatial_parts.extend([ov, nv])
+                elif traj_data.type == "time_series":
+                    t_parts.extend([it["t_opt"], it["t_nl"]])
+                    y_parts.extend([ov.ravel(), nv.ravel()])
+
+                iv = it_td.get("init_nl_vals", {}).get("values") if it_td.get("init_nl_vals") else None
+                if iv is not None:
+                    if traj_data.type == "spatial":
+                        spatial_parts.append(iv)
+                    elif traj_data.type == "time_series":
+                        t_init_nl = it.get("t_init_nl")
+                        if t_init_nl is not None:
+                            t_parts.append(t_init_nl)
+                            y_parts.append(iv.ravel())
+
+            if traj_data.type == "spatial" and spatial_parts:
+                all_vals = np.concatenate(spatial_parts, axis=0)
                 for dim_i, setter in enumerate([ax.set_xlim, ax.set_ylim] + ([ax.set_zlim] if hasattr(ax, 'set_zlim') and all_vals.shape[1] > 2 else [])):
                     lo, hi = all_vals[:, dim_i].min(), all_vals[:, dim_i].max()
                     margin = (hi - lo) * pad if hi > lo else 0.5
@@ -73,12 +99,7 @@ def _set_trajectory_limits(axs_trajectories, nominal_trajectory_data, nominal_it
                         setter(hi + margin, lo - margin)
                     else:
                         setter(lo - margin, hi + margin)
-            elif traj_data.type == "time_series":
-                t_parts = [t_opt, t_nl]
-                y_parts = [ov.ravel(), nv.ravel()]
-                if iv is not None and t_init_nl is not None:
-                    t_parts.append(t_init_nl)
-                    y_parts.append(iv.ravel())
+            elif traj_data.type == "time_series" and t_parts:
                 limits = traj_data.nl_vals.get("limits", {})
                 if limits:
                     for val in [limits.get("upper"), limits.get("lower")]:
@@ -95,6 +116,76 @@ def _set_trajectory_limits(axs_trajectories, nominal_trajectory_data, nominal_it
                 ym = (yhi - ylo) * pad if yhi > ylo else 0.5
                 ax.set_xlim(xlo - xm, xhi + xm)
                 ax.set_ylim(ylo - ym, yhi + ym)
+
+def _set_mc_trajectory_limits(axs_trajectories, nominal_trajectory_data, data, traj_configs=None, pad=0.05, show_runs=None):
+    if traj_configs is None:
+        traj_configs = {}
+    for traj_group_name, traj_group_data in nominal_trajectory_data.items():
+        for j, (traj_name, traj_data) in enumerate(traj_group_data.items()):
+            ax = axs_trajectories[traj_group_name][j]
+            mc_scale = traj_configs.get(traj_name, {}).get('mc_data_scale', None)
+
+            nl_path  = f"trajectory_data.{traj_group_name}.{traj_name}.nl_vals.values"
+            opt_path = f"trajectory_data.{traj_group_name}.{traj_name}.opt_vals.values"
+
+            if traj_data.type == "spatial":
+                all_vals = []
+                for method_data in data.values():
+                    n = len(method_data['runs']) if show_runs is None else min(show_runs, len(method_data['runs']))
+                    for run_idx in range(n):
+                        iter_data = method_data['runs'][run_idx]['iters'][-1]
+                        for path in [nl_path, opt_path]:
+                            arr = tools.get_from_path(iter_data, path)
+                            if arr.size > 0:
+                                all_vals.append(arr)
+                if all_vals:
+                    combined = np.concatenate(all_vals, axis=0)
+                    setters = [ax.set_xlim, ax.set_ylim]
+                    if hasattr(ax, 'set_zlim') and combined.shape[1] > 2:
+                        setters.append(ax.set_zlim)
+                    for dim_i, setter in enumerate(setters):
+                        lo, hi = combined[:, dim_i].min(), combined[:, dim_i].max()
+                        margin = (hi - lo) * pad if hi > lo else 0.5
+                        if dim_i == 0 and traj_data.get("invert_x", False):
+                            setter(hi + margin, lo - margin)
+                        else:
+                            setter(lo - margin, hi + margin)
+
+            elif traj_data.type == "time_series":
+                cur_cfg = traj_configs.get(traj_name, {})
+                all_t, all_y = [], []
+                for method_data in data.values():
+                    n = len(method_data['runs']) if show_runs is None else min(show_runs, len(method_data['runs']))
+                    for run_idx in range(n):
+                        iter_data = method_data['runs'][run_idx]['iters'][-1]
+                        for path, t_key in [(nl_path, 't_nl'), (opt_path, 't_opt')]:
+                            arr = tools.get_from_path(iter_data, path)
+                            if arr.size > 0:
+                                scaled = arr.ravel() * mc_scale if mc_scale is not None else arr.ravel()
+                                all_t.append(iter_data[t_key])
+                                all_y.append(scaled)
+                upper = cur_cfg.get("upper_limit", None)
+                lower = cur_cfg.get("lower_limit", None)
+                if upper is None and lower is None:
+                    pickle_limits = traj_data.nl_vals.get("limits", {})
+                    if pickle_limits:
+                        upper = pickle_limits.get("upper")
+                        lower = pickle_limits.get("lower")
+                for val in [upper, lower]:
+                    if val is not None:
+                        if isinstance(val, np.ndarray):
+                            all_y.append(val.ravel())
+                        else:
+                            all_y.append(np.array([val]))
+                if all_t and all_y:
+                    all_x_cat = np.concatenate(all_t)
+                    all_y_cat = np.concatenate(all_y)
+                    xlo, xhi = all_x_cat.min(), all_x_cat.max()
+                    ylo, yhi = all_y_cat.min(), all_y_cat.max()
+                    xm = (xhi - xlo) * pad if xhi > xlo else 0.5
+                    ym = (yhi - ylo) * pad if yhi > ylo else 0.5
+                    ax.set_xlim(xlo - xm, xhi + xm)
+                    ax.set_ylim(ylo - ym, yhi + ym)
 
 def _mc_collect_batch(data, method_name, n_runs, paths_and_cols):
     all_segs = [[] for _ in paths_and_cols]
@@ -120,11 +211,26 @@ def _mc_collect_batch(data, method_name, n_runs, paths_and_cols):
             all_segs[k].extend([arr[:min_len], nan])
     return [np.concatenate(s) if s else np.array([]) for s in all_segs]
 
-def _mc_batch_plot(ax, data, method_name, n_runs, paths_and_cols, pen):
+def _mc_batch_plot(ax, data, method_name, n_runs, paths_and_cols, pen, y_scale=None):
     arrays = _mc_collect_batch(data, method_name, n_runs, paths_and_cols)
+    if y_scale is not None and len(arrays) > 1:
+        arrays[-1] = arrays[-1] * y_scale
     if arrays[0].size:
         ax.plot(*arrays, color=pen.lrgba[:3], alpha=pen.lrgba[3],
-                linewidth=pen.lw, linestyle=pen.ls, marker=pen.msty, markersize=pen.msz)
+                linewidth=pen.lw, linestyle=pen.ls, marker=pen.msty, markersize=pen.msz,
+                rasterized=True)
+
+def _plot_phase_lines(axs_trajectories, nominal_trajectory_data, problem, nominal_iter_data):
+    if not problem.phases or len(problem.phases) <= 1:
+        return
+    t_opt = nominal_iter_data["t_opt"]
+    phase_times = [t_opt[min(phase.start, len(t_opt) - 1)] for phase in problem.phases[1:]]
+    for traj_group_name, traj_group_data in nominal_trajectory_data.items():
+        for i, (traj_name, traj_data) in enumerate(traj_group_data.items()):
+            if traj_data.type == "time_series":
+                ax = axs_trajectories[traj_group_name][i]
+                for t_phase in phase_times:
+                    ax.axvline(t_phase, color='0.15', ls='--', lw=1.8, alpha=0.9, zorder=5)
 
 def plot_default(trajopt_obj, data, analysis_type, show_iters=False, show_runs=None):
     PLTS = SCVXPLOTS(data)
@@ -148,6 +254,7 @@ def plot_default(trajopt_obj, data, analysis_type, show_iters=False, show_runs=N
 
     pcfg = problem_config.get('plot_config', {})
     traj_group_pcfg = pcfg.get('trajectory_groups', {})
+    traj_configs = problem_config.get('trajectories', {})
 
     figs_trajectories = AttrDict({})
     axs_trajectories  = AttrDict({})
@@ -222,8 +329,18 @@ def plot_default(trajopt_obj, data, analysis_type, show_iters=False, show_runs=N
         axs_weights_iters[wg_name]  = PLTS.createGrid(figs_weights_iters[wg_name], grid=create_grid(len(wg)))
 
     if analysis_type == 'standalone':
-        standalone_pens = AttrDict({"opt": pens.opt, "nl": pens.nl, "itr_opt": pens.itr_opt, "itr_nl": pens.itr_nl, "init": pens.init, "wt_opt": pens.wt_opt})
+        itr_opt_pen = AttrDict(dict(pens.itr_opt))
+        itr_nl_pen  = AttrDict(dict(pens.itr_nl))
+        if 'iter_alpha' in pcfg:
+            a = float(pcfg['iter_alpha'])
+            itr_opt_pen.lrgba = list(itr_opt_pen.lrgba[:3]) + [a]
+            itr_nl_pen.lrgba  = list(itr_nl_pen.lrgba[:3])  + [a]
+        if 'iter_first_frac' in pcfg:
+            itr_opt_pen['first_frac'] = float(pcfg['iter_first_frac'])
+            itr_nl_pen['first_frac']  = float(pcfg['iter_first_frac'])
+        standalone_pens = AttrDict({"opt": pens.opt, "nl": pens.nl, "itr_opt": itr_opt_pen, "itr_nl": itr_nl_pen, "init": pens.init, "wt_opt": pens.wt_opt})
         plot_trajectories(PLTS, axs_trajectories, nominal_trajectory_data, method=first_method, run=0, iters=iters, pens=standalone_pens)
+        _plot_phase_lines(axs_trajectories, nominal_trajectory_data, problem, nominal_iter_data)
         plot_weights_time(PLTS, axs_weights_time, weight_groups_time, method=first_method, run=0, iters=iters, pens=standalone_pens)
         plot_weights_iters(PLTS, axs_weights_iters, weight_groups_iters, method=first_method, run=0, pens=standalone_pens)
         plot_weights_iters(PLTS, axs_weights_terminal, weight_groups_terminal, method=first_method, run=0, pens=standalone_pens)
@@ -237,40 +354,57 @@ def plot_default(trajopt_obj, data, analysis_type, show_iters=False, show_runs=N
             for traj_group_name, traj_group_data in nominal_trajectory_data.items():
                 for j, (traj_name, traj_data) in enumerate(traj_group_data.items()):
                     ax = axs_trajectories[traj_group_name][j]
+
+                    # current YAML config for this trajectory — used for labels and mc_data_scale
+                    cur_cfg = traj_configs.get(traj_name, {})
+
                     if i == 0:
-                        if traj_data.get("title"):
-                            ax.set_title(traj_data["title"], fontsize=plot_options.title_fontsize, pad=plot_options.title_pad)
+                        title  = cur_cfg.get("title")  or traj_data.get("title")
+                        xlabel = cur_cfg.get("xlabel") or traj_data.get("xlabel")
+                        ylabel = cur_cfg.get("ylabel") or traj_data.get("ylabel")
+                        zlabel = cur_cfg.get("zlabel") or traj_data.get("zlabel")
+                        if title:
+                            ax.set_title(title, fontsize=plot_options.title_fontsize, pad=plot_options.title_pad)
                         ax.grid(True, alpha=0.3)
-                        if traj_data.get("xlabel"): ax.set_xlabel(traj_data["xlabel"])
-                        if traj_data.get("ylabel"): ax.set_ylabel(traj_data["ylabel"])
-                        if traj_data.get("zlabel") and hasattr(ax, 'set_zlabel'): ax.set_zlabel(traj_data["zlabel"])
-                        if traj_data.get("tick_nbins"):
-                            nbins = traj_data["tick_nbins"]
-                            ax.xaxis.set_major_locator(MaxNLocator(nbins=nbins))
-                            ax.yaxis.set_major_locator(MaxNLocator(nbins=nbins))
+                        if xlabel: ax.set_xlabel(xlabel)
+                        if ylabel: ax.set_ylabel(ylabel)
+                        if zlabel and hasattr(ax, 'set_zlabel'): ax.set_zlabel(zlabel)
+                        tick_nbins = cur_cfg.get("tick_nbins") or traj_data.get("tick_nbins")
+                        if tick_nbins:
+                            ax.xaxis.set_major_locator(MaxNLocator(nbins=tick_nbins))
+                            ax.yaxis.set_major_locator(MaxNLocator(nbins=tick_nbins))
                             if hasattr(ax, 'zaxis'):
-                                ax.zaxis.set_major_locator(MaxNLocator(nbins=nbins))
+                                ax.zaxis.set_major_locator(MaxNLocator(nbins=tick_nbins))
 
                     nl_path  = f"trajectory_data.{traj_group_name}.{traj_name}.nl_vals.values"
                     opt_path = f"trajectory_data.{traj_group_name}.{traj_name}.opt_vals.values"
+
+                    # mc_data_scale: rescales old pickle data to match current units
+                    # (remove from mission YAML once MC data is regenerated with current code)
+                    mc_scale = cur_cfg.get('mc_data_scale', None)
 
                     if traj_data.type == "spatial":
                         dim = traj_data.opt_vals["values"].shape[1]
                         _mc_batch_plot(ax, data, method_name, n_runs, [(nl_path, c) for c in range(dim)], pen_nl)
                         _mc_batch_plot(ax, data, method_name, n_runs, [(opt_path, c) for c in range(dim)], pen_opt)
                     elif traj_data.type == "time_series":
-                        _mc_batch_plot(ax, data, method_name, n_runs, [('t_nl', None), (nl_path, None)], pen_nl)
-                        _mc_batch_plot(ax, data, method_name, n_runs, [('t_opt', None), (opt_path, None)], pen_opt)
+                        _mc_batch_plot(ax, data, method_name, n_runs, [('t_nl', None), (nl_path, None)], pen_nl, y_scale=mc_scale)
+                        _mc_batch_plot(ax, data, method_name, n_runs, [('t_opt', None), (opt_path, None)], pen_opt, y_scale=mc_scale)
                         if i == 0:
-                            limits = traj_data.nl_vals.get("limits", {})
-                            if limits:
-                                for val in [limits.get("upper"), limits.get("lower")]:
-                                    if val is not None:
-                                        if isinstance(val, np.ndarray):
-                                            t_nl = data[method_name]['runs'][0]['iters'][-1]['t_nl']
-                                            ax.plot(t_nl[:len(val)], val, color='k', ls='--', lw=1, alpha=0.5)
-                                        else:
-                                            ax.axhline(val, color='k', ls='--', lw=1, alpha=0.5)
+                            upper = cur_cfg.get("upper_limit", None)
+                            lower = cur_cfg.get("lower_limit", None)
+                            if upper is None and lower is None:
+                                pickle_limits = traj_data.nl_vals.get("limits", {})
+                                if pickle_limits:
+                                    upper = pickle_limits.get("upper")
+                                    lower = pickle_limits.get("lower")
+                            for val in [upper, lower]:
+                                if val is not None:
+                                    if isinstance(val, np.ndarray):
+                                        t_nl = data[method_name]['runs'][0]['iters'][-1]['t_nl']
+                                        ax.plot(t_nl[:len(val)], val, color='k', ls='--', lw=1, alpha=0.5)
+                                    else:
+                                        ax.axhline(val, color='k', ls='--', lw=1, alpha=0.5)
 
                     if i == 0:
                         dim_m = traj_data.opt_vals["values"].shape[1] if traj_data.type == "spatial" else 2
@@ -308,10 +442,14 @@ def plot_default(trajopt_obj, data, analysis_type, show_iters=False, show_runs=N
                         ax.plot(np.arange(len(vals)), vals, color=pen_wt.lrgba[:3], alpha=pen_wt.lrgba[3],
                                 linewidth=pen_wt.lw, linestyle=pen_wt.ls, marker=pen_wt.msty, markersize=pen_wt.msz)
 
-    _set_trajectory_limits(axs_trajectories, nominal_trajectory_data, nominal_iter_data)
+    limits_all_iters = pcfg.get('limits_all_iters', True)
+    if analysis_type == 'mc':
+        _set_mc_trajectory_limits(axs_trajectories, nominal_trajectory_data, data, traj_configs=traj_configs, show_runs=show_runs)
+    else:
+        _set_trajectory_limits(axs_trajectories, nominal_trajectory_data, data, limits_all_iters=limits_all_iters)
 
     all_figs = {}
-    all_figs.update({f"trajectory_{k}": v for k, v in figs_trajectories.items()})
+    all_figs.update({k: v for k, v in figs_trajectories.items()})
     all_figs.update({f"weights_time_{k}": v for k, v in figs_weights_time.items()})
     all_figs.update({f"weights_terminal_{k}": v for k, v in figs_weights_terminal.items()})
     all_figs.update({f"weights_iters_{k}": v for k, v in figs_weights_iters.items()})
@@ -326,18 +464,29 @@ def plot_default(trajopt_obj, data, analysis_type, show_iters=False, show_runs=N
         handles = [_handle('init', 'Initial Guess'), _handle('opt', 'Optimal'), _handle('nl', 'Nonlinear')]
         if show_iters:
             handles.append(_handle('itr_nl', 'Iterations'))
+        traj_names = set(figs_trajectories.keys())
+        for fig_name, fig in all_figs.items():
+            if fig_name in traj_names:
+                fig.axes[0].legend(handles=handles, loc='best', fontsize=8, framealpha=0.8)
     elif analysis_type == 'mc':
         handles = [_handle(f'nl{i+1}', name) for i, name in enumerate(method_keys)]
-
-    for fig in all_figs.values():
-        first_ax = fig.axes[0]
-        first_ax.legend(handles=handles, loc='best', fontsize=8, framealpha=0.8)
+        for fig in all_figs.values():
+            fig.axes[0].legend(handles=handles, loc='best', fontsize=8, framealpha=0.8)
 
     save_dir = os.path.join("plots", analysis_type)
     os.makedirs(save_dir, exist_ok=True)
 
+    import warnings
+    save_dpi = 600 if analysis_type == 'mc' else 'figure'
     for name, fig in all_figs.items():
-        fig.savefig(os.path.join(save_dir, f"{name}.pdf"), bbox_inches="tight")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            try:
+                fig.tight_layout()
+            except Exception:
+                pass
+        fig.savefig(os.path.join(save_dir, f"{name}.pdf"), dpi=save_dpi,
+                    bbox_inches="tight", pad_inches=0.02)
 
     print(f"Saved {len(all_figs)} figures to {save_dir}/")
 
@@ -404,10 +553,18 @@ def plot_trajectories(PLTS, axs, nominal_trajectory_data, method, run=0, iters=[
 
             traj_type = current_traj_data.type
 
+            per_traj_show = current_traj_data.get("show_iters", None)
+            if per_traj_show is True:
+                traj_iters = slice(1, None)
+            elif per_traj_show is False:
+                traj_iters = [-1]
+            else:
+                traj_iters = iters
+
             if traj_type == "spatial":
-                plot_spatial_trajectories(PLTS, method, run, iters, current_traj_data, nl_vals_path, opt_vals_path, ax, pens, skip_init=skip_init)
+                plot_spatial_trajectories(PLTS, method, run, traj_iters, current_traj_data, nl_vals_path, opt_vals_path, ax, pens, skip_init=skip_init)
             elif traj_type == "time_series":
-                plot_time_series_trajectories(PLTS, method, run, iters, current_traj_data, nl_vals_path, opt_vals_path, ax, pens, skip_init=skip_init)
+                plot_time_series_trajectories(PLTS, method, run, traj_iters, current_traj_data, nl_vals_path, opt_vals_path, ax, pens, skip_init=skip_init)
 
 def plot_spatial_trajectories(PLTS, method, run, iters, current_traj_data, nl_vals_path, opt_vals_path, ax, pens, skip_init=False):
     dim = current_traj_data.opt_vals["values"].shape[1]
@@ -559,120 +716,6 @@ def plot_time_series_trajectories(PLTS, method, run, iters, current_traj_data, n
                     ax.plot(t_nl[:len(val)], val, color='k', ls='--', lw=1, alpha=0.5)
                 else:
                     ax.axhline(val, color='k', ls='--', lw=1, alpha=0.5)
-
-def plot_animated(trajopt_obj, data, analysis_type):
-    from matplotlib.animation import FuncAnimation
-    from IPython.display import display, HTML
-
-    method = list(data.keys())[0]
-    all_iters = data[method]["runs"][0]["iters"]
-    n_iters = len(all_iters)
-    if n_iters < 2:
-        return
-
-    pcfg = trajopt_obj.problem.config.problem.get('plot_config', {}).get('trajectory_groups', {})
-    last_traj = all_iters[-1]["trajectory_data"]
-    t_init = all_iters[0].get("t_init_nl")
-
-    save_dir = os.path.join("plots", analysis_type)
-    os.makedirs(save_dir, exist_ok=True)
-
-    for grp_name, grp_data in last_traj.items():
-        grp_cfg = pcfg.get(grp_name, {})
-        items = list(grp_data.items())
-        n = len(items)
-        ncols = 3 if n == 3 else int(np.ceil(np.sqrt(n)))
-        nrows = int(np.ceil(n / ncols))
-
-        fig = plt.figure(figsize=grp_cfg.get('figsize', plot_options.figsize), dpi=150)
-        axes = []
-        for i, (name, td) in enumerate(items):
-            is3d = td.type == "spatial" and td.opt_vals["values"].shape[1] == 3
-            axes.append(fig.add_subplot(nrows, ncols, i + 1, projection="3d" if is3d else None))
-        fig.subplots_adjust(hspace=0.4, wspace=0.3)
-
-        init_grp = all_iters[0]["trajectory_data"].get(grp_name, {})
-
-        axis_limits = _compute_axis_limits(all_iters, grp_name, items, t_init, init_grp)
-
-        def update(frame, axes=axes, items=items, init_grp=init_grp, grp_name=grp_name, axis_limits=axis_limits):
-            it = all_iters[frame]
-            it_grp = it["trajectory_data"].get(grp_name, {})
-            for i, (name, _) in enumerate(items):
-                ax, td = axes[i], it_grp[name]
-                ax.cla()
-                ax.set_title(td.get("title", name), fontsize=9)
-                ax.grid(True, alpha=0.3)
-                if td.get("xlabel"): ax.set_xlabel(td["xlabel"])
-                if td.get("ylabel"): ax.set_ylabel(td["ylabel"])
-                _draw_anim_frame(ax, td, it["t_opt"], it["t_nl"], t_init, init_grp.get(name))
-                lims = axis_limits[i]
-                ax.set_xlim(lims[0]); ax.set_ylim(lims[1])
-                if len(lims) > 2 and hasattr(ax, 'set_zlim'):
-                    ax.set_zlim(lims[2])
-            fig.suptitle(f"Iteration {frame + 1} / {n_iters}", fontsize=10)
-
-        anim = FuncAnimation(fig, update, frames=n_iters, interval=300)
-        anim.save(os.path.join(save_dir, f"anim_{grp_name}.gif"), writer='pillow')
-        display(HTML(anim.to_jshtml()))
-        plt.close(fig)
-
-    print(f"Saved {len(last_traj)} animation(s) to {save_dir}/")
-
-def _compute_axis_limits(all_iters, grp_name, items, t_init, init_grp):
-    PAD = 0.05
-    limits = {}
-    for i, (name, _) in enumerate(items):
-        all_x, all_y, all_z = [], [], []
-        for it in all_iters:
-            td = it["trajectory_data"].get(grp_name, {}).get(name)
-            if td is None:
-                continue
-            ov, nv = td.opt_vals["values"], td.nl_vals["values"]
-            if td.type == "time_series":
-                all_x.extend([it["t_opt"], it["t_nl"]])
-                all_y.extend([ov, nv])
-            elif td.type == "spatial":
-                for v in [ov, nv]:
-                    all_x.append(v[:, 0]); all_y.append(v[:, 1])
-                    if v.shape[1] > 2:
-                        all_z.append(v[:, 2])
-        init_td = init_grp.get(name)
-        if init_td is not None:
-            iv = init_td.init_nl_vals["values"]
-            td0 = all_iters[0]["trajectory_data"][grp_name][name]
-            if td0.type == "time_series":
-                all_x.append(t_init); all_y.append(iv)
-            elif td0.type == "spatial":
-                all_x.append(iv[:, 0]); all_y.append(iv[:, 1])
-                if iv.shape[1] > 2:
-                    all_z.append(iv[:, 2])
-
-        xmin, xmax = np.min(np.concatenate(all_x)), np.max(np.concatenate(all_x))
-        ymin, ymax = np.min(np.concatenate(all_y)), np.max(np.concatenate(all_y))
-        dx, dy = (xmax - xmin) * PAD, (ymax - ymin) * PAD
-        lims = [(xmin - dx, xmax + dx), (ymin - dy, ymax + dy)]
-        if all_z:
-            zmin, zmax = np.min(np.concatenate(all_z)), np.max(np.concatenate(all_z))
-            dz = (zmax - zmin) * PAD
-            lims.append((zmin - dz, zmax + dz))
-        limits[i] = lims
-    return limits
-
-def _draw_anim_frame(ax, td, t_opt, t_nl, t_init, init_td):
-    ov, nv = td.opt_vals["values"], td.nl_vals["values"]
-
-    if td.type == "time_series":
-        if init_td is not None:
-            ax.plot(t_init, init_td.init_nl_vals["values"], 'k--', lw=0.8, alpha=0.4)
-        ax.plot(t_nl, nv, 'r-', lw=1.5)
-        ax.plot(t_opt, ov, 'bo', ms=2)
-    elif td.type == "spatial":
-        cols = lambda v: tuple(v[:, j] for j in range(v.shape[1]))
-        if init_td is not None:
-            ax.plot(*cols(init_td.init_nl_vals["values"]), 'k--', lw=0.8, alpha=0.4)
-        ax.plot(*cols(nv), 'r-', lw=1.5)
-        ax.plot(*cols(ov), 'bo', ms=2)
 
 def create_grid(num_groups, cfg=None):
     if cfg is None:

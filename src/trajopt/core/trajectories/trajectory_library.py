@@ -88,6 +88,7 @@ class time_series:
         self.ylabel     = cnstr_config.get("ylabel", None)
         self.zlabel     = cnstr_config.get("zlabel", None)
         self.tick_nbins = cnstr_config.get("tick_nbins", None)
+        self.show_iters = cnstr_config.get("show_iters", None)
         self.backend    = cnstr_config.get("backend", "jax")
         self.index_map  = index_map
         self.upper_limit    = cnstr_config.get("upper_limit", None)

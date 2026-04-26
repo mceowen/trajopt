@@ -491,6 +491,7 @@ class Subproblem:
                     t_interval_k = t_kp - t_k
                     C.append(t_interval_k <= self.dt_max)
                     C.append(t_interval_k >= self.dt_min)
+
                     C.append(cp.abs(self.dt[k, 0]) <= self.ddt_max)
                     C.append(t_k >= 0)
                     C.append(0.0 <= self.s_ref[k, 0] + self.ds[k, 0])

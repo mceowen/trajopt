@@ -266,36 +266,37 @@ trajectories:
 # ===============================
 
 plot_config:
+  limits_all_iters: true
   trajectory_groups:
     state:
-      figsize: [12, 4.5]
+      figsize: [12, 4.2]
       grid_gap_x: 0.06
       grid_gap_y: 0.14
-      margins: [0.06, 0.02, 0.06, 0.12]
+      margins: [0.07, 0.02, 0.04, 0.12]
 
     control:
-      figsize: [8, 2.8]
+      figsize: [8, 2.6]
       grid_gap_x: 0.08
-      margins: [0.08, 0.02, 0.06, 0.14]
+      margins: [0.08, 0.02, 0.04, 0.14]
 
     state_trajplots:
-      figsize: [10, 3.2]
+      figsize: [10, 3.0]
       width_ratios: [1, 2]
       grid_gap_x: -0.10
       pad_3d: 0.0
-      margins: [0.08, 0.02, 0.06, 0.14]
+      margins: [0.08, 0.02, 0.04, 0.14]
 
     path:
-      figsize: [12, 2.8]
-      grid_gap_x: 0.10
-      margins: [0.06, 0.02, 0.06, 0.14]
+      figsize: [12, 2.6]
+      grid_gap_x: 0.05
+      margins: [0.07, 0.02, 0.04, 0.14]
 
     density_comparison:
-      figsize: [10, 2.8]
+      figsize: [10, 2.6]
       grid_gap_x: 0.08
-      margins: [0.06, 0.02, 0.06, 0.14]
+      margins: [0.07, 0.02, 0.04, 0.14]
 
     density_vs_alt_comparison:
-      figsize: [10, 2.8]
+      figsize: [10, 2.6]
       grid_gap_x: 0.08
-      margins: [0.06, 0.02, 0.06, 0.14]
+      margins: [0.07, 0.02, 0.04, 0.14]

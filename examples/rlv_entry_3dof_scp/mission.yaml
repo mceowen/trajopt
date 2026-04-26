@@ -1,0 +1,70 @@
+# ===============================
+# FUNCTION PARAMETERS
+# ===============================
+params.planet.inherit: trajopt/missions/shared/planet/earth.yaml
+params.vehicle.inherit: trajopt/missions/shared/vehicle/rlv.yaml
+
+# ===============================
+# PROBLEM SCALES
+# ===============================
+state.r.scale: 100
+state.theta.scale: 1.0
+state.phi.scale: 1.0
+state.v.scale: 100.0
+state.gamma.scale: 0.0001
+state.psi.scale: 10
+
+control.aoa.scale: 0.0001
+control.bank.scale: 0.001
+
+time.scale: 1.0
+
+# ===============================
+# CONSTRAINT/COST PARAMS
+# ===============================
+constraints:
+  initial_state:
+    value: ["${params.planet.r + 79248.0}", 0.0, 0.0, 7802.88, -1.0, 90.0]
+    idx: [0, 1, 2, 3, 4, 5]
+
+  final_state:
+    value: ["${params.planet.r + 24384.0}", 762.0, -5.0]
+    idx: [0, 3, 4]
+    eps: [100, 10, 0.1]
+
+  state_limits:
+    min_value: ["${params.planet.r}", 500.0, -80.0]
+    min_value_idx: [0, 3, 4]
+    max_value: ["${params.planet.r + 79248.0}", 45000.0, 80.0]
+    max_value_idx: [0, 3, 4]
+
+  control_limits:
+    min_value: [16, -90.0]
+    min_value_idx: [0, 1]
+    max_value: [18, 1.0]
+    max_value_idx: [0, 1]
+
+costs:
+  max_crossrange:
+    type: terminal_state
+    idx: [2]
+    sign: -1
+
+  control_rate_regularization:
+    type: rate_regularization
+    set: control
+    w: 0.1
+
+# ===============================
+# ACTIVE CONSTRAINTS AND COSTS
+# ===============================
+constraint_list:
+  - dynamics
+  - initial_state
+  - final_state
+  - state_limits
+  - control_limits
+
+cost_list:
+  - max_crossrange
+  # - control_rate_regularization

@@ -188,41 +188,65 @@ def compile_jax_discretization(problem, method):
             params_k[key] = jnp.asarray(array)[k]
         return params_k
 
-    # propagation function for node k
-    def propagate_k(k, z_ref, nu_ref, params_jax):
+    use_fixed_dt = int(getattr(method.flags, 'ode_fixed_dt', 0))
+    N_grid = problem.index_map.N.time_grid
 
-        params_k = _apply_phase_schedule(params_jax, k)
+    if use_fixed_dt:
+        nsub = 20
+        delta_tau = 1.0 / (N_grid - 1)
+        dt_rk4 = delta_tau / nsub
 
-        z_k  = z_ref[k]
-        nu_k  = nu_ref[k]
-        nu_kp = nu_ref[k+1]
-        lds0_k = pack_lds0(z_k)
+        def propagate_k(k, z_ref, nu_ref, params_jax):
+            params_k = _apply_phase_schedule(params_jax, k)
 
-        tau_k = k / (problem.index_map.N.time_grid - 1)
-        tau_kp = (k+1) / (problem.index_map.N.time_grid - 1)
+            z_k   = z_ref[k]
+            nu_k  = nu_ref[k]
+            nu_kp = nu_ref[k+1]
+            lds0_k = pack_lds0(z_k)
 
-        term = diffrax.ODETerm(f_dot)
+            tau_k = k / (N_grid - 1)
+            taus  = tau_k + jnp.arange(nsub) * dt_rk4
 
-        solver = diffrax.Dopri5()
-        stepsize_controller = diffrax.PIDController(rtol=1e-7, atol=1e-7)
-        sol = diffrax.diffeqsolve(
-            term,
-            solver,
-            tau_k,
-            tau_kp,
-            0.00005,
-            lds0_k,
-            stepsize_controller=stepsize_controller,
-            args=(k, nu_k, nu_kp, params_k),
-            max_steps=65536,
-        )
+            def rk4_step(lds, tau):
+                k1 = pack_lds_dot(tau,              k, lds,                     nu_k, nu_kp, params_k)
+                k2 = pack_lds_dot(tau + dt_rk4/2,   k, lds + (dt_rk4/2) * k1,  nu_k, nu_kp, params_k)
+                k3 = pack_lds_dot(tau + dt_rk4/2,   k, lds + (dt_rk4/2) * k2,  nu_k, nu_kp, params_k)
+                k4 = pack_lds_dot(tau + dt_rk4,     k, lds + dt_rk4 * k3,      nu_k, nu_kp, params_k)
+                return lds + (dt_rk4 / 6) * (k1 + 2*k2 + 2*k3 + k4), None
 
-        ldsf_k = sol.ys[-1]
+            ldsf_k, _ = jax.lax.scan(rk4_step, lds0_k, taus)
+            return unpack_ldsf(ldsf_k)
 
-        return unpack_ldsf(ldsf_k)
-    
+    else:
+        def propagate_k(k, z_ref, nu_ref, params_jax):
+            params_k = _apply_phase_schedule(params_jax, k)
+
+            z_k   = z_ref[k]
+            nu_k  = nu_ref[k]
+            nu_kp = nu_ref[k+1]
+            lds0_k = pack_lds0(z_k)
+
+            tau_k  = k / (N_grid - 1)
+            tau_kp = (k+1) / (N_grid - 1)
+
+            term = diffrax.ODETerm(f_dot)
+            solver = diffrax.Dopri5()
+            stepsize_controller = diffrax.PIDController(rtol=1e-7, atol=1e-7)
+            sol = diffrax.diffeqsolve(
+                term,
+                solver,
+                tau_k,
+                tau_kp,
+                0.00005,
+                lds0_k,
+                stepsize_controller=stepsize_controller,
+                args=(k, nu_k, nu_kp, params_k),
+                max_steps=65536,
+            )
+            ldsf_k = sol.ys[-1]
+            return unpack_ldsf(ldsf_k)
+
     propagate = jax.jit(jax.vmap(propagate_k, in_axes=(0, None, None, None)))
-
     method.propagate_discretization_jax = propagate
 
 

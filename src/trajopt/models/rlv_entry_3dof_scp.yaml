@@ -1,40 +1,93 @@
-fcns:
-  dynamics:  trajopt/models/rlv_entry_3dof.py:dynamics
-  altitude:  trajopt/models/rlv_entry_3dof.py:altitude
-  longitude: trajopt/models/rlv_entry_3dof.py:longitude
-  latitude:  trajopt/models/rlv_entry_3dof.py:latitude
-  velocity:  trajopt/models/rlv_entry_3dof.py:velocity
-  fpa:       trajopt/models/rlv_entry_3dof.py:fpa
-  heading:   trajopt/models/rlv_entry_3dof.py:heading
-  aoa:       trajopt/models/rlv_entry_3dof.py:aoa_out
-  bank:      trajopt/models/rlv_entry_3dof.py:bank_out
-  heat_rate: trajopt/models/rlv_entry_3dof.py:heat_rate
-  long_lat:  trajopt/models/rlv_entry_3dof.py:long_lat
+# ===============================
+# MODEL CONFIGURATION
+# ===============================
 
-state:
-  r:
+fcns:
+  dynamics:  trajopt/models/rlv_entry_3dof_scp.py:dynamics
+  altitude:  trajopt/models/rlv_entry_3dof_scp.py:altitude
+  longitude: trajopt/models/rlv_entry_3dof_scp.py:longitude
+  latitude:  trajopt/models/rlv_entry_3dof_scp.py:latitude
+  velocity:  trajopt/models/rlv_entry_3dof_scp.py:velocity
+  fpa:       trajopt/models/rlv_entry_3dof_scp.py:fpa
+  heading:   trajopt/models/rlv_entry_3dof_scp.py:heading
+  aoa:       trajopt/models/rlv_entry_3dof_scp.py:aoa
+  bank:      trajopt/models/rlv_entry_3dof_scp.py:bank
+  heat_rate: trajopt/models/rlv_entry_3dof_scp.py:heat_rate
+  long_lat:  trajopt/models/rlv_entry_3dof_scp.py:long_lat
+
+state.r:
     idx: [0]
-  theta:
+state.theta:
     idx: [1]
-  phi:
+state.phi:
     idx: [2]
-  v:
+state.v:
     idx: [3]
-  gamma:
+state.gamma:
     idx: [4]
-  psi:
+state.psi:
     idx: [5]
 
-control:
-  aoa:
+control.aoa:
     idx: [0]
-  bank:
+control.bank:
     idx: [1]
+
+# ===============================
+# CONSTRAINT MODELS
+# ===============================
+
+constraints.dynamics:
+  type: dynamics
+  fcn: fcns.dynamics
+
+constraints.initial_state:
+  type: equality_bc
+  set: state
+  boundary: init
+
+constraints.final_state:
+  type: equality_bc
+  set: state
+  boundary: final
+
+constraints.state_limits:
+  type: box
+  set: state
+  min_value: []
+  min_value_idx: []
+  max_value: []
+  max_value_idx: []
+
+constraints.control_limits:
+  type: box
+  set: control
+  min_value: null
+  min_value_idx: null
+  max_value: null
+  max_value_idx: null
+
+# ===============================
+# COST MODELS
+# ===============================
+
+costs.max_crossrange:
+  type: terminal_state
+  idx: [2]
+  sign: -1
+
+costs.control_rate_regularization:
+  type: rate_regularization
+  set: control
+  w: 0.1
+
+# ===============================
+# TRAJECTORIES
+# ===============================
 
 trajectories:
   altitude:
     type: time_series
-    backend: casadi
     fcn: "fcns.altitude * 0.001"
     group: state
     title: "Altitude vs Time"
@@ -43,7 +96,6 @@ trajectories:
 
   velocity:
     type: time_series
-    backend: casadi
     fcn: "fcns.velocity * 0.001"
     group: state
     title: "Velocity vs Time"
@@ -52,7 +104,6 @@ trajectories:
 
   fpa:
     type: time_series
-    backend: casadi
     fcn: fcns.fpa
     group: state
     title: "Flight Path Angle vs Time"
@@ -61,7 +112,6 @@ trajectories:
 
   longitude:
     type: time_series
-    backend: casadi
     fcn: fcns.longitude
     group: state
     title: "Longitude vs Time"
@@ -70,7 +120,6 @@ trajectories:
 
   latitude:
     type: time_series
-    backend: casadi
     fcn: fcns.latitude
     group: state
     title: "Latitude vs Time"
@@ -79,7 +128,6 @@ trajectories:
 
   heading:
     type: time_series
-    backend: casadi
     fcn: fcns.heading
     group: state
     title: "Heading Angle vs Time"
@@ -88,7 +136,6 @@ trajectories:
 
   angle_of_attack:
     type: time_series
-    backend: casadi
     fcn: fcns.aoa
     group: control
     title: "Angle of Attack vs Time"
@@ -97,7 +144,6 @@ trajectories:
 
   bank_angle:
     type: time_series
-    backend: casadi
     fcn: fcns.bank
     group: control
     title: "Bank Angle vs Time"
@@ -106,7 +152,6 @@ trajectories:
 
   ground_track:
     type: spatial
-    backend: casadi
     fcn: fcns.long_lat
     group: spatial
     title: "Ground Track"

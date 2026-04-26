@@ -50,5 +50,3 @@ class TrajectoryAnalyzer:
 
     def plot(self, data, analysis_type="standalone", show_iters=False, animate=False, show_runs=None):
         plotting.plot_default(self, data, analysis_type, show_iters=show_iters, show_runs=show_runs)
-        if animate:
-            plotting.plot_animated(self, data, analysis_type)
