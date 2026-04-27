@@ -14,13 +14,13 @@ def dynamics(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
 
     torque = nu[:3]
 
-    veh = params["vehicle"]
-    planet = params["planet"]
-    mu = planet["mu"]
-    Jbvec = jnp.array([veh["Jb11"], veh["Jb22"], veh["Jb33"]])
+    veh = params.vehicle
+    planet = params.planet
+    mu = planet.mu
+    Jbvec = jnp.array([veh.Jb11, veh.Jb22, veh.Jb33])
     Jb = jnp.diag(Jbvec)
     Jbinv = jnp.diag(1 / Jbvec)
-    mass = veh["mass"]
+    mass = veh.mass
 
     r_norm = jnp.linalg.norm(r)
     a_grav_inertial = -mu * r / r_norm**3
@@ -54,7 +54,7 @@ def heat_rate(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     v = jnp.linalg.norm(z[3:6])
     rho = fcns["density_model"](t, z, nu, params, fcns)
 
-    return jnp.array([params["vehicle"]["kQ"] * rho**0.5 * v**3])
+    return jnp.array([params.vehicle["kQ"] * rho**0.5 * v**3])
 
 
 def dynamic_pressure(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
@@ -69,7 +69,7 @@ def aero_load(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Aerodynamic translational acceleration magnitude (m / (s^2))."""
     aero = fcns["nonlinear_aero"](t, z, nu, params, fcns)
 
-    mass = params["vehicle"]["mass"]
+    mass = params.vehicle["mass"]
 
     return jnp.array([jnp.linalg.norm(aero["f_trans"] / mass)])
 
@@ -106,7 +106,7 @@ def sideslip(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
 
 def altitude(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Altitude above planet surface (m)."""
-    return jnp.array([(jnp.linalg.norm(z[0:3]) - params["planet"]["r"])])
+    return jnp.array([(jnp.linalg.norm(z[0:3]) - params.planet.r)])
 
 
 def DCM(q: Array) -> Array:
@@ -266,7 +266,7 @@ def long_lat_alt(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Arr
 
     theta = jnp.rad2deg(jnp.atan2(z[1], z[0]))
     phi = jnp.rad2deg(jnp.atan2(z[2], jnp.sqrt(z[0] ** 2 + z[1] ** 2)))
-    alt = r - params["planet"]["r"]
+    alt = r - params.planet.r
 
     return jnp.array([theta, phi, alt])
 

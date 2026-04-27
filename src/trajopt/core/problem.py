@@ -3,7 +3,7 @@ from trajopt.core.constraints.constraints import Constraints
 from trajopt.core.costs.costs import Costs
 from trajopt.core.trajectories.trajectories import Trajectories
 from trajopt.utils.config_loader import resolve_function_from_path
-from trajopt.utils.tools import AttrDict
+from trajopt.utils.tools import AttrDict, recursive_attrdict
 
 class Problem:
 
@@ -30,7 +30,7 @@ class Problem:
         # Parameters
         # ------------------------------------------------------------
 
-        self.params = config.problem.params
+        self.params = recursive_attrdict(config.problem.params)
 
         # ------------------------------------------------------------
         # Phases (multiphase support)

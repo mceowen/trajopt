@@ -9,8 +9,8 @@ jax.config.update("jax_enable_x64", True)
 # ===============================
 def dynamics(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """3-DoF atmospheric reentry dynamics."""
-    Om = jnp.deg2rad(params["planet"]["omega"])
-    mu = params["planet"]["mu"]
+    Om = jnp.deg2rad(params.planet.omega)
+    mu = params.planet.mu
 
     r, theta, phi, v, gamma, psi = z
 
@@ -21,9 +21,9 @@ def dynamics(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     sigma_rad = jnp.deg2rad(nu[0])
 
     # Determine lift and drag coefficients from velocity
-    aero = fcns["nonlinear_aero"](t, z, nu, params, fcns)
-    L = aero["L"]
-    D = aero["D"]
+    aero = fcns.nonlinear_aero(t, z, nu, params, fcns)
+    L = aero.L
+    D = aero.D
 
     # Extract sines and cosines of various values
     cp = jnp.cos(phi_rad)
@@ -60,24 +60,24 @@ def dynamics(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
 def heat_rate(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Convective heat rate (W/m²)."""
     v = z[3]
-    rho = fcns["density_model"](t, z, nu, params, fcns)
+    rho = fcns.density_model(t, z, nu, params, fcns)
 
-    return jnp.array([params["vehicle"]["kQ"] * rho**0.5 * v**3])
+    return jnp.array([params.vehicle.kQ * rho**0.5 * v**3])
 
 
 def dynamic_pressure(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Dynamic pressure q-bar (Pa)."""
     v = z[3]
-    rho = fcns["density_model"](t, z, nu, params, fcns)
+    rho = fcns.density_model(t, z, nu, params, fcns)
 
     return jnp.array([0.5 * rho * (v) ** 2])
 
 
 def aero_load(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Aerodynamic load magnitude (m/s²)."""
-    aero = fcns["nonlinear_aero"](t, z, nu, params, fcns)
-    L = aero["L"]
-    D = aero["D"]
+    aero = fcns.nonlinear_aero(t, z, nu, params, fcns)
+    L = aero.L
+    D = aero.D
 
     return jnp.array([jnp.sqrt(L**2 + D**2)])
 
@@ -85,27 +85,27 @@ def aero_load(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
 def vel_heat_rate(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """[velocity (m/s), heat rate (W/m²)]."""
     v = z[3]
-    rho = fcns["density_model"](t, z, nu, params, fcns)
-    return jnp.array([v, params["vehicle"]["kQ"] * rho**0.5 * v**3])
+    rho = fcns.density_model(t, z, nu, params, fcns)
+    return jnp.array([v, params.vehicle.kQ * rho**0.5 * v**3])
 
 
 def vel_dynamic_pressure(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """[velocity (m/s), dynamic pressure (Pa)]."""
     v = z[3]
-    rho = fcns["density_model"](t, z, nu, params, fcns)
+    rho = fcns.density_model(t, z, nu, params, fcns)
     return jnp.array([v, 0.5 * rho * v**2])
 
 
 def vel_aero_load(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """[velocity (m/s), aero load (m/s²)]."""
     v = z[3]
-    aero = fcns["nonlinear_aero"](t, z, nu, params, fcns)
-    return jnp.array([v, jnp.sqrt(aero["L"]**2 + aero["D"]**2)])
+    aero = fcns.nonlinear_aero(t, z, nu, params, fcns)
+    return jnp.array([v, jnp.sqrt(aero.L**2 + aero.D**2)])
 
 
 def vel_altitude(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """[velocity (m/s), altitude (m)]."""
-    return jnp.array([z[3], z[0] - params["planet"]["r"]])
+    return jnp.array([z[3], z[0] - params.planet.r])
 
 
 
@@ -116,12 +116,12 @@ def long_lat(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
 
 def long_lat_alt(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Longitude, latitude, and altitude output [theta, phi, h] (deg, deg, m)."""
-    return jnp.array([z[1], z[2], z[0] - params["planet"]["r"]])
+    return jnp.array([z[1], z[2], z[0] - params.planet.r])
 
 
 def altitude(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Altitude above planet surface (m)."""
-    return jnp.array([z[0] - params["planet"]["r"]])
+    return jnp.array([z[0] - params.planet.r])
 
 
 def longitude(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
@@ -158,16 +158,16 @@ def aoa(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
 
 def exp_density(t: float, z: Array, nu: Array, params: dict, fcns: dict | None = None) -> Array:
     """Exponential atmosphere density model (kg/m³), JAX version."""
-    h = z[0] - params["planet"]["r"]
+    h = z[0] - params.planet.r
 
-    return params["planet"]["rho"] * jnp.exp(-h / params["planet"]["H"])
+    return params.planet.rho * jnp.exp(-h / params.planet.H)
 
 def lift_drag(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Lift and drag forces for MSL."""
-    aero = fcns["nonlinear_aero"](t, z, nu, params, fcns)
+    aero = fcns.nonlinear_aero(t, z, nu, params, fcns)
 
-    L = aero["L"]
-    D = aero["D"]
+    L = aero.L
+    D = aero.D
     return jnp.array([L, D])
 
 # ===============================

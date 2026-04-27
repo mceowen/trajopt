@@ -244,7 +244,7 @@ class nonconvex_inequality:
         self.name           = cnstr_config["name"]
         self.group          = cnstr_config.get("group", None)
         self.scale          = cnstr_config.get("scale", None)
-        self.nodes           = cnstr_config.get("nodes", np.arange(0, index_map.N.time_grid))
+        self.nodes          = cnstr_config.get("nodes", np.arange(0, index_map.N.time_grid))
 
         self.fcn_string      = cnstr_config["fcn"]
         self.eps             = cnstr_config["eps"]

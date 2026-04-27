@@ -34,7 +34,7 @@ def _jit_cached(method, name, fn):
 
 def propagate_znu(z0, nu, problem, method, compiled_attr_name="_jit_propagate_znu"):
     dynamics    = problem.constraints.get(type="dynamics")[0].fcn
-    params      = tools.recursive_to_dict(problem.params)
+    params      = problem.params
     idx         = problem.index_map.indices
     N           = nu.shape[0]
     use_ps      = getattr(method.flags, 'discretize', 'ms') == 'ps'
@@ -59,7 +59,7 @@ def propagate_znu(z0, nu, problem, method, compiled_attr_name="_jit_propagate_zn
     def _solve(z0, nu, tau_ref, tau_dense, bary_w):
         def f_dot(tau, z, _):
             k = jnp.clip(jnp.floor(tau * (N - 1)).astype(jnp.int32), 0, N - 1)
-            p = {**params, **{key: arr[k] for key, arr in phase_sched.items()}}
+            p = tools.AttrDict({**params, **{key: arr[k] for key, arr in phase_sched.items()}})
             return dynamics(z, interp(tau, nu, tau_ref, bary_w), p)
         return diffrax.diffeqsolve(
             diffrax.ODETerm(f_dot), diffrax.Dopri5(),
@@ -80,7 +80,7 @@ def propagate_znu(z0, nu, problem, method, compiled_attr_name="_jit_propagate_zn
 def propagate_znu_rk4(z0, nu, problem, method, n_steps=10000):
     """Fixed-step RK4 propagation of the augmented state (z,nu) system."""
     dynamics    = problem.constraints.get(type="dynamics")[0].fcn
-    params      = tools.recursive_to_dict(problem.params)
+    params      = problem.params
     idx         = problem.index_map.indices
     N           = nu.shape[0]
     use_ps      = getattr(method.flags, 'discretize', 'ms') == 'ps'
@@ -106,7 +106,7 @@ def propagate_znu_rk4(z0, nu, problem, method, n_steps=10000):
     def _solve(z0, nu, tau_ref, bary_w):
         def f(tau, z):
             k = jnp.clip(jnp.floor(tau * (N - 1)).astype(jnp.int32), 0, N - 1)
-            p = {**params, **{key: arr[k] for key, arr in phase_sched.items()}}
+            p = tools.AttrDict({**params, **{key: arr[k] for key, arr in phase_sched.items()}})
             return dynamics(z, interp(tau, nu, tau_ref, bary_w), p)
 
         def rk4_step(z, tau):
@@ -130,7 +130,7 @@ def propagate_znu_rk4(z0, nu, problem, method, n_steps=10000):
 
 def propagate_txu(x0, u, t_ref, t_nl, problem, method, compiled_attr_name=None):
     dynamics  = problem.constraints.get(type="dynamics")[0].fcn_base
-    params    = tools.recursive_to_dict(problem.params)
+    params    = problem.params
     x0_jax    = jnp.asarray(x0)
     u_jax     = jnp.asarray(u)
     t_ref_jax = jnp.asarray(t_ref)
@@ -155,7 +155,7 @@ def propagate_txu(x0, u, t_ref, t_nl, problem, method, compiled_attr_name=None):
 
 def propagate_scipy_rk45(x0, u_ref, t_ref, t_nl, problem, method, dynamics=None):
     dynamics = problem.constraints.get(type="dynamics")[0].fcn_base if dynamics is None else dynamics
-    params   = tools.recursive_to_dict(problem.params)
+    params   = problem.params
     u_interp = interp1d(t_ref, u_ref, axis=0, fill_value="extrapolate")
     def f_dot(t, x): return np.array(dynamics(t, x, u_interp(t), params))
     sol      = solve_ivp(f_dot, [t_nl[0], t_nl[-1]], x0, t_eval=t_nl, method='RK45', rtol=1e-8, atol=1e-8)

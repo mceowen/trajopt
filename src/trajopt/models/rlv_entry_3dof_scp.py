@@ -19,14 +19,14 @@ def dynamics(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     aoa_r   = aoa   * _d2r
     bank_r  = bank  * _d2r
 
-    Re   = params["planet"]["r"]
-    rho0 = params["planet"]["rho"]
-    H    = params["planet"]["H"]
-    mu   = params["planet"]["mu"]
-    mass = params["vehicle"]["mass"]
-    S    = params["vehicle"]["sref"]
-    cl   = params["vehicle"]["cl"]
-    cd   = params["vehicle"]["cd"]
+    Re   = params.planet.r
+    rho0 = params.planet.rho
+    H    = params.planet.H
+    mu   = params.planet.mu
+    mass = params.vehicle.mass
+    S    = params.vehicle.sref
+    cl   = params.vehicle.cl
+    cd   = params.vehicle.cd
 
     alt  = r - Re
     rho  = rho0 * jnp.exp(-alt / H)
@@ -49,7 +49,7 @@ def dynamics(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
 
 
 def altitude(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
-    return jnp.array([z[0] - params["planet"]["r"]])
+    return jnp.array([z[0] - params.planet.r])
 
 
 def longitude(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
@@ -87,13 +87,13 @@ def long_lat(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
 def heat_rate(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     r, v = z[0], z[3]
     aoa_deg = nu[0]
-    Re   = params["planet"]["r"]
-    rho0 = params["planet"]["rho"]
-    H    = params["planet"]["H"]
-    cl   = params["vehicle"]["cl"]
-    cd   = params["vehicle"]["cd"]
-    mass = params["vehicle"]["mass"]
-    S    = params["vehicle"]["sref"]
+    Re   = params.planet.r
+    rho0 = params.planet.rho
+    H    = params.planet.H
+    cl   = params.vehicle.cl
+    cd   = params.vehicle.cd
+    mass = params.vehicle.mass
+    S    = params.vehicle.sref
 
     alt  = r - Re
     rho  = rho0 * jnp.exp(-alt / H)

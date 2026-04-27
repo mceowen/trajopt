@@ -80,4 +80,3 @@ class SolutionMethod:
 
         # --- Initialize reusable compiled Subproblem (DPP) ---
         self.subproblem = Subproblem(problem, self)
-

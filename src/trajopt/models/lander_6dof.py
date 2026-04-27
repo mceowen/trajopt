@@ -50,14 +50,14 @@ def cr(v: Array) -> Array:
 
 def dynamics(t: float, z: Array, nu: Array, params: dict) -> Array:
     """6-DoF powered descent dynamics."""
-    veh = params["vehicle"]
+    veh = params.vehicle
 
     x_dot = jnp.zeros(len(z))
 
-    g = jnp.array([-params["planet"]["g"], 0, 0])
+    g = jnp.array([-params.planet.g, 0, 0])
 
-    Jb = jnp.diag(jnp.array([veh["Jb11"], veh["Jb22"], veh["Jb33"]]))
-    Jbinv = jnp.diag(jnp.array([veh["Jbinv11"], veh["Jbinv22"], veh["Jbinv33"]]))
+    Jb = jnp.diag(jnp.array([veh.Jb11, veh.Jb22, veh.Jb33]))
+    Jbinv = jnp.diag(jnp.array([veh.Jbinv11, veh.Jbinv22, veh.Jbinv33]))
     rt = jnp.array([veh["rt1"], veh["rt2"], veh["rt3"]])
 
     x_dot = x_dot.at[0].set(-veh["alpha"] * jnp.linalg.norm(nu))
@@ -83,14 +83,14 @@ def thrust(t: float, z: Array, nu: Array, params: dict) -> Array:
 def glideslope(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Glideslope cone constraint: vehicle must stay above the glideslope angle."""
     r_i = z[0:3]
-    theta_gs = params["theta_gs"]
+    theta_gs = params.theta_gs
 
     return jnp.array([jnp.tan(jnp.deg2rad(theta_gs)) * jnp.linalg.norm(r_i[1:3]) - r_i[0]])
 
 
 def tilt(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Tilt angle constraint: limits the vehicle tilt from vertical."""
-    theta_tilt = jnp.deg2rad(params["theta_tilt"])
+    theta_tilt = jnp.deg2rad(params.theta_tilt)
     q2 = z[8]
     q3 = z[9]
 

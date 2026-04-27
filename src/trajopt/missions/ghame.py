@@ -2,6 +2,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import Array
+from trajopt.utils.tools import AttrDict
 
 jax.config.update("jax_enable_x64", True)
 
@@ -33,5 +34,5 @@ def nonlinear_aero_jax(t, x, u, params, fcns):
     L = 0.5 * (1 / mass) * rho * sref * Cl * v**2
     D = 0.5 * (1 / mass) * rho * sref * Cd * v**2
 
-    return {"L": L, "D": D, "Cl": Cl, "Cd": Cd, "alpha": alpha_deg, "rho": rho}
+    return AttrDict({"L": L, "D": D, "Cl": Cl, "Cd": Cd, "alpha": alpha_deg, "rho": rho})
 

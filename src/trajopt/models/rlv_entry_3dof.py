@@ -15,14 +15,14 @@ def dynamics(t, z, nu, params, fcns):
     aoa_r   = aoa   * _d2r
     bank_r  = bank  * _d2r
 
-    Re   = params["planet"]["r"]
-    rho0 = params["planet"]["rho"]
-    H    = params["planet"]["H"]
-    mu   = params["planet"]["mu"]
-    mass = params["vehicle"]["mass"]
-    S    = params["vehicle"]["sref"]
-    cl   = params["vehicle"]["cl"]
-    cd   = params["vehicle"]["cd"]
+    Re   = params.planet.r
+    rho0 = params.planet.rho
+    H    = params.planet.H
+    mu   = params.planet.mu
+    mass = params.vehicle.mass
+    S    = params.vehicle.sref
+    cl   = params.vehicle.cl
+    cd   = params.vehicle.cd
 
     alt  = r - Re
     rho  = rho0 * ca.exp(-alt / H)
@@ -45,7 +45,7 @@ def dynamics(t, z, nu, params, fcns):
 
 
 def altitude(t, z, nu, params, fcns):
-    return ca.vertcat(z[0] - params["planet"]["r"])
+    return ca.vertcat(z[0] - params.planet.r)
 
 
 def longitude(t, z, nu, params, fcns):
@@ -83,13 +83,13 @@ def long_lat(t, z, nu, params, fcns):
 def heat_rate(t, z, nu, params, fcns):
     r, v = z[0], z[3]
     aoa_deg = nu[0]
-    Re   = params["planet"]["r"]
-    rho0 = params["planet"]["rho"]
-    H    = params["planet"]["H"]
-    cl   = params["vehicle"]["cl"]
-    cd   = params["vehicle"]["cd"]
-    mass = params["vehicle"]["mass"]
-    S    = params["vehicle"]["sref"]
+    Re   = params.planet.r
+    rho0 = params.planet.rho
+    H    = params.planet.H
+    cl   = params.vehicle.cl
+    cd   = params.vehicle.cd
+    mass = params.vehicle.mass
+    S    = params.vehicle.sref
 
     alt  = r - Re
     rho  = rho0 * ca.exp(-alt / H)

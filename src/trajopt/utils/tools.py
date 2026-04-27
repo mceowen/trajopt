@@ -3,6 +3,7 @@ from functools import partial
 
 import numpy as np
 import cvxpy as cp
+import jax
 
 
 class _FcnExpr:
@@ -63,6 +64,13 @@ class AttrDict(dict):
 
     def __setattr__(self, name, value):
         self[name] = value
+
+# register the AttrDict class with jax to make it traceable
+
+jax.tree_util.register_pytree_node(AttrDict, 
+                                   flatten_func=lambda d: (list(d.values()), list(d.keys())),
+                                   unflatten_func=lambda keys, vals: AttrDict(zip(keys, vals))
+                                   )
     
 def recursive_attrdict(d):
     if isinstance(d, dict):
@@ -73,7 +81,9 @@ def recursive_attrdict(d):
         return d
     
 def recursive_to_dict(d):
-    if isinstance(d, dict):
+    if isinstance(d, AttrDict):
+        return AttrDict({k: recursive_to_dict(v) for k, v in d.items()})
+    elif isinstance(d, dict):
         return {k: recursive_to_dict(v) for k, v in d.items()}
     elif isinstance(d, list):
         return [recursive_to_dict(i) for i in d]

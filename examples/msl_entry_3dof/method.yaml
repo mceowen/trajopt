@@ -4,7 +4,7 @@ inherit: trajopt/methods/configs/autoscvx-term.yaml
 # ===============================
 # GRID SETTINGS
 # ==============================
-time_grid: 40
+time_grid: 20
 
 # ===============================
 # INITIAL GUESS SETTINGS

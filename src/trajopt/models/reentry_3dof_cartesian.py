@@ -16,7 +16,7 @@ def dynamics(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     v = z[3:6]
 
     sigma_rad = jnp.deg2rad(nu[0])
-    mu = params["planet"]["mu"]
+    mu = params.planet.mu
 
     a_grav = -mu * r / jnp.linalg.norm(r) ** 3
 
@@ -42,7 +42,7 @@ def heat_rate(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     v = jnp.linalg.norm(z[3:6])
     rho = fcns["atmosphere_model_jax"](t, z, nu, params)
 
-    return jnp.array([params["vehicle"]["kQ"] * rho**0.5 * v**3])
+    return jnp.array([params.vehicle.kQ * rho**0.5 * v**3])
 
 
 def dynamic_pressure(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
@@ -69,7 +69,7 @@ def heat_rate_nonjax(t: float, z: Array, nu: Array, params: dict, fcns: dict) ->
     v = jnp.linalg.norm(z[3:6])
     rho = fcns["atmosphere_model_nonjax"](t, z, nu, params)
 
-    return params["vehicle"]["kQ"] * rho**0.5 * v**3
+    return params.vehicle.kQ * rho**0.5 * v**3
 
 
 def dynamic_pressure_nonjax(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> float:

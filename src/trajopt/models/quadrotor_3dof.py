@@ -4,8 +4,8 @@ from jax import Array
 
 def dynamics_jax(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """3-DoF quadrotor dynamics (double integrator with gravity)."""
-    g = params["planet"]["g"]
-    mass = params["vehicle"]["mass"]
+    g = params.planet.g
+    mass = params.vehicle.mass
     g_vec = jnp.array([0, 0, -g])
     v = z[3:6]
     T = nu
