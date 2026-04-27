@@ -59,7 +59,7 @@ def compute_nonconvex_constraints(z, nu, problem, method):
     N         = method.index_map.N.time_grid
     z_jax     = jnp.asarray(z)
     nu_jax    = jnp.asarray(nu)
-    params_jax = tools.recursive_to_dict(problem.params)
+    params_jax = problem.params
 
     g     = np.zeros((N, n_ineq))
     dgdz  = np.zeros((N, n_ineq, n_z))
@@ -91,7 +91,7 @@ def compute_nonconvex_costs(z, nu, problem, method):
     dcostdz  = np.zeros((N, 1, n_z))
     dcostdnu = np.zeros((N, 1, n_nu))
 
-    params_jax = tools.recursive_to_dict(problem.params)
+    params_jax = problem.params
     nonconvex_costs = problem.costs.get(type="nonconvex")
 
     if len(nonconvex_costs) == 0:
@@ -127,8 +127,7 @@ def compile_jax_discretization(problem, method):
 
     z_time_idx = problem.index_map.indices.z.time
 
-    params = problem.params
-    params_jax = tools.recursive_to_dict(params)
+    params_jax = problem.params
 
     # pull ltv dynamics
     lin_dyn = problem.constraints.get(type='dynamics')[0].lin_dyn
@@ -180,13 +179,8 @@ def compile_jax_discretization(problem, method):
         return (A_jax_k, B_jax_k, Bp_jax_k, z_minus_k)
 
     def _apply_phase_schedule(params_jax, k):
-        schedule = params_jax.get('_phase_schedule', None)
-        if schedule is None:
-            return params_jax
-        params_k = dict(params_jax)
-        for key, array in schedule.items():
-            params_k[key] = jnp.asarray(array)[k]
-        return params_k
+        return tools.AttrDict({key: (jnp.asarray(val)[k] if hasattr(val, '__len__') and not isinstance(val, dict) else val)
+                               for key, val in params_jax.items()})
 
     use_fixed_dt = int(getattr(method.flags, 'ode_fixed_dt', 0))
     N_grid = problem.index_map.N.time_grid
@@ -357,8 +351,7 @@ def discretize_inv_free_jax(z_ref_np, nu_ref_np, problem, method):
     # convert numpy arrays to jax
     z_ref       = jnp.asarray(z_ref_np)
     nu_ref      = jnp.asarray(nu_ref_np)
-    params      = problem.params
-    params_jax  = tools.recursive_to_dict(params)
+    params_jax = problem.params
 
     # TODO(Skye): ensure dtk is computed from the z vector correctly for each node in the jax propagator
     # call jitted propagator for each node
@@ -378,8 +371,7 @@ def discretize_inv_free_jax_bwd(z_ref_np, nu_ref_np, problem, method):
     # convert numpy arrays to jax
     z_ref = jnp.asarray(z_ref_np)
     nu_ref = jnp.asarray(nu_ref_np)
-    params = problem.params
-    params_jax = tools.recursive_to_dict(params)
+    params_jax = problem.params
 
     # call jitted propagator for each node
     ks = jnp.arange(method.index_map.N.time_grid - 1)
@@ -479,7 +471,7 @@ def compute_ps_dynamics_and_jacobians(z_ref, nu_ref, problem, method):
     n_nu = problem.index_map.n.nu
 
     lin_dyn = problem.constraints.get(type='dynamics')[0].lin_dyn
-    params_jax = tools.recursive_to_dict(problem.params)
+    params_jax = problem.params
 
     f_ref_col = np.zeros((N_col, n_z))
     Ac_col = np.zeros((N_col, n_z, n_z))

@@ -9,14 +9,15 @@ def nonlinear_aero_jax(t: float, z: Array, nu: Array, params: dict, fcns: dict) 
     """Nonlinear aerodynamic force coefficients and state for MSL, JAX version."""
     v = z[3]
     rho = fcns.density_model(t, z, nu, params)
+    rho = fcns.density_model(t, z, nu, params)
 
-    rho = fcns['density_model'](t, z, nu, params)
+    vehicle = params.vehicle
 
-    mass = params.vehicle.mass
-    sref_shell = params.vehicle.sref_shell
-    sref_chute = params.vehicle.sref_chute
-    LD = params.vehicle.LD
-    bc = params.vehicle.bc
+    mass       = vehicle.mass
+    sref_shell = vehicle.sref_shell
+    sref_chute = vehicle.sref_chute
+    LD         = vehicle.LD
+    bc         = vehicle.bc
 
     Cd_entry = mass / (bc * sref_shell)
     Cl_entry = Cd_entry * LD

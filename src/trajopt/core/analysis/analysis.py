@@ -84,7 +84,7 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
     n_x         = problem.index_map.n.state
     n_u        = problem.index_map.n.control
     params      = problem.params
-    params_dict = tools.recursive_to_dict(params)
+    params_dict = params
     iter_data   = method.subproblem.iter_data
     nondim      = method.nondim
 
@@ -255,7 +255,7 @@ def perform_nlp_analysis(trajopt_obj):
     problem     = trajopt_obj.problem
     sol         = trajopt_obj.solution
     params      = problem.params
-    params_dict = tools.recursive_to_dict(params)
+    params_dict = params
 
     t  = sol['t']
     X  = sol['x']

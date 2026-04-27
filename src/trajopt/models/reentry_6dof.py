@@ -26,8 +26,8 @@ def dynamics(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     a_grav_inertial = -mu * r / r_norm**3
 
     # aero forces and moments
-    aero = fcns["nonlinear_aero"](t, z, nu, params, fcns)
-    a_aero_trans = (1 / mass) * aero["f_trans"]
+    aero = fcns.nonlinear_aero(t, z, nu, params, fcns)
+    a_aero_trans = (1 / mass) * aero.f_trans
 
     v_inertial = DCM(q).T @ v_body
 
@@ -44,34 +44,34 @@ def dynamics(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
 
 def control_torques_dt(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Constraint: control torques must equal the required aero moments (== 0)."""
-    aero = fcns["nonlinear_aero"](t, z, nu, params, fcns)
+    aero = fcns.nonlinear_aero(t, z, nu, params, fcns)
 
-    return nu[:3] - aero["m_rot"]  # == 0
+    return nu[:3] - aero.m_rot  # == 0
 
 
 def heat_rate(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Convective heat rate (W/m²)."""
     v = jnp.linalg.norm(z[3:6])
-    rho = fcns["density_model"](t, z, nu, params, fcns)
+    rho = fcns.density_model(t, z, nu, params, fcns)
 
-    return jnp.array([params.vehicle["kQ"] * rho**0.5 * v**3])
+    return jnp.array([params.vehicle.kQ * rho**0.5 * v**3])
 
 
 def dynamic_pressure(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Dynamic pressure q-bar (Pa)."""
     v = jnp.linalg.norm(z[3:6])
-    rho = fcns["density_model"](t, z, nu, params, fcns)
+    rho = fcns.density_model(t, z, nu, params, fcns)
 
     return jnp.array([0.5 * rho * v**2])
 
 
 def aero_load(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Aerodynamic translational acceleration magnitude (m / (s^2))."""
-    aero = fcns["nonlinear_aero"](t, z, nu, params, fcns)
+    aero = fcns.nonlinear_aero(t, z, nu, params, fcns)
 
-    mass = params.vehicle["mass"]
+    mass = params.vehicle.mass
 
-    return jnp.array([jnp.linalg.norm(aero["f_trans"] / mass)])
+    return jnp.array([jnp.linalg.norm(aero.f_trans / mass)])
 
 
 def quaternion_norm(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:

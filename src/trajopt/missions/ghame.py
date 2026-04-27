@@ -9,9 +9,9 @@ jax.config.update("jax_enable_x64", True)
 def nonlinear_aero_jax(t, x, u, params, fcns):
     """Nonlinear aerodynamic force coefficients and state for GHAME, JAX version."""
 
-    # Extract key params
-    mass = params["vehicle"]["mass"]
-
+    vehicle = params.vehicle
+    rho = fcns.density_model(t, x, u, params, fcns)
+    mass = vehicle.mass
     v = x[3]
 
     alpha_deg = 15.0
@@ -28,8 +28,7 @@ def nonlinear_aero_jax(t, x, u, params, fcns):
     Cl = cl0 + cl1 * alpha_deg
     Cd = cd0 + (cd1 * Cl) + (cd2 * (Cl**2))
 
-    rho = fcns["density_model"](t, x, u, params, fcns)
-    sref = params["vehicle"]["sref"]
+    sref = vehicle.sref
 
     L = 0.5 * (1 / mass) * rho * sref * Cl * v**2
     D = 0.5 * (1 / mass) * rho * sref * Cd * v**2

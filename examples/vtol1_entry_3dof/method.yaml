@@ -1,5 +1,5 @@
-# inherit: trajopt/methods/configs/autoscvx-term.yaml
-inherit: trajopt/methods/configs/autoscvx-term-ps.yaml
+inherit: trajopt/methods/configs/autoscvx-term.yaml
+# inherit: trajopt/methods/configs/autoscvx-term-ps.yaml
 
 time_grid: 60
 

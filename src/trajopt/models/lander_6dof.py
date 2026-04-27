@@ -58,9 +58,9 @@ def dynamics(t: float, z: Array, nu: Array, params: dict) -> Array:
 
     Jb = jnp.diag(jnp.array([veh.Jb11, veh.Jb22, veh.Jb33]))
     Jbinv = jnp.diag(jnp.array([veh.Jbinv11, veh.Jbinv22, veh.Jbinv33]))
-    rt = jnp.array([veh["rt1"], veh["rt2"], veh["rt3"]])
+    rt = jnp.array([veh.rt1, veh.rt2, veh.rt3])
 
-    x_dot = x_dot.at[0].set(-veh["alpha"] * jnp.linalg.norm(nu))
+    x_dot = x_dot.at[0].set(-veh.alpha * jnp.linalg.norm(nu))
     x_dot = x_dot.at[1:4].set(z[4:7])
     x_dot = x_dot.at[4:7].set((1 / z[0]) * DCM(z[7:11]).T @ nu[:3] + g)
     x_dot = x_dot.at[7:11].set((1 / 2) * omega(z[11:14]) @ z[7:11])

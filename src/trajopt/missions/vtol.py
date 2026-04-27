@@ -1,12 +1,12 @@
 import jax
 import jax.numpy as jnp
 from jax import Array
+from trajopt.utils.tools import AttrDict
 
 jax.config.update("jax_enable_x64", True)
 
 def nonlinear_aero_jax(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> dict:
     """Nonlinear aerodynamic force coefficients and state for VTOL."""
-    r = z[0]
     v = z[3]
 
     # Setup coefficient values
@@ -19,6 +19,9 @@ def nonlinear_aero_jax(t: float, z: Array, nu: Array, params: dict, fcns: dict) 
     kalph = 0.20705 / (340**2)
     vlim = 4570
     alphlim_deg = 40
+
+    vehicle = params.vehicle
+    rho = fcns.density_model(t, z, nu, params)
 
     # Velocity-dependent polynomial coefficients
     Kd1 = kd1
@@ -36,11 +39,11 @@ def nonlinear_aero_jax(t: float, z: Array, nu: Array, params: dict, fcns: dict) 
     Cd = Kd1 + Kd2 * Cl + Kd3 * Cl**2
     alpha = jnp.deg2rad(alphlim_deg - kalph * (jnp.minimum(v, vlim) - vlim) ** 2)
 
-    rho = fcns["density_model"](t, z, nu, params)
-    sref = params["vehicle"]["sref"]
-    mass = params["vehicle"]["mass"]
+    
+    sref = vehicle.sref
+    mass = vehicle.mass
 
     L = (0.5 / mass) * rho * sref * Cl * v**2
     D = (0.5 / mass) * rho * sref * Cd * v**2
 
-    return {"L": L, "D": D, "Cl": Cl, "Cd": Cd, "alpha": alpha, "rho": rho}
+    return AttrDict({"L": L, "D": D, "Cl": Cl, "Cd": Cd, "alpha": alpha, "rho": rho})

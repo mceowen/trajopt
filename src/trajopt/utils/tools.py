@@ -81,9 +81,7 @@ def recursive_attrdict(d):
         return d
     
 def recursive_to_dict(d):
-    if isinstance(d, AttrDict):
-        return AttrDict({k: recursive_to_dict(v) for k, v in d.items()})
-    elif isinstance(d, dict):
+    if isinstance(d, (AttrDict, dict)):
         return {k: recursive_to_dict(v) for k, v in d.items()}
     elif isinstance(d, list):
         return [recursive_to_dict(i) for i in d]
