@@ -1,17 +1,34 @@
+"""Post-processing and analysis for SCP and NLP trajectory optimization solutions."""
+
 import copy
-import numpy as np
-import trajopt.utils.tools as tools
+from collections.abc import Callable
+from typing import Any
+
 import jax
-import trajopt.methods.scp.integrators as integrators
+import numpy as np
+
 import trajopt.methods.scp.initial_guess as guess
 from trajopt.core.indexing.index_map import IndexMap
 from trajopt.core.problem import Problem
+from trajopt.core.scaling.nondim import Nondim
 from trajopt.core.solution_method import SolutionMethod
-from trajopt.utils.tools import recursive_attrdict, AttrDict
+from trajopt.core.trajectory_analyzer import TrajectoryAnalyzer
+from trajopt.methods.scp import integrators
+from trajopt.utils import tools
+from trajopt.utils.tools import AttrDict, recursive_attrdict
+
 jax.config.update("jax_enable_x64", True)
 
 
-def _eval_per_phase(eval_fn, z, nu, problem, params_dict, t_nodes=None):
+def _eval_per_phase(
+    eval_fn: Callable,
+    z: np.ndarray,
+    nu: np.ndarray,
+    problem: Any,
+    params_dict: dict,
+    t_nodes: np.ndarray | None = None,
+) -> dict:
+    """Evaluate a trajectory function per phase, stitching results across phase boundaries."""
     if problem.phases is None:
         return eval_fn(z, nu, params_dict)
 
@@ -26,8 +43,8 @@ def _eval_per_phase(eval_fn, z, nu, problem, params_dict, t_nodes=None):
         else:
             t_s = t_nodes[phase.start]
             t_e = t_nodes[min(phase.end, len(t_nodes) - 1)] if phase.end < len(t_nodes) else t[-1] + 1
-            s   = int(np.searchsorted(t, t_s))
-            e   = int(np.searchsorted(t, t_e)) if phase.end < len(t_nodes) else N_pts
+            s = int(np.searchsorted(t, t_s))
+            e = int(np.searchsorted(t, t_e)) if phase.end < len(t_nodes) else N_pts
 
         if e <= s:
             continue
@@ -50,7 +67,7 @@ def _eval_per_phase(eval_fn, z, nu, problem, params_dict, t_nodes=None):
     return stitched
 
 
-'''
+"""
 outline of solution_data structure:
 results = {
     "method1": {
@@ -59,51 +76,96 @@ results = {
 
     "method2": {
         "runs": []
-    }, 
+    },
 }
-'''
+"""
 
 ITER_DATA_KEYS_TO_KEEP = {
-    "iter_num", "converged", "cost", "solve_time", "prop_time", "parse_time", "t_full",
-    "t_opt", "z_opt", "nu_opt", "dt_opt", "T_opt",
-    "t_nl", "z_nl", "nu_nl", "t_init", "z_init", "nu_init", "t_init_nl", "z_init_nl", "nu_init_nl",
-    "constraint_data", "trajectory_data", "conv_data", "W", "dual", "penalty",
+    "iter_num",
+    "converged",
+    "cost",
+    "solve_time",
+    "prop_time",
+    "parse_time",
+    "t_full",
+    "t_opt",
+    "z_opt",
+    "nu_opt",
+    "dt_opt",
+    "T_opt",
+    "t_nl",
+    "z_nl",
+    "nu_nl",
+    "t_init",
+    "z_init",
+    "nu_init",
+    "t_init_nl",
+    "z_init_nl",
+    "nu_init_nl",
+    "constraint_data",
+    "trajectory_data",
+    "conv_data",
+    "W",
+    "dual",
+    "penalty",
 }
 
 METHOD_DATA_KEYS_TO_KEEP = {
-    'time_grid', 'N_dens', 'Npm', 'T_init', 'T_max', 'T_min', 'Ts_init', 'conv', 'conv_data', 'cost_init', 
-    'dT_max', 'ddt_max', 'dt_max', 'dt_min', 'flags', 'line_guess_u_init',
-    'name', 'n_minus', 'n_plus', 'nl_guess_u_start', 'nl_guess_u_stop', 'solver_opts',
-    'nondim', 'initial_guess', 'penalty', 'z_ind'
+    "time_grid",
+    "N_dens",
+    "Npm",
+    "T_init",
+    "T_max",
+    "T_min",
+    "Ts_init",
+    "conv",
+    "conv_data",
+    "cost_init",
+    "dT_max",
+    "ddt_max",
+    "dt_max",
+    "dt_min",
+    "flags",
+    "line_guess_u_init",
+    "name",
+    "n_minus",
+    "n_plus",
+    "nl_guess_u_start",
+    "nl_guess_u_stop",
+    "solver_opts",
+    "nondim",
+    "initial_guess",
+    "penalty",
+    "z_ind",
 }
 
-def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
-    problem     = trajopt_obj.problem
-    method      = trajopt_obj.method
 
-    n_x         = problem.index_map.n.state
-    n_u        = problem.index_map.n.control
-    params      = problem.params
+def perform_analysis(trajopt_obj: TrajectoryAnalyzer, trim: bool = True, compute_iters: bool = False) -> AttrDict:
+    """Post-process an SCP solution.
+
+    Re-dimensionalize states/controls, evaluate constraints and trajectory quantities,
+    and optionally trim per-iteration history.
+    """
+    problem = trajopt_obj.problem
+    method = trajopt_obj.method
+
+    params = problem.params
     params_dict = params
-    iter_data   = method.subproblem.iter_data
-    nondim      = method.nondim
+    iter_data = method.subproblem.iter_data
+    nondim = method.nondim
 
-    if compute_iters == True:
-        selected_iter_data = iter_data
-    else:
-        selected_iter_data = [iter_data[-1]]
+    selected_iter_data = iter_data if compute_iters else [iter_data[-1]]
 
     for data in selected_iter_data:
-        
-        z_opt = np.asarray(data['z_opt'])
-        nu_opt = np.asarray(data['nu_opt'])
+        z_opt = np.asarray(data["z_opt"])
+        nu_opt = np.asarray(data["nu_opt"])
 
         idx = problem.index_map.indices
         x_opt = z_opt[:, idx.z.state]
         t_opt = z_opt[:, idx.z.time].squeeze(-1)
         u_opt = nu_opt[:, idx.nu.control]
 
-        if getattr(method.flags, 'ode_fixed_dt', 0):
+        if getattr(method.flags, "ode_fixed_dt", 0):
             t_nl, z_nl, nu_nl = integrators.propagate_znu_rk4(z_opt[0], nu_opt, problem, method)
         else:
             t_nl, z_nl, nu_nl = integrators.propagate_znu(z_opt[0], nu_opt, problem, method)
@@ -129,59 +191,60 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
         # compute constraint values
         for constraint in problem.constraints.get():
             if hasattr(constraint, "compute_constraint_values"):
-                name  = constraint.name
-                cnstr_type  = constraint.type
+                name = constraint.name
+                cnstr_type = constraint.type
                 group = constraint.group
 
-                if group == None:
+                if group is None:
                     group = name
-                
-                eval_fn   = constraint.compute_constraint_values
-                opt_vals  = _eval_per_phase(eval_fn,z_opt,  nu_opt,  problem, params_dict)
-                nl_vals   = _eval_per_phase(eval_fn, z_nl,   nu_nl,   problem, params_dict, t_nodes=t_opt)
-                init_vals = _eval_per_phase(eval_fn,z_init, nu_init, problem, params_dict)
 
-                output = AttrDict({
-                    "name": name,
-                    "type": cnstr_type,
-                    "opt_vals": opt_vals,
-                    "nl_vals": nl_vals,
-                    "init_vals": init_vals
-                })
+                eval_fn = constraint.compute_constraint_values
+                opt_vals = _eval_per_phase(eval_fn, z_opt, nu_opt, problem, params_dict)
+                nl_vals = _eval_per_phase(eval_fn, z_nl, nu_nl, problem, params_dict, t_nodes=t_opt)
+                init_vals = _eval_per_phase(eval_fn, z_init, nu_init, problem, params_dict)
+
+                output = AttrDict(
+                    {
+                        "name": name,
+                        "type": cnstr_type,
+                        "opt_vals": opt_vals,
+                        "nl_vals": nl_vals,
+                        "init_vals": init_vals,
+                    },
+                )
 
                 if constraint_data.get(group) is None:
                     constraint_data[group] = AttrDict({})
-                
+
                 constraint_data[group][name] = output
-        
+
         # dimensional augmented z/nu for trajectory value evaluation
-        z_opt_d  = z_opt.copy()
+        z_opt_d = z_opt.copy()
         z_opt_d[:, idx.z.state] = x_opt @ nondim.M.state.nd2d
-        z_opt_d[:, idx.z.time]  = z_opt[:, idx.z.time] * nondim.time_scale
+        z_opt_d[:, idx.z.time] = z_opt[:, idx.z.time] * nondim.time_scale
         nu_opt_d = nu_opt.copy()
         nu_opt_d[:, idx.nu.control] = u_opt @ nondim.M.control.nd2d
 
-        z_nl_d  = z_nl.copy()
+        z_nl_d = z_nl.copy()
         z_nl_d[:, idx.z.state] = x_nl @ nondim.M.state.nd2d
-        z_nl_d[:, idx.z.time]  = z_nl[:, idx.z.time] * nondim.time_scale
+        z_nl_d[:, idx.z.time] = z_nl[:, idx.z.time] * nondim.time_scale
         nu_nl_d = nu_nl.copy()
         nu_nl_d[:, idx.nu.control] = u_nl @ nondim.M.control.nd2d
 
-        z_init_d  = z_init.copy()
+        z_init_d = z_init.copy()
         z_init_d[:, idx.z.state] = x_init @ nondim.M.state.nd2d
-        z_init_d[:, idx.z.time]  = z_init[:, idx.z.time] * nondim.time_scale
+        z_init_d[:, idx.z.time] = z_init[:, idx.z.time] * nondim.time_scale
         nu_init_d = nu_init.copy()
         nu_init_d[:, idx.nu.control] = u_init @ nondim.M.control.nd2d
 
-        z_init_dense_d  = z_init_dense.copy()
+        z_init_dense_d = z_init_dense.copy()
         z_init_dense_d[:, idx.z.state] = x_init_dense @ nondim.M.state.nd2d
-        z_init_dense_d[:, idx.z.time]  = z_init_dense[:, idx.z.time] * nondim.time_scale
+        z_init_dense_d[:, idx.z.time] = z_init_dense[:, idx.z.time] * nondim.time_scale
         nu_init_dense_d = nu_init_dense.copy()
         nu_init_dense_d[:, idx.nu.control] = u_init_dense @ nondim.M.control.nd2d
-        t_init_dense_d  = t_init_dense * nondim.time_scale
 
-        t_opt_d   = t_opt * nondim.time_scale
-        t_init_d  = t_init * nondim.time_scale
+        t_opt_d = t_opt * nondim.time_scale
+        t_init_d = t_init * nondim.time_scale
 
         # compute general trajectory values (not necessarily constraints as specified in the problem)
         for trajectory in problem.trajectories.get():
@@ -190,104 +253,111 @@ def perform_analysis(trajopt_obj, trim=True, compute_iters=False):
                 traj_type = trajectory.type
                 group = trajectory.group
 
-                if group == None:
+                if group is None:
                     group = name
 
-                eval_fn   = trajectory.compute_trajectory_values
-                opt_vals      = _eval_per_phase(eval_fn, z_opt_d,        nu_opt_d,        problem, params_dict)
-                nl_vals       = _eval_per_phase(eval_fn, z_nl_d,         nu_nl_d,         problem, params_dict, t_nodes=t_opt_d)
-                init_vals     = _eval_per_phase(eval_fn, z_init_d,       nu_init_d,       problem, params_dict)
-                init_nl_vals  = _eval_per_phase(eval_fn, z_init_dense_d, nu_init_dense_d, problem, params_dict, t_nodes=t_init_d)
+                eval_fn = trajectory.compute_trajectory_values
+                opt_vals = _eval_per_phase(eval_fn, z_opt_d, nu_opt_d, problem, params_dict)
+                nl_vals = _eval_per_phase(eval_fn, z_nl_d, nu_nl_d, problem, params_dict, t_nodes=t_opt_d)
+                init_vals = _eval_per_phase(eval_fn, z_init_d, nu_init_d, problem, params_dict)
+                init_nl_vals = _eval_per_phase(
+                    eval_fn,
+                    z_init_dense_d,
+                    nu_init_dense_d,
+                    problem,
+                    params_dict,
+                    t_nodes=t_init_d,
+                )
 
-                output = AttrDict({
-                    "name": name,
-                    "type": traj_type,
-                    "opt_vals": opt_vals,
-                    "nl_vals": nl_vals,
-                    "init_vals": init_vals,
-                    "init_nl_vals": init_nl_vals,
-                    "title": getattr(trajectory, "title", None),
-                    "xlabel": getattr(trajectory, "xlabel", None),
-                    "ylabel": getattr(trajectory, "ylabel", None),
-                    "zlabel": getattr(trajectory, "zlabel", None),
-                    "tick_nbins": getattr(trajectory, "tick_nbins", None),
-                    "markers": getattr(trajectory, "markers", None),
-                    "invert_x": getattr(trajectory, "invert_x", False),
-                    "show_iters": getattr(trajectory, "show_iters", None),
-                })
+                output = AttrDict(
+                    {
+                        "name": name,
+                        "type": traj_type,
+                        "opt_vals": opt_vals,
+                        "nl_vals": nl_vals,
+                        "init_vals": init_vals,
+                        "init_nl_vals": init_nl_vals,
+                        "title": getattr(trajectory, "title", None),
+                        "xlabel": getattr(trajectory, "xlabel", None),
+                        "ylabel": getattr(trajectory, "ylabel", None),
+                        "zlabel": getattr(trajectory, "zlabel", None),
+                        "tick_nbins": getattr(trajectory, "tick_nbins", None),
+                        "markers": getattr(trajectory, "markers", None),
+                        "invert_x": getattr(trajectory, "invert_x", False),
+                        "show_iters": getattr(trajectory, "show_iters", None),
+                    },
+                )
 
                 if trajectory_data.get(group) is None:
                     trajectory_data[group] = AttrDict({})
-                
+
                 trajectory_data[group][name] = output
 
         # re-dimensionalize all the data
-        data['t_nl']  = t_nl * nondim.time_scale
-        data['z_nl']  = x_nl @ nondim.M.state.nd2d
-        data['nu_nl'] = u_nl @ nondim.M.control.nd2d
+        data["t_nl"] = t_nl * nondim.time_scale
+        data["z_nl"] = x_nl @ nondim.M.state.nd2d
+        data["nu_nl"] = u_nl @ nondim.M.control.nd2d
 
-        data['t_init']     = t_init * nondim.time_scale
-        data['z_init']     = x_init @ nondim.M.state.nd2d
-        data['nu_init']    = u_init @ nondim.M.control.nd2d
+        data["t_init"] = t_init * nondim.time_scale
+        data["z_init"] = x_init @ nondim.M.state.nd2d
+        data["nu_init"] = u_init @ nondim.M.control.nd2d
 
-        data['t_init_nl']  = t_init_dense * nondim.time_scale
-        data['z_init_nl']  = x_init_dense @ nondim.M.state.nd2d
-        data['nu_init_nl'] = u_init_dense @ nondim.M.control.nd2d
+        data["t_init_nl"] = t_init_dense * nondim.time_scale
+        data["z_init_nl"] = x_init_dense @ nondim.M.state.nd2d
+        data["nu_init_nl"] = u_init_dense @ nondim.M.control.nd2d
 
-        data['t_opt']  = t_opt * nondim.time_scale
-        data['z_opt']  = x_opt @ nondim.M.state.nd2d
-        data['nu_opt'] = u_opt @ nondim.M.control.nd2d
-        data['constraint_data'] = constraint_data
-        data['trajectory_data'] = trajectory_data
+        data["t_opt"] = t_opt * nondim.time_scale
+        data["z_opt"] = x_opt @ nondim.M.state.nd2d
+        data["nu_opt"] = u_opt @ nondim.M.control.nd2d
+        data["constraint_data"] = constraint_data
+        data["trajectory_data"] = trajectory_data
 
-    if trim:
-        iters_out = [tools.trim_dict(rec, ITER_DATA_KEYS_TO_KEEP) for rec in iter_data]
-    else:
-        iters_out = iter_data
-    
-    return AttrDict({'iters': iters_out})
+    iters_out = [tools.trim_dict(rec, ITER_DATA_KEYS_TO_KEEP) for rec in iter_data] if trim else iter_data
+
+    return AttrDict({"iters": iters_out})
+
 
 # ======================================================================
 # NLP ANALYSIS (CasADi / IPOPT path)
 # ======================================================================
 
-def perform_nlp_analysis(trajopt_obj):
-    problem     = trajopt_obj.problem
-    sol         = trajopt_obj.solution
-    params      = problem.params
+
+def perform_nlp_analysis(trajopt_obj: TrajectoryAnalyzer) -> AttrDict:
+    """Post-process a CasADi/IPOPT solution into the standard analysis format."""
+    problem = trajopt_obj.problem
+    sol = trajopt_obj.solution
+    params = problem.params
     params_dict = params
 
-    t  = sol['t']
-    X  = sol['x']
-    U  = sol['u']
-    N  = len(t)
-    nx = X.shape[1]
-    nu = U.shape[1]
+    t = sol["t"]
+    X = sol["x"]
+    U = sol["u"]
+    N = len(t)
 
     U_pad = np.vstack([U, U[-1:]])
 
     idx = problem.index_map.indices
-    z  = np.zeros((N, len(idx.z.all)))
+    z = np.zeros((N, len(idx.z.all)))
     z[:, idx.z.state] = X
-    z[:, idx.z.time]  = t[:, None]
+    z[:, idx.z.time] = t[:, None]
 
     nu_arr = np.zeros((N, len(idx.nu.all)))
     nu_arr[:, idx.nu.control] = U_pad
     nu_arr[:, idx.nu.dilation_factor] = 1.0
 
-    guess   = trajopt_obj.config.method.guess
+    guess = trajopt_obj.config.method.guess
     x_start = np.array(guess.x_start)
-    x_end   = np.array(guess.x_end)
-    u_g     = np.array(guess.u)
-    tf_g    = float(guess.tf)
+    x_end = np.array(guess.x_end)
+    u_g = np.array(guess.u)
+    tf_g = float(guess.tf)
 
-    X_init  = np.array([x_start + (x_end - x_start) * k / (N - 1) for k in range(N)])
-    U_init  = np.tile(u_g, (N, 1))
-    t_init  = np.linspace(0.0, tf_g, N)
+    X_init = np.array([x_start + (x_end - x_start) * k / (N - 1) for k in range(N)])
+    U_init = np.tile(u_g, (N, 1))
+    t_init = np.linspace(0.0, tf_g, N)
 
-    z_init  = np.zeros_like(z)
+    z_init = np.zeros_like(z)
     z_init[:, idx.z.state] = X_init
-    z_init[:, idx.z.time]  = t_init[:, None]
+    z_init[:, idx.z.time] = t_init[:, None]
 
     nu_init = np.zeros_like(nu_arr)
     nu_init[:, idx.nu.control] = U_init
@@ -298,76 +368,83 @@ def perform_nlp_analysis(trajopt_obj):
 
     for constraint in problem.constraints.get():
         if hasattr(constraint, "compute_constraint_values"):
-            name  = constraint.name
+            name = constraint.name
             group = constraint.group or name
             eval_fn = constraint.compute_constraint_values
-            opt_vals  = eval_fn(z, nu_arr, params_dict)
-            output = AttrDict({
-                "name": name,
-                "type": constraint.type,
-                "opt_vals": opt_vals,
-                "nl_vals": opt_vals,
-                "init_vals": opt_vals,
-            })
+            opt_vals = eval_fn(z, nu_arr, params_dict)
+            output = AttrDict(
+                {
+                    "name": name,
+                    "type": constraint.type,
+                    "opt_vals": opt_vals,
+                    "nl_vals": opt_vals,
+                    "init_vals": opt_vals,
+                },
+            )
             if constraint_data.get(group) is None:
                 constraint_data[group] = AttrDict({})
             constraint_data[group][name] = output
 
     for trajectory in problem.trajectories.get():
-        name      = trajectory.name
+        name = trajectory.name
         traj_type = trajectory.type
-        group     = trajectory.group or name
+        group = trajectory.group or name
 
-        eval_fn   = trajectory.compute_trajectory_values
-        opt_vals      = eval_fn(z, nu_arr, params_dict)
-        init_vals     = eval_fn(z_init, nu_init, params_dict)
+        eval_fn = trajectory.compute_trajectory_values
+        opt_vals = eval_fn(z, nu_arr, params_dict)
+        init_vals = eval_fn(z_init, nu_init, params_dict)
 
-        output = AttrDict({
-            "name": name,
-            "type": traj_type,
-            "opt_vals": opt_vals,
-            "nl_vals": opt_vals,
-            "init_vals": init_vals,
-            "init_nl_vals": init_vals,
-            "title": getattr(trajectory, "title", None),
-            "xlabel": getattr(trajectory, "xlabel", None),
-            "ylabel": getattr(trajectory, "ylabel", None),
-            "zlabel": getattr(trajectory, "zlabel", None),
-            "tick_nbins": getattr(trajectory, "tick_nbins", None),
-            "markers": getattr(trajectory, "markers", None),
-            "invert_x": getattr(trajectory, "invert_x", False),
-            "show_iters": getattr(trajectory, "show_iters", None),
-        })
+        output = AttrDict(
+            {
+                "name": name,
+                "type": traj_type,
+                "opt_vals": opt_vals,
+                "nl_vals": opt_vals,
+                "init_vals": init_vals,
+                "init_nl_vals": init_vals,
+                "title": getattr(trajectory, "title", None),
+                "xlabel": getattr(trajectory, "xlabel", None),
+                "ylabel": getattr(trajectory, "ylabel", None),
+                "zlabel": getattr(trajectory, "zlabel", None),
+                "tick_nbins": getattr(trajectory, "tick_nbins", None),
+                "markers": getattr(trajectory, "markers", None),
+                "invert_x": getattr(trajectory, "invert_x", False),
+                "show_iters": getattr(trajectory, "show_iters", None),
+            },
+        )
         if trajectory_data.get(group) is None:
             trajectory_data[group] = AttrDict({})
         trajectory_data[group][name] = output
 
-    iter_data = AttrDict({
-        "t_opt": t,
-        "z_opt": X,
-        "nu_opt": U_pad,
-        "t_nl": t,
-        "z_nl": X,
-        "nu_nl": U_pad,
-        "t_init": t_init,
-        "z_init": X_init,
-        "nu_init": U_init,
-        "t_init_nl": t_init,
-        "z_init_nl": X_init,
-        "nu_init_nl": U_init,
-        "trajectory_data": trajectory_data,
-        "constraint_data": constraint_data,
-        "W": AttrDict({}),
-        "dual": AttrDict({}),
-        "penalty": AttrDict({}),
-    })
+    iter_data = AttrDict(
+        {
+            "t_opt": t,
+            "z_opt": X,
+            "nu_opt": U_pad,
+            "t_nl": t,
+            "z_nl": X,
+            "nu_nl": U_pad,
+            "t_init": t_init,
+            "z_init": X_init,
+            "nu_init": U_init,
+            "t_init_nl": t_init,
+            "z_init_nl": X_init,
+            "nu_init_nl": U_init,
+            "trajectory_data": trajectory_data,
+            "constraint_data": constraint_data,
+            "W": AttrDict({}),
+            "dual": AttrDict({}),
+            "penalty": AttrDict({}),
+        },
+    )
 
     return AttrDict({"iters": [iter_data]})
 
 
-def run_nlp_analysis(trajopt_obj):
+def run_nlp_analysis(trajopt_obj: TrajectoryAnalyzer) -> AttrDict:
+    """Run NLP post-processing and return results nested under the method name."""
     config = trajopt_obj.config.method
-    name   = config.get("name", "nlp")
+    name = config.get("name", "nlp")
     return recursive_attrdict({name: {"runs": [perform_nlp_analysis(trajopt_obj)]}})
 
 
@@ -375,26 +452,35 @@ def run_nlp_analysis(trajopt_obj):
 # STANDALONE ANALYSIS
 # ======================================================================
 
-def run_standalone_analysis(trajopt_obj, show_iters = True):
-    config  = trajopt_obj.config.method
+
+def run_standalone_analysis(trajopt_obj: TrajectoryAnalyzer, show_iters: bool = True) -> AttrDict:
+    """Run a single SCP solve and return results nested under the method name."""
+    config = trajopt_obj.config.method
     name = config.get("name", "method1")
     return recursive_attrdict({name: {"runs": [perform_analysis(trajopt_obj, compute_iters=show_iters)]}})
+
 
 # ======================================================================
 # MISSION AND METHOD VARIATION ANALYSIS
 # ======================================================================
 
-def update_problem_with_variations(problem, realized_mission_variations_flat, config, nondim):
+
+def update_problem_with_variations(
+    problem: Problem,
+    realized_mission_variations_flat: AttrDict,
+    config: Any,
+    nondim: Nondim,
+) -> None:
+    """Apply a flat dict of variation paths to problem constraints, costs, and params, then re-nondimensionalize any updated constraints."""
     for path, value in realized_mission_variations_flat.items():
-        
         if path.startswith("constraints."):
-            # constraints.initial_state.value: 
+            # constraints.initial_state.value:
             constraint_name = path.split(".")[1]
             path_to_spec = ".".join(path.split(".")[2:])
 
             constraint = problem.constraints.get(name=constraint_name)[0]
             tools.set_attr_from_path(constraint, path_to_spec, value)
-        
+
         if path.startswith("costs."):
             cost_name = path.split(".")[1]
 
@@ -402,14 +488,14 @@ def update_problem_with_variations(problem, realized_mission_variations_flat, co
                 cost = problem.costs.get(name=cost_name)[0]
                 path_to_spec = ".".join(path.split(".")[2:])
                 tools.set_attr_from_path(cost, path_to_spec, value)
-        
+
         if path.startswith("params."):
             path_to_param = path.split("params.")[1]
             tools.set_attr_from_path(problem.params, path_to_param, value)
-        
-    # Nondimensionalize constraints that were just updated 
+
+    # Nondimensionalize constraints that were just updated
     updated_constraint_names = set()
-    for path in realized_mission_variations_flat.keys():
+    for path in realized_mission_variations_flat:
         if path.startswith("constraints."):
             constraint_name = path.split(".")[1]
             updated_constraint_names.add(constraint_name)
@@ -417,18 +503,23 @@ def update_problem_with_variations(problem, realized_mission_variations_flat, co
         if constraint.name in updated_constraint_names:
             constraint.nondim_constraint(nondim)
 
-def run_mc_analysis(trajopt_obj):
 
+def run_mc_analysis(trajopt_obj: TrajectoryAnalyzer) -> AttrDict:
+    """Run Monte Carlo analysis over method and mission variations.
+
+    Iterates over all method variants in config.variations.method, then for each
+    method runs config.variations.mission.num randomized mission perturbations.
+    Returns per-method runs collected in an AttrDict.
+    """
     nominal_config = trajopt_obj.config
-    
+
     seed = nominal_config.get("seed", 0)
 
     orig_problem = trajopt_obj.problem
-    orig_method  = trajopt_obj.method
+    orig_method = trajopt_obj.method
     results = AttrDict({})
 
     for method_name, method_var_config in nominal_config.variations.method.items():
-
         np.random.seed(seed)
 
         # start with nominal config
@@ -439,32 +530,34 @@ def run_mc_analysis(trajopt_obj):
 
         # apply method variations to current config
         for path, val in method_var_config_flat.items():
-            if path.startswith("constraints.") or path.startswith("costs."):
+            if path.startswith(("constraints.", "costs.")):
                 tools.set_from_path(config_for_current_method.problem, path, val)
             else:
                 tools.set_from_path(config_for_current_method.method, path, val)
 
         # build a new problem and method for method variations
         index_map = IndexMap(config_for_current_method)
-        problem   = Problem(config_for_current_method, index_map=index_map)
-        method    = SolutionMethod(problem, config_for_current_method, index_map=index_map)
-        
+        problem = Problem(config_for_current_method, index_map=index_map)
+        method = SolutionMethod(problem, config_for_current_method, index_map=index_map)
+
         trajopt_obj.index_map = index_map
         trajopt_obj.problem = problem
-        trajopt_obj.method  = method
+        trajopt_obj.method = method
         trajopt_obj.solve()
 
         subprob = method.subproblem
         runs = [perform_analysis(trajopt_obj)]
 
-        mission_var_config      = config_for_current_method.variations.mission
+        mission_var_config = config_for_current_method.variations.mission
         mission_var_config_flat = tools.flatten_dict(mission_var_config)
 
         # mission variations
         realized_mission_variations_flat = AttrDict({})
         for i in range(config_for_current_method.variations.mission.num):
-            print(f"\n=== method: {method_name} | run: {i+1} / {config_for_current_method.variations.mission.num} ===")
-            
+            print(
+                f"\n=== method: {method_name} | run: {i + 1} / {config_for_current_method.variations.mission.num} ===",
+            )
+
             for path_to_spec, spec in mission_var_config_flat.items():
                 if spec == "uniform":
                     path = path_to_spec.replace(".type", "")
@@ -472,12 +565,12 @@ def run_mc_analysis(trajopt_obj):
 
                     lb = random_variable_spec["lb"]
                     ub = random_variable_spec["ub"]
-                    
+
                     delta = np.random.uniform(lb, ub)
 
                     new_val = tools.get_from_path(config_for_current_method.problem.mission, path) + delta
                     realized_mission_variations_flat[path] = new_val
-                
+
                 if spec == "normal":
                     path = path_to_spec.replace(".type", "")
                     random_variable_spec = tools.get_from_path(mission_var_config, path)
@@ -486,34 +579,43 @@ def run_mc_analysis(trajopt_obj):
 
                     delta = np.random.normal(mu, sigma)
 
-            update_problem_with_variations(problem, realized_mission_variations_flat, config_for_current_method, method.nondim)
+            update_problem_with_variations(
+                problem,
+                realized_mission_variations_flat,
+                config_for_current_method,
+                method.nondim,
+            )
             guess.set_initial_guess(problem, method)
 
-            n_N    = problem.index_map.N.time_grid
-            n_neq  = problem.index_map.n.nonconvex_inequality
-            n_dyn  = problem.index_map.n.dynamics
+            n_N = problem.index_map.N.time_grid
+            n_neq = problem.index_map.n.nonconvex_inequality
+            n_dyn = problem.index_map.n.dynamics
             n_term = problem.index_map.n.term_total
 
             # Reset iter_data like the first run: W and dual None so first iteration uses configure_penalty_weights
-            subprob.iter_data = [tools.recursive_attrdict({
-                "iter_num": 0,
-                "z_opt":  method.initial_guess.z,
-                "nu_opt": method.initial_guess.nu,
-                "conv_data": {
-                    "vb_ineq": np.zeros((n_N, n_neq)),
-                    "vb_dyn":  np.zeros((n_N - 1, n_dyn)),
-                    "vb_terminal": np.zeros((n_term, 1)),
-                },
-                "W": None,
-                "dual": None,
-                "penalty": copy.deepcopy(method.penalty),
-            })]
+            subprob.iter_data = [
+                tools.recursive_attrdict(
+                    {
+                        "iter_num": 0,
+                        "z_opt": method.initial_guess.z,
+                        "nu_opt": method.initial_guess.nu,
+                        "conv_data": {
+                            "vb_ineq": np.zeros((n_N, n_neq)),
+                            "vb_dyn": np.zeros((n_N - 1, n_dyn)),
+                            "vb_terminal": np.zeros((n_term, 1)),
+                        },
+                        "W": None,
+                        "dual": None,
+                        "penalty": copy.deepcopy(method.penalty),
+                    },
+                ),
+            ]
             trajopt_obj.solve()
             runs.append(perform_analysis(trajopt_obj, compute_iters=False))
 
         results[method_name] = AttrDict({"runs": runs})
 
     trajopt_obj.problem = orig_problem
-    trajopt_obj.method  = orig_method
-    
+    trajopt_obj.method = orig_method
+
     return results
