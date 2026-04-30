@@ -12,7 +12,6 @@ from trajopt.core.indexing.index_map import IndexMap
 from trajopt.core.problem import Problem
 from trajopt.core.scaling.nondim import Nondim
 from trajopt.core.solution_method import SolutionMethod
-from trajopt.core.trajectory_analyzer import TrajectoryAnalyzer
 from trajopt.methods.scp import integrators
 from trajopt.utils import tools
 from trajopt.utils.tools import AttrDict, recursive_attrdict
