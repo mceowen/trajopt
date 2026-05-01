@@ -1,84 +1,67 @@
-params.planet.inherit: trajopt/missions/shared/planet/earth.yaml
-params.vehicle.inherit: trajopt/missions/shared/vehicle/rlv.yaml
+# ===============================
+# FUNCTION REGISTRY
+# ===============================
+fcns:
+  nonlinear_aero: trajopt/missions/rlv_entry.py:nonlinear_aero
 
-time.scale: 1.0
+# ===============================
+# PARAMETERS
+# ===============================
+params:
+  planet:
+    inherit: trajopt/missions/planets/earth.yaml
+  vehicle:
+    inherit: trajopt/missions/vehicles/rlv.yaml
 
+# ===============================
+# CONSTRAINTS
+# ===============================
 constraints:
   initial_state:
-    type: equality_bc
-    set: state
     value: ["${params.planet.r + 79248.0}", 0.0, 0.0, 7802.88, -1.0, 90.0]
     idx: [0, 1, 2, 3, 4, 5]
-    boundary: init
-    eps: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
   final_state:
-    type: equality_bc
-    set: state
     value: ["${params.planet.r + 24384.0}", 762.0, -5.0]
     idx: [0, 3, 4]
-    boundary: final
-    eps: [0.0, 0.0, 0.0]
+    eps: [100, 10, 0.1]
 
-  altitude_bounds:
-    type: nonconvex_inequality
-    backend: casadi
-    fcn: fcns.altitude
-    min_value: [0.0]
-    max_value: [79248.0]
-    dimension: 1
-    eps: [0.0]
+  state_limits:
+    min_value: ["${params.planet.r}", 500.0, -80.0]
+    min_value_idx: [0, 3, 4]
+    max_value: ["${params.planet.r + 79248.0}", 45000.0, 80.0]
+    max_value_idx: [0, 3, 4]
 
-  velocity_bounds:
-    type: nonconvex_inequality
-    backend: casadi
-    fcn: fcns.velocity
-    min_value: [10.0]
-    max_value: [45000.0]
-    dimension: 1
-    eps: [0.0]
+  control_limits:
+    min_value: [-90.0, 17.0]
+    min_value_idx: [0, 1]
+    max_value: [1.0, 17.5]
+    max_value_idx: [0, 1]
 
-  fpa_bounds:
-    type: nonconvex_inequality
-    backend: casadi
-    fcn: fcns.fpa
-    min_value: [-80.0]
-    max_value: [80.0]
-    dimension: 1
-    eps: [0.0]
-
-  aoa_bounds:
-    type: nonconvex_inequality
-    backend: casadi
-    fcn: fcns.aoa
-    min_value: [-90.0]
-    max_value: [90.0]
-    dimension: 1
-    eps: [0.0]
-
-  bank_bounds:
-    type: nonconvex_inequality
-    backend: casadi
-    fcn: fcns.bank
-    min_value: [-90.0]
-    max_value: [1.0]
-    dimension: 1
-    eps: [0.0]
-
+# ===============================
+# COSTS
+# ===============================
 costs:
   max_crossrange:
     type: terminal_state
     idx: [2]
     sign: -1
 
+  control_rate_regularization:
+    type: rate_regularization
+    set: control
+    w: 1.0
+
+# ===============================
+# ACTIVE CONSTRAINTS AND COSTS
+# ===============================
 constraint_list:
+  - dynamics
   - initial_state
   - final_state
-  - altitude_bounds
-  - velocity_bounds
-  - fpa_bounds
-  - aoa_bounds
-  - bank_bounds
+  - state_limits
+  - control_limits
 
 cost_list:
   - max_crossrange
+  - control_rate_regularization

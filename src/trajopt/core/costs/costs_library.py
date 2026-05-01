@@ -184,7 +184,7 @@ class nonconvex:
 
         # symbolic function in dimensional units provided by user
         # (jax or sympy)
-        self.fcn_dim = tools.resolve_fcn(self.fcn_string, fcns)
+        self.fcn_dim = tools.resolve_function_from_string(self.fcn_string, fcns)
         self.fcn_nd = None
 
         # this is the symbolic nondimmed version of fcn_fim, it will

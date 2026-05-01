@@ -1,18 +1,50 @@
-type: nlp
+inherit: trajopt/methods/configs/autoscvx-term.yaml
+
+# ===============================
+# GRID SETTINGS
+# ===============================
 time_grid: 150
 
-solver:
-  name: ipopt
-  max_iter: 3000
-  tol: 1.0e-6
-  print_level: 5
+# ===============================
+# FLAGS
+# ===============================
+flags:
+  ode_fixed_dt: 1
+  equal_dt: 1
+  free_final_time: 0
+  flag_conv: 1
 
-bounds:
-  tf_lb: 0.0
-  tf_ub: 3000.0
-
+# ===============================
+# INITIAL GUESS SETTINGS
+# ===============================
 guess:
-  tf: 2000.0
-  x_start: ["${params.planet.r + 79248.0}", 0.0, 0.0, 7802.88, -1.0, 90.0]
-  x_end:   ["${params.planet.r + 24384.0}", 5.0, 15.0, 762.0, -5.0, 90.0]
-  u: [17.4, -30.0]
+  T_init: 2000.0
+  T_min: 1000.0
+  T_max: 3000.0
+  dT_max: 10.0
+
+  nl_guess_u_start: [-45.0, 17.4]
+  nl_guess_u_stop:  [-45.0, 17.4]
+
+# ===============================
+# CONVERGENCE TOLERANCES
+# ===============================
+conv:
+  eps_state:  [500, 0.0001, 0.0001, 50, 0.0001, 0.0001]
+  eps_cost:   1
+  eps_defect: [0.01]
+  eps_dyn:    [100.0, 0.1, 0.1, 30.0, 0.1, 0.1]
+  iter_max:   300
+
+# ===============================
+# WEIGHTS
+# ===============================
+weights:
+  alpha_z: 0.005
+  alpha_u: 0.005
+
+# ===============================
+# SOLVER OPTIONS
+# ===============================
+solver_opts:
+  solver: CLARABEL

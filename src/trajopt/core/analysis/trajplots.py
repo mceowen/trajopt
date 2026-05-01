@@ -1,15 +1,11 @@
 """Low-level Matplotlib helpers for plotting SCP iteration data."""
 
 from typing import Any
-
-import matplotlib.pyplot as plt
 import numpy as np
 
-from trajopt.utils import tools
-
-# matplotlib.rcParams['text.usetex'] = True
-plt.rcParams["text.usetex"] = True
-
+import matplotlib.pyplot as plt
+import trajopt.utils.tools as tools
+plt.rcParams['text.usetex'] = False
 
 class SCVXPLOTS:
     """Plotting helper for SCP trajectory data organized by method, run, and iteration."""
@@ -194,30 +190,7 @@ class SCVXPLOTS:
 
         n = len(iter_data_list)
         xs = np.arange(1, n + 1)
-        for i in range(n - 1):
-            t = i / max(n - 2, 1)
-            alpha = lrgba[3] * (0.2 + 0.8 * t)
-            ax.plot(
-                xs[i : i + 2],
-                y_data[i : i + 2, y_idx],
-                color=lrgba[:3],
-                alpha=alpha,
-                linewidth=lw,
-                linestyle=ls,
-                marker=msty,
-                markersize=msz,
-            )
-        if n >= 1:
-            ax.plot(
-                xs[-1:],
-                y_data[-1:, y_idx],
-                color=lrgba[:3],
-                alpha=lrgba[3],
-                linewidth=lw,
-                linestyle=ls,
-                marker=msty,
-                markersize=msz,
-            )
+        ax.plot(xs, y_data[:, y_idx], color=lrgba[:3], alpha=lrgba[3], linewidth=lw, linestyle=ls, marker=msty, markersize=msz)
 
     ######## LABELS AND LEGENDS ############
     def setTicks(self, ax: Any, x: bool = False, y: bool = False, ins: dict = {}) -> None:

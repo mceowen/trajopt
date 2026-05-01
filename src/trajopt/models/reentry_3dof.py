@@ -2,6 +2,7 @@ import jax
 import jax.numpy as jnp
 from jax import Array
 
+from trajopt.utils.tools import AttrDict
 jax.config.update("jax_enable_x64", True)
 
 # ===============================
@@ -9,6 +10,7 @@ jax.config.update("jax_enable_x64", True)
 # ===============================
 def dynamics(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """3-DoF atmospheric reentry dynamics."""
+
     Om = jnp.deg2rad(params.planet.omega)
     mu = params.planet.mu
 
@@ -57,6 +59,23 @@ def dynamics(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     )
 
 
+def nonlinear_aero(t: float, x: Array, u: Array, params: dict, fcns: dict) -> dict:
+    """Nonlinear aerodynamic acceleration coefficients and state"""
+    v = x[3]
+    rho = fcns.density_model(t, x, u, params, fcns)
+
+    vehicle = params.vehicle
+    mass = vehicle.mass
+    sref = vehicle.sref
+
+    coeffs = fcns.coeffs(t, x, u, params, fcns)
+
+    L = (1 / mass) * 0.5 * rho * v**2 * coeffs.cl * sref
+    D = (1 / mass) * 0.5 * rho * v**2 * coeffs.cd * sref
+
+    return AttrDict({"L": L, "D": D})
+
+
 def heat_rate(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Convective heat rate (W/m²)."""
     v = z[3]
@@ -70,22 +89,21 @@ def dynamic_pressure(t: float, z: Array, nu: Array, params: dict, fcns: dict) ->
     v = z[3]
     rho = fcns.density_model(t, z, nu, params, fcns)
 
-    return jnp.array([0.5 * rho * (v) ** 2])
+    return jnp.array([0.5 * rho * v**2])
 
 
 def aero_load(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Aerodynamic load magnitude (m/s²)."""
     aero = fcns.nonlinear_aero(t, z, nu, params, fcns)
-    L = aero.L
-    D = aero.D
 
-    return jnp.array([jnp.sqrt(L**2 + D**2)])
+    return jnp.array([jnp.sqrt(aero.L**2 + aero.D**2)])
 
 
 def vel_heat_rate(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """[velocity (m/s), heat rate (W/m²)]."""
     v = z[3]
     rho = fcns.density_model(t, z, nu, params, fcns)
+
     return jnp.array([v, params.vehicle.kQ * rho**0.5 * v**3])
 
 
@@ -93,6 +111,7 @@ def vel_dynamic_pressure(t: float, z: Array, nu: Array, params: dict, fcns: dict
     """[velocity (m/s), dynamic pressure (Pa)]."""
     v = z[3]
     rho = fcns.density_model(t, z, nu, params, fcns)
+
     return jnp.array([v, 0.5 * rho * v**2])
 
 
@@ -100,13 +119,13 @@ def vel_aero_load(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Ar
     """[velocity (m/s), aero load (m/s²)]."""
     v = z[3]
     aero = fcns.nonlinear_aero(t, z, nu, params, fcns)
+
     return jnp.array([v, jnp.sqrt(aero.L**2 + aero.D**2)])
 
 
 def vel_altitude(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """[velocity (m/s), altitude (m)]."""
     return jnp.array([z[3], z[0] - params.planet.r])
-
 
 
 def long_lat(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
@@ -148,13 +167,16 @@ def heading(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Heading angle (deg)."""
     return jnp.array([z[5]])
 
+
 def bank(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
-    """Banke angle (deg)."""
+    """Bank angle (deg)."""
     return jnp.array([nu[0]])
+
 
 def aoa(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Angle of attack (deg)."""
     return jnp.array([nu[1]])
+
 
 def exp_density(t: float, z: Array, nu: Array, params: dict, fcns: dict | None = None) -> Array:
     """Exponential atmosphere density model (kg/m³), JAX version."""
@@ -162,13 +184,12 @@ def exp_density(t: float, z: Array, nu: Array, params: dict, fcns: dict | None =
 
     return params.planet.rho * jnp.exp(-h / params.planet.H)
 
+
 def lift_drag(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Lift and drag forces for MSL."""
     aero = fcns.nonlinear_aero(t, z, nu, params, fcns)
 
-    L = aero.L
-    D = aero.D
-    return jnp.array([L, D])
+    return jnp.array([aero.L, aero.D])
 
 # ===============================
 # CASADI MODEL

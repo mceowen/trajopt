@@ -436,4 +436,3 @@ class IndexMap:
         print("\nSCALAR COUNTS (self.n):")
         for k, v in self.n.items():
             print(f"  {k:25s}: {v}")
-

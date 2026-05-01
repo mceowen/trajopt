@@ -1,55 +1,58 @@
 # ===============================
-# FUNCTIONS
+# FUNCTION REGISTRY
 # ===============================
-fcns.thrust_norm: trajopt/models/quadrotor_3dof.py:thrust_norm
-fcns.obstacle: trajopt/models/quadrotor_3dof.py:obstacle
-fcns.dynamics: trajopt/models/quadrotor_3dof.py:dynamics_jax
-fcns.height: trajopt/models/quadrotor_3dof.py:height
-fcns.pos_x: trajopt/models/quadrotor_3dof.py:pos_x
-fcns.pos_y: trajopt/models/quadrotor_3dof.py:pos_y
-
-fcns.xz: trajopt/models/quadrotor_3dof.py:xz
-fcns.yz: trajopt/models/quadrotor_3dof.py:yz
-
-# ===============================
-# FUNCTION PARAMETERS
-# ===============================
-params.planet.inherit: trajopt/missions/shared/planet/earth.yaml
-params.vehicle.inherit: trajopt/missions/shared/vehicle/quadrotor.yaml
-
-state.x.scale: 1.0
-state.y.scale: 1.0
-state.z.scale: 1.0
-state.vx.scale: 1.0
-state.vy.scale: 1.0
-state.vz.scale: 1.0
-control.Tx.scale: 1.0
-control.Ty.scale: 1.0
-control.Tz.scale: 1.0
-time.scale: 1.0
+fcns:
+  thrust_norm: trajopt/models/quadrotor_3dof.py:thrust_norm
+  obstacle:    trajopt/models/quadrotor_3dof.py:obstacle
+  dynamics:    trajopt/models/quadrotor_3dof.py:dynamics_jax
+  height:      trajopt/models/quadrotor_3dof.py:height
+  pos_x:       trajopt/models/quadrotor_3dof.py:pos_x
+  pos_y:       trajopt/models/quadrotor_3dof.py:pos_y
+  xz:          trajopt/models/quadrotor_3dof.py:xz
+  yz:          trajopt/models/quadrotor_3dof.py:yz
 
 # ===============================
-# CONSTRAINT/COST PARAMS
+# PARAMETERS
+# ===============================
+params:
+  planet:
+    inherit: trajopt/missions/planets/earth.yaml
+  vehicle:
+    inherit: trajopt/missions/vehicles/quadrotor.yaml
+
+# ===============================
+# SCALING
+# ===============================
+state:
+  x.scale:  1.0
+  y.scale:  1.0
+  z.scale:  1.0
+  vx.scale: 1.0
+  vy.scale: 1.0
+  vz.scale: 1.0
+
+control:
+  Tx.scale: 1.0
+  Ty.scale: 1.0
+  Tz.scale: 1.0
+
+time:
+  scale: 1.0
+
+# ===============================
+# CONSTRAINTS
 # ===============================
 constraints:
   dynamics:
     type: dynamics
     fcn: fcns.dynamics
-  
+
   initial_state:
     type: equality_bc
     set: state
     boundary: init
     value: [0.0, 0.0, 5.0, 0, 0.5, 0.0]
     idx: [0, 1, 2, 3, 4, 5]
-  
-  state_limits:
-    type: box
-    set: state
-    min_value: [-0.5, -0.5, 0.25]
-    min_value_idx: [0, 1, 2]
-    max_value: [12.0, 12.0, 10.0]
-    max_value_idx: [0, 1, 2]
 
   final_state:
     type: equality_bc
@@ -59,7 +62,15 @@ constraints:
     idx: [0, 1, 2, 3, 4, 5]
     value_guess: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
     eps: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
-  
+
+  state_limits:
+    type: box
+    set: state
+    min_value: [-0.5, -0.5, 0.25]
+    min_value_idx: [0, 1, 2]
+    max_value: [12.0, 12.0, 10.0]
+    max_value_idx: [0, 1, 2]
+
   initial_control:
     type: equality_bc
     set: control
@@ -73,7 +84,7 @@ constraints:
     boundary: final
     value: [0.0, 0.0, "${params.planet.g * params.vehicle.mass}"]
     idx: [0, 1, 2]
-  
+
   control_rate_limit:
     type: control_rate_limit
     value: [3.0, 3.0, 3.0]
@@ -90,31 +101,28 @@ constraints:
     group: path
     fcn: fcns.thrust_norm
     min_value: 0.21
-    eps: [0.01]
-    dimension: 1
-    # ct: 0
 
   obstacle:
     type: nonconvex_inequality
     group: path
-    fcn: "fcns.obstacle"
+    fcn: fcns.obstacle
     min_value: 4.0
-    eps: [0.01]
-    dimension: 1
-    # ct: 1
 
   low_height_stc:
     type: nonconvex_inequality
     group: path
     fcn: "((fcns.pos_x >= 5.0) and (fcns.pos_y >= 5.0)) implies (fcns.height <= 1.0)"
-    eps: [0.1]
-    scale: [1.0]
-    dimension: 1
 
+# ===============================
+# COSTS
+# ===============================
 costs:
   min_time:
     type: min_time
 
+# ===============================
+# TRAJECTORIES
+# ===============================
 trajectories:
   xz:
     type: spatial
@@ -129,19 +137,18 @@ trajectories:
 # ===============================
 # ACTIVE CONSTRAINTS AND COSTS
 # ===============================
-
 constraint_list:
   - dynamics
   - initial_state
-  - state_limits
   - final_state
+  - state_limits
   - initial_control
   - final_control
   - control_rate_limit
   - max_thrust
   - min_thrust
   - obstacle
-  #- low_height_stc
+  # - low_height_stc
 
 cost_list:
   - min_time

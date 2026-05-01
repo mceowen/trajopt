@@ -11,10 +11,11 @@ mission:
       lb: [0, 0, 0, 0, 0.0, 0.0]
       ub: [0, 0, 0,  0, 0.0, 0.0]
 
-  params.vehicle.bc:
-    type: uniform
-    lb: -20
-    ub: 20
+  params:
+    vehicle.bc:
+      type: uniform
+      lb: -20
+      ub: 20
 
 # ===============================
 # METHOD VARIATIONS

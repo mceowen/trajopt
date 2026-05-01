@@ -1,56 +1,59 @@
+# ===============================
+# FUNCTION REGISTRY
+# ===============================
+
+fcns:
+  dynamics:    trajopt/models/quadrotor_3dof.py:dynamics_jax
+  thrust_norm: trajopt/models/quadrotor_3dof.py:thrust_norm
+  obstacle:    trajopt/models/quadrotor_3dof.py:obstacle
+  height:      trajopt/models/quadrotor_3dof.py:height
+  pos_x:       trajopt/models/quadrotor_3dof.py:pos_x
+  pos_y:       trajopt/models/quadrotor_3dof.py:pos_y
+  vel_x:       trajopt/models/quadrotor_3dof.py:vel_x
+  vel_y:       trajopt/models/quadrotor_3dof.py:vel_y
+  vel_z:       trajopt/models/quadrotor_3dof.py:vel_z
+  thrust_x:    trajopt/models/quadrotor_3dof.py:thrust_x
+  thrust_y:    trajopt/models/quadrotor_3dof.py:thrust_y
+  thrust_z:    trajopt/models/quadrotor_3dof.py:thrust_z
+  xy:          trajopt/models/quadrotor_3dof.py:xy
+  xyz:         trajopt/models/quadrotor_3dof.py:xyz
+  xz:          trajopt/models/quadrotor_3dof.py:xz
+  yz:          trajopt/models/quadrotor_3dof.py:yz
+
+# ===============================
+# MODEL CONFIGURATION
+# ===============================
+
 state:
   x:
     idx: [0]
-    title: "X Position vs Time"
-    xlabel: "Time (s)"
-    ylabel: "X (m)"
   y:
     idx: [1]
-    title: "Y Position vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Y (m)"
   z:
     idx: [2]
-    title: "Z Position vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Z (m)"
   vx:
     idx: [3]
-    title: "X Velocity vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Vx (m/s)"
   vy:
     idx: [4]
-    title: "Y Velocity vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Vy (m/s)"
   vz:
     idx: [5]
-    title: "Z Velocity vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Vz (m/s)"
 
 control:
   Tx:
     idx: [0]
-    title: "X Thrust vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Tx (N)"
   Ty:
     idx: [1]
-    title: "Y Thrust vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Ty (N)"
   Tz:
     idx: [2]
-    title: "Z Thrust vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Tz (N)"
+
+# ===============================
+# TRAJECTORIES
+# ===============================
 
 trajectories:
   pos_x:
     type: time_series
-    fcn: trajopt/models/quadrotor_3dof.py:pos_x
+    fcn: fcns.pos_x
     group: state_pos
     title: "X Position vs Time"
     xlabel: "Time (s)"
@@ -58,7 +61,7 @@ trajectories:
 
   pos_y:
     type: time_series
-    fcn: trajopt/models/quadrotor_3dof.py:pos_y
+    fcn: fcns.pos_y
     group: state_pos
     title: "Y Position vs Time"
     xlabel: "Time (s)"
@@ -66,7 +69,7 @@ trajectories:
 
   height:
     type: time_series
-    fcn: trajopt/models/quadrotor_3dof.py:height
+    fcn: fcns.height
     group: state_pos
     title: "Z Position vs Time"
     xlabel: "Time (s)"
@@ -74,7 +77,7 @@ trajectories:
 
   vel_x:
     type: time_series
-    fcn: trajopt/models/quadrotor_3dof.py:vel_x
+    fcn: fcns.vel_x
     group: state_vel
     title: "X Velocity vs Time"
     xlabel: "Time (s)"
@@ -82,7 +85,7 @@ trajectories:
 
   vel_y:
     type: time_series
-    fcn: trajopt/models/quadrotor_3dof.py:vel_y
+    fcn: fcns.vel_y
     group: state_vel
     title: "Y Velocity vs Time"
     xlabel: "Time (s)"
@@ -90,7 +93,7 @@ trajectories:
 
   vel_z:
     type: time_series
-    fcn: trajopt/models/quadrotor_3dof.py:vel_z
+    fcn: fcns.vel_z
     group: state_vel
     title: "Z Velocity vs Time"
     xlabel: "Time (s)"
@@ -98,7 +101,7 @@ trajectories:
 
   thrust_x:
     type: time_series
-    fcn: trajopt/models/quadrotor_3dof.py:thrust_x
+    fcn: fcns.thrust_x
     group: control
     title: "Tx vs Time"
     xlabel: "Time (s)"
@@ -106,7 +109,7 @@ trajectories:
 
   thrust_y:
     type: time_series
-    fcn: trajopt/models/quadrotor_3dof.py:thrust_y
+    fcn: fcns.thrust_y
     group: control
     title: "Ty vs Time"
     xlabel: "Time (s)"
@@ -114,7 +117,7 @@ trajectories:
 
   thrust_z:
     type: time_series
-    fcn: trajopt/models/quadrotor_3dof.py:thrust_z
+    fcn: fcns.thrust_z
     group: control
     title: "Tz vs Time"
     xlabel: "Time (s)"
@@ -122,7 +125,7 @@ trajectories:
 
   thrust_norm_traj:
     type: time_series
-    fcn: trajopt/models/quadrotor_3dof.py:thrust_norm
+    fcn: fcns.thrust_norm
     group: control
     title: "Thrust Magnitude vs Time"
     xlabel: "Time (s)"
@@ -130,7 +133,7 @@ trajectories:
 
   xy_trajectory:
     type: spatial
-    fcn: trajopt/models/quadrotor_3dof.py:xy
+    fcn: fcns.xy
     group: position_trajectories
     title: "XY Trajectory"
     xlabel: "X (m)"
@@ -138,7 +141,7 @@ trajectories:
 
   xyz_trajectory:
     type: spatial
-    fcn: trajopt/models/quadrotor_3dof.py:xyz
+    fcn: fcns.xyz
     group: position_trajectories
     title: "XYZ Trajectory"
     xlabel: "X (m)"

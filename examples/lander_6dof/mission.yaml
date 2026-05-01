@@ -1,7 +1,6 @@
 # ===============================
 # FUNCTION REGISTRY
 # ===============================
-
 fcns:
   altitude:      trajopt/models/lander_6dof.py:altitude
   speed:         trajopt/models/lander_6dof.py:speed
@@ -13,33 +12,28 @@ fcns:
 # ===============================
 # PARAMETERS
 # ===============================
-
 params:
   planet:
     inherit: trajopt/missions/planets/nondim_planet.yaml
-  
   vehicle:
     inherit: trajopt/missions/vehicles/mikilander.yaml
 
-  zi: [4, 4, 0, 0.0, -1.0, 1.0, 0, 0, 0]
+  zi: [4, 4, 0, 0.0, -1.5, 1.5, 0, 0, 0]
 
-  # control limits
   min_thrust:   0.3
   max_thrust:   5
   theta_gimbal: 20
-  theta_tilt:   5
+  theta_tilt:   10
 
-  # altitude-triggered constraint limits
   alt_trigger:         1.0
   speed_limit:         0.5
-  angular_speed_limit: 5.0
+  angular_speed_limit: 0.5
   theta_gs:            10.0
   los_limit:           5.0
 
 # ===============================
-# BOUNDARY CONDITIONS
+# CONSTRAINTS
 # ===============================
-
 constraints:
   initial_state:
     value: ${params.zi}
@@ -59,58 +53,41 @@ constraints:
     max_value: ${params.max_thrust}
 
   min_thrust:
-    min_value: ["${params.min_thrust}"]
-    eps: [0.001]
-
-# ===============================
-# ALTITUDE-TRIGGERED CONSTRAINTS
-# ===============================
+    min_value: "${params.min_thrust}"
 
   altitude_triggered_tilt:
     type: nonconvex_inequality
     fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.tilt <= 0)"
-    eps: [0.001]
-    scale: [1.0]
 
   altitude_triggered_speed:
     type: nonconvex_inequality
     fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.speed <= ${params.speed_limit})"
-    eps: [0.001]
-    scale: [1.0]
 
   altitude_triggered_angular_speed:
     type: nonconvex_inequality
     fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.angular_speed <= ${params.angular_speed_limit})"
-    eps: [0.001]
-    scale: [1.0]
 
   altitude_triggered_glideslope:
     type: nonconvex_inequality
     fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.glide_slope <= ${params.theta_gs})"
-    eps: [0.001]
-    scale: [1.0]
 
   altitude_triggered_los:
     type: nonconvex_inequality
     fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.los <= ${params.los_limit})"
-    eps: [0.001]
-    scale: [1.0]
 
 # ===============================
 # COSTS
 # ===============================
-
 costs:
   control_rate_regularization:
     type: rate_regularization
     set: control
     norm_type: l2
-    w: 1.0
+    w: 0.1
 
 # ===============================
-# ACTIVE COSTS AND CONSTRAINTS
+# ACTIVE CONSTRAINTS AND COSTS
 # ===============================
-
 constraint_list:
   - dynamics
   - initial_state
@@ -121,9 +98,9 @@ constraint_list:
   - altitude_triggered_tilt
   - altitude_triggered_speed
   - altitude_triggered_angular_speed
-  # - altitude_triggered_glideslope
+  - altitude_triggered_glideslope
   # - altitude_triggered_los
 
 cost_list:
   - min_time
-  - control_rate_regularization
+  # - control_rate_regularization

@@ -19,6 +19,7 @@ fcns:
   heading: trajopt/models/reentry_3dof.py:heading
   bank: trajopt/models/reentry_3dof.py:bank
   aoa: trajopt/models/reentry_3dof.py:aoa
+  nonlinear_aero: trajopt/models/reentry_3dof.py:nonlinear_aero
 
 state.r:
     idx: [0]
@@ -37,6 +38,22 @@ control.bank:
     idx: [0]
 control.aoa:
     idx: [1]
+
+# ===============================
+# PROBLEM SCALES
+# ===============================
+
+state.r.scale: 1000000
+state.theta.scale: 1
+state.phi.scale: 1
+state.v.scale: 1000
+state.gamma.scale: 1
+state.psi.scale: 1
+
+control.bank.scale: 1
+control.aoa.scale: 1
+
+time.scale: 1.0
 
 # ===============================
 # CONSTRAINT MODELS
@@ -115,7 +132,6 @@ constraints.max_Q:
   group: path
   fcn: "fcns.heat_rate * 0.0001"
   eps: null
-  dimension: 1
   ct: 0
 
 constraints.max_q:
@@ -123,7 +139,6 @@ constraints.max_q:
   group: path
   fcn: "fcns.dynamic_pressure"
   eps: null
-  dimension: 1
   ct: 0
 
 constraints.max_load:
@@ -131,7 +146,6 @@ constraints.max_load:
   group: path
   fcn: "fcns.aero_load"
   eps: null
-  dimension: 1
   ct: 0
 
 # ===============================

@@ -1,5 +1,8 @@
+import importlib.resources
+import importlib.util
 import inspect
 from functools import partial
+from pathlib import Path
 
 import numpy as np
 import cvxpy as cp
@@ -195,20 +198,103 @@ def expand_to_array_if_scalar(x, n):
     
     return x
 
-def resolve_fcn(fcn_string, fcns=None):
-    if fcns and isinstance(fcn_string, str):
-        if any(op in fcn_string for op in ('<=', '>=', ' and ', ' or ', ' implies ')):
-            from trajopt.core.constraints.stl import parse_stl_expression
-            return parse_stl_expression(fcn_string, fcns)
+def resolve_function_from_string(fcn_string, fcns=None):
+    if isinstance(fcn_string, str):
+        has_stl = any(op in fcn_string for op in ('<=', '>=', ' and ', ' or ', ' implies '))
+        has_fcns_ref = 'fcns.' in fcn_string
 
-        if 'fcns.' in fcn_string:
-            ns = {}
-            for name, fn in fcns.items():
-                if 'fcns' in inspect.signature(fn).parameters:
-                    fn = partial(fn, fcns=fcns)
-                ns[name] = _FcnExpr(fn)
-            result = eval(fcn_string.replace('fcns.', ''), {'__builtins__': {}}, ns)
-            return result._fcn if isinstance(result, _FcnExpr) else result
+        if fcns is not None:
+            if not has_stl and not has_fcns_ref:
+                raise ValueError(
+                    f"Function reference '{fcn_string}' is not allowed directly in constraint/cost configs. "
+                    f"Add it to the 'fcns' dict at the top of your YAML and reference it as 'fcns.{fcn_string.rsplit(':', 1)[-1]}'."
+                )
 
-        from trajopt.utils.config_loader import resolve_function_from_path
-        return resolve_function_from_path(fcn_string)
+            if has_stl:
+                from trajopt.core.constraints.stl import parse_stl_expression
+                return parse_stl_expression(fcn_string, fcns)
+
+            if has_fcns_ref:
+                ns = {}
+                for name, fn in fcns.items():
+                    if isinstance(fn, str):
+                        fn = resolve_function_from_string(fn)
+                    if 'fcns' in inspect.signature(fn).parameters:
+                        fn = partial(fn, fcns=fcns)
+                    ns[name] = _FcnExpr(fn)
+                result = eval(fcn_string.replace('fcns.', ''), {'__builtins__': {}}, ns)
+                return result._fcn if isinstance(result, _FcnExpr) else result
+
+    file_path_str, func_name = fcn_string.rsplit(':', 1)
+    if file_path_str.startswith('trajopt/') or file_path_str.startswith('/trajopt/'):
+        file_path_str = file_path_str.lstrip('/')
+        parts = file_path_str.split('/')
+        file_path = importlib.resources.files('.'.join(parts[:-1])).joinpath(parts[-1])
+    else:
+        file_path = Path(file_path_str)
+
+    try:
+        spec = importlib.util.spec_from_file_location("dynamic_module", file_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    except Exception as e:
+        raise type(e)(f"could not load file '{file_path}' (from '{fcn_string}'): {e}") from None
+
+    try:
+        return getattr(module, func_name)
+    except AttributeError:
+        available = [n for n, obj in inspect.getmembers(module, inspect.isfunction) if obj.__module__ == module.__name__]
+        raise AttributeError(
+            f"function '{func_name}' not found in '{file_path}'\n"
+            f"  requested: '{fcn_string}'\n"
+            f"  available: {available}"
+        ) from None
+    
+def update_problem_from_config(problem, updated_config_vals_flat, nondim):
+    for path, value in updated_config_vals_flat.items():
+        
+        # update constraint value from config
+        if path.startswith("constraints."):
+            constraint_name = path.split(".")[1]
+            path_to_spec = ".".join(path.split(".")[2:])
+
+            constraint = problem.constraints.get(name=constraint_name)[0]
+            set_attr_from_path(constraint, path_to_spec, value)
+        
+        # update cost value from config changes 
+        if path.startswith("costs."):
+            cost_name = path.split(".")[1]
+
+            if cost_name in problem.costs.names:
+                cost = problem.costs.get(name=cost_name)[0]
+                path_to_spec = ".".join(path.split(".")[2:])
+                set_attr_from_path(cost, path_to_spec, value)
+        
+        if path.startswith("params."):
+            path_to_param = path.split("params.")[1]
+            set_attr_from_path(problem.params, path_to_param, value)
+        
+    # Nondimensionalize constraints that were just updated 
+    updated_constraint_names = set()
+    for path in updated_config_vals_flat.keys():
+        if path.startswith("constraints."):
+            constraint_name = path.split(".")[1]
+            updated_constraint_names.add(constraint_name)
+    
+    for constraint in problem.constraints.get():
+        if constraint.name in updated_constraint_names:
+            constraint.nondim_constraint(nondim)
+
+ITER_DATA_KEYS_TO_KEEP = {
+    "iter_num", "converged", "cost", "solve_time", "prop_time", "parse_time", "t_full",
+    "t_opt", "z_opt", "nu_opt", "dt_opt", "T_opt",
+    "t_nl", "z_nl", "nu_nl", "t_init", "z_init", "nu_init", "t_init_nl", "z_init_nl", "nu_init_nl",
+    "constraint_data", "trajectory_data", "conv_data", "W", "dual", "penalty",
+}
+
+METHOD_DATA_KEYS_TO_KEEP = {
+    'time_grid', 'N_dens', 'Npm', 'T_init', 'T_max', 'T_min', 'Ts_init', 'conv', 'conv_data', 'cost_init', 
+    'dT_max', 'ddt_max', 'dt_max', 'dt_min', 'flags', 'line_guess_u_init',
+    'name', 'n_minus', 'n_plus', 'nl_guess_u_start', 'nl_guess_u_stop', 'solver_opts',
+    'nondim', 'initial_guess', 'penalty', 'z_ind'
+}

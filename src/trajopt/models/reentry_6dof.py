@@ -2,8 +2,7 @@ import jax
 import jax.numpy as jnp
 from jax import Array
 
-jax.config.update("jax_enable_x64", True)
-
+import trajopt.models.rotations as rotations
 
 def dynamics(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """6-DoF atmospheric reentry dynamics."""
@@ -29,14 +28,14 @@ def dynamics(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     aero = fcns.nonlinear_aero(t, z, nu, params, fcns)
     a_aero_trans = (1 / mass) * aero.f_trans
 
-    v_inertial = DCM(q).T @ v_body
+    v_inertial = rotations.DCM(q).T @ v_body
 
     # rotational kinematics and dynamics (body sees control + aero moments)
-    q_dot = (1/2) * omega(w) @ q
-    w_dot = jnp.rad2deg(Jbinv @ (torque - cr(w) @ Jb @ w))
+    q_dot = (1/2) * rotations.omega(w) @ q
+    w_dot = jnp.rad2deg(Jbinv @ (torque - rotations.cr(w) @ Jb @ w))
 
     # translational accelerations
-    v_body_dot = a_aero_trans + DCM(q) @ a_grav_inertial - cr(w) @ v_body
+    v_body_dot = a_aero_trans + rotations.DCM(q) @ a_grav_inertial - rotations.cr(w) @ v_body
 
     # state derivative
     return jnp.concatenate([v_inertial, v_body_dot, q_dot, w_dot])
@@ -109,46 +108,6 @@ def altitude(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([(jnp.linalg.norm(z[0:3]) - params.planet.r)])
 
 
-def DCM(q: Array) -> Array:
-    """Direction cosine matrix (inertial → body) from unit quaternion [q0, q1, q2, q3]."""
-    return jnp.array(
-        [
-            [
-                1 - 2 * (q[2] ** 2 + q[3] ** 2),
-                2 * (q[1] * q[2] + q[0] * q[3]),
-                2 * (q[1] * q[3] - q[0] * q[2]),
-            ],
-            [
-                2 * (q[1] * q[2] - q[0] * q[3]),
-                1 - 2 * (q[1] ** 2 + q[3] ** 2),
-                2 * (q[2] * q[3] + q[0] * q[1]),
-            ],
-            [
-                2 * (q[1] * q[3] + q[0] * q[2]),
-                2 * (q[2] * q[3] - q[0] * q[1]),
-                1 - 2 * (q[1] ** 2 + q[2] ** 2),
-            ],
-        ],
-    )
-
-
-def omega(w: Array) -> Array:
-    """Skew-symmetric quaternion kinematic matrix for angular velocity w."""
-    return jnp.array(
-        [
-            [0, -w[0], -w[1], -w[2]],
-            [w[0], 0, w[2], -w[1]],
-            [w[1], -w[2], 0, w[0]],
-            [w[2], w[1], -w[0], 0],
-        ],
-    )
-
-
-def cr(v: Array) -> Array:
-    """Skew-symmetric cross-product matrix for vector v."""
-    return jnp.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
-
-
 def R_vec_theta(n: Array, theta_deg: float) -> Array:
     """Rotation matrix for a rotation of theta_deg degrees about unit vector n."""
     theta_rad = jnp.deg2rad(theta_deg)
@@ -157,11 +116,11 @@ def R_vec_theta(n: Array, theta_deg: float) -> Array:
     return (
         jnp.outer(n_hat, n_hat)
         + jnp.cos(theta_rad) * (jnp.eye(3) - jnp.outer(n_hat, n_hat))
-        + jnp.sin(theta_rad) * cr(n_hat)
+        + jnp.sin(theta_rad) * rotations.cr(n_hat)
     )
 
 
-def quat_from_dcm(C: Array) -> Array:
+def quat_from_DCM(C: Array) -> Array:
     """Quaternion [q0, q1, q2, q3] from a direction cosine matrix C."""
     q_0 = 0.5 * jnp.sqrt(C[0, 0] + C[1, 1] + C[2, 2] + 1)
     q_1 = (C[1, 2] - C[2, 1]) / (4 * q_0)
@@ -191,12 +150,12 @@ def bank_aoa_to_quat(v_vec: Array, r_vec: Array, sigma_deg: float, alpha_deg: fl
     B_frame = R_vec_theta(v_hat, sigma_deg) @ B_frame
 
     # quaternion from DCM
-    return quat_from_dcm(B_frame.T)
+    return quat_from_DCM(B_frame.T)
 
 
 def quat_to_bank_aoa(q: Array, v_vec: Array, r_vec: Array) -> tuple[Array, Array, Array]:
     """Extract bank angle, AoA, and sideslip from a quaternion."""
-    DCM_I2B = DCM(q)
+    DCM_I2B = rotations.DCM(q)
 
     # alpha and beta from body-frame velocity direction
     v_body = DCM_I2B @ v_vec
@@ -305,7 +264,7 @@ def polar_fpa(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     v_body = z[3:6]
     q = z[6:10]
 
-    v_inertial = DCM(q).T @ v_body
+    v_inertial = rotations.DCM(q).T @ v_body
     r_hat = r / jnp.linalg.norm(r)
     v_mag = jnp.maximum(jnp.linalg.norm(v_inertial), 1e-10)
     gamma = jnp.rad2deg(jnp.arcsin(jnp.dot(v_inertial, r_hat) / v_mag))
@@ -319,7 +278,7 @@ def polar_heading(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Ar
     v_body = z[3:6]
     q = z[6:10]
 
-    v_inertial = DCM(q).T @ v_body
+    v_inertial = rotations.DCM(q).T @ v_body
     r_hat = r / jnp.linalg.norm(r)
 
     v_horiz = v_inertial - jnp.dot(v_inertial, r_hat) * r_hat

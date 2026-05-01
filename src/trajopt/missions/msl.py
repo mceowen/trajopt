@@ -2,36 +2,21 @@ import jax
 import jax.numpy as jnp
 from jax import Array
 from trajopt.utils.tools import AttrDict
-
 jax.config.update("jax_enable_x64", True)
 
-def nonlinear_aero_jax(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> dict:
-    """Nonlinear aerodynamic force coefficients and state for MSL, JAX version."""
-    v = z[3]
-    rho = fcns.density_model(t, z, nu, params)
-    rho = fcns.density_model(t, z, nu, params)
-
+def coeffs_entry(t, x, u, params, fcns):
     vehicle = params.vehicle
+    mass = vehicle.mass
+    sref = vehicle.sref
 
-    mass       = vehicle.mass
-    sref_shell = vehicle.sref_shell
-    sref_chute = vehicle.sref_chute
-    LD         = vehicle.LD
-    bc         = vehicle.bc
+    LD = vehicle.LD
+    bc = vehicle.bc
 
-    Cd_entry = mass / (bc * sref_shell)
-    Cl_entry = Cd_entry * LD
+    cd_entry = mass / (bc * sref)
+    cl_entry = cd_entry * LD
 
-    Cd_chute = 0.55
-    Cl_chute = 0.0
+    return AttrDict({"cd": cd_entry, "cl": cl_entry})
 
-    p = params.get('p', 0)
+def coeffs_descent(t, x, u, params, fcns):
 
-    Cd   = (1 - p) * Cd_entry   + p * Cd_chute
-    Cl   = (1 - p) * Cl_entry   + p * Cl_chute
-    sref = (1 - p) * sref_shell + p * sref_chute
-
-    L = (1 / mass) * 0.5 * rho * v**2 * Cl * sref
-    D = (1 / mass) * 0.5 * rho * v**2 * Cd * sref
-
-    return AttrDict({"L": L, "D": D, "alpha": 0, "rho": rho})
+    return AttrDict({"cd": 0.55, "cl": 0.0})

@@ -21,7 +21,8 @@ class Constraints:
         print("constraints:")
 
         self.index_map = index_map
-        self.constraints_list: list = []
+        self.constraints_list = []
+        self.params = config.problem.params
 
         for i, (cnstr_name, cnstr_config_i) in enumerate(config.problem.constraints.items()):
             print(f"  {i}: {cnstr_name}: type: {cnstr_config_i.type}")
@@ -42,7 +43,7 @@ class Constraints:
         cnstr_type = cnstr_config["type"]
         constraintClass = getattr(constraints_library, cnstr_type)
 
-        cnstr_object = constraintClass(cnstr_config, index_map, fcns=fcns)
+        cnstr_object = constraintClass(cnstr_config, index_map, fcns=fcns, params=self.params)
         self.constraints_list.append(cnstr_object)
 
     def get(self, **kwargs: Any) -> list:

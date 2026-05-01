@@ -1,88 +1,155 @@
 # ===============================
+# FUNCTION REGISTRY
+# ===============================
+
+fcns:
+  # dynamics / constraints
+  dynamics:           trajopt/models/lander_6dof.py:dynamics
+  thrust:             trajopt/models/lander_6dof.py:thrust
+
+  # state trajectories
+  mass:               trajopt/models/lander_6dof.py:mass
+  pos_vec:            trajopt/models/lander_6dof.py:pos_vec
+  vel_vec:            trajopt/models/lander_6dof.py:vel_vec
+  quat_vec:           trajopt/models/lander_6dof.py:quat_vec
+  ang_vel_vec:        trajopt/models/lander_6dof.py:ang_vel_vec
+
+  # control trajectories
+  thrust_x:           trajopt/models/lander_6dof.py:thrust_x
+  thrust_y:           trajopt/models/lander_6dof.py:thrust_y
+  thrust_z:           trajopt/models/lander_6dof.py:thrust_z
+  thrust_mag:         trajopt/models/lander_6dof.py:thrust_mag
+
+  # spatial trajectories
+  traj_yz:            trajopt/models/lander_6dof.py:traj_yz
+  traj_y_alt:         trajopt/models/lander_6dof.py:traj_y_alt
+  traj_3d:            trajopt/models/lander_6dof.py:traj_3d
+
+  # quiver directions — Y-Z footprint
+  body_x_dir_yz:      trajopt/models/lander_6dof.py:body_x_dir_yz
+  thrust_dir_yz:      trajopt/models/lander_6dof.py:thrust_dir_yz
+
+  # quiver directions — Y vs altitude
+  body_x_dir_y_alt:   trajopt/models/lander_6dof.py:body_x_dir_y_alt
+  thrust_dir_y_alt:   trajopt/models/lander_6dof.py:thrust_dir_y_alt
+
+  # quiver directions — 3D
+  body_x_dir_3d:      trajopt/models/lander_6dof.py:body_x_dir_3d
+  thrust_dir_3d:      trajopt/models/lander_6dof.py:thrust_dir_3d
+
+  # STL constraint trajectories
+  altitude_traj:      trajopt/models/lander_6dof.py:altitude_traj
+  speed_traj:         trajopt/models/lander_6dof.py:speed_traj
+  angular_speed_traj: trajopt/models/lander_6dof.py:angular_speed_traj
+  glide_slope_traj:   trajopt/models/lander_6dof.py:glide_slope_traj
+  tilt_traj:          trajopt/models/lander_6dof.py:tilt_traj
+  los_traj:           trajopt/models/lander_6dof.py:los_traj
+
+  # spatial overlays
+  glideslope_cone:    trajopt/models/lander_6dof.py:glideslope_cone
+  glideslope_cone_3d: trajopt/models/lander_6dof.py:glideslope_cone_3d
+
+# ===============================
 # MODEL CONFIGURATION
 # ===============================
 
-state: 
-  mass.idx: [0]
-  pos.idx: [1, 2, 3]
-  vel.idx: [4, 5, 6]
-  quat.idx: [7, 8, 9, 10]
-  angv.idx: [11, 12, 13]
+state:
+  mass:
+    idx: [0]
+    scale: 1
+  pos:
+    idx: [1, 2, 3]
+    scale: 1
+  vel:
+    idx: [4, 5, 6]
+    scale: 1
+  quat:
+    idx: [7, 8, 9, 10]
+    scale: 1
+  angv:
+    idx: [11, 12, 13]
+    scale: 1
 
 control:
-  thrust.idx: [0, 1, 2]
+  thrust:
+    idx: [0, 1, 2]
+    scale: 1
+
+time:
+  scale: 1
 
 # ===============================
-# CONSTRAINT MODELS
+# CONSTRAINTS
 # ===============================
 
-constraints.dynamics:
-  type: dynamics
-  fcn: trajopt/models/lander_6dof.py:dynamics
+constraints:
+  dynamics:
+    type: dynamics
+    fcn: fcns.dynamics
 
-constraints.initial_state:
-  type: equality_bc
-  set: state
-  boundary: init
+  initial_state:
+    type: equality_bc
+    set: state
+    boundary: init
 
-constraints.final_state:
-  type: equality_bc
-  set: state
-  boundary: final
+  final_state:
+    type: equality_bc
+    set: state
+    boundary: final
 
-constraints.final_control:
-  type: equality_bc
-  set: control
-  boundary: final
+  final_control:
+    type: equality_bc
+    set: control
+    boundary: final
 
-constraints.state_limits:
-  type: box
-  set: state
+  state_limits:
+    type: box
+    set: state
 
-constraints.gimbal_limit:
-  type: axis_angle_cone
-  set: control
-  axis: [1, 0, 0]
-  idx: [0, 1, 2]
+  gimbal_limit:
+    type: axis_angle_cone
+    set: control
+    axis: [1, 0, 0]
+    idx: [0, 1, 2]
 
-constraints.glide_slope:
-  type: axis_angle_cone
-  set: state
-  axis: [1, 0, 0]
-  idx: [1, 2, 3]
+  glide_slope:
+    type: axis_angle_cone
+    set: state
+    axis: [1, 0, 0]
+    idx: [1, 2, 3]
 
-constraints.max_thrust:
-  type: max_norm_cone
-  set: control
-  idx: [0, 1, 2]
+  max_thrust:
+    type: max_norm_cone
+    set: control
+    idx: [0, 1, 2]
 
-constraints.max_angular_velocity:
-  type: max_norm_cone
-  set: state
-  idx: [11, 12, 13]
+  max_angular_velocity:
+    type: max_norm_cone
+    set: state
+    idx: [11, 12, 13]
 
-constraints.tilt_limit:
-  type: quaternion_cone
-  axis_num: 1
-  quat_start_idx: 7
+  tilt_limit:
+    type: quaternion_cone
+    axis_num: 1
+    quat_start_idx: 7
 
-constraints.min_thrust:
-  type: nonconvex_inequality
-  group: path
-  fcn: trajopt/models/lander_6dof.py:thrust
-  dimension: 1
-  ct: 0
+  min_thrust:
+    type: nonconvex_inequality
+    group: path
+    fcn: fcns.thrust
+    ct: 0
 
 # ===============================
-# COST MODELS
+# COSTS
 # ===============================
 
-costs.min_time:
-  type: min_time
+costs:
+  min_time:
+    type: min_time
 
-costs.control_effort:
-  type: control_effort
-  idx: [0, 1, 2]
+  control_effort:
+    type: control_effort
+    idx: [0, 1, 2]
 
 # ===============================
 # TRAJECTORIES
@@ -91,7 +158,7 @@ costs.control_effort:
 trajectories:
   position:
     type: time_series
-    fcn: trajopt/models/lander_6dof.py:pos_vec
+    fcn: fcns.pos_vec
     group: state
     title: "Position vs Time"
     xlabel: "Time (s)"
@@ -99,7 +166,7 @@ trajectories:
 
   velocity:
     type: time_series
-    fcn: trajopt/models/lander_6dof.py:vel_vec
+    fcn: fcns.vel_vec
     group: state
     title: "Velocity vs Time"
     xlabel: "Time (s)"
@@ -107,7 +174,7 @@ trajectories:
 
   quaternion:
     type: time_series
-    fcn: trajopt/models/lander_6dof.py:quat_vec
+    fcn: fcns.quat_vec
     group: state
     title: "Quaternion vs Time"
     xlabel: "Time (s)"
@@ -115,15 +182,15 @@ trajectories:
 
   angular_velocity:
     type: time_series
-    fcn: trajopt/models/lander_6dof.py:ang_vel_vec
+    fcn: fcns.ang_vel_vec
     group: state
     title: "Angular Velocity vs Time"
     xlabel: "Time (s)"
-    ylabel: "ω (rad/s)"
+    ylabel: "$\\omega$ (rad/s)"
 
   thrust_x:
     type: time_series
-    fcn: trajopt/models/lander_6dof.py:thrust_x
+    fcn: fcns.thrust_x
     group: control
     title: "Tx vs Time"
     xlabel: "Time (s)"
@@ -131,7 +198,7 @@ trajectories:
 
   thrust_y:
     type: time_series
-    fcn: trajopt/models/lander_6dof.py:thrust_y
+    fcn: fcns.thrust_y
     group: control
     title: "Ty vs Time"
     xlabel: "Time (s)"
@@ -139,7 +206,7 @@ trajectories:
 
   thrust_z:
     type: time_series
-    fcn: trajopt/models/lander_6dof.py:thrust_z
+    fcn: fcns.thrust_z
     group: control
     title: "Tz vs Time"
     xlabel: "Time (s)"
@@ -147,15 +214,15 @@ trajectories:
 
   thrust_mag:
     type: time_series
-    fcn: trajopt/models/lander_6dof.py:thrust_mag
+    fcn: fcns.thrust_mag
     group: control
     title: "Thrust Magnitude vs Time"
     xlabel: "Time (s)"
-    ylabel: "‖T‖ (N)"
+    ylabel: "$\\|T\\|$ (N)"
 
   mass:
     type: time_series
-    fcn: trajopt/models/lander_6dof.py:mass
+    fcn: fcns.mass
     group: state_mass
     title: "Mass vs Time"
     xlabel: "Time (s)"
@@ -163,21 +230,23 @@ trajectories:
 
   traj_yz:
     type: spatial
-    fcn: trajopt/models/lander_6dof.py:traj_yz
+    fcn: fcns.traj_yz
     group: position_traj_yz
     title: "Y-Z Footprint"
     xlabel: "Y (m)"
     ylabel: "Z (m)"
+    equal_aspect: true
+    limits_opt_only: true
     quivers:
       body_x:
-        fcn: trajopt/models/lander_6dof.py:body_x_dir_yz
+        fcn: fcns.body_x_dir_yz
         scale: 0.25
         color: [0, 0, 0]
         alpha: 1.0
         stride: 1
         linewidth: 2.5
       thrust:
-        fcn: trajopt/models/lander_6dof.py:thrust_dir_yz
+        fcn: fcns.thrust_dir_yz
         scale: 0.25
         color: [0.95, 0.45, 0.0]
         alpha: 0.9
@@ -187,21 +256,30 @@ trajectories:
 
   traj_y_alt:
     type: spatial
-    fcn: trajopt/models/lander_6dof.py:traj_y_alt
+    fcn: fcns.traj_y_alt
     group: position_traj_y_alt
     title: "Altitude vs Y"
     xlabel: "Y (m)"
     ylabel: "Altitude (m)"
+    equal_aspect: true
+    limits_opt_only: true
+    overlays:
+      glideslope:
+        fcn: fcns.glideslope_cone
+        color: [0, 0, 0]
+        ls: ':'
+        lw: 1.2
+        alpha: 0.6
     quivers:
       body_x:
-        fcn: trajopt/models/lander_6dof.py:body_x_dir_y_alt
+        fcn: fcns.body_x_dir_y_alt
         scale: 0.25
         color: [0, 0, 0]
         alpha: 1.0
         stride: 1
         linewidth: 2.5
       thrust:
-        fcn: trajopt/models/lander_6dof.py:thrust_dir_y_alt
+        fcn: fcns.thrust_dir_y_alt
         scale: 0.25
         color: [0.95, 0.45, 0.0]
         alpha: 0.9
@@ -211,28 +289,93 @@ trajectories:
 
   traj_3d:
     type: spatial
-    fcn: trajopt/models/lander_6dof.py:traj_3d
+    fcn: fcns.traj_3d
     group: position_traj_3d
     title: "3D Trajectory"
     xlabel: "Y (m)"
     ylabel: "Z (m)"
     zlabel: "Altitude (m)"
+    limits_opt_only: true
+    overlays:
+      glideslope:
+        fcn: fcns.glideslope_cone_3d
+        color: [0, 0, 0]
+        ls: ':'
+        lw: 0.8
+        alpha: 0.4
     quivers:
       body_x:
-        fcn: trajopt/models/lander_6dof.py:body_x_dir_3d
-        scale: 0.6
+        fcn: fcns.body_x_dir_3d
+        scale: 0.15
         color: [0, 0, 0]
         alpha: 1.0
         stride: 1
         linewidth: 1.2
       thrust:
-        fcn: trajopt/models/lander_6dof.py:thrust_dir_3d
-        scale: 0.6
+        fcn: fcns.thrust_dir_3d
+        scale: 0.15
         color: [0.95, 0.45, 0.0]
         alpha: 0.9
         stride: 1
         linewidth: 0.8
         negate: true
+
+  stl_altitude:
+    type: time_series
+    fcn: fcns.altitude_traj
+    group: stl_constraints
+    title: "Altitude vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Altitude"
+    upper_limit: ${params.alt_trigger}
+    trigger_line:
+      threshold: ${params.alt_trigger}
+      direction: below
+
+  stl_speed:
+    type: time_series
+    fcn: fcns.speed_traj
+    group: stl_constraints
+    title: "Speed vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Speed"
+    upper_limit: ${params.speed_limit}
+
+  stl_angular_speed:
+    type: time_series
+    fcn: fcns.angular_speed_traj
+    group: stl_constraints
+    title: "Angular Speed vs Time"
+    xlabel: "Time (s)"
+    ylabel: "$\\|\\omega\\|$ (rad/s)"
+    upper_limit: ${params.angular_speed_limit}
+
+  stl_glide_slope:
+    type: time_series
+    fcn: fcns.glide_slope_traj
+    group: stl_constraints
+    title: "Glide Slope Angle vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Angle (deg)"
+    upper_limit: ${params.theta_gs}
+
+  stl_tilt:
+    type: time_series
+    fcn: fcns.tilt_traj
+    group: stl_constraints
+    title: "Tilt Angle vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Angle (deg)"
+    upper_limit: ${params.theta_tilt}
+
+  stl_los:
+    type: time_series
+    fcn: fcns.los_traj
+    group: stl_constraints
+    title: "LOS Angle vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Angle (deg)"
+    upper_limit: ${params.los_limit}
 
 # ===============================
 # PLOT CONFIGURATION
@@ -256,9 +399,21 @@ plot_config:
       grid_gap_x: 0.08
       margins: [0.08, 0.02, 0.06, 0.14]
 
-    # position_traj:
-    #   figsize: [12, 3.2]
-    #   width_ratios: [1, 1, 2]
-    #   grid_gap_x: -0.04
-    #   pad_3d: 0.0
-    #   margins: [0.06, 0.02, 0.06, 0.14]
+    position_traj_yz:
+      figsize: [5, 5]
+      margins: [0.14, 0.04, 0.10, 0.14]
+
+    position_traj_y_alt:
+      figsize: [6, 5]
+      margins: [0.14, 0.04, 0.10, 0.14]
+
+    position_traj_3d:
+      figsize: [6, 5]
+      pad_3d: 0.0
+      margins: [0.08, 0.04, 0.08, 0.12]
+
+    stl_constraints:
+      figsize: [14, 5.5]
+      grid_gap_x: 0.08
+      grid_gap_y: 0.20
+      margins: [0.06, 0.02, 0.06, 0.12]

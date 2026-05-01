@@ -11,10 +11,10 @@ from trajopt.methods.scp.subproblem_constraints import SubproblemConstraints, co
 from trajopt.utils import tools
 from trajopt.utils.tools import recursive_attrdict
 
-
 # =========================
 # Subproblem (build-once)
 # =========================
+
 class Subproblem:
     """Reusable convex SCP with full baseline functionality & DPP updates."""
 
@@ -178,11 +178,11 @@ class Subproblem:
         # duals (same ≥1-column pattern, unified inequality structure)
         self.dual = tools.AttrDict()
         self.dual.nonconvex_inequality = cp.Parameter((N, max(self.n.nonconvex_inequality, 1)), name="dual_ineq")
-        self.dual.dynamics = cp.Parameter((N - 1, max(n_z, 1)), name="dual_dyn")
-        self.dual.plus_real = cp.Parameter((max(self.N.pm_real, 1), max(self.n.plus_real, 1)), name="dual_plus_real")
-        self.dual.minus_real = cp.Parameter((max(self.N.pm_real, 1), max(self.n.minus_real, 1)), name="dual_minus_real")
-        self.dual.plus_ctcs = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.plus_ctcs, 1)), name="dual_plus_ctcs")
-        self.dual.minus_ctcs = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.minus_ctcs, 1)), name="dual_minus_ctcs")
+        self.dual.dynamics    = cp.Parameter((N - 1, max(n_z, 1)), name="dual_dyn")
+        self.dual.plus_real   = cp.Parameter((max(self.N.pm_real, 1), max(self.n.plus_real, 1)), name="dual_plus_real")
+        self.dual.minus_real  = cp.Parameter((max(self.N.pm_real, 1), max(self.n.minus_real, 1)), name="dual_minus_real")
+        self.dual.plus_ctcs   = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.plus_ctcs, 1)), name="dual_plus_ctcs")
+        self.dual.minus_ctcs  = cp.Parameter((max(self.N.pm_ctcs, 1), max(self.n.minus_ctcs, 1)), name="dual_minus_ctcs")
         self.dual.final_state = cp.Parameter((max(self.n.term_total, 1),), name="dual_term")
 
         # CTCS epsilon (scalar)
@@ -674,6 +674,9 @@ class Subproblem:
                     <= constraint.rhs
                 )
 
+        if bool(self.flags.free_final_time):
+            C.append(0.0 <= self.s_ref[N - 1, 0] + self.ds[N - 1, 0])
+
         self.cp_constraints += C
 
     # ============================================================
@@ -709,9 +712,8 @@ class Subproblem:
 
         for cost in problem.costs.get(type="terminal_state"):
             zf = self.z_ref[-1] + self.dz[-1]
-
             idx = cost.idx
-            self.TRUE += self.w.cost * zf[idx]
+            self.TRUE += cost.sign * self.w.cost * zf[idx]
 
         for cost in problem.costs.get(type="regularization"):
             if cost.set == "control":
@@ -791,9 +793,8 @@ class Subproblem:
         # Solve subproblem
         solver_name = self.method.solver_opts.get("solver", "CLARABEL")
         solver_kwargs = {k: v for k, v in self.method.solver_opts.items() if k != "solver"}
-        ignore_dpp = self.method.flags.ignore_dpp
         self.cp_subproblem.solve(
-            solver=solver_name, warm_start=False, ignore_dpp=ignore_dpp, **solver_kwargs
+            solver=solver_name, warm_start=False, **solver_kwargs
         )
 
         # Create unified record for this iteration and append
@@ -982,7 +983,6 @@ class Subproblem:
         rec.dnu = dnu_val
         rec.dt = dt_val
 
-        # outputs (absolute trajectories)
         rec.z_opt = dz_val + input_for_iter.z_ref
         rec.nu_opt = dnu_val + input_for_iter.nu_ref
 
@@ -1068,7 +1068,7 @@ class Subproblem:
         iter_num = rec.iter_num
 
         if flag == "1":
-            dual_update_info = hp.autotune1(self, conv_data, iter_num)
+            dual_update_info = hp.autotune1(self, conv_data, conv_data_prev, iter_num)
             rec.dual_update = dual_update_info
         elif flag == "2":
             weight_update_info = hp.autotune2(self, conv_data, conv_data_prev, iter_num)

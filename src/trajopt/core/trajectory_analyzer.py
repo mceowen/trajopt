@@ -1,44 +1,33 @@
-from trajopt.core.indexing.index_map import IndexMap
+import copy
 from trajopt.core.problem import Problem
+from trajopt.core.indexing.index_map import IndexMap
 from trajopt.core.solution_method import SolutionMethod
-import trajopt.utils.config_loader as cfg
-import trajopt.methods.scp.scp as scp
+import trajopt.utils.config_loader as config_loader
 import trajopt.core.analysis.analysis as analysis
 import trajopt.core.analysis.plotting as plotting
-from trajopt.core.analysis.trajplots import *
 
 class TrajectoryAnalyzer:
-
     def __init__(self, mission, model, method, variations=None):
 
-        self.config = cfg.load_trajopt_config(mission, model, method, variations)
+        self.config = config_loader.load_trajopt_config(mission, model, method, variations)
+        # Save a clean copy before initialize() mutates conv tolerances in-place
+        self._raw_config = copy.deepcopy(self.config)
 
         index_map    = IndexMap(self.config)
         self.problem = Problem(self.config, index_map=index_map)
+        self.method  = SolutionMethod(self.problem, self.config, index_map)
+
+        self.method.initialize()
 
         self.solution         = None
         self.results          = None
         self.variation_config = None
 
-        if self.config.method.get('type', 'scp') == 'nlp':
-            index_map.update_index_map(problem=self.problem)
-            self.method = None
-        else:
-            self.method = SolutionMethod(self.problem, self.config, index_map=index_map)
-
     def solve(self):
-        if self.config.method.get('type', 'scp') == 'nlp':
-            import trajopt.methods.nlp.multiple_shooting as ms
-            self.solution = ms.solve(self)
-        else:
-            scp.run_scp(self)
+        self.method.solve()
 
     def analyze(self, analysis_type="standalone", compute_iters=False):
         self.analysis_type = analysis_type
-
-        if self.config.method.get('type', 'scp') == 'nlp':
-            self.results = analysis.run_nlp_analysis(self)
-            return self.results
 
         if analysis_type == "standalone":
             self.results = analysis.run_standalone_analysis(self, show_iters=compute_iters)
@@ -49,4 +38,4 @@ class TrajectoryAnalyzer:
         return self.results
 
     def plot(self, data, analysis_type="standalone", show_iters=False, animate=False, show_runs=None):
-        plotting.plot_default(self, data, analysis_type, show_iters=show_iters, show_runs=show_runs)
+        plotting.plot(self, data, show_iters=show_iters)

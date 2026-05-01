@@ -1,33 +1,21 @@
 # ===============================
-# FUNCTIONS
+# FUNCTION REGISTRY
 # ===============================
-fcns.nonlinear_aero: trajopt/missions/vtol.py:nonlinear_aero_jax
+fcns:
+  nonlinear_aero: trajopt/missions/vtol.py:nonlinear_aero_jax
 
 # ===============================
-# FUNCTION PARAMETERS
+# PARAMETERS
 # ===============================
-
-params.planet.inherit: trajopt/missions/shared/planet/earth.yaml
-params.vehicle.inherit: trajopt/missions/shared/vehicle/vtol.yaml
-
-# ===============================
-# PROBLEM SCALES
-# ===============================
-
-state.r.scale: 1000000
-state.theta.scale: 1
-state.phi.scale: 1
-state.v.scale: 1000
-state.gamma.scale: 1
-state.psi.scale: 1
-
-control.bank.scale: 1
-time.scale: 1.0
+params:
+  planet:
+    inherit: trajopt/missions/planets/earth.yaml
+  vehicle:
+    inherit: trajopt/missions/vehicles/vtol.yaml
 
 # ===============================
-# CONSTRAINT/COST PARAMS
+# CONSTRAINTS
 # ===============================
-
 constraints:
   initial_state:
     value: ["${params.planet.r + 100e3}", 0.0, 0.0, 7450, -0.5, 0.0]
@@ -51,34 +39,47 @@ constraints:
   bank_angle_rate_limit:
     value: [10]
     idx: [0]
-  
+
   max_Q:
     max_value: 33300
     scale: [33300]
     eps: [0.01]
-  
+
   max_q:
     max_value: 18000
-    # ct: 1
     scale: [18000]
     eps: [0.01]
-  
+
   max_load:
     max_value: 24.525
-    # ct: 1
     scale: [24.525]
     eps: [0.01]
 
+# ===============================
+# COSTS
+# ===============================
 costs:
   control_rate_regularization:
     type: rate_regularization
     set: control
-    w: 0.1
+    w: 1.0
+
+# ===============================
+# TRAJECTORIES
+# ===============================
+trajectories:
+  heat_rate:
+    upper_limit: 3.33
+
+  dynamic_pressure:
+    upper_limit: 18.0
+
+  aero_load:
+    upper_limit: "${24.525 / 9.81}"
 
 # ===============================
 # ACTIVE CONSTRAINTS AND COSTS
 # ===============================
-
 constraint_list:
   - dynamics
   - initial_state
@@ -90,16 +91,6 @@ constraint_list:
   - max_q
   - max_load
 
-cost_list: 
+cost_list:
   - min_terminal_velocity
-  - control_rate_regularization
-
-trajectories:
-  heat_rate:
-    upper_limit: 3.33
-  
-  dynamic_pressure:
-    upper_limit: 18.0
-  
-  aero_load:
-    upper_limit: "${24.525 / 9.81}"
+  # - control_rate_regularization

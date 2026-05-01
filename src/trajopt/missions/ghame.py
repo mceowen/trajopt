@@ -34,4 +34,3 @@ def nonlinear_aero_jax(t, x, u, params, fcns):
     D = 0.5 * (1 / mass) * rho * sref * Cd * v**2
 
     return AttrDict({"L": L, "D": D, "Cl": Cl, "Cd": Cd, "alpha": alpha_deg, "rho": rho})
-

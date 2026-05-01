@@ -2,7 +2,7 @@
 # PARAMETERS AND FUNCTIONS
 # ===============================
 params:
-  planet.inherit: trajopt/missions/shared/planet/mars.yaml
+  planet.inherit: trajopt/missions/planets/mars.yaml
   vehicle.inherit: trajopt/local/vehicles/cobra.yaml
 
 fcns:
@@ -101,49 +101,41 @@ constraints.max_Q:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/models/reentry_6dof.py:heat_rate
-  dimension: 1
 
 constraints.max_q:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/models/reentry_6dof.py:dynamic_pressure
-  dimension: 1
 
 constraints.max_load:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/models/reentry_6dof.py:aero_load
-  dimension: 1
 
 constraints.minimum_velocity:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/models/reentry_6dof.py:velocity
-  dimension: 1
 
 constraints.minimum_altitude:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/models/reentry_6dof.py:altitude
-  dimension: 1
 
 constraints.aoa_limits:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/models/reentry_6dof.py:aoa
-  dimension: 1
 
 constraints.sideslip_limits:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/models/reentry_6dof.py:sideslip
-  dimension: 1
 
 constraints.terminal_altitude:
   type: nonconvex_inequality
   group: path
   fcn: trajopt/models/reentry_6dof.py:altitude
-  dimension: 1
 
 costs.min_time:
   type: min_time
