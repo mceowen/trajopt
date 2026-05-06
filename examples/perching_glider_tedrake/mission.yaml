@@ -12,9 +12,6 @@ params:
   rho: 1.204  # air density (kg/m^3).
   g: 9.81  # gravity
 
-  self.elevator_lower_limit: -0.9473
-  self.elevator_upper_limit: 0.4463
-
 constraints:
   dynamics:
     type: dynamics
@@ -50,6 +47,7 @@ constraint_list:
   - dynamics
   - initial_state
   - final_state
+  - state_limits
   - terminal_box
 
 cost_list:

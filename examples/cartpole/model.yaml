@@ -1,0 +1,70 @@
+# source: https://underactuated.mit.edu/acrobot.html#cart_pole
+
+fcns:
+  dynamics: cartpole.py:dynamics
+  u_squared_cost: cartpole.py:u_squared_cost
+  state_pos: cartpole.py:state_pos
+  state_vel: cartpole.py:state_vel
+  control_force: cartpole.py:control_force
+  cart_pos: cartpole.py:cart_pos
+  pole_dir: cartpole.py:pole_dir
+
+state:
+  x1:
+    idx: [0]
+    scale: 1
+  theta:
+    idx: [1]
+    scale: 1
+  x1dot:
+    idx: [2]
+    scale: 1
+  thetadot:
+    idx: [3]
+    scale: 1
+
+control:
+  fx1:
+    idx: [0]
+    scale: 1
+
+time: 
+  scale: 1
+
+trajectories:
+  position:
+    type: time_series
+    fcn: fcns.state_pos
+    group: state
+    title: "Position vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Position"
+
+  velocity:
+    type: time_series
+    fcn: fcns.state_vel
+    group: state
+    title: "Velocity vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Velocity"
+
+  control:
+    type: time_series
+    fcn: fcns.control_force
+    group: control
+    title: "Force vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Force (N)"
+
+  cartpole:
+    type: spatial
+    fcn: fcns.cart_pos
+    equal_aspect: true
+    quivers:
+      body:
+        fcn: fcns.pole_dir
+        scale: 0.2
+        color: [0, 0, 0]
+        alpha: 0.8
+        linewidth: 2.0
+        centered: false

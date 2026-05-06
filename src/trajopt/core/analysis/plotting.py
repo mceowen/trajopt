@@ -113,7 +113,7 @@ def plot(trajopt_obj, data, show_iters=False):
                     if zlim is not None and hasattr(ax, 'set_zlim'):
                         ax.set_zlim(zlim)
 
-    # --- set axis limits from optimal + initial guess data ---
+    # --- set axis limits from optimal + initial guess + quiver data ---
     for group_name, group_data in traj_data.items():
         for i, (traj_name, traj) in enumerate(group_data.items()):
             ax   = axs[group_name][i]
@@ -123,6 +123,7 @@ def plot(trajopt_obj, data, show_iters=False):
                 equal_aspect = bool(traj_cfg.get("equal_aspect", False))
                 init_vals = traj.init_nl_vals.get("values", None) if hasattr(traj, "init_nl_vals") else None
                 all_vals = np.vstack([vals, init_vals]) if init_vals is not None else vals
+                all_vals = _include_quiver_extents(all_vals, traj)
                 _set_limits_from_data(ax, all_vals, equal_aspect=equal_aspect)
             else:
                 t = last_iter["t_opt"]
@@ -403,6 +404,24 @@ def _set_time_series_limits(ax, t, vals, margin=0.08):
     ax.set_xlim(*_padded_lim(t.min(), t.max(), margin))
     lo, hi = vals.min(), vals.max()
     ax.set_ylim(*_padded_lim(lo, hi, margin))
+
+
+def _include_quiver_extents(all_vals, traj):
+    """Expand the point set with quiver tip positions so axis limits fit them."""
+    for q in (traj.opt_vals.get("quivers") or []):
+        cfg      = q["config"]
+        stride   = int(cfg.get("stride", 1))
+        scale    = float(cfg.get("scale", 1.0)) * (-1.0 if cfg.get("negate") else 1.0)
+        centered = bool(cfg.get("centered", False))
+
+        origins = traj.opt_vals["values"][::stride]
+        dirs    = q["dirs"][::stride] * scale
+        if centered:
+            tips = np.vstack([origins - dirs / 2, origins + dirs / 2])
+        else:
+            tips = origins + dirs
+        all_vals = np.vstack([all_vals, tips])
+    return all_vals
 
 
 _NOT_FOUND = object()

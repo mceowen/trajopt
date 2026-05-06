@@ -3,7 +3,6 @@
 import jax.numpy as jnp
 import cvxpy as cp
 
-
 def u_squared_cost(t, x, u, params):
     return cp.sum_squares(u)
 
@@ -54,6 +53,7 @@ def dynamics(t, x, u, params, fcns):
 def terminal_box(t, x, u, params):
     return jnp.array([x[4], x[5], x[2]])
 
+# functions for trajectory plots
 def x1x2(t, x, u, params, fcns):
     return jnp.array([x[0], x[1]])
 
