@@ -31,9 +31,3 @@ conv:
   eps_defect: [0.01]
   eps_dyn:    [10.0, 0.1, 0.1, 30.0, 0.1, 0.1]
   iter_max:   100
-
-# ===============================
-# SOLVER OPTIONS
-# ===============================
-solver_opts:
-  solver: CLARABEL

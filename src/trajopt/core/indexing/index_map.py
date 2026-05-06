@@ -252,16 +252,7 @@ class IndexMap:
                     f"provide 'dimension' in config"
                 )
 
-            # double for inequality types with both upper and lower bounds
-            if ctype in ("convex_inequality", "nonconvex_inequality"):
-                has_upper = cfg.get("upper") is not None
-                has_lower = cfg.get("lower") is not None
-                if has_upper and has_lower:
-                    cfg["dimension"] = 2 * base_dim
-                else:
-                    cfg["dimension"] = base_dim
-            else:
-                cfg["dimension"] = base_dim
+            cfg["dimension"] = base_dim
 
     def update_indices(self):
         
@@ -292,7 +283,11 @@ class IndexMap:
         n_by_type = {}
         for name in constraint_name_list:
             cfg = constraint_configs[name]
-            n_by_type[cfg.type] = n_by_type.get(cfg.type, 0) + cfg.dimension
+            dim = cfg.dimension
+            if cfg.type in ("convex_inequality", "nonconvex_inequality"):
+                if cfg.get("upper") is not None and cfg.get("lower") is not None:
+                    dim = 2 * dim
+            n_by_type[cfg.type] = n_by_type.get(cfg.type, 0) + dim
 
         n_nu        = n_u + 1
 

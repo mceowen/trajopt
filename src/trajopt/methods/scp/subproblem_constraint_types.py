@@ -49,12 +49,7 @@ def create_cvxpy_constraints_dynamics(method):
         if method.flags.discretize == "ms":
             vb_dyn = method.cp_vars.vb_stack.get("dynamics", None)
             
-            rhs = (
-                method.cp_params.Ak[k] @ method.dz[k]
-                + method.cp_params.Bk[k] @ method.dnu[k]
-                + method.cp_params.Bkp[k] @ method.dnu[k + 1]
-                + (vb_dyn[k] if vb_dyn is not None else 0)
-            )
+            rhs = (method.cp_params.Ak[k] @ method.dz[k] + method.cp_params.Bk[k] @ method.dnu[k] + method.cp_params.Bkp[k] @ method.dnu[k + 1] + (vb_dyn[k] if vb_dyn is not None else 0))
             method.cp_constraints.append(method.dz[k + 1] + method.cp_params.z_ref[k + 1] - method.cp_params.z_m[k + 1] == rhs)
 
         # ctcs integral constraint
@@ -442,6 +437,24 @@ def create_cvxpy_cost_running(method):
     )
 
 
+def create_cvxpy_cost_convex_terminal(method):
+    for cost in method.problem.costs.get(type="convex_terminal"):
+        for k in np.atleast_1d(cost.nodes):
+            x_k = method.cp_params.z_ref[k, method.indices.z.state] + method.dz[k, method.indices.z.state]
+            u_k = method.cp_params.nu_ref[k, method.indices.nu.control] + method.dnu[k, method.indices.nu.control]
+            method.cp_cost += cost.w * cost.fcn_dim(0, x_k, u_k, method.problem.params)
+
+
+def create_cvxpy_cost_convex_running(method):
+    N = method.N.time_grid
+    for cost in method.problem.costs.get(type="convex_running"):
+        for k in range(N):
+            if k in cost.nodes:
+                x_k = method.cp_params.z_ref[k, method.indices.z.state] + method.dz[k, method.indices.z.state]
+                u_k = method.cp_params.nu_ref[k, method.indices.nu.control] + method.dnu[k, method.indices.nu.control]
+                method.cp_cost += cost.w * cost.fcn_dim(0, x_k, u_k, method.problem.params) * (1.0 / N)
+
+
 def create_cvxpy_cost_minimax_epigraph(method):
     for cost in method.problem.costs.get(type="nonconvex", minimax=1):
         method.cp_cost += method.minimax_epigraph_upperbound
@@ -646,6 +659,8 @@ CREATE_COST_REGISTRY.update({
     "nonconvex":              create_cvxpy_cost_nonconvex,
     "terminal":               create_cvxpy_cost_terminal,
     "running":                create_cvxpy_cost_running,
+    "convex_terminal":        create_cvxpy_cost_convex_terminal,
+    "convex_running":         create_cvxpy_cost_convex_running,
     "minimax_epigraph":       create_cvxpy_cost_minimax_epigraph,
     "min_time":               create_cvxpy_cost_min_time,
     "min_norm_terminal":      create_cvxpy_cost_min_norm_terminal,

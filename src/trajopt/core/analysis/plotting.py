@@ -113,7 +113,7 @@ def plot(trajopt_obj, data, show_iters=False):
                     if zlim is not None and hasattr(ax, 'set_zlim'):
                         ax.set_zlim(zlim)
 
-    # --- set axis limits from optimal data only ---
+    # --- set axis limits from optimal + initial guess data ---
     for group_name, group_data in traj_data.items():
         for i, (traj_name, traj) in enumerate(group_data.items()):
             ax   = axs[group_name][i]
@@ -121,7 +121,9 @@ def plot(trajopt_obj, data, show_iters=False):
             if traj.type == "spatial":
                 traj_cfg = traj_configs.get(traj_name, {})
                 equal_aspect = bool(traj_cfg.get("equal_aspect", False))
-                _set_limits_from_data(ax, vals, equal_aspect=equal_aspect)
+                init_vals = traj.init_nl_vals.get("values", None) if hasattr(traj, "init_nl_vals") else None
+                all_vals = np.vstack([vals, init_vals]) if init_vals is not None else vals
+                _set_limits_from_data(ax, all_vals, equal_aspect=equal_aspect)
             else:
                 t = last_iter["t_opt"]
                 _set_time_series_limits(ax, t[:vals.shape[0]], vals)
@@ -208,7 +210,7 @@ def _plot_spatial(ax, traj, iters_to_show, last_iter):
     for i, it in enumerate(iters_to_show):
         traj_it = it["trajectory_data"]
         group   = _find_group(traj_it, traj.name)
-        if group is None: continue
+        if group is _NOT_FOUND: continue
         t = traj_it[group][traj.name]
 
         coords = unpack(t.nl_vals)
@@ -234,7 +236,7 @@ def _plot_time_series(ax, traj, iters_to_show, last_iter):
     for i, it in enumerate(iters_to_show):
         traj_it = it["trajectory_data"]
         group   = _find_group(traj_it, traj.name)
-        if group is None: continue
+        if group is _NOT_FOUND: continue
         t = traj_it[group][traj.name]
 
         _draw(ax, it["t_nl"],  t.nl_vals["values"].squeeze(),  pens.itr_nl,  n_iters=n, i=i)
@@ -289,7 +291,9 @@ def _plot_quivers(ax, traj, dim):
         idx  = np.arange(0, len(traj.opt_vals["values"]), stride)
         o    = traj.opt_vals["values"][idx]
         d    = q["dirs"][idx] * scale
-        segs = np.stack([o, o + d, np.full_like(o, np.nan)], axis=1).reshape(-1, o.shape[1])
+        centered = bool(cfg.get("centered", False))
+        start = o - d / 2 if centered else o
+        segs = np.stack([start, start + d, np.full_like(o, np.nan)], axis=1).reshape(-1, o.shape[1])
 
         ax.plot(*[segs[:, c] for c in range(dim)],
                 color    = cfg.get("color", [0.2, 0.2, 0.2]),
@@ -401,8 +405,10 @@ def _set_time_series_limits(ax, t, vals, margin=0.08):
     ax.set_ylim(*_padded_lim(lo, hi, margin))
 
 
+_NOT_FOUND = object()
+
 def _find_group(traj_data, name):
     for group_name, group in traj_data.items():
         if name in group:
             return group_name
-    return None
+    return _NOT_FOUND

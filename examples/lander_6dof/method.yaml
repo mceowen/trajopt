@@ -26,7 +26,7 @@ guess:
 # ===============================
 
 conv:
-  eps_state:  0.01
+  eps_state:  0.005
   eps_dyn:    0.00001
   eps_defect: 1.0
   eps_cost:   1

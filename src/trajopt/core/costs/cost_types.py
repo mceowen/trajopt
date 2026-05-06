@@ -215,6 +215,38 @@ class terminal:
         )
 
 
+class convex_terminal:
+    def __init__(self, cost_config: dict, index_map: Any, fcns: dict | None = None, **kwargs: Any) -> None:
+        """Convex terminal cost added directly to the CVXPY subproblem (no linearization)."""
+        self.type = "convex_terminal"
+        self.name = cost_config["name"]
+        self.group = cost_config.get("group", None)
+        self.nodes = cost_config.get("nodes", np.array([index_map.N.time_grid - 1]))
+        self.w = cost_config.get("w", 1.0)
+
+        self.fcn_string = cost_config["fcn"]
+        self.fcn_dim = tools.resolve_function_from_string(self.fcn_string, fcns)
+
+    def nondim_cost(self, nondim: Any) -> None:
+        pass
+
+
+class convex_running:
+    def __init__(self, cost_config: dict, index_map: Any, fcns: dict | None = None, **kwargs: Any) -> None:
+        """Convex running cost added directly to the CVXPY subproblem (no linearization)."""
+        self.type = "convex_running"
+        self.name = cost_config["name"]
+        self.group = cost_config.get("group", None)
+        self.nodes = cost_config.get("nodes", np.arange(0, index_map.N.time_grid))
+        self.w = cost_config.get("w", 1.0)
+
+        self.fcn_string = cost_config["fcn"]
+        self.fcn_dim = tools.resolve_function_from_string(self.fcn_string, fcns)
+
+    def nondim_cost(self, nondim: Any) -> None:
+        pass
+
+
 class running:
     def __init__(self, cost_config: dict, index_map: Any, fcns: dict | None = None, **kwargs: Any) -> None:
         """Running cost evaluated at all nodes via a user-supplied function."""

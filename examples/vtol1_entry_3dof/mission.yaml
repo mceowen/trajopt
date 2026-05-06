@@ -60,7 +60,6 @@ constraints:
     type: nonconvex_inequality
     fcn: fcns.aero_load
     upper: 2.5
-    dimension: 1
     scale: [2.5]
 
   final_time:

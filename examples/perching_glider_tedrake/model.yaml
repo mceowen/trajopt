@@ -1,0 +1,53 @@
+# source: https://underactuated.mit.edu/trajopt.html#perching
+
+fcns:
+  dynamics: perching_glider_tedrake.py:dynamics
+  x1x2: perching_glider_tedrake.py:x1x2
+  body_dir: perching_glider_tedrake.py:body_dir
+  terminal_box: perching_glider_tedrake.py:terminal_box
+  u_squared_cost: perching_glider_tedrake.py:u_squared_cost
+
+state:
+  x1:
+    idx: [0]
+    scale: 1
+  x2:
+    idx: [1]
+    scale: 1
+  pitch:
+    idx: [2]
+    scale: 1
+  elevator:
+    idx: [3]
+    scale: 1
+  x1dot:
+    idx: [4]
+    scale: 1
+  x2dot:
+    idx: [5]
+    scale: 1
+  pitchdot:
+    idx: [6]
+    scale: 1
+
+control:
+  elevatordot:
+    idx: [0]
+    scale: 1
+
+time: 
+  scale: 1
+
+trajectories:
+  xy:
+    type: spatial
+    fcn: fcns.x1x2
+    equal_aspect: true
+    quivers:
+      body:
+        fcn: fcns.body_dir
+        scale: 0.2
+        color: [0, 0, 0]
+        alpha: 0.8
+        linewidth: 2.0
+        centered: true
