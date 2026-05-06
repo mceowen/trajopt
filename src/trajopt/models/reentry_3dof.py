@@ -81,7 +81,7 @@ def heat_rate(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     v = z[3]
     rho = fcns.density_model(t, z, nu, params, fcns)
 
-    return jnp.array([params.vehicle.kQ * rho**0.5 * v**3])
+    return jnp.array([0.0001 * params.vehicle.kQ * rho**0.5 * v**3])
 
 
 def dynamic_pressure(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
@@ -89,14 +89,14 @@ def dynamic_pressure(t: float, z: Array, nu: Array, params: dict, fcns: dict) ->
     v = z[3]
     rho = fcns.density_model(t, z, nu, params, fcns)
 
-    return jnp.array([0.5 * rho * v**2])
+    return jnp.array([0.001 * 0.5 * rho * v**2])
 
 
 def aero_load(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
-    """Aerodynamic load magnitude (m/s²)."""
+    """Aerodynamic load magnitude (earth g)."""
     aero = fcns.nonlinear_aero(t, z, nu, params, fcns)
 
-    return jnp.array([jnp.sqrt(aero.L**2 + aero.D**2)])
+    return jnp.array([(1 / 9.81) * jnp.sqrt(aero.L**2 + aero.D**2)])
 
 
 def vel_heat_rate(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
@@ -190,7 +190,3 @@ def lift_drag(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     aero = fcns.nonlinear_aero(t, z, nu, params, fcns)
 
     return jnp.array([aero.L, aero.D])
-
-# ===============================
-# CASADI MODEL
-# ===============================

@@ -12,7 +12,7 @@ guess:
   T_init: 1700.0
   T_min:  550.0
   T_max:  3000.0
-  dT_max: 50.0
+  dT_max: 100.0
 
   nl_guess_u_start: [0.0, 0.0]
   nl_guess_u_stop:  [0.0, 0.0]
@@ -21,7 +21,11 @@ guess:
 # CONVERGENCE TOLERANCES
 # ===============================
 conv:
-  eps_state:  [500, 0.01, 0.01, 50, 0.01, 0.01]
+  eps_state:  [500, 0.1, 0.1, 50, 0.1, 0.5]
   eps_cost:   1
   eps_defect: 0.01
   eps_dyn:    [100.0, 0.1, 0.1, 30.0, 0.1, 0.1]
+  iter_max: 400
+
+solver_opts:
+  solver: CLARABEL

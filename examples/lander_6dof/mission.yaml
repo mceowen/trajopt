@@ -18,8 +18,6 @@ params:
   vehicle:
     inherit: trajopt/missions/vehicles/mikilander.yaml
 
-  zi: [4, 4, 0, 0.0, -1.5, 1.5, 0, 0, 0]
-
   min_thrust:   0.3
   max_thrust:   5
   theta_gimbal: 20
@@ -35,25 +33,45 @@ params:
 # CONSTRAINTS
 # ===============================
 constraints:
-  initial_state:
-    value: ${params.zi}
-    idx: [1, 2, 3, 4, 5, 6, 11, 12, 13]
-    value_guess: [2.0, 4, 4, 0, 0, -4.0, 4.0, 1.0, 0, 0, 0, 0, 0, 0]
+  dynamics:
+    type: dynamics
+    fcn: fcns.dynamics
 
-  final_state:
-    value: [0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
-    idx: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+  landing_initial_state:
+    type: initial_state
+    value:       [2.0, 4, 4, 0, 0, -4, 4, null, null, null, null, 0, 0, 0]
+    value_guess: [2.0, 4, 4, 0, 0, -4, 4, 1.0,     0,    0,    0, 0, 0, 0]
+
+  landing_final_state:
+    type: final_state
+    value: [null, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
     eps: [0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001]
     value_guess: [1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
 
   gimbal_limit:
-    theta_max: ${params.theta_gimbal}
+    type: convex_inequality
+    fcn: fcns.cvx_gimbal_limit
+
+  glide_slope:
+    type: convex_inequality
+    fcn: fcns.cvx_glide_slope
 
   max_thrust:
-    max_value: ${params.max_thrust}
+    type: convex_inequality
+    fcn: fcns.cvx_max_thrust
+
+  max_angular_velocity:
+    type: convex_inequality
+    fcn: fcns.cvx_max_angular_velocity
+
+  tilt_limit:
+    type: convex_inequality
+    fcn: fcns.cvx_tilt_limit
 
   min_thrust:
-    min_value: "${params.min_thrust}"
+    type: nonconvex_inequality
+    fcn: fcns.thrust
+    lower: "${params.min_thrust}"
 
   altitude_triggered_tilt:
     type: nonconvex_inequality
@@ -79,28 +97,27 @@ constraints:
 # COSTS
 # ===============================
 costs:
-  control_rate_regularization:
-    type: rate_regularization
-    set: control
-    norm_type: l2
-    w: 0.1
+  min_time:
+    type: min_time
 
 # ===============================
 # ACTIVE CONSTRAINTS AND COSTS
 # ===============================
 constraint_list:
   - dynamics
-  - initial_state
-  - final_state
+  - landing_initial_state
+  - landing_final_state
   - gimbal_limit
+  - glide_slope
   - max_thrust
+  - max_angular_velocity
+  - tilt_limit
   - min_thrust
-  - altitude_triggered_tilt
-  - altitude_triggered_speed
-  - altitude_triggered_angular_speed
-  - altitude_triggered_glideslope
+  # - altitude_triggered_tilt
+  # - altitude_triggered_speed
+  # - altitude_triggered_angular_speed
+  # - altitude_triggered_glideslope
   # - altitude_triggered_los
 
 cost_list:
   - min_time
-  # - control_rate_regularization

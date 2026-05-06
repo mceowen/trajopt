@@ -153,6 +153,41 @@ def propagate_txu(x0, u, t_ref, t_nl, problem, method, compiled_attr_name=None):
     return np.asarray(t_nl_jax), np.asarray(sol.ys), u_out
 
 
+def propagate_txu_rk4(x0, u, t_ref, problem, method, n_substeps=50):
+    """Fixed-step RK4 propagation of physical dynamics dx/dt = f(t, x, u)."""
+    dynamics = problem.constraints.get(type="dynamics")[0].fcn_base
+    params   = problem.params
+    N        = t_ref.shape[0]
+    x0_jax   = jnp.asarray(x0)
+    u_jax    = jnp.asarray(u)
+    t_jax    = jnp.asarray(t_ref)
+
+    def _solve(x0, u, t_ref):
+        def propagate_interval(x, k):
+            t_k  = t_ref[k]
+            t_kp = t_ref[k + 1]
+            dt   = (t_kp - t_k) / n_substeps
+            ts   = t_k + jnp.arange(n_substeps) * dt
+
+            def rk4_step(x, t):
+                u_t = _foh(t, t_ref, u)
+                k1 = dynamics(t,          x,                  u_t, params)
+                k2 = dynamics(t + dt / 2, x + (dt / 2) * k1, _foh(t + dt/2, t_ref, u), params)
+                k3 = dynamics(t + dt / 2, x + (dt / 2) * k2, _foh(t + dt/2, t_ref, u), params)
+                k4 = dynamics(t + dt,     x + dt * k3,       _foh(t + dt, t_ref, u), params)
+                return x + (dt / 6) * (k1 + 2*k2 + 2*k3 + k4), None
+
+            x_next, _ = jax.lax.scan(rk4_step, x, ts)
+            return x_next, x_next
+
+        _, x_all = jax.lax.scan(propagate_interval, x0, jnp.arange(N - 1))
+        return jnp.concatenate([x0[None, :], x_all])
+
+    solve_fn = _jit_cached(method, "_jit_propagate_txu_rk4", _solve)
+    x_out    = np.asarray(solve_fn(x0_jax, u_jax, t_jax))
+    return np.asarray(t_ref), x_out, np.asarray(u)
+
+
 def propagate_scipy_rk45(x0, u_ref, t_ref, t_nl, problem, method, dynamics=None):
     dynamics = problem.constraints.get(type="dynamics")[0].fcn_base if dynamics is None else dynamics
     params   = problem.params

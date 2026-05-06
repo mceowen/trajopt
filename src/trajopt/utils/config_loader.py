@@ -10,7 +10,6 @@ YAML config loader:
 import yaml
 import numpy as np
 import importlib.resources
-import importlib.util
 from pathlib import Path
 import re
 
@@ -98,6 +97,10 @@ def load_trajopt_config(mission_path, model_path, method_path, variations_path=N
     except KeyError as e:
         raise KeyError(f"constraint {e} is in 'constraint_list' but not defined in 'constraints' — check model ('{model_path}') and mission ('{mission_path}')") from None
 
+    for name in constraint_config:
+        if 'ct' not in constraint_config[name]:
+            constraint_config[name]['ct'] = 0
+
     try:
         cost_config = AttrDict({name: {'name': name, **cost_config[name]} for name in active_cost_list})
     except KeyError as e:
@@ -120,13 +123,14 @@ def load_trajopt_config(mission_path, model_path, method_path, variations_path=N
             'control': control_config,
             'time': time_config,
             'constraints': constraint_config,
+            'constraint_list': active_constraint_list,
             'trajectories': trajectory_config,
             'costs': cost_config,
+            'cost_list': active_cost_list,
             'params': params_config,
             'fcns': fcns_config,
             'mission': mission_config,
             'model': model_config,
-            'diagnostics': problem_config.get('diagnostics', {}),
             'plot_config': problem_config.get('plot_config', {}),
         },
         

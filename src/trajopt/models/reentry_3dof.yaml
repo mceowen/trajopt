@@ -1,5 +1,5 @@
 # ===============================
-# MODEL CONFIGURATION
+# MODEL FUNCTIONS
 # ===============================
 
 fcns:
@@ -21,151 +21,41 @@ fcns:
   aoa: trajopt/models/reentry_3dof.py:aoa
   nonlinear_aero: trajopt/models/reentry_3dof.py:nonlinear_aero
 
+# ===============================
+# STATE AND CONTROL CONFIG
+# ===============================
+
 state.r:
     idx: [0]
+    scale: 1000000
 state.theta:
     idx: [1]
+    scale: 1.0
 state.phi:
     idx: [2]
+    scale: 1.0
 state.v:
     idx: [3]
+    scale: 1000
 state.gamma:
     idx: [4]
+    scale: 1.0
 state.psi:
     idx: [5]
+    scale: 1.0
 
 control.bank:
     idx: [0]
+    scale: 1.0
 control.aoa:
     idx: [1]
-
-# ===============================
-# PROBLEM SCALES
-# ===============================
-
-state.r.scale: 1000000
-state.theta.scale: 1
-state.phi.scale: 1
-state.v.scale: 1000
-state.gamma.scale: 1
-state.psi.scale: 1
-
-control.bank.scale: 1
-control.aoa.scale: 1
+    scale: 1.0
 
 time.scale: 1.0
 
 # ===============================
-# CONSTRAINT MODELS
+# TRAJECTORIES FOR PLOTTING
 # ===============================
-
-constraints.dynamics:
-  type: dynamics
-  fcn: fcns.dynamics
-
-constraints.initial_state:
-  type: equality_bc
-  set: state
-  boundary: init
-
-constraints.initial_control:
-  type: equality_bc
-  set: control
-  boundary: init
-
-constraints.final_state:
-  type: equality_bc
-  set: state
-  boundary: final
-
-constraints.final_bank_angle:
-  type: equality_bc
-  set: control
-  value: null
-  idx: null
-  boundary: final
-
-constraints.state_limits:
-  type: box
-  set: state
-  min_value: []
-  min_value_idx: []
-  max_value: []
-  max_value_idx: []
-
-constraints.control_limits:
-  type: box
-  set: control
-  min_value: null
-  min_value_idx: null
-  max_value: null
-  max_value_idx: null
-
-constraints.bank_angle_limit:
-  type: box
-  set: control
-  min_value: null
-  min_value_idx: null
-  max_value: null
-  max_value_idx: null
-
-constraints.bank_aoa_angle_limits:
-  type: box
-  set: control
-  min_value: null
-  min_value_idx: null
-  max_value: null
-  max_value_idx: null
-
-constraints.bank_angle_rate_limit:
-  type: control_rate_limit
-  value: null
-  idx: null
-
-constraints.bank_aoa_rate_limit:
-  type: control_rate_limit
-  value: null
-  idx: null
-
-constraints.max_Q:
-  type: nonconvex_inequality
-  group: path
-  fcn: "fcns.heat_rate * 0.0001"
-  eps: null
-  ct: 0
-
-constraints.max_q:
-  type: nonconvex_inequality
-  group: path
-  fcn: "fcns.dynamic_pressure"
-  eps: null
-  ct: 0
-
-constraints.max_load:
-  type: nonconvex_inequality
-  group: path
-  fcn: "fcns.aero_load"
-  eps: null
-  ct: 0
-
-# ===============================
-# COST MODELS
-# ===============================
-
-costs.min_time:
-  type: min_time
-
-costs.min_terminal_velocity:
-  type: terminal_state
-  value: null
-  idx: [3]
-
-costs.min_max_heat_rate:
-    type: nonconvex
-    minimax: 1
-    fcn: fcns.heat_rate
-    units: [{none: 1}]
-    ct: 0
 
 trajectories:
   altitude:

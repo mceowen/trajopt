@@ -21,7 +21,7 @@ def nonlinear_aero_jax(t: float, z: Array, nu: Array, params: dict, fcns: dict) 
     alphlim_deg = 40
 
     vehicle = params.vehicle
-    rho = fcns.density_model(t, z, nu, params)
+    rho = fcns.density_model(t, z, nu, params, fcns)
 
     # Velocity-dependent polynomial coefficients
     Kd1 = kd1

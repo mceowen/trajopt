@@ -1,23 +1,23 @@
-import copy
 from trajopt.core.problem import Problem
-from trajopt.core.indexing.index_map import IndexMap
-from trajopt.core.solution_method import SolutionMethod
+import trajopt.methods.scp.scvx as scvx
 import trajopt.utils.config_loader as config_loader
+from trajopt.core.indexing.index_map import IndexMap
+from trajopt.core.scaling.nondim import Nondim
 import trajopt.core.analysis.analysis as analysis
 import trajopt.core.analysis.plotting as plotting
 
 class TrajectoryAnalyzer:
     def __init__(self, mission, model, method, variations=None):
 
-        self.config = config_loader.load_trajopt_config(mission, model, method, variations)
-        # Save a clean copy before initialize() mutates conv tolerances in-place
-        self._raw_config = copy.deepcopy(self.config)
+        self.config    = config_loader.load_trajopt_config(mission, model, method, variations)
+        self.index_map = IndexMap(self.config)
+        self.nondim    = Nondim(self.config, self.index_map)
+        
+        self.problem = Problem(self.config, self.index_map, self.nondim)
 
-        index_map    = IndexMap(self.config)
-        self.problem = Problem(self.config, index_map=index_map)
-        self.method  = SolutionMethod(self.problem, self.config, index_map)
-
-        self.method.initialize()
+        # TODO (Carlos): directly pointing to GeneralSCvx method, need to generalize path
+        SolutionMethod = getattr(scvx, "SCvx")
+        self.method = SolutionMethod(self.config, self.index_map, self.problem)
 
         self.solution         = None
         self.results          = None

@@ -1,3 +1,4 @@
+import cvxpy as cp
 import jax.numpy as jnp
 from jax import Array
 
@@ -25,11 +26,10 @@ def obstacle(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([jnp.linalg.norm(r - pos_obs)])
 
 
-def xy_dist_from_term(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
-    """Distance from terminal position (10, 10) in xy-plane."""
-    r = z[0:2]
-    # return jnp.array([jnp.sqrt((r[0]-10.0)**2 + (r[1]-10.0)**2 + 0.00001)])
-    return jnp.array([(r[0] - 10.0) ** 2 + (r[1] - 10.0) ** 2])
+def max_thrust_cone(x, u, params):
+    """||T|| <= T_max as a CVXPY SOC constraint."""
+    T_max = params.vehicle.T_max
+    return cp.norm(u[0:3]) <= T_max
 
 
 def pos_x(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
@@ -44,7 +44,7 @@ def pos_y(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
 
 def height(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Height (z-position)."""
-    return jnp.array(z[2])
+    return jnp.array([z[2]])
 
 
 def xy(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
@@ -67,20 +67,20 @@ def xyz(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return z[0:3]
 
 
-def vel_x(t: float, z: Array, nu: Array, params: dict) -> Array:
+def vel_x(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([z[3]])
 
-def vel_y(t: float, z: Array, nu: Array, params: dict) -> Array:
+def vel_y(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([z[4]])
 
-def vel_z(t: float, z: Array, nu: Array, params: dict) -> Array:
+def vel_z(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([z[5]])
 
-def thrust_x(t: float, z: Array, nu: Array, params: dict) -> Array:
+def thrust_x(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([nu[0]])
 
-def thrust_y(t: float, z: Array, nu: Array, params: dict) -> Array:
+def thrust_y(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([nu[1]])
 
-def thrust_z(t: float, z: Array, nu: Array, params: dict) -> Array:
+def thrust_z(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([nu[2]])

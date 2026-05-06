@@ -52,7 +52,7 @@ MARKER_DEFAULTS = {
 
 def plot(trajopt_obj, data, show_iters=False):
     method         = list(data.keys())[0]
-    iters_all      = data[method]["runs"][0]["iters"]
+    iters_all      = data[method]["runs"][0]["iter_data_list"]
     last_iter      = iters_all[-1]
     traj_data      = last_iter["trajectory_data"]
     problem_config = trajopt_obj.problem.config.problem
@@ -96,9 +96,35 @@ def plot(trajopt_obj, data, show_iters=False):
     for group_name, group_data in traj_data.items():
         for i, (traj_name, traj) in enumerate(group_data.items()):
             if traj.type == "spatial":
+                ax       = axs[group_name][i]
                 dim      = traj.opt_vals["values"].shape[1]
                 traj_cfg = traj_configs.get(traj_name, traj)
-                _plot_overlays(axs[group_name][i], traj_cfg, dim, trajopt_obj.problem.params, fcns)
+
+                limits_opt_only = traj_cfg.get("limits_opt_only", False)
+                if limits_opt_only:
+                    xlim, ylim = ax.get_xlim(), ax.get_ylim()
+                    zlim = ax.get_zlim() if hasattr(ax, 'get_zlim') else None
+
+                _plot_overlays(ax, traj_cfg, dim, trajopt_obj.problem.params, fcns)
+
+                if limits_opt_only:
+                    ax.set_xlim(xlim)
+                    ax.set_ylim(ylim)
+                    if zlim is not None and hasattr(ax, 'set_zlim'):
+                        ax.set_zlim(zlim)
+
+    # --- set axis limits from optimal data only ---
+    for group_name, group_data in traj_data.items():
+        for i, (traj_name, traj) in enumerate(group_data.items()):
+            ax   = axs[group_name][i]
+            vals = traj.opt_vals["values"]
+            if traj.type == "spatial":
+                traj_cfg = traj_configs.get(traj_name, {})
+                equal_aspect = bool(traj_cfg.get("equal_aspect", False))
+                _set_limits_from_data(ax, vals, equal_aspect=equal_aspect)
+            else:
+                t = last_iter["t_opt"]
+                _set_time_series_limits(ax, t[:vals.shape[0]], vals)
 
     # --- legend ---
     legend_entries = [('init', 'Initial Guess'), ('opt', 'Optimal'), ('nl', 'Nonlinear')]
@@ -334,6 +360,46 @@ def _create_grid(n, cfg=None):
 # ======================================================================
 # UTILITIES
 # ======================================================================
+
+def _padded_lim(lo, hi, margin=0.08):
+    pad = margin * (hi - lo) if hi > lo else 0.1
+    return lo - pad, hi + pad
+
+
+def _set_limits_from_data(ax, vals, margin=0.08, equal_aspect=False):
+    ax.set_xlim(*_padded_lim(vals[:, 0].min(), vals[:, 0].max(), margin))
+    ax.set_ylim(*_padded_lim(vals[:, 1].min(), vals[:, 1].max(), margin))
+    if vals.shape[1] >= 3 and hasattr(ax, 'set_zlim'):
+        ax.set_zlim(*_padded_lim(vals[:, 2].min(), vals[:, 2].max(), margin))
+        if equal_aspect:
+            _set_equal_aspect_3d(ax)
+    elif equal_aspect:
+        ax.set_aspect('equal', adjustable='box')
+
+
+def _set_equal_aspect_3d(ax):
+    """Force equal scaling on all three axes of a 3D plot."""
+    xlim = np.array(ax.get_xlim())
+    ylim = np.array(ax.get_ylim())
+    zlim = np.array(ax.get_zlim())
+
+    spans = np.array([xlim[1] - xlim[0], ylim[1] - ylim[0], zlim[1] - zlim[0]])
+    max_span = spans.max()
+
+    mid_x = xlim.mean()
+    mid_y = ylim.mean()
+    mid_z = zlim.mean()
+
+    ax.set_xlim(mid_x - max_span / 2, mid_x + max_span / 2)
+    ax.set_ylim(mid_y - max_span / 2, mid_y + max_span / 2)
+    ax.set_zlim(mid_z - max_span / 2, mid_z + max_span / 2)
+
+
+def _set_time_series_limits(ax, t, vals, margin=0.08):
+    ax.set_xlim(*_padded_lim(t.min(), t.max(), margin))
+    lo, hi = vals.min(), vals.max()
+    ax.set_ylim(*_padded_lim(lo, hi, margin))
+
 
 def _find_group(traj_data, name):
     for group_name, group in traj_data.items():

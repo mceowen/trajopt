@@ -17,65 +17,64 @@ params:
 # CONSTRAINTS
 # ===============================
 constraints:
+  dynamics:
+    type: dynamics
+    fcn: fcns.dynamics
+
   initial_state:
+    type: initial_state
     value: ["${params.planet.r + 100e3}", 0.0, 0.0, 7450, -0.5, 0.0]
-    idx: [0, 1, 2, 3, 4, 5]
 
   final_state:
-    value: ["${params.planet.r + 15e3}", 12, 70, -10, 90]
-    idx: [0, 1, 2, 4, 5]
+    type: final_state
+    value: ["${params.planet.r + 15e3}", 12, 70, null, -10, 90]
     eps: [500, 0.001, 0.001, 0.001, 0.001]
 
   state_limits:
-    min_value: ["${params.planet.r}", 100.0]
-    min_value_idx: [0, 3]
+    type: state_limits
+    lower: ["${params.planet.r}", null, null, 100.0, null, null]
 
   bank_angle_limit:
-    min_value: [-80.0]
-    min_value_idx: [0]
-    max_value: [80.0]
-    max_value_idx: [0]
+    type: control_limits
+    lower: [-80.0, null]
+    upper: [80.0, null]
 
   bank_angle_rate_limit:
+    type: control_rate_limit
     value: [10]
     idx: [0]
 
   max_Q:
-    max_value: 33300
-    scale: [33300]
-    eps: [0.01]
+    type: nonconvex_inequality
+    fcn: "fcns.heat_rate"
+    upper: 3.3300
+    scale: [3.3300]
 
   max_q:
-    max_value: 18000
-    scale: [18000]
-    eps: [0.01]
+    type: nonconvex_inequality
+    fcn: fcns.dynamic_pressure
+    upper: 18.000
+    scale: [18.000]
 
   max_load:
-    max_value: 24.525
-    scale: [24.525]
-    eps: [0.01]
+    type: nonconvex_inequality
+    fcn: fcns.aero_load
+    upper: 2.5
+    dimension: 1
+    scale: [2.5]
+
+  final_time:
+    type: final_time
+    lower: 550.0
+    upper: 3000.0
 
 # ===============================
 # COSTS
 # ===============================
 costs:
-  control_rate_regularization:
-    type: rate_regularization
-    set: control
-    w: 1.0
-
-# ===============================
-# TRAJECTORIES
-# ===============================
-trajectories:
-  heat_rate:
-    upper_limit: 3.33
-
-  dynamic_pressure:
-    upper_limit: 18.0
-
-  aero_load:
-    upper_limit: "${24.525 / 9.81}"
+  min_terminal_velocity:
+    type: terminal
+    fcn: fcns.velocity
 
 # ===============================
 # ACTIVE CONSTRAINTS AND COSTS
@@ -86,11 +85,25 @@ constraint_list:
   - final_state
   - state_limits
   - bank_angle_limit
-  # - bank_angle_rate_limit
+  - bank_angle_rate_limit
   - max_Q
   - max_q
   - max_load
+  - final_time
 
 cost_list:
   - min_terminal_velocity
-  # - control_rate_regularization
+
+# ===============================
+# TRAJECTORIES
+# ===============================
+
+trajectories:
+  heat_rate:
+    upper_limit: 3.33
+
+  dynamic_pressure:
+    upper_limit: 18.0
+
+  aero_load:
+    upper_limitt: 2.5

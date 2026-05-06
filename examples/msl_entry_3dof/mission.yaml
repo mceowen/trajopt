@@ -1,6 +1,7 @@
 # ===============================
 # FUNCTION REGISTRY
 # ===============================
+
 fcns:
   coeffs: trajopt/missions/msl.py:coeffs_entry
 
@@ -15,59 +16,54 @@ params:
 # ===============================
 # CONSTRAINTS
 # ===============================
-constraints:
-  initial_state:
-    value: ["${params.planet.r + 126e3}", 0.0, 0.0, 5845, -15.47, 0.0]
-    idx: [0, 1, 2, 3, 4, 5]
 
-  final_state:
-    value: ["${params.planet.r + 10e3}", 0.0, 10.5768]
-    idx: [0, 1, 2]
-    eps: [1, 0.0001, 0.0001]
+constraints:
+  dynamics:
+    type: dynamics
+    fcn: fcns.dynamics
+
+  entry_initial_state:
+    type: initial_state
+    value: ["${params.planet.r + 126e3}", 0.0, 0.0, 5845, -15.47, 0.0]
+
+  entry_final_state:
+    type: final_state
+    value: ["${params.planet.r + 10e3}", 0.0, 10.5768, null, null, null]
 
   state_limits:
-    min_value: ["${params.planet.r + 1e3}", 10.0]
-    min_value_idx: [0, 3]
+    type: state_limits
+    lower: ["${params.planet.r + 1e3}", null, null, 10.0, null, null]
 
   bank_aoa_angle_limits:
-    min_value: [-178.0, -10.0]
-    min_value_idx: [0, 1]
-    max_value: [178.0, 10.0]
-    max_value_idx: [0, 1]
+    type: control_limits
+    lower: [-178.0, -10.0]
+    upper: [178.0, 10.0]
+
+  final_time:
+    type: final_time
+    lower: 200.0
+    upper:  8000.0
 
 # ===============================
 # COSTS
 # ===============================
+
 costs:
-  min_lonlat_error:
-    type: min_norm_terminal
-    idx: [1, 2]
-    value: [0.0, 10.5768]
-
-  control_rate_regularization:
-    type: rate_regularization
-    set: control
-    w: 0.1
-
-# ===============================
-# TRAJECTORIES
-# ===============================
-trajectories:
-  lift_drag:
-    type: time_series
-    fcn: fcns.lift_drag
-    group: lift_drag
+  min_terminal_velocity:
+    type: terminal
+    fcn: fcns.velocity
 
 # ===============================
 # ACTIVE CONSTRAINTS AND COSTS
 # ===============================
+
 constraint_list:
   - dynamics
-  - initial_state
-  - final_state
+  - entry_initial_state
+  - entry_final_state
   - state_limits
   - bank_aoa_angle_limits
+  - final_time
 
 cost_list:
   - min_terminal_velocity
-  # - control_rate_regularization

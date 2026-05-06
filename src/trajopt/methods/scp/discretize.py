@@ -14,7 +14,7 @@ jax.config.update("jax_persistent_cache_enable_xla_caches", "xla_gpu_per_fusion_
 def compute_nonconvex_constraints(z, nu, problem, method):
     n_ineq    = problem.index_map.n.nonconvex_inequality
     n_z       = problem.index_map.n.z
-    n_nu       = problem.index_map.n.nu
+    n_nu      = problem.index_map.n.nu
     N         = method.index_map.N.time_grid
     z_jax     = jnp.asarray(z)
     nu_jax    = jnp.asarray(nu)
@@ -51,23 +51,40 @@ def compute_nonconvex_costs(z, nu, problem, method):
 
     params = problem.params
     nonconvex_costs = problem.costs.get(type="nonconvex")
+    terminal_costs  = problem.costs.get(type="terminal")
+    running_costs   = problem.costs.get(type="running")
 
-    if len(nonconvex_costs) == 0:
+    if len(nonconvex_costs) + len(terminal_costs) + len(running_costs) == 0:
         return cost, dcostdz, dcostdnu
 
     z_jax  = jnp.asarray(z)
     nu_jax = jnp.asarray(nu)
 
-    for cost_fn in nonconvex_costs:
+    for cost_fn in nonconvex_costs + running_costs:
         f_batch, dfdx_batch, dfdu_batch = cost_fn.g_aff_batched(z_jax, nu_jax, params)
 
         f_np    = np.asarray(f_batch).reshape(N, -1)
         dfdx_np = np.asarray(dfdx_batch).reshape(N, -1, n_z)
         dfdu_np = np.asarray(dfdu_batch).reshape(N, -1, n_nu)
 
-        cost[:, 0]                     += np.sum(f_np, axis=1)
-        dcostdz[:, 0, :]              += np.sum(dfdx_np, axis=1)
+        cost[:, 0] += np.sum(f_np, axis=1)
+        dcostdz[:, 0, :] += np.sum(dfdx_np, axis=1)
         dcostdnu[:, 0, :] += np.sum(dfdu_np, axis=1)
+
+    for cost_fn in terminal_costs:
+        nodes = np.atleast_1d(cost_fn.nodes)
+        z_nodes  = z_jax[nodes]
+        nu_nodes = nu_jax[nodes]
+        f_batch, dfdx_batch, dfdu_batch = cost_fn.g_aff_batched(z_nodes, nu_nodes, params)
+
+        f_np    = np.asarray(f_batch).reshape(len(nodes), -1)
+        dfdx_np = np.asarray(dfdx_batch).reshape(len(nodes), -1, n_z)
+        dfdu_np = np.asarray(dfdu_batch).reshape(len(nodes), -1, n_nu)
+
+        for i, k in enumerate(nodes):
+            cost[k, 0]       += np.sum(f_np[i])
+            dcostdz[k, 0, :]  += np.sum(dfdx_np[i], axis=0)
+            dcostdnu[k, 0, :] += np.sum(dfdu_np[i], axis=0)
 
     return cost, dcostdz, dcostdnu
 
@@ -136,7 +153,7 @@ def compile_jax_discretization(problem, method):
     N_grid = problem.index_map.N.time_grid
 
     if use_fixed_dt:
-        nsub = 20
+        nsub = 50
         delta_tau = 1.0 / (N_grid - 1)
         dt_rk4 = delta_tau / nsub
 
@@ -229,28 +246,6 @@ def compute_linsys_discrete(z_ref, nu_ref, problem, method):
 
     return Ak, Bk, Bkp, z_minus
 
-
-def build_ms_dyn_constraint(subproblem, k):
-    """
-    Construct the multiple shooting dynamics constraint for time step k.
-
-    The constraint enforces:
-        dz[k+1] + z_ref[k+1] - z_m[k+1] == Ak[k] @ dz[k] + Bk[k] @ dnu[k] + Bkp[k] @ dnu[k+1] + (vb_dyn_p[k] - vb_dyn_m[k])
-
-    Returns:
-    --------
-    cp.Constraint
-        The equality constraint for the multiple shooting dynamics
-    """
-    rhs = (
-        subproblem.Ak[k] @ subproblem.dz[k]
-        + subproblem.Bk[k] @ subproblem.dnu[k]
-        + subproblem.Bkp[k] @ subproblem.dnu[k + 1]
-        + subproblem.vb_stack.dynamics[k]
-    )
-    return subproblem.dz[k + 1] + subproblem.z_ref[k + 1] - subproblem.z_m[k + 1] == rhs
-
-
 def build_ps_dyn_constraints(subproblem):
     """
     Build pseudospectral dynamics constraints as a single block matrix equation.
@@ -261,15 +256,14 @@ def build_ps_dyn_constraints(subproblem):
     cp.Constraint
         Single constraint for all collocation nodes, shape (N_col, n_z)
     """
-    method = subproblem.method
-    N_col  = method.index_map.N.time_grid - 1
+    N_col  = subproblem.index_map.N.time_grid - 1
 
-    Z   = subproblem.z_ref + subproblem.dz
+    Z   = subproblem.cp_params.z_ref + subproblem.dz
     lhs = 2.0 * (subproblem.ps_D @ Z)
 
     rhs_list = []
     for k in range(N_col):
-        rhs_k = subproblem.ps_f_ref[k] + subproblem.ps_Ac[k] @ subproblem.dz[k + 1] + subproblem.ps_Bc[k] @ subproblem.dnu[k + 1]
+        rhs_k = subproblem.cp_params.ps_f_ref[k] + subproblem.cp_params.ps_Ac[k] @ subproblem.dz[k + 1] + subproblem.cp_params.ps_Bc[k] @ subproblem.dnu[k + 1]
         rhs_list.append(rhs_k)
 
     rhs = cp.vstack(rhs_list)

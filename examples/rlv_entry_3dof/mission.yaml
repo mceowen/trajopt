@@ -10,6 +10,8 @@ fcns:
 params:
   planet:
     inherit: trajopt/missions/planets/earth.yaml
+    omega: 0.0
+  
   vehicle:
     inherit: trajopt/missions/vehicles/rlv.yaml
 
@@ -17,26 +19,28 @@ params:
 # CONSTRAINTS
 # ===============================
 constraints:
+  dynamics:
+    type: dynamics
+    fcn: fcns.dynamics
+
   initial_state:
+    type: initial_state
     value: ["${params.planet.r + 79248.0}", 0.0, 0.0, 7802.88, -1.0, 90.0]
-    idx: [0, 1, 2, 3, 4, 5]
 
   final_state:
-    value: ["${params.planet.r + 24384.0}", 762.0, -5.0]
-    idx: [0, 3, 4]
+    type: final_state
+    value: ["${params.planet.r + 24384.0}", null, null, 762.0, -5.0, null]
     eps: [100, 10, 0.1]
 
   state_limits:
-    min_value: ["${params.planet.r}", 500.0, -80.0]
-    min_value_idx: [0, 3, 4]
-    max_value: ["${params.planet.r + 79248.0}", 45000.0, 80.0]
-    max_value_idx: [0, 3, 4]
+    type: state_limits
+    lower: ["${params.planet.r}",           null, null,   500.0, -80.0, null]
+    upper: ["${params.planet.r + 400000.0}", null, null, 10000.0,  80.0, null]
 
   control_limits:
-    min_value: [-90.0, 17.0]
-    min_value_idx: [0, 1]
-    max_value: [1.0, 17.5]
-    max_value_idx: [0, 1]
+    type: control_limits
+    lower: [-90.0, -90]
+    upper: [1.0, 90]
 
 # ===============================
 # COSTS
@@ -46,11 +50,10 @@ costs:
     type: terminal_state
     idx: [2]
     sign: -1
-
-  control_rate_regularization:
-    type: rate_regularization
-    set: control
-    w: 1.0
+  
+  min_terminal_velocity:
+    type: terminal
+    fcn: fcns.velocity
 
 # ===============================
 # ACTIVE CONSTRAINTS AND COSTS
@@ -64,4 +67,3 @@ constraint_list:
 
 cost_list:
   - max_crossrange
-  - control_rate_regularization

@@ -2,20 +2,20 @@ import numpy as np
 from trajopt.utils.tools import AttrDict
 
 class Nondim:
-    def __init__(self, problem):
+    def __init__(self, config, index_map):
 
         """
         Initializes all nondimensional parameters
         """
 
-        n_x                 = problem.index_map.n.state
-        n_u                 = problem.index_map.n.get('control')
+        n_x                 = index_map.n.state
+        n_u                 = index_map.n.get('control')
 
         self.state_scales   = np.ones(n_x)
         self.control_scales = np.ones(n_u)
         self.time_scale     = 1.0
 
-        for state_group_name, state_group in problem.config.problem.state.items():
+        for state_group_name, state_group in config.problem.state.items():
 
             provided_scale = state_group.get("scale", None)
             if provided_scale is None:
@@ -26,7 +26,7 @@ class Nondim:
 
             self.state_scales[state_group["idx"]] = group_scale
 
-        for control_group_name, control_group in problem.config.problem.control.items():
+        for control_group_name, control_group in config.problem.control.items():
             provided_scale = control_group.get("scale", None)
             
             if provided_scale is None:
@@ -37,7 +37,7 @@ class Nondim:
 
             self.control_scales[control_group["idx"]] = group_scale
 
-        provided_scale = problem.config.problem.time.get("scale", None)
+        provided_scale = config.problem.time.get("scale", None)
         if provided_scale is None:
             print("Warning: no time scale provided in 'model.nondim.t_scale', defaulting to 1.0.")
             self.time_scale = 1.0

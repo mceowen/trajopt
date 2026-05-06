@@ -3,22 +3,23 @@
 # ===============================
 
 fcns:
-  dynamics:    trajopt/models/quadrotor_3dof.py:dynamics_jax
-  thrust_norm: trajopt/models/quadrotor_3dof.py:thrust_norm
-  obstacle:    trajopt/models/quadrotor_3dof.py:obstacle
-  height:      trajopt/models/quadrotor_3dof.py:height
-  pos_x:       trajopt/models/quadrotor_3dof.py:pos_x
-  pos_y:       trajopt/models/quadrotor_3dof.py:pos_y
-  vel_x:       trajopt/models/quadrotor_3dof.py:vel_x
-  vel_y:       trajopt/models/quadrotor_3dof.py:vel_y
-  vel_z:       trajopt/models/quadrotor_3dof.py:vel_z
-  thrust_x:    trajopt/models/quadrotor_3dof.py:thrust_x
-  thrust_y:    trajopt/models/quadrotor_3dof.py:thrust_y
-  thrust_z:    trajopt/models/quadrotor_3dof.py:thrust_z
-  xy:          trajopt/models/quadrotor_3dof.py:xy
-  xyz:         trajopt/models/quadrotor_3dof.py:xyz
-  xz:          trajopt/models/quadrotor_3dof.py:xz
-  yz:          trajopt/models/quadrotor_3dof.py:yz
+  dynamics:        trajopt/models/quadrotor_3dof.py:dynamics_jax
+  thrust_norm:     trajopt/models/quadrotor_3dof.py:thrust_norm
+  max_thrust_cone: trajopt/models/quadrotor_3dof.py:max_thrust_cone
+  obstacle:        trajopt/models/quadrotor_3dof.py:obstacle
+  height:          trajopt/models/quadrotor_3dof.py:height
+  pos_x:           trajopt/models/quadrotor_3dof.py:pos_x
+  pos_y:           trajopt/models/quadrotor_3dof.py:pos_y
+  vel_x:           trajopt/models/quadrotor_3dof.py:vel_x
+  vel_y:           trajopt/models/quadrotor_3dof.py:vel_y
+  vel_z:           trajopt/models/quadrotor_3dof.py:vel_z
+  thrust_x:        trajopt/models/quadrotor_3dof.py:thrust_x
+  thrust_y:        trajopt/models/quadrotor_3dof.py:thrust_y
+  thrust_z:        trajopt/models/quadrotor_3dof.py:thrust_z
+  xy:              trajopt/models/quadrotor_3dof.py:xy
+  xyz:             trajopt/models/quadrotor_3dof.py:xyz
+  xz:              trajopt/models/quadrotor_3dof.py:xz
+  yz:              trajopt/models/quadrotor_3dof.py:yz
 
 # ===============================
 # MODEL CONFIGURATION
@@ -45,6 +46,8 @@ control:
     idx: [1]
   Tz:
     idx: [2]
+
+time.scale: 1.0
 
 # ===============================
 # TRAJECTORIES

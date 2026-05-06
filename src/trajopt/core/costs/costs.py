@@ -1,13 +1,14 @@
 import inspect
 from functools import partial
 
-from trajopt.core.costs import costs_library
+from trajopt.core.costs import cost_types
 
 
 class Costs:
     def __init__(self, config, index_map, fcns=None):
 
-        self.costs_list = []
+        self.cost_list = []
+        self.cost_type_list = []
 
         print("\ncosts:")
 
@@ -29,8 +30,10 @@ class Costs:
 
         """
         cost_type = cost_config["type"]
-        costClass = getattr(costs_library, cost_type)
-        self.costs_list.append(costClass(cost_config, index_map, fcns=fcns))
+        costClass = getattr(cost_types, cost_type)
+        self.cost_list.append(costClass(cost_config, index_map, fcns=fcns))
+        if cost_type not in self.cost_type_list:
+            self.cost_type_list.append(cost_type)
 
     def get(self, **kwargs):
         """Get all costs that match given keyword arguments.
@@ -42,7 +45,7 @@ class Costs:
             List of costs that match the given keyword arguments.
 
         """
-        selected_costs = [cost for cost in self.costs_list if all(getattr(cost, k, None) == v for k, v in kwargs.items())]
+        selected_costs = [cost for cost in self.cost_list if all(getattr(cost, k, None) == v for k, v in kwargs.items())]
         return selected_costs
 
     def has(self, **kwargs):
@@ -55,7 +58,7 @@ class Costs:
             True if any costs match all given keyword arguments, False otherwise.
 
         """
-        return any(all(getattr(cost, k, None) == v for k, v in kwargs.items()) for cost in self.costs_list)
+        return any(all(getattr(cost, k, None) == v for k, v in kwargs.items()) for cost in self.cost_list)
 
     def resolve_functions(self, fcns):
         """Bind user-provided functions to cost objects and wrap 'fcns' dictionary.
@@ -67,7 +70,7 @@ class Costs:
             None.
 
         """
-        for cost in self.costs_list:
+        for cost in self.cost_list:
             if getattr(cost, "fcn_dim", None) is not None:
                 sig = inspect.signature(cost.fcn_dim)
                 param_names = sig.parameters.keys()
@@ -89,7 +92,7 @@ class Costs:
             None.
 
         """
-        for cost in self.costs_list:
+        for cost in self.cost_list:
             cost.nondim_cost(nondim)
 
     def convexify_costs(self):
@@ -102,6 +105,6 @@ class Costs:
             None.
 
         """
-        for cost in self.costs_list:
+        for cost in self.cost_list:
             if getattr(cost, "convexify_cost", None) is not None:
                 cost.convexify_cost()

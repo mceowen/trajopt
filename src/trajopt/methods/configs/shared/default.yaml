@@ -2,70 +2,32 @@ flags:
   auto_jac: 1
   auto_jac_aero: 1
   auto_jac_cnst: 1
-  dev_var: 1
-  var_scl_flag: 0
   free_final_time: 0
   equal_dt: 0
-  flag_autotune: 3
-  flag_Wauto_memory: 0
-  weight_zero: 0
-  stepsize_auto_primal: 0
-  stepsize_auto_dual: 0
   flag_conv: 0
-  buff_dyn: "term"
-  buff_dyn_dual: "none"
-  ctcs: "none"
   ode_fixed_dt: 0
-  aoa_vb: 0
   jax_dyn: 1
-  dynamics_nonconvex: 1
   ignore_dpp: 0
 
-
-  flag_path:    1.0
-  flag_nfz:     1.0
-  flag_custom:  1.0
-  flag_term:    1.0
-  flag_dyn:     1.0
-  flag_tr:      1.0
-  flag_true:    1.0
-  flag_dual:    1.0
-  flag_vb:      1.0
 
 # Convergence settings
 conv:
   eps_cost:   []
   eps_state:  []
+  eps_defect: 0.001
   eps_path:   []
   eps_nfz:    []
   eps_custom:    []
+  eps_time:   0.001
   eps_term:   []
   eps_dyn:    []
   ctcs_mult_state: 1.0
   ctcs_mult_cnst: 1.0
-  eps_ctcs: 1e-6
-  iter_max: 20
+  eps_ctcs: 0.000001
+  iter_max: 300
   fac_eps: 0.0
   ctcs_fac_cnst: 0.5
 
-# Weight structure
-weights:
-  w_cost: 0.0
-  alpha_z: 0.5
-  alpha_u: "inf"
-  beta: 1.0
-  gamma: 0.1
-  eps_nonzero1: 0.2
-  eps_nonzero2: 0.0000000001
-  config:
-    scale_w:
-      default: 100.0
-      path: 1.0
-      custom: 1.0
-      nfz: 1.0
-      dyn: 100000.0
-      term: 100.0
-  w_ctcs: 100.0
 
 time_grid: 40
 

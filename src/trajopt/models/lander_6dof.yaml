@@ -1,11 +1,18 @@
 # ===============================
-# FUNCTION REGISTRY
+# MODEL FUNCTIONS
 # ===============================
 
 fcns:
-  # dynamics / constraints
-  dynamics:           trajopt/models/lander_6dof.py:dynamics
-  thrust:             trajopt/models/lander_6dof.py:thrust
+  # dynamics
+  dynamics:               trajopt/models/lander_6dof.py:dynamics
+  thrust:                 trajopt/models/lander_6dof.py:thrust
+
+  # convex inequality constraints (CVXPY expressions)
+  cvx_gimbal_limit:       trajopt/models/lander_6dof.py:cvx_gimbal_limit
+  cvx_glide_slope:        trajopt/models/lander_6dof.py:cvx_glide_slope
+  cvx_max_thrust:         trajopt/models/lander_6dof.py:cvx_max_thrust
+  cvx_max_angular_velocity: trajopt/models/lander_6dof.py:cvx_max_angular_velocity
+  cvx_tilt_limit:         trajopt/models/lander_6dof.py:cvx_tilt_limit
 
   # state trajectories
   mass:               trajopt/models/lander_6dof.py:mass
@@ -37,7 +44,7 @@ fcns:
   body_x_dir_3d:      trajopt/models/lander_6dof.py:body_x_dir_3d
   thrust_dir_3d:      trajopt/models/lander_6dof.py:thrust_dir_3d
 
-  # STL constraint trajectories
+  # constraint plot trajectories
   altitude_traj:      trajopt/models/lander_6dof.py:altitude_traj
   speed_traj:         trajopt/models/lander_6dof.py:speed_traj
   angular_speed_traj: trajopt/models/lander_6dof.py:angular_speed_traj
@@ -50,7 +57,7 @@ fcns:
   glideslope_cone_3d: trajopt/models/lander_6dof.py:glideslope_cone_3d
 
 # ===============================
-# MODEL CONFIGURATION
+# STATE AND CONTROL CONFIG
 # ===============================
 
 state:
@@ -77,79 +84,6 @@ control:
 
 time:
   scale: 1
-
-# ===============================
-# CONSTRAINTS
-# ===============================
-
-constraints:
-  dynamics:
-    type: dynamics
-    fcn: fcns.dynamics
-
-  initial_state:
-    type: equality_bc
-    set: state
-    boundary: init
-
-  final_state:
-    type: equality_bc
-    set: state
-    boundary: final
-
-  final_control:
-    type: equality_bc
-    set: control
-    boundary: final
-
-  state_limits:
-    type: box
-    set: state
-
-  gimbal_limit:
-    type: axis_angle_cone
-    set: control
-    axis: [1, 0, 0]
-    idx: [0, 1, 2]
-
-  glide_slope:
-    type: axis_angle_cone
-    set: state
-    axis: [1, 0, 0]
-    idx: [1, 2, 3]
-
-  max_thrust:
-    type: max_norm_cone
-    set: control
-    idx: [0, 1, 2]
-
-  max_angular_velocity:
-    type: max_norm_cone
-    set: state
-    idx: [11, 12, 13]
-
-  tilt_limit:
-    type: quaternion_cone
-    axis_num: 1
-    quat_start_idx: 7
-
-  min_thrust:
-    type: nonconvex_inequality
-    group: path
-    fcn: fcns.thrust
-    ct: 0
-
-# ===============================
-# COSTS
-# ===============================
-
-costs:
-  min_time:
-    type: min_time
-
-  control_effort:
-    type: control_effort
-    idx: [0, 1, 2]
 
 # ===============================
 # TRAJECTORIES
@@ -263,13 +197,6 @@ trajectories:
     ylabel: "Altitude (m)"
     equal_aspect: true
     limits_opt_only: true
-    overlays:
-      glideslope:
-        fcn: fcns.glideslope_cone
-        color: [0, 0, 0]
-        ls: ':'
-        lw: 1.2
-        alpha: 0.6
     quivers:
       body_x:
         fcn: fcns.body_x_dir_y_alt
@@ -295,14 +222,8 @@ trajectories:
     xlabel: "Y (m)"
     ylabel: "Z (m)"
     zlabel: "Altitude (m)"
+    equal_aspect: true
     limits_opt_only: true
-    overlays:
-      glideslope:
-        fcn: fcns.glideslope_cone_3d
-        color: [0, 0, 0]
-        ls: ':'
-        lw: 0.8
-        alpha: 0.4
     quivers:
       body_x:
         fcn: fcns.body_x_dir_3d

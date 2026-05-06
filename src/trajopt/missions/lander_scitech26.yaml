@@ -56,10 +56,10 @@ constraints:
     theta_max: ${params.theta_gimbal}
 
   max_thrust:
-    max_value: ${params.max_thrust}
+    upper: ${params.max_thrust}
 
   min_thrust:
-    min_value: ["${params.min_thrust}"]
+    lower: ["${params.min_thrust}"]
     eps: [0.001]
 
 # ===============================
@@ -118,9 +118,9 @@ constraint_list:
   - gimbal_limit
   - max_thrust
   - min_thrust
-  - altitude_triggered_tilt
-  - altitude_triggered_speed
-  - altitude_triggered_angular_speed
+  # - altitude_triggered_tilt
+  # - altitude_triggered_speed
+  # - altitude_triggered_angular_speed
   # - altitude_triggered_glideslope
   # - altitude_triggered_los
 

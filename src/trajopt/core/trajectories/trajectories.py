@@ -1,4 +1,4 @@
-import trajopt.core.trajectories.trajectory_library as trajectory_library
+import trajopt.core.trajectories.trajectory_types as trajectory_types
 import inspect
 from functools import partial
 
@@ -6,6 +6,7 @@ class Trajectories:
     def __init__(self, config, index_map, fcns=None):
 
         self.trajectories_list = []
+        self.trajectory_type_list = []
 
         for i, (traj_name, traj_config_i) in enumerate(config.problem.trajectories.items()):
             self.register_trajectory(traj_config_i, index_map, fcns=fcns)
@@ -23,10 +24,12 @@ class Trajectories:
             None.
         """
         traj_type = traj_config["type"]
-        trajectoryClass = getattr(trajectory_library, traj_type)
+        trajectoryClass = getattr(trajectory_types, traj_type)
 
         traj_object = trajectoryClass(traj_config, index_map, fcns=fcns)
         self.trajectories_list.append(traj_object)
+        if traj_type not in self.trajectory_type_list:
+            self.trajectory_type_list.append(traj_type)
         
     def get(self, **kwargs):
         """"

@@ -1,5 +1,6 @@
 import numpy as np
-from trajopt.utils.tools import AttrDict
+import jax.numpy as jnp
+from trajopt.utils.tools import AttrDict, resolve_function_from_string
 
 
 class IndexMap:
@@ -9,17 +10,14 @@ class IndexMap:
     """
 
     def __init__(self, config):
-        # Accept configs or objects for flexible initialization
-        self.model_config   = config.problem.model
-        self.mission_config = config.problem.mission
+        # IndexMap should be fully defined from the configs
+        self.problem_config = config.problem
         self.method_config  = config.method
-        self.problem        = None
-        self.method         = None
 
         self.n = AttrDict({
             # core model dims
-            "state":        max(max(group["idx"]) for group in self.model_config["state"].values()) + 1,
-            "control":      max(max(group["idx"]) for group in self.model_config["control"].values()) + 1,
+            "state":        max(max(group["idx"]) for group in self.problem_config["state"].values()) + 1,
+            "control":      max(max(group["idx"]) for group in self.problem_config["control"].values()) + 1,
         })
 
         self.N = AttrDict({
@@ -27,17 +25,7 @@ class IndexMap:
             "time_grid":            self.method_config['time_grid']
         })
 
-
-    def update_index_map(self, problem=None, method=None):
-        
-        if method is not None and problem is None:
-            problem = getattr(method, "problem", None)
-        if problem is not None:
-            self.problem = problem
-        if method is not None:
-            self.method = method
-
-        self._build_indices()
+        self.update_indices()
     
 ############################################################
 # INDEX PACKING / UNPACKING UTILITIES
@@ -156,7 +144,6 @@ class IndexMap:
 
         return f_alg
 
-
     def wrap_znu_fcn(self, f_alg, beta=None, s=1.0):
         """
         Wrap an algorithm-level function f_alg(z, nu, params)
@@ -199,41 +186,115 @@ class IndexMap:
 ############################################################
 # BUILD INDICES OBJECTS FROM CONFIGS
 ############################################################
-        
-    def _build_indices(self):
-        
-        # Priority: use configs if provided, else fall back to objects
-        if self.model_config is not None:
-            nx      = self.n.state
-            n_u     = self.n.control
-        else:
-            nx = n_u = None
 
-        if self.mission_config is not None:
-            nz = self.mission_config.get('n_z', nx)
-        else:
-            nz = nx
+    def _infer_constraint_dimensions(self):
+        """Infer and inject 'dimension' into each constraint config from its fields.
 
-        if self.problem is not None and hasattr(self.problem, 'constraints'):
-            n_ineq = sum(constraint.dimension for constraint in self.problem.constraints.get(ct=0, type="nonconvex_inequality"))
+        Handles all constraint types:
+        - initial_state / final_state: count non-None entries in value, or len(idx)
+        - state_limits / control_limits: count non-None in lower + upper
+        - control_rate_limit: len(idx)
+        - convex_inequality / nonconvex_inequality: resolve the function, call it
+          with dummy inputs, and get output size. Doubles if both bounds present.
+        - dynamics: set to 0 here (will be set to nz after ctcs count is known)
+        """
+        nx = self.n.state
+        nu = self.n.control
 
-            if self.problem.constraints.has(ct=1):
-                n_ctcs = sum(constraint.dimension for constraint in self.problem.constraints.get(ct=1))
+        constraint_name_list = self.problem_config.constraint_list
+        constraint_configs   = self.problem_config.constraints
+
+        # resolve the raw fcns config so we can probe function-based constraints
+        fcns_config = self.problem_config.get("fcns", {})
+        resolved_fcns = AttrDict()
+        for fname, fpath in fcns_config.items():
+            if isinstance(fpath, str):
+                resolved_fcns[fname] = resolve_function_from_string(fpath)
             else:
-                n_ctcs = 0
+                resolved_fcns[fname] = fpath
 
-            n_t         = 1
-            nz          = nx + n_t + n_ctcs
+        params = self.problem_config.get("params", None)
 
-            n_term      = sum(constraint.dimension for constraint in self.problem.constraints.get(ct=0, type="equality_bc", boundary="final", set="state"))
-            n_term_ineq = sum(constraint.dimension for constraint in self.problem.constraints.get(ct=0, type='inequality_bc', boundary="final", set="state"))
-            n_term_ctcs = n_ctcs
-            n_term_total= n_term + n_term_ineq + n_ctcs
-        else:
-            n_ineq      = n_path = n_nfz = n_custom = n_ctcs = n_term = n_term_ineq = n_term_ctcs = n_term_total = 0
-            n_t         = 1
+        for name in constraint_name_list:
+            cfg   = constraint_configs[name]
+            ctype = cfg.type
 
-        n_nu            = n_u + 1
+            if "dimension" in cfg:
+                base_dim = int(cfg["dimension"])
+            elif ctype in ("initial_state", "final_state"):
+                if "idx" in cfg:
+                    base_dim = len(cfg["idx"])
+                else:
+                    base_dim = sum(1 for v in cfg["value"] if v is not None)
+            elif ctype in ("state_limits", "control_limits"):
+                raw_lower = cfg.get("lower", [])
+                raw_upper = cfg.get("upper", [])
+                base_dim = (sum(1 for v in raw_lower if v is not None)
+                          + sum(1 for v in raw_upper if v is not None))
+            elif ctype == "control_rate_limit":
+                base_dim = len(cfg["idx"])
+            elif ctype in ("convex_inequality", "nonconvex_inequality"):
+                fcn = resolve_function_from_string(cfg["fcn"], resolved_fcns)
+                _out = fcn(0, np.ones(nx), np.ones(nu), params)
+                try:
+                    base_dim = jnp.atleast_1d(_out).shape[0]
+                except TypeError:
+                    base_dim = int(np.prod(_out.shape)) if _out.shape else 1
+            elif ctype == "dynamics":
+                cfg["dimension"] = 0
+                continue
+            elif ctype == "final_time":
+                cfg["dimension"] = 1
+                continue
+            else:
+                raise ValueError(
+                    f"Cannot infer dimension for constraint '{name}' of type '{ctype}': "
+                    f"provide 'dimension' in config"
+                )
+
+            # double for inequality types with both upper and lower bounds
+            if ctype in ("convex_inequality", "nonconvex_inequality"):
+                has_upper = cfg.get("upper") is not None
+                has_lower = cfg.get("lower") is not None
+                if has_upper and has_lower:
+                    cfg["dimension"] = 2 * base_dim
+                else:
+                    cfg["dimension"] = base_dim
+            else:
+                cfg["dimension"] = base_dim
+
+    def update_indices(self):
+        
+        nx      = self.n.state
+        n_u     = self.n.control
+
+        constraint_name_list = self.problem_config.constraint_list
+        constraint_configs   = self.problem_config.constraints
+
+        # infer dimensions for all constraints from config fields
+        self._infer_constraint_dimensions()
+
+        # count ctcs dimensions (constraints with ct=1)
+        n_ctcs = 0
+        for name in constraint_name_list:
+            cfg = constraint_configs[name]
+            if cfg.get("ct", 0) == 1:
+                n_ctcs += cfg.dimension
+
+        # now set dynamics dimension to nz
+        n_t  = 1
+        nz   = nx + n_t + n_ctcs
+        for name in constraint_name_list:
+            if constraint_configs[name].type == "dynamics":
+                constraint_configs[name]["dimension"] = nz
+
+        # accumulate total dimension per constraint type
+        n_by_type = {}
+        for name in constraint_name_list:
+            cfg = constraint_configs[name]
+            n_by_type[cfg.type] = n_by_type.get(cfg.type, 0) + cfg.dimension
+
+        n_nu        = n_u + 1
 
         z_idx_all       = np.arange(0, nz)
         z_idx_state     = np.arange(0, nx)
@@ -244,58 +305,13 @@ class IndexMap:
         u_idx_ctrl      = np.arange(0, n_u)
         u_idx_s         = np.arange(n_u, n_u + 1)
 
-        n_term_eq       = n_term
-        term_eq_idx     = np.arange(0, n_term_eq)
-        term_ineq_idx   = np.arange(n_term_eq, n_term_eq + n_term_ineq)
-        term_ctcs_idx   = np.arange(n_term_eq + n_term_ineq, n_term_eq + n_term_ineq + n_term_ctcs)
-
         Ak_ind          = np.arange(0, nz * nz)
         Bk_ind          = np.arange(Ak_ind[-1] + 1, Ak_ind[-1] + 1 + nz * n_nu)
         Bkp_ind         = np.arange(Bk_ind[-1] + 1, Bk_ind[-1] + 1 + nz * n_nu)
 
-        time_grid       = self.N.time_grid if self.method_config is not None else 0
-        buff_dyn        = str(self.method.flags.buff_dyn) if self.method is not None else "l2"
-        ctcs            = str(self.method.flags.ctcs) if self.method is not None else "none"
+        time_grid       = self.N.time_grid 
 
         n_real = nx + n_t
-
-        if buff_dyn in {"term", "l1", "l2"}:
-            n_plus_real     = 0
-            n_minus_real    = 0
-            Npm_real        = 0
-        elif buff_dyn == "quad-1":
-            n_plus_real     = 1
-            n_minus_real    = 1
-            Npm_real        = 1
-        elif buff_dyn == "quad-2":
-            n_plus_real     = 1
-            n_minus_real    = 1
-            Npm_real        = time_grid - 1
-        elif buff_dyn == "quad-3":
-            n_plus_real     = n_real
-            n_minus_real    = n_real
-            Npm_real        = 1
-        else:
-            raise ValueError("Invalid buff_dyn flag.")
-
-        if ctcs in {"term", "l1", "l2", "none"}:
-            n_plus_ctcs     = 0
-            n_minus_ctcs    = 0
-            Npm_ctcs        = 0
-        elif ctcs == "quad-1":
-            n_plus_ctcs     = 1
-            n_minus_ctcs    = 1
-            Npm_ctcs        = 1
-        elif ctcs == "quad-2":
-            n_plus_ctcs     = 1
-            n_minus_ctcs    = 1
-            Npm_ctcs        = time_grid - 1
-        elif ctcs == "quad-3":
-            n_plus_ctcs     = n_ctcs
-            n_minus_ctcs    = n_ctcs
-            Npm_ctcs        = 1
-        else:
-            raise ValueError("Invalid ctcs flag.")
 
         # phase_idx_all = np.arange(
         #                         self.mission_config.phases.entry.start,
@@ -330,16 +346,12 @@ class IndexMap:
             "dilation_factor":  u_idx_s,
         })
 
-        nonconvex_inequality = AttrDict({
-            "all":          np.arange(0, n_ineq),
-        })
-
-        terminal = AttrDict({
-            "eq":           term_eq_idx,
-            "ineq":         term_ineq_idx,
-            "ctcs":         term_ctcs_idx,
-            "all":          np.arange(0, n_term_eq + n_term_ineq + n_term_ctcs),
-        })
+        # terminal = AttrDict({
+        #     "eq":           term_eq_idx,
+        #     "ineq":         term_ineq_idx,
+        #     "ctcs":         term_ctcs_idx,
+        #     "all":          np.arange(0, n_term_eq + n_term_ineq + n_term_ctcs),
+        # })
 
         dynamics_indices = AttrDict({
             "Ak":           Ak_ind,
@@ -349,19 +361,20 @@ class IndexMap:
 
         ctcs_indices = AttrDict({
             "state":        z_idx_ctcs,
-            "term":         term_ctcs_idx,
-            "ineq":         np.array([], dtype=int),
+            # "term":         term_ctcs_idx,
+            # "ineq":         np.array([], dtype=int),
         })
+
+        constraint_indices = AttrDict({"dynamics": dynamics_indices})
+        for t, n in n_by_type.items():
+            if t != "dynamics":
+                constraint_indices[t] = AttrDict({"all": np.arange(0, n)})
 
         self.indices = AttrDict({
             "z":            z_indices,
             "nu":           nu_indices,
-            "constraints": AttrDict({
-                "nonconvex_inequality": nonconvex_inequality,
-                "final_state":          terminal,
-                "dynamics":             dynamics_indices,
-            }),
-            "ctcs":     ctcs_indices,
+            "constraints":  constraint_indices,
+            "ctcs":         ctcs_indices,
             # "phases":   phase_indices
         })
 
@@ -373,16 +386,8 @@ class IndexMap:
             "nu":                   int(n_nu),
             "z":                    int(nz),
             "ctcs":                 int(n_ctcs),
-            "nonconvex_inequality": int(n_ineq),
-            "final_state":          int(n_term),
-            "term_ineq":            int(n_term_ineq),
-            "term_ctcs":            int(n_term_ctcs),
-            "term_total":           int(n_term_total),
+            **{t: int(n) for t, n in n_by_type.items()},
             "dynamics":             int(nz),
-            "plus_real":            int(n_plus_real),
-            "minus_real":           int(n_minus_real),
-            "plus_ctcs":            int(n_plus_ctcs),
-            "minus_ctcs":           int(n_minus_ctcs),
         })
 
         # phase_dim = AttrDict({
@@ -403,13 +408,11 @@ class IndexMap:
             "AFFINE":               time_grid,
             "POLYTOPE":             time_grid,
             "SOC":                  time_grid,
+            "final_time":           1,
             "equality_bc":          1,
             "inequality_bc":        1,
             'time_grid':            time_grid,
             "real":                 time_grid,
-            "pm_real":              int(Npm_real),
-            "pm_ctcs":              int(Npm_ctcs),
-            # "phases":               phase_dim
         })
 
     # TODO(Skye): Update this summary

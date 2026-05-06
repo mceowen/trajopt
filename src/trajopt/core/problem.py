@@ -5,14 +5,15 @@ from trajopt.utils.tools import AttrDict, recursive_attrdict, resolve_function_f
 
 class Problem:
 
-    def __init__(self, config, index_map):
+    def __init__(self, config, index_map, nondim):
 
         # ------------------------------------------------------------
         # Config
         # ------------------------------------------------------------
 
-        self.config = config
+        self.config    = config
         self.index_map = index_map
+        self.nondim    = nondim
 
         # ------------------------------------------------------------
         # Functions
@@ -50,6 +51,7 @@ class Problem:
 
         self.costs = Costs(self.config, index_map, fcns=self.fcns)
         print("------------------------------------------------------------")
+        print("\n")
 
         # ------------------------------------------------------------
         # Bind fcns dict to constraint/cost functions that accept it
@@ -63,3 +65,15 @@ class Problem:
         # ------------------------------------------------------------
         self.trajectories = Trajectories(self.config, index_map, fcns=self.fcns)
         self.trajectories.resolve_functions(self.fcns)
+
+        # nondimensionalize and convexfiy constraints
+        self.constraints.nondim_constraints(self.nondim)
+        
+        dynamics_constraint = self.constraints.get(type="dynamics")[0]
+        dynamics_constraint.fcn = self.constraints.augment_dynamics_jax(dynamics_constraint.fcn_base)
+        
+        self.constraints.convexify_constraints()
+
+        # nondimensionalize and convexify costs
+        self.costs.nondim_costs(self.nondim)
+        self.costs.convexify_costs()

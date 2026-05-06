@@ -1,7 +1,7 @@
 # ===============================
 # CONSTRAINT CONFIGURATIONS
 # ==============================
-constraints:
+penalty_config:
   types: 
     nonconvex_inequality:
       W:

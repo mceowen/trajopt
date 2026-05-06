@@ -7,7 +7,7 @@ from trajopt.utils.tools import AttrDict
 
 def set_initial_guess(problem,method):
         
-        initial_guess_type = getattr(method.initial_guess, "type", "propagation")
+        initial_guess_type = getattr(method.config.method.guess, "type", "propagation")
 
         if initial_guess_type == "propagation":
             nonlinear_initial_guess(problem, method)
@@ -18,10 +18,6 @@ def set_initial_guess(problem,method):
         augment_initial_guess(problem, method)
 
         method.cost_init = discretize.compute_nonconvex_costs(method.initial_guess.z, method.initial_guess.nu, problem, method)
-    
-
-##################################################################################################################################
-
 
 # TODO(Skye): Possibly add actual computation of beta using index_map helpers
 def augment_initial_guess(problem, method):
@@ -91,12 +87,12 @@ def straight_line_initial_guess(problem, method):
 
     init = method.initial_guess
 
-    line_init_u_init            = method.initial_guess.line_guess_u_init @ method.nondim.M.control["d2nd"]
+    line_init_u_init            = method.config.method.guess.line_guess_u_init @ problem.nondim.M.control["d2nd"]
     t_init                      = np.asarray(init.t).reshape(-1)
 
     
-    init_state_constraint       = problem.constraints.get(type="equality_bc", boundary="init")[0]
-    terminal_state_constraint   = problem.constraints.get(type="equality_bc", boundary="final")[0]
+    init_state_constraint       = problem.constraints.get(type="initial_state")[0]
+    terminal_state_constraint   = problem.constraints.get(type="final_state")[0]
 
     if len(init_state_constraint.idx) == problem.index_map.n.state:
         xi_full = init_state_constraint.value
@@ -138,15 +134,14 @@ def straight_line_initial_guess(problem, method):
 def nonlinear_initial_guess(problem, method):
     init                = method.initial_guess
 
-    x0                  = problem.constraints.get(type="equality_bc", boundary="init")[0].value
+    x0                  = problem.constraints.get(type="initial_state")[0].value
     dynamics_cnstr      = problem.constraints.get(type="dynamics")[0]
 
     # ---- Control initialization ----
-    nl_init_u_start     = method.nondim.M.control.d2nd @ method.initial_guess.nl_guess_u_start
-    nl_init_u_stop      = method.nondim.M.control.d2nd @ method.initial_guess.nl_guess_u_stop
+    nl_init_u_start     = problem.nondim.M.control.d2nd @ method.config.method.guess.nl_guess_u_start
+    nl_init_u_stop      = problem.nondim.M.control.d2nd @ method.config.method.guess.nl_guess_u_stop
 
     t_init              = np.asarray(init.t).reshape(-1)
-    t_nl                = np.linspace(t_init[0], t_init[-1], 10000)
 
     # Linearly interpolate control between start and stop values
     t_start_end_pts     = np.array([t_init[0], t_init[-1]])
@@ -154,39 +149,20 @@ def nonlinear_initial_guess(problem, method):
     u_init_interp_func  = interp1d(t_start_end_pts, u_start_end_pts, axis=0)
     u_init              = u_init_interp_func(t_init)
 
-    # Propagate physical dynamics dx/dt = f(t, x, u) directly over real time
-    if dynamics_cnstr.backend == "jax":
-        t_nl_out, x_nl, _ = integrators.propagate_txu(
-            x0,
-            u_init,
-            t_init,
-            t_nl,
-            problem,
-            method,
-            compiled_attr_name="propagate_rk4_physical_jit",
-        )
-    else:
-        t_nl_out, x_nl, _ = integrators.propagate_scipy_rk45(
-            x0,
-            u_init,
-            t_init,
-            t_nl,
-            problem,
-            method,
-            dynamics=dynamics_cnstr.fcn_base,
-        )
-
-    x_interp_func = interp1d(t_nl_out, x_nl, axis=0)
-    x_init        = x_interp_func(t_init)
-
-    u_dense_func  = interp1d(t_init, u_init, axis=0, bounds_error=False,
-                             fill_value=(u_init[0], u_init[-1]))
+    # Propagate physical dynamics dx/dt = f(t, x, u) using fixed-step RK4
+    t_nl_out, x_nl, _ = integrators.propagate_txu_rk4(
+        x0,
+        u_init,
+        t_init,
+        problem,
+        method,
+    )
 
     init.t        = t_init
-    init.x        = x_init
+    init.x        = x_nl
     init.u        = u_init
     init.t_dense  = t_nl_out
     init.x_dense  = x_nl
-    init.u_dense  = u_dense_func(t_nl_out)
+    init.u_dense  = u_init
 
-    return t_init, x_init, u_init
+    return t_init, x_nl, u_init

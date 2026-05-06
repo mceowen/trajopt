@@ -3,15 +3,15 @@ inherit: trajopt/methods/configs/autoscvx-term.yaml
 # ===============================
 # GRID SETTINGS
 # ===============================
-time_grid: 150
+time_grid: 100
 
 # ===============================
 # FLAGS
 # ===============================
 flags:
   ode_fixed_dt: 1
-  equal_dt: 1
-  free_final_time: 0
+  equal_dt: 0
+  free_final_time: 1
   flag_conv: 1
 
 # ===============================
@@ -23,8 +23,8 @@ guess:
   T_max: 3000.0
   dT_max: 10.0
 
-  nl_guess_u_start: [-45.0, 17.4]
-  nl_guess_u_stop:  [-45.0, 17.4]
+  nl_guess_u_start: [-75.0, 17.4]
+  nl_guess_u_stop:  [-0.0, 17.4]
 
 # ===============================
 # CONVERGENCE TOLERANCES
@@ -40,8 +40,8 @@ conv:
 # WEIGHTS
 # ===============================
 weights:
-  alpha_z: 0.005
-  alpha_u: 0.005
+  alpha_z: 0.5
+  alpha_nu: 0.005
 
 # ===============================
 # SOLVER OPTIONS

@@ -1,8 +1,6 @@
 """Post-processing and analysis for SCP and NLP trajectory optimization solutions."""
 
 import copy
-from collections.abc import Callable
-from typing import Any
 
 import jax
 import numpy as np
@@ -10,8 +8,7 @@ import numpy as np
 import trajopt.methods.scp.initial_guess as guess
 from trajopt.core.indexing.index_map import IndexMap
 from trajopt.core.problem import Problem
-from trajopt.core.scaling.nondim import Nondim
-from trajopt.core.solution_method import SolutionMethod
+import trajopt.methods.scp.scvx as scvx
 from trajopt.methods.scp import integrators
 from trajopt.utils import tools
 from trajopt.utils.tools import AttrDict, recursive_attrdict
@@ -32,21 +29,21 @@ results = {
 """
 
 def perform_analysis(trajopt_obj, compute_iters=False):
-    problem     = trajopt_obj.problem
-    method      = trajopt_obj.method
+    problem          = trajopt_obj.problem
+    method           = trajopt_obj.method
 
-    params      = problem.params
-    iter_data   = method.subproblem.iter_data
-    nondim      = method.nondim
+    params           = problem.params
+    iter_data_list   = method.iter_data_list
+    nondim           = problem.nondim
 
     if compute_iters:
-        selected_iter_data = iter_data
+        selected_iter_data = iter_data_list
     else:
-        selected_iter_data = [iter_data[-1]]
+        selected_iter_data = [iter_data_list[-1]]
 
-    for data in selected_iter_data:
-        z_opt = np.asarray(data["z_opt"])
-        nu_opt = np.asarray(data["nu_opt"])
+    for iter_data in selected_iter_data:
+        z_opt = np.asarray(iter_data["z_opt"])
+        nu_opt = np.asarray(iter_data["nu_opt"])
 
         idx = problem.index_map.indices
         x_opt = z_opt[:, idx.z.state]
@@ -136,26 +133,26 @@ def perform_analysis(trajopt_obj, compute_iters=False):
                 trajectory_data[group][name] = output
 
         # re-dimensionalize all the data
-        data['t_nl'] = t_nl * nondim.time_scale
-        data['z_nl'] = x_nl @ nondim.M.state.nd2d
-        data['nu_nl'] = u_nl @ nondim.M.control.nd2d
+        iter_data['t_nl'] = t_nl * nondim.time_scale
+        iter_data['z_nl'] = x_nl @ nondim.M.state.nd2d
+        iter_data['nu_nl'] = u_nl @ nondim.M.control.nd2d
 
-        data['t_init'] = t_init * nondim.time_scale
-        data['z_init'] = x_init @ nondim.M.state.nd2d
-        data['nu_init'] = u_init @ nondim.M.control.nd2d
+        iter_data['t_init'] = t_init * nondim.time_scale
+        iter_data['z_init'] = x_init @ nondim.M.state.nd2d
+        iter_data['nu_init'] = u_init @ nondim.M.control.nd2d
 
-        data["t_init_nl"] = t_init_dense * nondim.time_scale
-        data["z_init_nl"] = x_init_dense @ nondim.M.state.nd2d
-        data["nu_init_nl"] = u_init_dense @ nondim.M.control.nd2d
+        iter_data["t_init_nl"] = t_init_dense * nondim.time_scale
+        iter_data["z_init_nl"] = x_init_dense @ nondim.M.state.nd2d
+        iter_data["nu_init_nl"] = u_init_dense @ nondim.M.control.nd2d
 
-        data['t_opt']   = t_opt * nondim.time_scale
-        data['z_opt']   = x_opt @ nondim.M.state.nd2d
-        data['nu_opt']  = u_opt @ nondim.M.control.nd2d
-        data['trajectory_data'] = trajectory_data
+        iter_data['t_opt']   = t_opt * nondim.time_scale
+        iter_data['z_opt']   = x_opt @ nondim.M.state.nd2d
+        iter_data['nu_opt']  = u_opt @ nondim.M.control.nd2d
+        iter_data['trajectory_data'] = trajectory_data
 
-    iters_out = [tools.trim_dict(rec, tools.ITER_DATA_KEYS_TO_KEEP) for rec in iter_data]
+        iter_data = tools.trim_dict(iter_data, tools.ITER_DATA_KEYS_TO_KEEP) 
     
-    return AttrDict({'iters': iters_out})
+    return AttrDict({'iter_data_list': iter_data_list})
 
 # ======================================================================
 # STANDALONE ANALYSIS
@@ -205,7 +202,9 @@ def run_mc_analysis(trajopt_obj):
         # build a new problem and method for method variations
         index_map = IndexMap(config_for_current_method)
         problem   = Problem(config_for_current_method, index_map=index_map)
-        method    = SolutionMethod(problem, config_for_current_method, index_map=index_map)
+
+        SolutionMethod = getattr(scvx, "SCvx")
+        method = SolutionMethod(problem, config_for_current_method, index_map)
 
         method.initialize()
         
@@ -214,7 +213,7 @@ def run_mc_analysis(trajopt_obj):
         trajopt_obj.method    = method
         trajopt_obj.solve()
 
-        subprob = method.subproblem
+        subprob = method
         runs = [perform_analysis(trajopt_obj)]
 
         mission_var_config = config_for_current_method.variations.mission
@@ -226,7 +225,7 @@ def run_mc_analysis(trajopt_obj):
             
             updated_config_vals_flat = get_variations(config_for_current_method, mission_var_config, mission_var_config_flat)
 
-            tools.update_problem_from_config(problem, updated_config_vals_flat, method.nondim)
+            tools.update_problem_from_config(problem, updated_config_vals_flat, problem.nondim)
             guess.set_initial_guess(problem, method)
 
             n_N = problem.index_map.N.time_grid

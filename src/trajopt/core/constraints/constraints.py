@@ -5,7 +5,7 @@ from typing import Any
 
 import jax.numpy as jnp
 
-from trajopt.core.constraints import constraints_library
+from trajopt.core.constraints import constraint_types
 
 
 class Constraints:
@@ -21,7 +21,8 @@ class Constraints:
         print("constraints:")
 
         self.index_map = index_map
-        self.constraints_list = []
+        self.constraint_list = []
+        self.constraint_type_list = []
         self.params = config.problem.params
 
         for i, (cnstr_name, cnstr_config_i) in enumerate(config.problem.constraints.items()):
@@ -41,10 +42,12 @@ class Constraints:
 
         """
         cnstr_type = cnstr_config["type"]
-        constraintClass = getattr(constraints_library, cnstr_type)
+        constraintClass = getattr(constraint_types, cnstr_type)
 
         cnstr_object = constraintClass(cnstr_config, index_map, fcns=fcns, params=self.params)
-        self.constraints_list.append(cnstr_object)
+        self.constraint_list.append(cnstr_object)
+        if cnstr_type not in self.constraint_type_list:
+            self.constraint_type_list.append(cnstr_type)
 
     def get(self, **kwargs: Any) -> list:
         """Get all constraints that match given keyword arguments.
@@ -58,7 +61,7 @@ class Constraints:
         """
         selected_constraints = [
             constraint
-            for constraint in self.constraints_list
+            for constraint in self.constraint_list
             if all(getattr(constraint, k, None) == v for k, v in kwargs.items())
         ]
 
@@ -75,7 +78,7 @@ class Constraints:
 
         """
         return any(
-            all(getattr(constraint, k, None) == v for k, v in kwargs.items()) for constraint in self.constraints_list
+            all(getattr(constraint, k, None) == v for k, v in kwargs.items()) for constraint in self.constraint_list
         )
 
     def resolve_functions(self, fcns: dict) -> None:
@@ -88,7 +91,7 @@ class Constraints:
             None.
 
         """
-        for constraint in self.constraints_list:
+        for constraint in self.constraint_list:
             if getattr(constraint, "fcn_dim", None) is not None:
                 sig = inspect.signature(constraint.fcn_dim)
                 param_names = sig.parameters.keys()
@@ -110,7 +113,7 @@ class Constraints:
             None.
 
         """
-        for constraint in self.constraints_list:
+        for constraint in self.constraint_list:
             constraint.nondim_constraint(nondim)
 
     def convexify_constraints(self) -> None:
@@ -123,7 +126,7 @@ class Constraints:
             None.
 
         """
-        for constraint in self.constraints_list:
+        for constraint in self.constraint_list:
             if getattr(constraint, "convexify_constraint", None) is not None:
                 constraint.convexify_constraint()
 
@@ -163,22 +166,3 @@ class Constraints:
             return s * jnp.concatenate([dx_dt, dt_dt, dbeta_dt])
 
         return dynamics_z_nu
-
-    def augment_txu_to_znu(self, fcn: Callable) -> Callable:
-        """Wrap a function f(t, x, u, params) to accept augmented state f(z, nu, params).
-
-        Args:
-            fcn: Function with signature f(t, x, u, params).
-
-        Returns:
-            Wrapped function with signature fcn_znu(z, nu, params).
-
-        """
-
-        def fcn_znu(z: Any, nu: Any, params: Any) -> Any:
-            x, t, beta = self.index_map.unpack_z(z)
-            u, s = self.index_map.unpack_nu(nu)
-
-            return fcn(t, x, u, params)
-
-        return fcn_znu

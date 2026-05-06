@@ -1,12 +1,14 @@
 import numpy as np
 import jax.numpy as jnp
 from jax import Array
+import cvxpy as cp
 import trajopt.models.rotations as rotations
+
 # =============================================================================
 # dynamics
 # =============================================================================
 
-def dynamics(t: float, z: Array, nu: Array, params: dict) -> Array:
+def dynamics(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """6-DoF powered descent dynamics."""
     veh = params.vehicle
 
@@ -14,44 +16,40 @@ def dynamics(t: float, z: Array, nu: Array, params: dict) -> Array:
 
     g = jnp.array([-params.planet.g, 0, 0])
 
-    Jb = jnp.diag(jnp.array([veh.Jb11, veh.Jb22, veh.Jb33]))
+    Jb    = jnp.diag(jnp.array([veh.Jb11, veh.Jb22, veh.Jb33]))
     Jbinv = jnp.diag(jnp.array([veh.Jbinv11, veh.Jbinv22, veh.Jbinv33]))
-    rt = jnp.array([veh.rt1, veh.rt2, veh.rt3])
+    rt    = jnp.array([veh.rt1, veh.rt2, veh.rt3])
 
-    x_dot = x_dot.at[0].set(-veh.alpha * jnp.linalg.norm(nu))
-    x_dot = x_dot.at[1:4].set(z[4:7])
-    x_dot = x_dot.at[4:7].set((1 / z[0]) * rotations.DCM(z[7:11]).T @ nu[:3] + g)
-    x_dot = x_dot.at[7:11].set((1 / 2) * rotations.omega(z[11:14]) @ z[7:11])
-    x_dot = x_dot.at[11:14].set(Jbinv @ (rotations.cr(rt) @ nu[:3] - rotations.cr(z[11:14]) @ Jb @ z[11:14]))
+    mass   = z[0]
+    v      = z[4:7]
+    q      = z[7:11]
+    w      = z[11:14]
+    thrust = nu[:3]
+
+    # mass dynamics
+    x_dot = x_dot.at[0].set(-veh.alpha * jnp.linalg.norm(thrust))
+    
+    # translational kinematics
+    x_dot = x_dot.at[1:4].set(v)
+
+    # translational dynamics
+    x_dot = x_dot.at[4:7].set((1 / mass) * rotations.DCM(q).T @ thrust + g)
+    
+    # quaternion kinematics
+    x_dot = x_dot.at[7:11].set(0.5 * rotations.omega(w) @ q)
+
+    # rotational dynamics
+    x_dot = x_dot.at[11:14].set(Jbinv @ (rotations.cr(rt) @ thrust - rotations.cr(w) @ Jb @ w))
 
     return x_dot
 
 # =============================================================================
 # nonconvex inequality constraint functions
-# (used with type: nonconvex_inequality constraints)
 # =============================================================================
 
-
-def thrust(t: float, z: Array, nu: Array, params: dict) -> Array:
+def thrust(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Thrust magnitude."""
     return jnp.array([jnp.linalg.norm(nu[:3])])
-
-
-def glideslope(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
-    """Glideslope cone constraint: vehicle must stay above the glideslope angle."""
-    r_i = z[1:4]
-    theta_gs = params.theta_gs
-
-    return jnp.array([jnp.tan(jnp.deg2rad(theta_gs)) * jnp.linalg.norm(r_i[1:3]) - r_i[0]])
-
-
-def tilt(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
-    """Tilt angle constraint: limits the vehicle tilt from vertical."""
-    theta_tilt = jnp.deg2rad(params.theta_tilt)
-    q2 = z[9]
-    q3 = z[10]
-
-    return jnp.array([jnp.cos(theta_tilt) - 1.0 + 2 * (q2**2 + q3**2)])
 
 
 def altitude(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
@@ -79,6 +77,14 @@ def glide_slope(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Arra
     return jnp.array([jnp.rad2deg(jnp.arctan2(horiz, alt))])
 
 
+def tilt(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """Tilt angle from vertical (degrees) via quaternion."""
+    q2 = z[9]
+    q3 = z[10]
+    cos_tilt = 1.0 - 2 * (q2**2 + q3**2)
+    return jnp.array([jnp.rad2deg(jnp.arccos(jnp.clip(cos_tilt, -1.0, 1.0)))])
+
+
 def los(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Line-of-sight angle: angle between body x-axis and vertical (degrees)."""
     body_x_inertial = rotations.DCM(z[7:11]).T[:, 0]
@@ -87,186 +93,167 @@ def los(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
 
 
 # =============================================================================
+# convex inequality constraint functions (CVXPY expressions)
+# g(t, x, u, params) <= 0
+# =============================================================================
+
+def cvx_gimbal_limit(t, x, u, params):
+    """Gimbal angle limit: thrust vector within theta_gimbal of body x-axis."""
+    cos_theta = np.cos(np.deg2rad(float(params.theta_gimbal)))
+    return cos_theta * cp.norm(u[:3]) - u[0]
+
+
+def cvx_glide_slope(t, x, u, params):
+    """Glide slope cone: horizontal distance bounded by altitude."""
+    tan_theta = np.tan(np.deg2rad(float(params.theta_gs)))
+    return tan_theta * cp.norm(x[2:4]) - x[1]
+
+
+def cvx_max_thrust(t, x, u, params):
+    """Maximum thrust magnitude."""
+    return cp.norm(u[:3]) - float(params.max_thrust)
+
+
+def cvx_max_angular_velocity(t, x, u, params):
+    """Maximum angular velocity magnitude."""
+    return cp.norm(x[11:14]) - float(params.angular_speed_limit)
+
+
+def cvx_tilt_limit(t, x, u, params):
+    """Tilt angle limit via quaternion components q2, q3."""
+    rhs = np.sqrt((1.0 - np.cos(np.deg2rad(float(params.theta_tilt)))) / 2.0)
+    return cp.norm(x[9:11]) - rhs
+
+
+# =============================================================================
 # trajectory helper functions
 # =============================================================================
 
-def mass(t: float, z: Array, nu: Array, params: dict) -> Array:
+def mass(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([z[0]])
 
-def pos_x(t: float, z: Array, nu: Array, params: dict) -> Array:
-    return jnp.array([z[1]])
-
-def pos_y(t: float, z: Array, nu: Array, params: dict) -> Array:
-    return jnp.array([z[2]])
-
-def pos_z(t: float, z: Array, nu: Array, params: dict) -> Array:
-    return jnp.array([z[3]])
-
-def vel_x(t: float, z: Array, nu: Array, params: dict) -> Array:
-    return jnp.array([z[4]])
-
-def vel_y(t: float, z: Array, nu: Array, params: dict) -> Array:
-    return jnp.array([z[5]])
-
-def vel_z(t: float, z: Array, nu: Array, params: dict) -> Array:
-    return jnp.array([z[6]])
-
-def q0(t: float, z: Array, nu: Array, params: dict) -> Array:
-    return jnp.array([z[7]])
-
-def q1(t: float, z: Array, nu: Array, params: dict) -> Array:
-    return jnp.array([z[8]])
-
-def q2(t: float, z: Array, nu: Array, params: dict) -> Array:
-    return jnp.array([z[9]])
-
-def q3(t: float, z: Array, nu: Array, params: dict) -> Array:
-    return jnp.array([z[10]])
-
-def ang_vel_x(t: float, z: Array, nu: Array, params: dict) -> Array:
-    return jnp.array([z[11]])
-
-def ang_vel_y(t: float, z: Array, nu: Array, params: dict) -> Array:
-    return jnp.array([z[12]])
-
-def ang_vel_z(t: float, z: Array, nu: Array, params: dict) -> Array:
-    return jnp.array([z[13]])
-
-def thrust_x(t: float, z: Array, nu: Array, params: dict) -> Array:
-    return jnp.array([nu[0]])
-
-def thrust_y(t: float, z: Array, nu: Array, params: dict) -> Array:
-    return jnp.array([nu[1]])
-
-def thrust_z(t: float, z: Array, nu: Array, params: dict) -> Array:
-    return jnp.array([nu[2]])
-
-def thrust_mag(t: float, z: Array, nu: Array, params: dict) -> Array:
-    return jnp.array([jnp.linalg.norm(nu[:3])])
-
-def pos_vec(t: float, z: Array, nu: Array, params: dict) -> Array:
+def pos_vec(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return z[1:4]
 
-def vel_vec(t: float, z: Array, nu: Array, params: dict) -> Array:
+def vel_vec(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return z[4:7]
 
-def quat_vec(t: float, z: Array, nu: Array, params: dict) -> Array:
+def quat_vec(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return z[7:11]
 
-def ang_vel_vec(t: float, z: Array, nu: Array, params: dict) -> Array:
+def ang_vel_vec(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return z[11:14]
 
-def traj_yz(t: float, z: Array, nu: Array, params: dict) -> Array:
+def thrust_x(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    return jnp.array([nu[0]])
+
+def thrust_y(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    return jnp.array([nu[1]])
+
+def thrust_z(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    return jnp.array([nu[2]])
+
+def thrust_mag(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    return jnp.array([jnp.linalg.norm(nu[:3])])
+
+def traj_yz(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Y-Z horizontal plane (no altitude)."""
     return z[2:4]
 
-def traj_y_alt(t: float, z: Array, nu: Array, params: dict) -> Array:
+def traj_y_alt(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Y downrange vs altitude: col0=Y, col1=altitude."""
     return jnp.array([z[2], z[1]])
 
-def traj_3d(t: float, z: Array, nu: Array, params: dict) -> Array:
+def traj_3d(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """3D trajectory: col0=Y, col1=Z, col2=altitude (so altitude appears on z-axis)."""
     return jnp.array([z[2], z[3], z[1]])
 
 
 # =============================================================================
-# quiver direction functions  (return direction in plot-frame coordinates)
-#
-# Inertial frame:  x = altitude, y = Y, z = Z
-# 3D plot columns: (Y, Z, altitude) = (inertial y, inertial z, inertial x)
-# 2D plot columns: (Y, altitude)    = (inertial y, inertial x)
-#
-# Body axis k in inertial frame = DCM.T @ e_k  (k-th column of C_IB = DCM.T)
+# quiver direction functions
 # =============================================================================
 
 def _body_axis_3d(q: Array, k: int) -> Array:
     """k-th body axis in 3D plot coordinates (Y, Z, altitude)."""
     C_IB = rotations.DCM(q).T
-    v_inertial = C_IB[:, k]           # [alt, Y, Z] in inertial
+    v_inertial = C_IB[:, k]
     return jnp.array([v_inertial[1], v_inertial[2], v_inertial[0]])
 
-def body_x_dir_3d(t: float, z: Array, nu: Array, params: dict) -> Array:
+def body_x_dir_3d(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return _body_axis_3d(z[7:11], 0)
 
-def body_y_dir_3d(t: float, z: Array, nu: Array, params: dict) -> Array:
-    return _body_axis_3d(z[7:11], 1)
-
-def body_z_dir_3d(t: float, z: Array, nu: Array, params: dict) -> Array:
-    return _body_axis_3d(z[7:11], 2)
-
-def thrust_dir_3d(t: float, z: Array, nu: Array, params: dict) -> Array:
-    """Thrust unit vector in 3D plot coordinates (Y, Z, altitude)."""
-    T_body = nu[:3]
-    T_hat  = T_body / (jnp.linalg.norm(T_body) + 1e-8)
-    v_inertial = rotations.DCM(z[7:11]).T @ T_hat   # [alt, Y, Z]
-    return jnp.array([v_inertial[1], v_inertial[2], v_inertial[0]])
-
-def body_x_dir_y_alt(t: float, z: Array, nu: Array, params: dict) -> Array:
+def body_x_dir_y_alt(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Body x-axis in 2D Y-vs-altitude plot coordinates (Y, altitude)."""
     C_IB = rotations.DCM(z[7:11]).T
     v    = C_IB[:, 0]
     return jnp.array([v[1], v[0]])
 
-def thrust_dir_y_alt(t: float, z: Array, nu: Array, params: dict) -> Array:
+def thrust_dir_y_alt(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Thrust unit vector in 2D Y-vs-altitude plot coordinates (Y, altitude)."""
     T_hat      = nu[:3] / (jnp.linalg.norm(nu[:3]) + 1e-8)
     v_inertial = rotations.DCM(z[7:11]).T @ T_hat
     return jnp.array([v_inertial[1], v_inertial[0]])
 
-def body_x_dir_yz(t: float, z: Array, nu: Array, params: dict) -> Array:
+def body_x_dir_yz(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Body x-axis projected onto the Y-Z plot plane (Y, Z)."""
     C_IB = rotations.DCM(z[7:11]).T
-    v    = C_IB[:, 0]              # [alt, Y, Z] in inertial
+    v    = C_IB[:, 0]
     return jnp.array([v[1], v[2]])
 
-def thrust_dir_yz(t: float, z: Array, nu: Array, params: dict) -> Array:
+def thrust_dir_yz(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Thrust unit vector projected onto the Y-Z plot plane (Y, Z)."""
     T_hat      = nu[:3] / (jnp.linalg.norm(nu[:3]) + 1e-8)
-    v_inertial = rotations.DCM(z[7:11]).T @ T_hat   # [alt, Y, Z]
+    v_inertial = rotations.DCM(z[7:11]).T @ T_hat
     return jnp.array([v_inertial[1], v_inertial[2]])
+
+def thrust_dir_3d(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """Thrust unit vector in 3D plot coordinates (Y, Z, altitude)."""
+    T_body = nu[:3]
+    T_hat  = T_body / (jnp.linalg.norm(T_body) + 1e-8)
+    v_inertial = rotations.DCM(z[7:11]).T @ T_hat
+    return jnp.array([v_inertial[1], v_inertial[2], v_inertial[0]])
 
 
 # =============================================================================
 # STL constraint trajectory helpers (for plotting)
 # =============================================================================
 
-def altitude_traj(t: float, z: Array, nu: Array, params: dict) -> Array:
+def altitude_traj(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([z[1]])
 
-def speed_traj(t: float, z: Array, nu: Array, params: dict) -> Array:
+def speed_traj(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([jnp.sqrt(z[4] ** 2 + z[5] ** 2 + z[6] ** 2 + 1e-6)])
 
-def angular_speed_traj(t: float, z: Array, nu: Array, params: dict) -> Array:
+def angular_speed_traj(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([jnp.sqrt(z[11] ** 2 + z[12] ** 2 + z[13] ** 2 + 1e-6)])
 
-def glide_slope_traj(t: float, z: Array, nu: Array, params: dict) -> Array:
+def glide_slope_traj(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     alt = z[1] + 0.5
     eps = 1e-6
     horiz = jnp.sqrt(z[2] ** 2 + z[3] ** 2 + eps)
     return jnp.array([jnp.rad2deg(jnp.arctan2(horiz, alt))])
 
-def tilt_traj(t: float, z: Array, nu: Array, params: dict) -> Array:
+def tilt_traj(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     q2 = z[9]
     q3 = z[10]
     cos_tilt = 1.0 - 2 * (q2**2 + q3**2)
     return jnp.array([jnp.rad2deg(jnp.arccos(jnp.clip(cos_tilt, -1.0, 1.0)))])
 
-def los_traj(t: float, z: Array, nu: Array, params: dict) -> Array:
+def los_traj(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     body_x_inertial = rotations.DCM(z[7:11]).T[:, 0]
     cos_angle = jnp.clip(body_x_inertial[0], -1.0, 1.0)
     return jnp.array([jnp.rad2deg(jnp.arccos(cos_angle))])
 
 
 # =============================================================================
-# spatial overlay functions  (called at plot time: (params, ax) -> np.ndarray)
-# return shape (N, 2) array of (x, y) points; NaN rows separate segments
+# spatial overlay functions
 # =============================================================================
 
 def glideslope_cone(params, ax) -> np.ndarray:
     """Glideslope cone boundary for Y-vs-altitude plot: two lines from apex."""
     tan_gs = np.tan(np.deg2rad(float(params.theta_gs)))
     offset = float(params.alt_trigger)
-    alts   = np.array([0.0, 1e4])          # large extent; clipped by axis limits
+    alts   = np.array([0.0, 1e4])
     horiz  = (alts + offset) * tan_gs
     nan    = np.full(1, np.nan)
     xs = np.concatenate([ horiz, nan, -horiz])
@@ -274,19 +261,15 @@ def glideslope_cone(params, ax) -> np.ndarray:
     return np.column_stack([xs, ys])
 
 def glideslope_cone_3d(params, ax) -> np.ndarray:
-    """Glideslope cone surface for 3D trajectory plot (Y, Z, altitude axes).
-    Returns NaN-separated segments: one circle at alt=0 and generating lines.
-    """
+    """Glideslope cone surface for 3D trajectory plot (Y, Z, altitude axes)."""
     tan_gs = np.tan(np.deg2rad(float(params.theta_gs)))
     offset = float(params.alt_trigger)
     nan    = np.full((1, 3), np.nan)
 
-    # circle at alt = 0
     theta  = np.linspace(0, 2 * np.pi, 80)
     r0     = offset * tan_gs
     circle = np.column_stack([r0 * np.cos(theta), r0 * np.sin(theta), np.zeros(80)])
 
-    # generating lines from apex (0,0,-offset) to circle at alt=0 and at alt=1e4
     r_top   = (1e4 + offset) * tan_gs
     n_lines = 12
     phi     = np.linspace(0, 2 * np.pi, n_lines, endpoint=False)

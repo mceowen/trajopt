@@ -1,31 +1,35 @@
-inherit: trajopt/methods/configs/autoscvx-ps.yaml
+inherit: trajopt/methods/configs/autoscvx-term.yaml
 
 # ===============================
 # GRID SETTINGS
 # ===============================
-time_grid: 15
+time_grid: 30
+
+# ===============================
+# FLAGS
+# ===============================
+flags:
+  free_final_time: 1
+  equal_dt: 1
 
 # ===============================
 # INITIAL GUESS SETTINGS
 # ===============================
 guess:
-  type: propagation
   T_init: 7.0
-  T_min:  1.0
-  T_max:  10.0
-  dT_max: 0.1
+  dT_max: 0.5
 
   nl_guess_u_start: "${(np.array([0, 0, params.planet.g]) * params.vehicle.mass) + np.array([0.08, 0.08, 0.0])}"
   nl_guess_u_stop:  "${(np.array([0, 0, params.planet.g]) * params.vehicle.mass) + np.array([0.08, 0.08, 0.0])}"
-
-  line_guess_u_init: "${np.tile(np.array([0, 0, params.planet.g]) * params.vehicle.mass, (time_grid, 1))}"
 
 # ===============================
 # CONVERGENCE TOLERANCES
 # ===============================
 conv:
   eps_state: 0.01
-  eps_dyn:   0.000001
+  eps_cost:  0.01
+  eps_dyn:   0.001
+  iter_max:  100
 
 # ===============================
 # SOLVER OPTIONS

@@ -4,7 +4,7 @@
 fcns:
   thrust_norm: trajopt/models/quadrotor_3dof.py:thrust_norm
   obstacle:    trajopt/models/quadrotor_3dof.py:obstacle
-  dynamics:    trajopt/models/quadrotor_3dof.py:dynamics_jax
+  max_thrust_cone: trajopt/models/quadrotor_3dof.py:max_thrust_cone
   height:      trajopt/models/quadrotor_3dof.py:height
   pos_x:       trajopt/models/quadrotor_3dof.py:pos_x
   pos_y:       trajopt/models/quadrotor_3dof.py:pos_y
@@ -21,25 +21,6 @@ params:
     inherit: trajopt/missions/vehicles/quadrotor.yaml
 
 # ===============================
-# SCALING
-# ===============================
-state:
-  x.scale:  1.0
-  y.scale:  1.0
-  z.scale:  1.0
-  vx.scale: 1.0
-  vy.scale: 1.0
-  vz.scale: 1.0
-
-control:
-  Tx.scale: 1.0
-  Ty.scale: 1.0
-  Tz.scale: 1.0
-
-time:
-  scale: 1.0
-
-# ===============================
 # CONSTRAINTS
 # ===============================
 constraints:
@@ -48,70 +29,39 @@ constraints:
     fcn: fcns.dynamics
 
   initial_state:
-    type: equality_bc
-    set: state
-    boundary: init
-    value: [0.0, 0.0, 5.0, 0, 0.5, 0.0]
-    idx: [0, 1, 2, 3, 4, 5]
+    type: initial_state
+    value: [0.0, 0.0, 5.0, 0.0, 0.5, 0.0]
 
   final_state:
-    type: equality_bc
-    set: state
-    boundary: final
+    type: final_state
     value: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
-    idx: [0, 1, 2, 3, 4, 5]
     value_guess: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
     eps: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
 
-  state_limits:
-    type: box
-    set: state
-    min_value: [-0.5, -0.5, 0.25]
-    min_value_idx: [0, 1, 2]
-    max_value: [12.0, 12.0, 10.0]
-    max_value_idx: [0, 1, 2]
-
-  initial_control:
-    type: equality_bc
-    set: control
-    boundary: init
-    value: [0.0, 0.0, "${params.planet.g * params.vehicle.mass}"]
-    idx: [0, 1, 2]
-
-  final_control:
-    type: equality_bc
-    set: control
-    boundary: final
-    value: [0.0, 0.0, "${params.planet.g * params.vehicle.mass}"]
-    idx: [0, 1, 2]
-
-  control_rate_limit:
-    type: control_rate_limit
-    value: [3.0, 3.0, 3.0]
-    idx: [0, 1, 2]
-
   max_thrust:
-    type: max_norm_cone
-    set: control
-    idx: [0, 1, 2]
-    max_value: 8.12
+    type: convex_inequality
+    fcn: fcns.max_thrust_cone
+    dimension: 1
+    scale: [1.0]
 
   min_thrust:
     type: nonconvex_inequality
-    group: path
     fcn: fcns.thrust_norm
-    min_value: 0.21
+    lower: "${params.vehicle.T_min}"
+    dimension: 1
+    scale: [1.0]
 
   obstacle:
     type: nonconvex_inequality
-    group: path
     fcn: fcns.obstacle
-    min_value: 4.0
+    lower: 4.0
+    dimension: 1
+    scale: [4.0]
 
-  low_height_stc:
-    type: nonconvex_inequality
-    group: path
-    fcn: "((fcns.pos_x >= 5.0) and (fcns.pos_y >= 5.0)) implies (fcns.height <= 1.0)"
+  final_time:
+    type: final_time
+    lower: 1.0
+    upper: 10.0
 
 # ===============================
 # COSTS
@@ -141,14 +91,10 @@ constraint_list:
   - dynamics
   - initial_state
   - final_state
-  - state_limits
-  - initial_control
-  - final_control
-  - control_rate_limit
   - max_thrust
   - min_thrust
   - obstacle
-  # - low_height_stc
+  - final_time
 
 cost_list:
   - min_time
