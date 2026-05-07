@@ -39,10 +39,6 @@ constraints:
     lower: [-178.0, -10.0]
     upper: [178.0, 10.0]
 
-  alsdnlasdk:
-    type: nonconvex_inequality
-    fcn: fcn.asndaskjdn
-
 
   final_time:
     type: final_time
