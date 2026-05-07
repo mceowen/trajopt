@@ -72,9 +72,9 @@ def angular_speed(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Ar
 def glide_slope(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Glide slope angle from vertical (degrees)."""
     alt = z[1] + 0.5
-    eps = 1e-6
-    horiz = jnp.sqrt(z[2] ** 2 + z[3] ** 2 + eps)
-    return jnp.array([jnp.rad2deg(jnp.arctan2(horiz, alt))])
+    # eps = 1e-6
+    horiz = z[2] ** 2 + z[3] ** 2
+    return jnp.array([jnp.tan(params.theta_gs)**2 * horiz - alt**2])
 
 
 def tilt(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
@@ -82,7 +82,8 @@ def tilt(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     q2 = z[9]
     q3 = z[10]
     cos_tilt = 1.0 - 2 * (q2**2 + q3**2)
-    return jnp.array([jnp.rad2deg(jnp.arccos(jnp.clip(cos_tilt, -1.0, 1.0)))])
+    cos_theta_limit = jnp.cos(jnp.deg2rad(params.theta_tilt))
+    return jnp.array([cos_theta_limit - cos_tilt])
 
 
 def los(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:

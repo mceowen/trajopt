@@ -8,6 +8,7 @@ fcns:
   angular_speed: trajopt/models/lander_6dof.py:angular_speed
   glide_slope:   trajopt/models/lander_6dof.py:glide_slope
   los:           trajopt/models/lander_6dof.py:los
+  build_initial_guess: aslkdjfbdsjah.py:function_name
 
 # ===============================
 # PARAMETERS
@@ -26,7 +27,7 @@ params:
   alt_trigger:         1.0
   speed_limit:         0.5
   angular_speed_limit: 0.5
-  theta_gs:            10.0
+  theta_gs:            20.0
   los_limit:           5.0
 
 # ===============================
@@ -39,8 +40,8 @@ constraints:
 
   landing_initial_state:
     type: initial_state
-    value:       [2.0, 4, 4, 0, 0, -4, 4, null, null, null, null, 0, 0, 0]
-    value_guess: [2.0, 4, 4, 0, 0, -4, 4, 1.0,     0,    0,    0, 0, 0, 0]
+    value:       [2.0, 4, 4, 0, 0, -1.5, 1.5, null, null, null, null, 0, 0, 0]
+    value_guess: [2.0, 4, 4, 0, 0, -1.5, 1.5, 1.0,     0,    0,    0, 0, 0, 0]
 
   landing_final_state:
     type: final_state

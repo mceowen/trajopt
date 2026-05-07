@@ -221,7 +221,18 @@ def eval_expr(expr_str, ctx):
 def eval_values(obj, ctx, key=None, _path=""):
     """Recursively evaluate expressions in a config object."""
     if isinstance(obj, dict):
-        return AttrDict({k: eval_values(v, ctx, key=k, _path=f"{_path}.{k}") for k, v in obj.items()})
+        result = AttrDict({})
+        for k, v in obj.items():
+            local_ctx = dict(ctx)
+            for sk, sv in obj.items():
+                bare_val = result[sk] if sk in result else sv
+                if not isinstance(bare_val, dict):
+                    local_ctx[sk] = bare_val
+            evaluated = eval_values(v, local_ctx, key=k, _path=f"{_path}.{k}")
+            result[k] = evaluated
+            full_key = f"{_path}.{k}".lstrip(".")
+            ctx[full_key] = evaluated
+        return result
 
     if isinstance(obj, list):
         results = [eval_values(item, ctx, _path=f"{_path}[{i}]") for i, item in enumerate(obj)]

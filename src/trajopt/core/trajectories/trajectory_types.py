@@ -23,7 +23,12 @@ class spatial:
         raw_quivers = cnstr_config.get("quivers", {}) or {}
         self.quiver_configs      = list(raw_quivers.values()) if isinstance(raw_quivers, dict) else list(raw_quivers)
         self.quiver_fcn_dims     = [tools.resolve_function_from_string(qcfg["fcn"], fcns) for qcfg in self.quiver_configs]
+        self.quiver_origin_fcn_dims = [
+            tools.resolve_function_from_string(qcfg["origin_fcn"], fcns) if "origin_fcn" in qcfg else None
+            for qcfg in self.quiver_configs
+        ]
         self.quiver_fcns_batched = []
+        self.quiver_origin_fcns_batched = []
 
     def _wrap(self, fn):
         def fcn(z, nu, params):
@@ -35,13 +40,21 @@ class spatial:
     def compile_function(self):
         self.fcn_batched = self._wrap(self.fcn_dim)
         self.quiver_fcns_batched = [self._wrap(f) for f in self.quiver_fcn_dims]
+        self.quiver_origin_fcns_batched = [
+            self._wrap(f) if f is not None else None
+            for f in self.quiver_origin_fcn_dims
+        ]
 
     def compute_trajectory_values(self, z, nu, params):
         z_jax, nu_jax = jnp.asarray(z), jnp.asarray(nu)
         values = np.asarray(self.fcn_batched(z_jax, nu_jax, params))
         quivers = [
-            {"dirs": np.asarray(qfn(z_jax, nu_jax, params)), "config": qcfg}
-            for qfn, qcfg in zip(self.quiver_fcns_batched, self.quiver_configs)
+            {
+                "dirs": np.asarray(qfn(z_jax, nu_jax, params)),
+                "origins": np.asarray(ofn(z_jax, nu_jax, params)) if ofn is not None else None,
+                "config": qcfg,
+            }
+            for qfn, ofn, qcfg in zip(self.quiver_fcns_batched, self.quiver_origin_fcns_batched, self.quiver_configs)
         ]
         return {"values": values, "limits": None, "quivers": quivers}
 

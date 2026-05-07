@@ -79,4 +79,10 @@ class Trajectories:
                 if 'fcns' in sig.parameters:
                     trajectory.quiver_fcn_dims[i] = partial(qfcn, fcns=fcns)
 
+            for i, ofcn in enumerate(getattr(trajectory, 'quiver_origin_fcn_dims', [])):
+                if ofcn is not None:
+                    sig = inspect.signature(ofcn)
+                    if 'fcns' in sig.parameters:
+                        trajectory.quiver_origin_fcn_dims[i] = partial(ofcn, fcns=fcns)
+
             trajectory.compile_function()

@@ -40,26 +40,24 @@ def create_cvxpy_constraints_dynamics(method):
     problem = method.problem
     N       = method.N.time_grid
 
+    # pseudo-spectral dynamics constraint
     if method.flags.discretize == "ps":
         method.cp_constraints.append(discretize.build_ps_dyn_constraints(method))
 
-    for k in range(N - 1):
-
-        # dynamic constraint
-        if method.flags.discretize == "ms":
-            vb_dyn = method.cp_vars.vb_stack.get("dynamics", None)
-            
+    # multiple shooting dynamics constraint
+    if method.flags.discretize == "ms":
+        vb_dyn = method.cp_vars.vb_stack.get("dynamics", None)
+        for k in range(N - 1):
             rhs = (method.cp_params.Ak[k] @ method.dz[k] + method.cp_params.Bk[k] @ method.dnu[k] + method.cp_params.Bkp[k] @ method.dnu[k + 1] + (vb_dyn[k] if vb_dyn is not None else 0))
             method.cp_constraints.append(method.dz[k + 1] + method.cp_params.z_ref[k + 1] - method.cp_params.z_m[k + 1] == rhs)
 
-        # ctcs integral constraint
-        if problem.constraints.has(ct=1):
+    # ctcs integral constraint
+    if problem.constraints.has(ct=1):
+        for k in range(N - 1):
             method.cp_constraints.append(
                 (method.cp_params.z_ref[k + 1, method.indices.z.ctcs] + method.dz[k + 1, method.indices.z.ctcs])
                 - (method.cp_params.z_ref[k, method.indices.z.ctcs] + method.dz[k, method.indices.z.ctcs])
-                <= method.cp_params.eps_ctcs
-            )
-
+                <= method.cp_params.eps_ctcs)
 
 # =============================================================================
 # INITIAL STATE

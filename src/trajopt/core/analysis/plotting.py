@@ -125,6 +125,10 @@ def plot(trajopt_obj, data, show_iters=False):
                 all_vals = np.vstack([vals, init_vals]) if init_vals is not None else vals
                 all_vals = _include_quiver_extents(all_vals, traj)
                 _set_limits_from_data(ax, all_vals, equal_aspect=equal_aspect)
+                if traj_cfg.get("xlim") is not None:
+                    ax.set_xlim(traj_cfg["xlim"])
+                if traj_cfg.get("ylim") is not None:
+                    ax.set_ylim(traj_cfg["ylim"])
             else:
                 t = last_iter["t_opt"]
                 _set_time_series_limits(ax, t[:vals.shape[0]], vals)
@@ -291,6 +295,8 @@ def _plot_quivers(ax, traj, dim):
 
         idx  = np.arange(0, len(traj.opt_vals["values"]), stride)
         o    = traj.opt_vals["values"][idx]
+        if q.get("origins") is not None:
+            o = o + q["origins"][idx]
         d    = q["dirs"][idx] * scale
         centered = bool(cfg.get("centered", False))
         start = o - d / 2 if centered else o
@@ -415,6 +421,8 @@ def _include_quiver_extents(all_vals, traj):
         centered = bool(cfg.get("centered", False))
 
         origins = traj.opt_vals["values"][::stride]
+        if q.get("origins") is not None:
+            origins = origins + q["origins"][::stride]
         dirs    = q["dirs"][::stride] * scale
         if centered:
             tips = np.vstack([origins - dirs / 2, origins + dirs / 2])

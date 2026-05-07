@@ -1,0 +1,53 @@
+# source: https://underactuated.mit.edu/trajopt.html#perching
+
+params:
+  g: 9.81
+  rs: 4.5
+  ls: 50.0
+  mass: 120000
+  Isp: 330
+  lcg: "${0.4 * ls}"
+  lcp: "${0.45 * ls}"
+  J: "${1 / 12 * mass * (6 * rs**2 + ls**2)}"
+  vterm: 85
+  cd: "${1.2 * mass * g / (vterm**2)}"
+  alpha: "${-1 / (Isp * g)}"
+
+constraints:
+  dynamics:
+    type: dynamics
+    fcn: fcns.dynamics
+  
+  initial_state:
+    type: initial_state
+    value: [100.0, 600.0, 0.0, "${-params.vterm}", "${np.deg2rad(90.0)}", 0.0]
+  
+  final_state:
+    type: final_state
+    value: [0, 0, 0, -0.1, 0, 0]
+
+  state_limits:
+    type: state_limits
+    lower: [null, 0,    null, null, "${np.deg2rad(-45.0)}", null]
+    upper: [null, null, null, null,  "${np.deg2rad(90.0)}", null]
+
+  control_limits:
+    type: control_limits
+    lower: [880000, "${np.deg2rad(-10)}"]
+    upper: [6000000, "${np.deg2rad(10)}"]
+
+costs:
+  u_squared:
+    type: convex_running
+    fcn: fcns.u_squared_cost
+    w: 10
+
+constraint_list:
+  - dynamics
+  - initial_state
+  - final_state
+  - state_limits
+  - control_limits
+
+cost_list:
+  - u_squared
