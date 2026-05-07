@@ -8,7 +8,6 @@ fcns:
   angular_speed: trajopt/models/lander_6dof.py:angular_speed
   glide_slope:   trajopt/models/lander_6dof.py:glide_slope
   los:           trajopt/models/lander_6dof.py:los
-  build_initial_guess: aslkdjfbdsjah.py:function_name
 
 # ===============================
 # PARAMETERS
