@@ -1,4 +1,5 @@
 inherit: trajopt/methods/configs/autoscvx-term.yaml
+# inherit: trajopt/methods/configs/autoscvx-term-ps.yaml
 
 # ===============================
 # GRID SETTINGS
@@ -9,9 +10,7 @@ time_grid: 50
 # FLAGS
 # ===============================
 flags:
-  equal_dt: 0
   ode_fixed_dt: 1
-  free_final_time: 0
 
 # ===============================
 # INITIAL GUESS SETTINGS

@@ -116,9 +116,13 @@ def create_cvxpy_constraints_convex_inequality(method):
     for k in range(method.N.time_grid):
         for constraint in method.problem.constraints.get(ct=0, type="convex_inequality"):
             if k in constraint.nodes:
-                x_k = method.cp_params.z_ref[k, method.indices.z.state]  + method.dz[k,  method.indices.z.state]
+                
+                x_k = method.cp_params.z_ref[k, method.indices.z.state] + method.dz[k,  method.indices.z.state]
                 u_k = method.cp_params.nu_ref[k, method.indices.nu.control] + method.dnu[k, method.indices.nu.control]
-                method.cp_constraints.append(constraint.fcn_dim(0, x_k, u_k, method.problem.params))
+                
+                expr = constraint.fcn_dim(0, x_k, u_k, method.problem.params)
+                
+                method.cp_constraints.append(expr <= 0)
 
 
 # =============================================================================

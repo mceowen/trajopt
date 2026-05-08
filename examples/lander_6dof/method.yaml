@@ -1,4 +1,5 @@
 inherit: trajopt/methods/configs/autoscvx.yaml
+# inherit: trajopt/methods/configs/autoscvx-ps.yaml
 
 # ===============================
 # GRID SETTINGS

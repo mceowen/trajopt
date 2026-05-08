@@ -68,7 +68,7 @@ def engine_offset(t, x, u, params, fcns):
 def cvx_glide_slope(t, x, u, params):
     """Glide slope cone: tan(gamma) * |x1| <= x2."""
     tan_gamma = np.tan(np.deg2rad(float(params.gamma_gs)))
-    return tan_gamma * cp.abs(x[0]) - x[1] <= 0.0
+    return tan_gamma * cp.abs(x[0]) - x[1]
 
 def ei(t, x, u, params, fcns):
     theta = x[4]

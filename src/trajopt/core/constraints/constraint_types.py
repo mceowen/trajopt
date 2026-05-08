@@ -275,7 +275,6 @@ class convex_inequality:
     def __init__(self, cnstr_config: dict, index_map: Any, fcns: dict | None = None, **kwargs: Any) -> None:
         """Convex inequality constraint g(t, x, u) <= upper or >= lower."""
         self.name            = cnstr_config["name"]
-        self.ct              = cnstr_config.get("ct", 0)
         self.group           = cnstr_config.get("group", None)
         self.nodes           = cnstr_config.get("nodes", np.arange(0, index_map.N.time_grid))
         self.upper       = cnstr_config.get("upper", None)
@@ -285,10 +284,11 @@ class convex_inequality:
         self.fcn_string      = cnstr_config["fcn"]
         self.index_map       = index_map
         self.type            = 'convex_inequality'
+        self.ct              = cnstr_config.get("ct", 0)
 
         self.fcn_dim = tools.resolve_function_from_string(self.fcn_string, fcns)
 
-        self.dimension = cnstr_config["dimension"]
+        self.dimension = cnstr_config.get("dimension", 1)
 
         self.eps   = np.atleast_1d(cnstr_config.get("eps", np.full(self.dimension, 0.0001)))
         self.scale = cnstr_config.get("scale", None)
@@ -306,6 +306,9 @@ class convex_inequality:
         self.dfcn_du_compiled = None
 
     def nondim_constraint(self, nondim):
+        if self.upper is None and self.lower is None:
+            return
+
         if self.upper is not None:
             self.upper = jnp.asarray(jnp.atleast_1d(self.upper))
 

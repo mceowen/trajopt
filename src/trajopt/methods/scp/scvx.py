@@ -307,7 +307,7 @@ class SCvx:
 
         x_opt_new, t_opt_new, beta_opt_new, u_opt_new, s_opt_new = self.index_map.unpack_znu(z_new, nu_new)
 
-        T_opt_new  = t_opt_new[-1]
+        T_opt_new  = float(np.asarray(t_opt_new[-1]).ravel()[0])
 
         self.current_iter_data.x_opt    = x_opt_new
         self.current_iter_data.t_opt    = t_opt_new
