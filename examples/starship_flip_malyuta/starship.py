@@ -1,5 +1,6 @@
 # source: https://github.com/UW-ACL/SCPToolbox.jl/tree/master/test/examples/starship_flip
 
+import numpy as np
 import jax.numpy as jnp
 import cvxpy as cp
 
@@ -63,6 +64,11 @@ def engine_offset(t, x, u, params, fcns):
     """Offset from CG to engine (bottom of rocket): -lcg * ej."""
     e_j = fcns.ej(t, x, u, params, fcns)
     return -params.lcg * e_j
+
+def cvx_glide_slope(t, x, u, params):
+    """Glide slope cone: tan(gamma) * |x1| <= x2."""
+    tan_gamma = np.tan(np.deg2rad(float(params.gamma_gs)))
+    return tan_gamma * cp.abs(x[0]) - x[1] <= 0.0
 
 def ei(t, x, u, params, fcns):
     theta = x[4]

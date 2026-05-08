@@ -2,7 +2,7 @@
 # PARAMETERS AND FUNCTIONS
 # ===============================
 params:
-  planet.inherit: trajopt/missions/planets/mars.yaml
+  planet.inherit: trajopt/missions/configs/planets/mars.yaml
   vehicle.inherit: trajopt/local/vehicles/cobra.yaml
 
 fcns:

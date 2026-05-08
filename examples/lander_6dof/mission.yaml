@@ -14,9 +14,9 @@ fcns:
 # ===============================
 params:
   planet:
-    inherit: trajopt/missions/planets/nondim_planet.yaml
+    inherit: trajopt/missions/configs/planets/nondim_planet.yaml
   vehicle:
-    inherit: trajopt/missions/vehicles/mikilander.yaml
+    inherit: trajopt/missions/configs/vehicles/mikilander.yaml
 
   min_thrust:   0.3
   max_thrust:   5

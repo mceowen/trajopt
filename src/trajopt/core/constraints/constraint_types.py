@@ -275,6 +275,7 @@ class convex_inequality:
     def __init__(self, cnstr_config: dict, index_map: Any, fcns: dict | None = None, **kwargs: Any) -> None:
         """Convex inequality constraint g(t, x, u) <= upper or >= lower."""
         self.name            = cnstr_config["name"]
+        self.ct              = cnstr_config.get("ct", 0)
         self.group           = cnstr_config.get("group", None)
         self.nodes           = cnstr_config.get("nodes", np.arange(0, index_map.N.time_grid))
         self.upper       = cnstr_config.get("upper", None)

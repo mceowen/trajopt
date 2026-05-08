@@ -9,9 +9,9 @@ fcns:
 # ===============================
 params:
   planet:
-    inherit: trajopt/missions/planets/earth.yaml
+    inherit: trajopt/missions/configs/planets/earth.yaml
   vehicle:
-    inherit: trajopt/missions/vehicles/vtol.yaml
+    inherit: trajopt/missions/configs/vehicles/vtol.yaml
 
 # ===============================
 # CONSTRAINTS

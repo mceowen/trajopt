@@ -1,4 +1,4 @@
-inherit: trajopt/methods/configs/shared/default.yaml
+inherit: trajopt/methods/configs/default.yaml
 
 time_grid: 
 

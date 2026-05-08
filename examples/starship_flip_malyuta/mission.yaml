@@ -1,6 +1,7 @@
 # source: https://underactuated.mit.edu/trajopt.html#perching
 
 params:
+  gamma_gs: 60
   g: 9.81
   rs: 4.5
   ls: 50.0
@@ -36,6 +37,16 @@ constraints:
     lower: [880000, "${np.deg2rad(-10)}"]
     upper: [6000000, "${np.deg2rad(10)}"]
 
+  control_limits1:
+    type: control_limits
+    lower: ["${3 * 880000}", "${np.deg2rad(-10)}"]
+    upper: [6000000, "${np.deg2rad(10)}"]
+    nodes: [0, 1, 2, 3]
+
+  glide_slope:
+    type: convex_inequality
+    fcn: fcns.cvx_glide_slope
+
 costs:
   u_squared:
     type: convex_running
@@ -47,7 +58,9 @@ constraint_list:
   - initial_state
   - final_state
   - state_limits
+  - control_limits1
   - control_limits
+  - glide_slope
 
 cost_list:
   - u_squared

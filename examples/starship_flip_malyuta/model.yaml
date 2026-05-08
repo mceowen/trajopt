@@ -12,6 +12,7 @@ fcns:
   control: starship.py:control
   thrust_dir: starship.py:thrust_dir
   engine_offset: starship.py:engine_offset
+  cvx_glide_slope: starship.py:cvx_glide_slope
 
 state:
   x1:

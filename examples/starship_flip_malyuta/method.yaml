@@ -11,6 +11,7 @@ time_grid: 40
 
 flags:
   equal_dt: 1
+  flag_conv: 1
 
 guess:
   type: straight_line
@@ -22,14 +23,14 @@ guess:
   nl_guess_u_start: [500000, 0]
   nl_guess_u_stop:  [500000, 0]
   
-  line_guess_u_init: "${np.tile([880000, 0.0], (time_grid, 1))}"
+  line_guess_u_init: "${np.tile([3 * 880000, 0.0], (time_grid, 1))}"
 
 # ===============================
 # CONVERGENCE TOLERANCES
 # ===============================
 
 conv:
-  eps_state:  0.001
+  eps_state:  0.01
   eps_dyn:    0.00001
   eps_defect: 1.0
   eps_cost:   1

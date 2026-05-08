@@ -558,7 +558,7 @@ def update_cvxpy_parameters_dynamics(method):
 
     if method.flags.discretize == "ps":
         f_ref_col, Ac_col, Bc_col = discretize.compute_ps_dynamics_and_jacobians(
-            z_opt, z_opt, method.problem, method
+            z_opt, nu_opt, method.problem, method
         )
         method.cp_params.ps_f_ref.value = f_ref_col
         method.cp_params.ps_Ac.value    = Ac_col

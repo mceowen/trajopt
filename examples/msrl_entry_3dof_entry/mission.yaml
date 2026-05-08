@@ -1,0 +1,85 @@
+# ===============================
+# FUNCTIONS
+# ===============================
+
+fcns:
+  density_model: trajopt/missions/msrl.py:density_model
+  nonlinear_aero: trajopt/missions/msrl.py:nonlinear_aero
+
+# ===============================
+# PARAMETERS
+# ===============================
+
+params:
+  planet:
+    inherit: trajopt/missions/configs/planets/mars.yaml
+  vehicle:
+    inherit: trajopt/local/vehicles/msrl.yaml
+
+# ===============================
+# CONSTRAINTS
+# ===============================
+
+constraints:
+  dynamics:
+    type: dynamics
+    fcn: fcns.dynamics
+
+  initial_state:
+    type: initial_state
+    value: [3456160, 68.20, 14.12, 7935.15, -7.7075, 62.2803]
+
+  initial_bank_angle:
+    type: control_limits
+    lower: [120, null]
+    upper: [120, null]
+    nodes: [0]
+
+  final_state:
+    type: final_state
+    value: ["${params.planet.r + 10e3}", null, null, null, null, null]
+
+  state_limits:
+    type: state_limits
+    lower: ["${params.planet.r}", null, null, 100.0, null, null]
+
+  bank_aoa_angle_limits:
+    type: control_limits
+    lower: [-360.0, null]
+    upper: [360.0, null]
+
+  bank_angle_rate_limit:
+    type: control_rate_limit
+    value: [10]
+    idx: [0]
+
+# ===============================
+# COSTS
+# ===============================
+
+costs:
+  min_terminal_velocity:
+    type: terminal
+    fcn: fcns.velocity
+
+  control_rate_regularization:
+    type: rate_regularization
+    set: control
+    w: 0.1
+
+# ===============================
+# ACTIVE CONSTRAINTS AND COSTS
+# ===============================
+
+constraint_list:
+  - dynamics
+  - initial_state
+  - initial_bank_angle
+  - final_state
+  - state_limits
+  - bank_aoa_angle_limits
+  - bank_angle_rate_limit
+
+cost_list:
+  - min_terminal_velocity
+  - control_rate_regularization

@@ -16,10 +16,10 @@ fcns:
 
 params:
   planet:
-    inherit: trajopt/missions/planets/nondim_planet.yaml
+    inherit: trajopt/missions/configs/planets/nondim_planet.yaml
   
   vehicle:
-    inherit: trajopt/missions/vehicles/mikilander.yaml
+    inherit: trajopt/missions/configs/vehicles/mikilander.yaml
 
   zi: [4, 4, 0, 0.0, -1.0, 1.0, 0, 0, 0]
 
