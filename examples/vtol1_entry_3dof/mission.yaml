@@ -41,7 +41,7 @@ constraints:
 
   bank_angle_rate_limit:
     type: control_rate_limit
-    value: [10]
+    value: [5]
     idx: [0]
 
   max_Q:

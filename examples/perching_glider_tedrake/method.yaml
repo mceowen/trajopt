@@ -1,4 +1,4 @@
-inherit: trajopt/methods/configs/autoscvx-term.yaml
+inherit: trajopt/methods/configs/autoscvx.yaml
 
 # ===============================
 # GRID SETTINGS
@@ -31,3 +31,6 @@ conv:
   eps_dyn:    0.00001
   eps_defect: 1.0
   eps_cost:   1
+
+solver_opts:
+  solver: CLARABEL

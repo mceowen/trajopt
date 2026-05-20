@@ -6,10 +6,6 @@ import diffrax
 import trajopt.methods.scp.pseudospectral as pseudospectral
 
 jax.config.update("jax_enable_x64", True)
-jax.config.update("jax_compilation_cache_dir", "/tmp/jax_cache")
-jax.config.update("jax_persistent_cache_min_entry_size_bytes", -1)
-jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
-jax.config.update("jax_persistent_cache_enable_xla_caches", "xla_gpu_per_fusion_autotune_cache_dir")
 
 def compute_nonconvex_constraints(z, nu, problem, method):
     n_ineq    = problem.index_map.n.nonconvex_inequality
@@ -40,6 +36,44 @@ def compute_nonconvex_constraints(z, nu, problem, method):
     return g, dgdz, dgdnu
 
 
+def compute_nonconvex_constraint_hessians(z, nu, problem, method):
+    N = method.index_map.N.time_grid
+    n_z = problem.index_map.n.z
+    n_nu = problem.index_map.n.nu
+    n_w = n_z + n_nu
+
+    H_ineq = np.zeros((N, n_w, n_w))
+
+    if not problem.constraints.has(ct=0, type="nonconvex_inequality"):
+        return H_ineq
+
+    lam = jnp.asarray(method.lagrangian_duals.nonconvex_inequality)
+    z_jax = jnp.asarray(z)
+    nu_jax = jnp.asarray(nu)
+    params = problem.params
+
+    col_start = 0
+    for constraint in problem.constraints.get(ct=0, type="nonconvex_inequality"):
+        col_end = col_start + constraint.dimension
+        nodes = np.asarray(constraint.nodes)
+
+        lam_nodes = lam[nodes, col_start:col_end]
+        z_nodes = z_jax[nodes]
+        nu_nodes = nu_jax[nodes]
+
+        H_z, H_nu = constraint.lagrangian_hessians(lam_nodes, z_nodes, nu_nodes, params)
+
+        for i, k in enumerate(nodes):
+            H_ineq[k, :n_z, :n_z] += np.asarray(H_z[0][i])
+            H_ineq[k, :n_z, n_z:] += np.asarray(H_z[1][i])
+            H_ineq[k, n_z:, :n_z] += np.asarray(H_nu[0][i])
+            H_ineq[k, n_z:, n_z:] += np.asarray(H_nu[1][i])
+
+        col_start = col_end
+
+    return H_ineq
+
+
 def compute_nonconvex_costs(z, nu, problem, method):
     N         = method.index_map.N.time_grid
     n_z       = problem.index_map.n.z
@@ -61,15 +95,16 @@ def compute_nonconvex_costs(z, nu, problem, method):
     nu_jax = jnp.asarray(nu)
 
     for cost_fn in nonconvex_costs + running_costs:
+        w = getattr(cost_fn, 'w', 1.0)
         f_batch, dfdx_batch, dfdu_batch = cost_fn.g_aff_batched(z_jax, nu_jax, params)
 
         f_np    = np.asarray(f_batch).reshape(N, -1)
         dfdx_np = np.asarray(dfdx_batch).reshape(N, -1, n_z)
         dfdu_np = np.asarray(dfdu_batch).reshape(N, -1, n_nu)
 
-        cost[:, 0] += np.sum(f_np, axis=1)
-        dcostdz[:, 0, :] += np.sum(dfdx_np, axis=1)
-        dcostdnu[:, 0, :] += np.sum(dfdu_np, axis=1)
+        cost[:, 0] += w * np.sum(f_np, axis=1)
+        dcostdz[:, 0, :] += w * np.sum(dfdx_np, axis=1)
+        dcostdnu[:, 0, :] += w * np.sum(dfdu_np, axis=1)
 
     for cost_fn in terminal_costs:
         nodes = np.atleast_1d(cost_fn.nodes)
@@ -88,6 +123,49 @@ def compute_nonconvex_costs(z, nu, problem, method):
 
     return cost, dcostdz, dcostdnu
 
+
+def compute_nonconvex_cost_hessians(z, nu, problem, method):
+    N = method.index_map.N.time_grid
+    n_z = problem.index_map.n.z
+    n_nu = problem.index_map.n.nu
+
+    H_cost_z = np.zeros((N, n_z, n_z))
+    H_cost_nu = np.zeros((N, n_nu, n_nu))
+    H_cost_znu = np.zeros((N, n_z, n_nu))
+
+    params = problem.params
+    nonconvex_costs = problem.costs.get(type="nonconvex")
+    terminal_costs = problem.costs.get(type="terminal")
+    running_costs = problem.costs.get(type="running")
+
+    if len(nonconvex_costs) + len(terminal_costs) + len(running_costs) == 0:
+        return H_cost_z, H_cost_nu, H_cost_znu
+
+    z_jax = jnp.asarray(z)
+    nu_jax = jnp.asarray(nu)
+
+    for cost_fn in nonconvex_costs + running_costs:
+        w = getattr(cost_fn, 'w', 1.0)
+        d2z = cost_fn.d2fcn_dz2_batched(z_jax, nu_jax, params)
+        d2nu = cost_fn.d2fcn_dnu2_batched(z_jax, nu_jax, params)
+        d2znu = cost_fn.d2fcn_dzdnu_batched(z_jax, nu_jax, params)
+        H_cost_z += w * np.asarray(d2z).reshape(N, n_z, n_z)
+        H_cost_nu += w * np.asarray(d2nu).reshape(N, n_nu, n_nu)
+        H_cost_znu += w * np.asarray(d2znu).reshape(N, n_z, n_nu)
+
+    for cost_fn in terminal_costs:
+        nodes = np.atleast_1d(cost_fn.nodes)
+        z_nodes = z_jax[nodes]
+        nu_nodes = nu_jax[nodes]
+        d2z = cost_fn.d2fcn_dz2_batched(z_nodes, nu_nodes, params)
+        d2nu = cost_fn.d2fcn_dnu2_batched(z_nodes, nu_nodes, params)
+        d2znu = cost_fn.d2fcn_dzdnu_batched(z_nodes, nu_nodes, params)
+        for i, k in enumerate(nodes):
+            H_cost_z[k] += np.asarray(d2z[i]).reshape(n_z, n_z)
+            H_cost_nu[k] += np.asarray(d2nu[i]).reshape(n_nu, n_nu)
+            H_cost_znu[k] += np.asarray(d2znu[i]).reshape(n_z, n_nu)
+
+    return H_cost_z, H_cost_nu, H_cost_znu
 
 
 
@@ -117,7 +195,7 @@ def compile_jax_discretization(problem, method):
         b = (tau - tau_k) / (tau_kp - tau_k)
         nu = a * nu_k + b * nu_kp
 
-        fc, Ac, Bc    = lin_dyn(z, nu, params)
+        fc, Ac, Bc = lin_dyn(z, nu, params)
 
         P1_dot = fc
         P2_dot = (Ac @ phi_a).reshape((n_z*n_z,))
@@ -206,8 +284,65 @@ def compile_jax_discretization(problem, method):
     propagate = jax.jit(jax.vmap(propagate_k, in_axes=(0, None, None, None)))
     method.propagate_discretization_jax = propagate
 
+def compile_rk4_discretization(problem, method):
+
+    # pull ltv dynamics
+    lin_dyn = problem.constraints.get(type='dynamics')[0].lin_dyn
+
+    # dynamics derivative function
+    def f_dot(k, tau, z, nu_k, nu_kp, params):
+
+        tau_k  = k / (problem.index_map.N.time_grid - 1)
+        tau_kp = (k+1) / (problem.index_map.N.time_grid - 1)
+        a      = (tau_kp - tau) / (tau_kp - tau_k)
+        b      = (tau - tau_k)  / (tau_kp - tau_k)
+        nu     = a * nu_k + b * nu_kp
+
+        fc, _, _ = lin_dyn(z, nu, params)
+
+        return fc
+
+    # propagation flow map from z_k -> z_kp
+    def propagate_k(k, z_k, nu_k, nu_kp, params):
+        N_grid = problem.index_map.N.time_grid
+
+        nsub      = 2
+        delta_tau = 1.0 / (N_grid - 1)
+        dt_rk4    = delta_tau / nsub
+
+        tau_k = k / (N_grid - 1)
+        taus  = tau_k + jnp.arange(nsub) * dt_rk4
+
+        def rk4_step(z, tau):
+
+            k1 = f_dot(k, tau,            z,                    nu_k, nu_kp, params)
+            k2 = f_dot(k, tau + dt_rk4/2, z + (dt_rk4/2) * k1,  nu_k, nu_kp, params)
+            k3 = f_dot(k, tau + dt_rk4/2, z + (dt_rk4/2) * k2,  nu_k, nu_kp, params)
+            k4 = f_dot(k, tau + dt_rk4,   z +     dt_rk4 * k3,  nu_k, nu_kp, params)
+            
+            return z + (dt_rk4 / 6) * (k1 + 2*k2 + 2*k3 + k4), None
+        
+        # propagate z_k -> z_kp
+        z_kp, _ = jax.lax.scan(rk4_step, z_k, taus)
+
+        return z_kp
+    
+    # Lagrangian for the multiple shooting constraint (scalar).
+    # L is linear in z_kp so all its second derivatives w.r.t. z_kp are zero;
+    # we therefore exclude z_kp and differentiate only w.r.t. (z_k, nu_k, nu_kp).
+    def lagrangian_k(k, lam_k, z_k, nu_k, nu_kp, params):
+        return -lam_k.T @ propagate_k(k, z_k, nu_k, nu_kp, params)
+
+    prop_jacobians_k = jax.jacfwd(propagate_k, argnums=(1, 2, 3))
+    cnstr_hessians_k = jax.hessian(lagrangian_k, argnums=(2, 3, 4))
+
+    method.propagate           = jax.jit(jax.vmap(propagate_k,      in_axes=(0, 0, 0, 0, None)))
+    method.propagate_jacobians = jax.jit(jax.vmap(prop_jacobians_k, in_axes=(0, 0, 0, 0, None)))
+    method.cnstr_hessians      = jax.jit(jax.vmap(cnstr_hessians_k, in_axes=(0, 0, 0, 0, 0, None)))
+    
+
 # inverse free discretize with jax
-def discretize_inv_free_jax(z_ref_np, nu_ref_np, problem, method):
+def discretize_ms_variational(z_ref_np, nu_ref_np, problem, method):
 
     # convert numpy arrays to jax
     z_ref = jnp.asarray(z_ref_np)
@@ -219,8 +354,29 @@ def discretize_inv_free_jax(z_ref_np, nu_ref_np, problem, method):
     ks = jnp.arange(method.index_map.N.time_grid - 1)
     A_jax, B_jax, Bp_jax, z_minus = method.propagate_discretization_jax(ks, z_ref, nu_ref, params)
 
-    # print(f"actual_prop_time: {(start - time.time())*1000}")
     z_ref_0 = z_ref[[0], :]
+    
+    return np.asarray(A_jax), np.asarray(B_jax), np.asarray(Bp_jax), np.asarray(jnp.vstack([z_ref_0, z_minus]))
+
+# inverse free discretize with jax
+def discretize_ms_rk4(z_ref_np, nu_ref_np, problem, method):
+
+    # convert numpy arrays to jax
+    z_ref_ks   = jnp.asarray(z_ref_np[:-1])
+    z_ref_kps  = jnp.asarray(z_ref_np[1:])
+    nu_ref_ks  = jnp.asarray(nu_ref_np[:-1])
+    nu_ref_kps = jnp.asarray(nu_ref_np[1:])
+    lam_refs   = jnp.asarray(method.lagrangian_duals.dynamics)
+    params     = problem.params
+
+    ks = jnp.arange(method.index_map.N.time_grid - 1)
+
+    z_minus              = method.propagate(ks, z_ref_ks, nu_ref_ks, nu_ref_kps, params)
+    A_jax, B_jax, Bp_jax = method.propagate_jacobians(ks, z_ref_ks, nu_ref_ks, nu_ref_kps, params)
+
+    method.H_z_k, method.H_nu_k, method.H_nu_kp = method.cnstr_hessians(ks, lam_refs, z_ref_ks, nu_ref_ks, nu_ref_kps, params)
+
+    z_ref_0 = z_ref_ks[[0], :]
     
     return np.asarray(A_jax), np.asarray(B_jax), np.asarray(Bp_jax), np.asarray(jnp.vstack([z_ref_0, z_minus]))
 
@@ -239,10 +395,7 @@ def compute_linsys_discrete(z_ref, nu_ref, problem, method):
     tuple: Ak, Bk, Bkp, z_minus
     """
 
-    if method.flags.jax_dyn:
-        Ak, Bk, Bkp, z_minus = discretize_inv_free_jax(z_ref, nu_ref, problem, method)
-    else:
-       pass # TODO(Skye/Carlos): add sympy and numpy(analytical) backend here
+    Ak, Bk, Bkp, z_minus = discretize_ms_rk4(z_ref, nu_ref, problem, method)
 
     return Ak, Bk, Bkp, z_minus
 

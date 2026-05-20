@@ -30,8 +30,11 @@ constraints:
     upper: [20]
 
 costs:
+  min_time:
+    type: min_time
+
   u_squared:
-    type: convex_running
+    type: running
     fcn: fcns.u_squared_cost
     w: 1.0
 
@@ -43,4 +46,5 @@ constraint_list:
   - control_limits
 
 cost_list:
-  - u_squared
+  - min_time
+  # - u_squared

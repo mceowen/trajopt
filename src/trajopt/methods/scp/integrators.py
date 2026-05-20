@@ -128,6 +128,75 @@ def propagate_znu_rk4(z0, nu, problem, method, n_steps=10000):
     return t_nl, z_all, nu_all
 
 
+def propagate_znu_ms(z_all, nu, problem, method, n_dense_per_seg=50):
+    dynamics    = problem.constraints.get(type="dynamics")[0].fcn
+    params      = problem.params
+    idx         = problem.index_map.indices
+    N           = nu.shape[0]
+    use_ps      = getattr(method.flags, 'discretize', 'ms') == 'ps'
+    nu_jax      = jnp.asarray(nu)
+    z_all_jax   = jnp.asarray(z_all)
+    phase_sched = {k: jnp.asarray(v) for k, v in params.get('_phase_schedule', {}).items()}
+
+    if use_ps:
+        from trajopt.methods.scp.discretize import compute_ps_differentiation_matrix
+        _, etau, _, _ = compute_ps_differentiation_matrix(N - 1)
+        tau_ref            = jnp.asarray((etau + 1.0) / 2.0)
+        bary_w             = _barycentric_weights(tau_ref)
+        compiled_attr_name = "_jit_propagate_znu_ms_ps"
+    else:
+        tau_ref = jnp.linspace(0.0, 1.0, N)
+        bary_w  = None
+        compiled_attr_name = "_jit_propagate_znu_ms"
+
+    alphas      = jnp.linspace(0.0, 1.0, n_dense_per_seg)
+    tau_starts  = tau_ref[:-1]
+    tau_ends    = tau_ref[1:]
+    tau_dense_all = tau_starts[:, None] + alphas[None, :] * (tau_ends - tau_starts)[:, None]
+    z0_all      = z_all_jax[:-1]
+
+    def interp(tau, nu, tau_ref, bary_w):
+        return _lagrange(tau, tau_ref, nu, bary_w) if bary_w is not None else _foh(tau, tau_ref, nu)
+
+    def _solve(z0_all, nu, tau_ref, tau_dense_all, bary_w):
+        def f_dot(tau, z, _):
+            k = jnp.clip(jnp.floor(tau * (N - 1)).astype(jnp.int32), 0, N - 1)
+            p = tools.AttrDict({**params, **{key: arr[k] for key, arr in phase_sched.items()}})
+            return dynamics(z, interp(tau, nu, tau_ref, bary_w), p)
+
+        def solve_segment(z0, tau_dense):
+            sol = diffrax.diffeqsolve(
+                diffrax.ODETerm(f_dot), diffrax.Dopri5(),
+                t0=tau_dense[0], t1=tau_dense[-1], dt0=None, y0=z0,
+                stepsize_controller=diffrax.PIDController(rtol=1e-6, atol=1e-6),
+                saveat=diffrax.SaveAt(ts=tau_dense),
+                max_steps=4096,
+            )
+            nu_seg = jax.vmap(lambda t: interp(t, nu, tau_ref, bary_w))(tau_dense)
+            return sol.ys, nu_seg
+
+        return jax.vmap(solve_segment)(z0_all, tau_dense_all)
+
+    z_segs, nu_segs = _jit_cached(method, compiled_attr_name, _solve)(
+        z0_all, nu_jax, tau_ref, tau_dense_all, bary_w
+    )
+
+    z_segs  = np.asarray(z_segs)
+    nu_segs = np.asarray(nu_segs)
+    t_segs  = z_segs[:, :, idx.z.time].squeeze(-1)
+
+    n_seg = N - 1
+    nan_z  = np.full((n_seg, 1, z_segs.shape[2]), np.nan)
+    nan_nu = np.full((n_seg, 1, nu_segs.shape[2]), np.nan)
+    nan_t  = np.full((n_seg, 1), np.nan)
+
+    z_out  = np.concatenate([z_segs, nan_z], axis=1).reshape(-1, z_segs.shape[2])[:-1]
+    nu_out = np.concatenate([nu_segs, nan_nu], axis=1).reshape(-1, nu_segs.shape[2])[:-1]
+    t_out  = np.concatenate([t_segs, nan_t], axis=1).reshape(-1)[:-1]
+
+    return t_out, z_out, nu_out
+
+
 def propagate_txu(x0, u, t_ref, t_nl, problem, method, compiled_attr_name=None):
     dynamics  = problem.constraints.get(type="dynamics")[0].fcn_base
     params    = problem.params

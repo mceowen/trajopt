@@ -10,9 +10,12 @@ fcns:
   velocity: starship.py:velocity
   angular: starship.py:angular
   control: starship.py:control
+  thrust_magnitude: starship.py:thrust_magnitude
+  gimbal_angle: starship.py:gimbal_angle
   thrust_dir: starship.py:thrust_dir
   engine_offset: starship.py:engine_offset
   cvx_glide_slope: starship.py:cvx_glide_slope
+  glideslope_overlay: starship.py:glideslope_overlay
 
 state:
   x1:
@@ -76,6 +79,9 @@ trajectories:
         color: [0.95, 0.45, 0.0]
         alpha: 0.9
         linewidth: 1.5
+    overlays:
+      glideslope:
+        fcn: fcns.glideslope_overlay
 
   velocity:
     type: time_series
@@ -93,10 +99,18 @@ trajectories:
     xlabel: "Time (s)"
     ylabel: "Angle (rad) / Rate (rad/s)"
 
-  control:
+  thrust:
     type: time_series
-    fcn: fcns.control
+    fcn: fcns.thrust_magnitude
     group: control
-    title: "Control vs Time"
+    title: "Thrust vs Time"
     xlabel: "Time (s)"
-    ylabel: "Thrust (N) / Gimbal (rad)"
+    ylabel: "Thrust (N)"
+
+  gimbal:
+    type: time_series
+    fcn: fcns.gimbal_angle
+    group: control
+    title: "Gimbal Angle vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Gimbal (rad)"

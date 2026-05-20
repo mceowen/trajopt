@@ -1,5 +1,6 @@
 from typing import Any
 
+import cvxpy as cp
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -306,25 +307,22 @@ class convex_inequality:
         self.dfcn_du_compiled = None
 
     def nondim_constraint(self, nondim):
-        if self.upper is None and self.lower is None:
-            return
-
         if self.upper is not None:
-            self.upper = jnp.asarray(jnp.atleast_1d(self.upper))
+            self.upper = np.asarray(np.atleast_1d(self.upper))
 
         if self.lower is not None:
-            self.lower = jnp.asarray(jnp.atleast_1d(self.lower))
+            self.lower = np.asarray(np.atleast_1d(self.lower))
 
         if self.scale is not None:
-            self.M_out_d2nd = jnp.diag(1 / jnp.abs(jnp.asarray(self.scale)))
+            self.M_out_d2nd = np.diag(1 / np.abs(np.asarray(self.scale)))
         elif self.upper is not None:
-            self.M_out_d2nd = jnp.diag(1 / jnp.abs(self.upper))
+            self.M_out_d2nd = np.diag(1 / np.abs(self.upper))
         elif self.lower is not None:
-            self.M_out_d2nd = jnp.diag(1 / jnp.abs(self.lower))
+            self.M_out_d2nd = np.diag(1 / np.abs(self.lower))
         else:
             raise ValueError("At least one of 'scales', 'upper', or 'lower' must be provided for nondimensionalization.")
 
-        self.M_out_nd2d = jnp.diag(1 / jnp.diag(self.M_out_d2nd))
+        self.M_out_nd2d = np.diag(1 / np.diag(self.M_out_d2nd))
 
         if self.upper is not None:
             self.upper = self.M_out_d2nd @ self.upper
@@ -332,18 +330,69 @@ class convex_inequality:
         if self.lower is not None:
             self.lower = self.M_out_d2nd @ self.lower
 
-        M_state_nd2d_jax = jnp.asarray(nondim.M.state.nd2d)
-        M_ctrl_nd2d_jax  = jnp.asarray(nondim.M.control.nd2d)
+        M_state_nd2d = np.asarray(nondim.M.state.nd2d)
+        M_ctrl_nd2d  = np.asarray(nondim.M.control.nd2d)
+        M_out        = self.M_out_d2nd
+        raw_fcn      = self.fcn_dim
 
-        import inspect
-        sig = inspect.signature(self.fcn_dim)
-        if len(sig.parameters) >= 4:
-            self.fcn_nd = nondim.nondim_function(self.fcn_dim, M_state_nd2d_jax, M_ctrl_nd2d_jax, self.M_out_d2nd)
+        state_is_eye = np.allclose(M_state_nd2d, np.eye(M_state_nd2d.shape[0]))
+        ctrl_is_eye  = np.allclose(M_ctrl_nd2d, np.eye(M_ctrl_nd2d.shape[0]))
+        out_is_unity = (M_out.shape == (1, 1) and abs(float(M_out[0, 0]) - 1.0) < 1e-12) or \
+                       np.allclose(M_out, np.eye(M_out.shape[0]))
+
+        if state_is_eye and ctrl_is_eye and out_is_unity:
+            self.fcn_nd = raw_fcn
+        elif M_out.shape == (1, 1):
+            out_scale = float(M_out[0, 0])
+            M_state_nd2d_T = M_state_nd2d.T
+            M_ctrl_nd2d_T = M_ctrl_nd2d.T
+            def _cvx_nondim(x, u, params):
+                x_dim = x @ M_state_nd2d_T if not state_is_eye else x
+                u_dim = u @ M_ctrl_nd2d_T if not ctrl_is_eye else u
+                return out_scale * raw_fcn(x_dim, u_dim, params)
+            self.fcn_nd = _cvx_nondim
+        else:
+            M_state_nd2d_T = M_state_nd2d.T
+            M_ctrl_nd2d_T = M_ctrl_nd2d.T
+            M_out_diag = np.diag(M_out)
+            def _cvx_nondim(x, u, params):
+                x_dim = x @ M_state_nd2d_T if not state_is_eye else x
+                u_dim = u @ M_ctrl_nd2d_T if not ctrl_is_eye else u
+                return cp.multiply(M_out_diag, raw_fcn(x_dim, u_dim, params))
+            self.fcn_nd = _cvx_nondim
 
         self.eps = self.M_out_d2nd @ self.eps
 
         if self.upper_and_lower:
-            self.eps = jnp.concatenate((self.eps, self.eps))
+            self.eps = np.concatenate((self.eps, self.eps))
+
+    def convexify_constraint(self):
+        """Build vectorized constraint function: fcn(x_all, u_all, params) <= 0.
+
+        x_all: (N, n_state) CVXPY expression
+        u_all: (N, n_ctrl) CVXPY expression
+        Returns: (N,) or (N, d) CVXPY expression where each row <= 0.
+        """
+        if self.upper_and_lower:
+            fcn_nd = self.fcn_nd
+            lower, upper = self.lower, self.upper
+            def fcn_vec(x, u, params):
+                val = fcn_nd(x, u, params)
+                return cp.hstack([-val + lower, val - upper])
+        elif (self.upper is not None) and (self.lower is None):
+            upper = self.upper
+            fcn_nd = self.fcn_nd
+            def fcn_vec(x, u, params):
+                return fcn_nd(x, u, params) - upper
+        elif (self.lower is not None) and (self.upper is None):
+            lower = self.lower
+            fcn_nd = self.fcn_nd
+            def fcn_vec(x, u, params):
+                return -fcn_nd(x, u, params) + lower
+        else:
+            fcn_vec = self.fcn_nd
+
+        self.fcn = fcn_vec
 
 # ===============================================================
 # NONCONVEX CONSTRAINTS
@@ -448,6 +497,13 @@ class nonconvex_inequality:
         self.fcn_batched     = jax.jit(jax.vmap(self.fcn_compiled,     in_axes=(0, 0, None)))
         self.dfcn_dz_batched = jax.jit(jax.vmap(self.dfcn_dz_compiled, in_axes=(0, 0, None)))
         self.dfcn_du_batched = jax.jit(jax.vmap(self.dfcn_du_compiled, in_axes=(0, 0, None)))
+
+        fcn_closure = self.fcn
+        def lagrangian_k(lam, z, nu, params):
+            return lam @ fcn_closure(z, nu, params)
+
+        lagrangian_hessian_k = jax.hessian(lagrangian_k, argnums=(1, 2))
+        self.lagrangian_hessians = jax.jit(jax.vmap(lagrangian_hessian_k, in_axes=(0, 0, 0, None)))
 
     def g_aff(self, z: Any, nu: Any, params: Any) -> tuple:
         """Evaluate linearized (affine) constraint at a single point.

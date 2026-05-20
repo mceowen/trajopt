@@ -31,7 +31,8 @@ constraints:
 
   state_limits:
     type: state_limits
-    lower: ["${params.planet.r + 1e3}", null, null, 10.0, null, null]
+    lower: ["${params.planet.r + 5e3}", -10.0, -5.0, 10.0, -90.0, -180.0]
+    upper: ["${params.planet.r + 140e3}", 10.0, 20.0, 6500.0, 5.0, 180.0]
 
   bank_aoa_angle_limits:
     type: control_limits
@@ -52,6 +53,11 @@ costs:
     type: terminal
     fcn: fcns.velocity
 
+  control_rate_regularization:
+    type: rate_regularization
+    set: control
+    w: 1.0
+
 # ===============================
 # ACTIVE CONSTRAINTS AND COSTS
 # ===============================
@@ -62,7 +68,6 @@ constraint_list:
   - final_state
   - state_limits
   - bank_aoa_angle_limits
-  # - final_time
 
 cost_list:
   - min_terminal_velocity

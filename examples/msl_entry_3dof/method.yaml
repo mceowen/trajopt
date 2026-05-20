@@ -1,16 +1,20 @@
-inherit: trajopt/methods/configs/autoscvx-term.yaml
+inherit: trajopt/methods/configs/autoscvx.yaml
 # inherit: trajopt/methods/configs/autoscvx-term-ps.yaml
 
 # ===============================
 # GRID SETTINGS
 # ===============================
-time_grid: 50
+time_grid: 20
 
 # ===============================
 # FLAGS
 # ===============================
 flags:
   ode_fixed_dt: 1
+  equal_dt: 1
+  free_final_time: 1
+  flag_conv: 1
+  ctcs: 0
 
 # ===============================
 # INITIAL GUESS SETTINGS
@@ -26,8 +30,8 @@ guess:
 # CONVERGENCE TOLERANCES
 # ===============================
 conv:
-  eps_state:  [500, 0.001, 0.001, 50, 0.001, 0.001]
-  eps_cost:   1
+  eps_state:  [50, 0.1, 0.1, 5, 0.1, 0.1]
+  eps_cost:   0.1
   eps_defect: [0.01]
   eps_dyn:    [10.0, 0.1, 0.1, 30.0, 0.1, 0.1]
   iter_max:   100

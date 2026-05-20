@@ -26,10 +26,10 @@ def obstacle(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([jnp.linalg.norm(r - pos_obs)])
 
 
-def max_thrust_cone(t, x, u, params):
+def max_thrust_cone(x, u, params):
     """||T|| <= T_max as a CVXPY SOC constraint."""
     T_max = float(params.vehicle.T_max)
-    return cp.norm(u[0:3]) - T_max
+    return cp.norm(u[:, 0:3], axis=1) - T_max
 
 
 def pos_x(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:

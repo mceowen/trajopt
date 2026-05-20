@@ -4,7 +4,7 @@ import jax.numpy as jnp
 import cvxpy as cp
 
 def u_squared_cost(t, x, u, params):
-    return cp.sum_squares(u)
+    return jnp.atleast_1d(jnp.sum(u**2))
 
 def dynamics(t, x, u, params, fcns):
 

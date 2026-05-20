@@ -4,18 +4,23 @@ inherit: trajopt/methods/configs/autoscvx.yaml
 # ===============================
 # GRID SETTINGS
 # ===============================
-time_grid: 50
+time_grid: 40
 
 # ===============================
 # INITIAL GUESS SETTINGS
 # ===============================
 
+flags:
+  equal_dt: 1
+  zoh_dilation: 1
+  free_final_time: 0
+
 guess:
   type: straight_line
-  T_init: 5
+  T_init: 6.0
   T_min:  3
   T_max:  10
-  dT_max: 0.1
+  dT_max: 5.0
 
   nl_guess_u_start: [2.0, 0, 0]
   nl_guess_u_stop:  [2.0, 0, 0]
@@ -27,20 +32,13 @@ guess:
 # ===============================
 
 conv:
-  eps_state:  0.005
+  eps_state:  0.00001
   eps_dyn:    0.00001
   eps_defect: 1.0
   eps_cost:   1
 
 # ===============================
-# WEIGHTS
-# ===============================
-weights:
-  alpha_z: 0.5
-  alpha_u: 0.5
-
-# ===============================
 # SOLVER OPTIONS
 # ===============================
 solver_opts:
-  solver: QOCO
+  solver: CLARABEL

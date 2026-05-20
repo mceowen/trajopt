@@ -1,25 +1,27 @@
 # INHERIT THE AUTOSCVX METHOD CONFIGS
-inherit: trajopt/methods/configs/autoscvx-term.yaml
+inherit: trajopt/methods/configs/autoscvx.yaml
 
 # ===============================
 # GRID SETTINGS
 # ==============================
-time_grid: 40
+time_grid: 100
 
 # ===============================
 # INITIAL GUESS SETTINGS
 # ==============================
 guess:
-  T_init: 110.0
+  T_init: 200.0
   T_min: 110.0
   T_max: 1000.0
   dT_max: 50.0
 
-  nl_guess_u_start: [120, 0.0]
+  nl_guess_u_start: [120.0, 0.0]
   nl_guess_u_stop: [0, 0.0]
 
 flags:
   equal_dt: 1
+  zoh_dilation: 1
+  free_final_time: 0
 
 # ===============================
 # CONVERGENCE TOLERANCES

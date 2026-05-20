@@ -151,6 +151,7 @@ def plot(trajopt_obj, data, show_iters=False):
         fig.savefig(os.path.join(save_dir, f"{name}.pdf"), pad_inches=0.02)
     print(f"Saved {len(figs)} figures to {save_dir}/")
     plt.show()
+    convergence_plots(trajopt_obj)
 
 
 # ======================================================================
@@ -430,6 +431,175 @@ def _include_quiver_extents(all_vals, traj):
             tips = origins + dirs
         all_vals = np.vstack([all_vals, tips])
     return all_vals
+
+
+def convergence_plots(traj, save=True):
+    iters   = traj.method.iter_data_list[1:]
+    k       = np.arange(1, len(iters) + 1)
+    dz      = [it.chk.dz for it in iters]
+    dcost   = [it.chk.dcost for it in iters]
+    alphas  = [it.get("alpha", 1.0) for it in iters]
+    costs   = [it.cost for it in iters]
+
+    eps_stack = traj.method.eps_stack
+    vb_types  = list(iters[0].vb.keys()) if hasattr(iters[0], 'vb') and iters[0].vb else []
+
+    vb_series = {}
+    for ct in vb_types:
+        eps_ct = np.atleast_1d(eps_stack.get(ct, 1.0))
+        vb_series[ct] = [float(np.max(np.abs(it.vb[ct]) / eps_ct)) for it in iters]
+
+    grid  = _create_grid(3)
+    fig   = plt.figure(figsize=(14, 3.5), dpi=plot_options.dpi)
+    axes  = [fig.add_axes(grid[i]) for i in range(3)]
+
+    markers = ['o', 's', '^', 'v', 'D', 'P', 'X', 'h']
+
+    ax = axes[0]
+    ax.semilogy(k, dz,    'o-', ms=3, label=r'$\|\delta x\|/\epsilon_x$')
+    ax.semilogy(k, dcost, 's-', ms=3, label=r'$|\delta J|/\epsilon_J$')
+    for i, ct in enumerate(vb_types):
+        m = markers[(i + 2) % len(markers)]
+        ax.semilogy(k, vb_series[ct], f'{m}-', ms=3, label=f'$\\|vb_{{\\mathrm{{{ct}}}}}\\|/\\epsilon$')
+    ax.axhline(1.0, color='k', ls='--', lw=0.8)
+    ax.set_xlabel('Iteration'); ax.set_ylabel('Normalized metric')
+    ax.set_title('Convergence History', fontsize=plot_options.title_fontsize, pad=plot_options.title_pad)
+    ax.legend(fontsize=6); ax.grid(True, alpha=0.3)
+
+    ax = axes[1]
+    ax.plot(k, costs, 'o-', ms=3, color=pens.opt.lrgba[:3])
+    ax.set_xlabel('Iteration'); ax.set_ylabel('Cost')
+    ax.set_title('Objective', fontsize=plot_options.title_fontsize, pad=plot_options.title_pad)
+    ax.grid(True, alpha=0.3)
+
+    ax = axes[2]
+    ax.plot(k, alphas, 'o-', ms=3, color=pens.nl.lrgba[:3])
+    ax.set_xlabel('Iteration'); ax.set_ylabel(r'$\alpha$')
+    ax.set_title('Line-Search Step Size', fontsize=plot_options.title_fontsize, pad=plot_options.title_pad)
+    ax.set_ylim([0, 1.1]); ax.grid(True, alpha=0.3)
+
+    if save:
+        save_dir = os.path.join("plots", "standalone")
+        os.makedirs(save_dir, exist_ok=True)
+        fig.savefig(os.path.join(save_dir, "convergence.pdf"), pad_inches=0.02)
+    plt.show()
+
+    convergence_step_plots(traj, save=save)
+    convergence_weight_plots(traj, save=save)
+
+    return fig
+
+
+def convergence_step_plots(traj, save=True):
+    """Per-node |dx| and |du| across SCP iterations to identify which
+    state/control components are still changing at convergence."""
+    method = traj.method
+    iters  = method.iter_data_list[1:]
+    if not iters:
+        return
+
+    idx_state   = method.index_map.indices.z.state
+    idx_control = method.index_map.indices.nu.control
+    n_state     = method.index_map.n.state
+    n_control   = method.index_map.n.control
+    N           = method.index_map.N.time_grid
+    nodes       = np.arange(N)
+
+    state_cfg   = traj.config.problem.state
+    control_cfg = traj.config.problem.control
+    state_names   = sorted(state_cfg.keys(),   key=lambda s: min(state_cfg[s]["idx"]))
+    control_names = sorted(control_cfg.keys(), key=lambda s: min(control_cfg[s]["idx"]))
+    state_names   += [f"z_{j}" for j in range(len(state_names), n_state)]
+    control_names += [f"u_{j}" for j in range(len(control_names), n_control)]
+
+    n_iters = len(iters)
+    cmap_state   = plt.cm.tab10(np.linspace(0, 1, 10))
+    cmap_control = plt.cm.tab10(np.linspace(0, 1, 10))
+
+    fig, (ax_dx, ax_du) = plt.subplots(1, 2, figsize=(14, 4), dpi=plot_options.dpi)
+
+    for i, it in enumerate(iters):
+        alpha_step = float(it.get("alpha", 1.0))
+        dx = np.abs(alpha_step * np.asarray(it.dz)[:, idx_state])
+        du = np.abs(alpha_step * np.asarray(it.dnu)[:, idx_control])
+
+        frac = 0.08 + 0.92 * (i / max(n_iters - 1, 1))
+        is_last = (i == n_iters - 1)
+        lw = 1.6 if is_last else 0.6
+
+        for j in range(n_state):
+            ax_dx.plot(nodes, dx[:, j],
+                       color=cmap_state[j % 10], alpha=frac, lw=lw,
+                       label=state_names[j] if is_last else None)
+
+        for j in range(n_control):
+            ax_du.plot(nodes, du[:, j],
+                       color=cmap_control[j % 10], alpha=frac, lw=lw,
+                       label=control_names[j] if is_last else None)
+
+    for ax, title, ylabel in [
+        (ax_dx, r'State Step $|\alpha \cdot \delta x|$ per Node',   r'$|\alpha \cdot \delta x|$'),
+        (ax_du, r'Control Step $|\alpha \cdot \delta u|$ per Node', r'$|\alpha \cdot \delta u|$'),
+    ]:
+        ax.set_yscale('log')
+        ax.set_xlabel('Node')
+        ax.set_ylabel(ylabel)
+        ax.set_title(title, fontsize=plot_options.title_fontsize, pad=plot_options.title_pad)
+        ax.legend(fontsize=7, loc='best')
+        ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    if save:
+        save_dir = os.path.join("plots", "standalone")
+        os.makedirs(save_dir, exist_ok=True)
+        fig.savefig(os.path.join(save_dir, "convergence_steps.pdf"), pad_inches=0.02)
+    plt.show()
+    return fig
+
+
+def convergence_weight_plots(traj, save=True):
+    iters = traj.method.iter_data_list[1:]
+    if not iters:
+        return
+
+    has_W    = hasattr(iters[0], 'W')    and iters[0].W
+    has_dual = hasattr(iters[0], 'dual') and iters[0].dual
+
+    if not has_W and not has_dual:
+        return
+
+    k = np.arange(1, len(iters) + 1)
+    fig, axes = plt.subplots(1, 2, figsize=(14, 3.5), dpi=plot_options.dpi)
+
+    if has_W:
+        ax = axes[0]
+        for ct in iters[0].W.keys():
+            ax.semilogy(k, [np.mean(it.W[ct]) for it in iters], 'o-', ms=3, label=ct)
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('Mean W')
+        ax.set_title('Quadratic Penalty Weights', fontsize=plot_options.title_fontsize, pad=plot_options.title_pad)
+        ax.legend(fontsize=7, loc='best')
+        ax.grid(True, alpha=0.3)
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+
+    if has_dual:
+        ax = axes[1]
+        for ct in iters[0].dual.keys():
+            ax.semilogy(k, [np.mean(np.abs(it.dual[ct])) for it in iters], 'o-', ms=3, label=ct)
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel(r'Mean $|\lambda|$')
+        ax.set_title('Linear (Dual) Weights', fontsize=plot_options.title_fontsize, pad=plot_options.title_pad)
+        ax.legend(fontsize=7, loc='best')
+        ax.grid(True, alpha=0.3)
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+
+    plt.tight_layout()
+    if save:
+        save_dir = os.path.join("plots", "standalone")
+        os.makedirs(save_dir, exist_ok=True)
+        fig.savefig(os.path.join(save_dir, "convergence_weights.pdf"), pad_inches=0.02)
+    plt.show()
+    return fig
 
 
 _NOT_FOUND = object()

@@ -1,4 +1,4 @@
-inherit: trajopt/methods/configs/autoscvx-term.yaml
+inherit: trajopt/methods/configs/autoscvx.yaml
 
 # ===============================
 # GRID SETTINGS
@@ -11,6 +11,10 @@ time_grid: 40
 
 flags:
   equal_dt: 1
+  zoh_dilation: 1
+  free_final_time: 1
+  flag_conv: 1
+  
 
 guess:
   type: straight_line
