@@ -14,6 +14,7 @@ fcns:
   altitude: trajopt/models/reentry_3dof.py:altitude
   longitude: trajopt/models/reentry_3dof.py:longitude
   latitude: trajopt/models/reentry_3dof.py:latitude
+  altitude_rate: trajopt/models/reentry_3dof.py:altitude_rate
   velocity: trajopt/models/reentry_3dof.py:velocity
   fpa: trajopt/models/reentry_3dof.py:fpa
   heading: trajopt/models/reentry_3dof.py:heading
@@ -27,7 +28,7 @@ fcns:
 
 state.r:
     idx: [0]
-    scale: 1000000
+    scale: 10000
 state.theta:
     idx: [1]
     scale: 1.0
@@ -143,7 +144,7 @@ trajectories:
 
   heat_rate:
     type: time_series
-    fcn: "fcns.heat_rate * 0.0001"
+    fcn: "fcns.heat_rate"
     group: path
     title: "Heat Rate vs Time"
     xlabel: "Time (s)"
@@ -151,7 +152,7 @@ trajectories:
 
   dynamic_pressure:
     type: time_series
-    fcn: "fcns.dynamic_pressure * 0.001"
+    fcn: "fcns.dynamic_pressure"
     group: path
     title: "Dynamic Pressure vs Time"
     xlabel: "Time (s)"
@@ -159,7 +160,7 @@ trajectories:
 
   aero_load:
     type: time_series
-    fcn: "fcns.aero_load / 9.81"
+    fcn: "fcns.aero_load"
     group: path
     title: "Aerodynamic Load vs Time"
     xlabel: "Time (s)"

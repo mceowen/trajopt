@@ -152,6 +152,13 @@ def latitude(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([z[2]])
 
 
+def altitude_rate(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+    """Altitude rate: v * sin(fpa) (m/s)."""
+    v = z[3]
+    gamma = jnp.deg2rad(z[4])
+    return jnp.array([v * jnp.sin(gamma)])
+
+
 def velocity(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     """Velocity (m/s)."""
     return jnp.array([z[3]])
