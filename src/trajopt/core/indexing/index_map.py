@@ -1,15 +1,17 @@
-import numpy as np
+from collections.abc import Callable
+
 import jax.numpy as jnp
+import numpy as np
+from jax import Array
+
 from trajopt.utils.tools import AttrDict, resolve_function_from_string
 
 
 class IndexMap:
-    """
-    Generates and stores structured index maps for states, controls,
-    dynamics, and constraints using configs and/or objects.
-    """
+    """Generate and store structured index maps for states, controls, dynamics, and constraints."""
 
-    def __init__(self, config):
+    def __init__(self, config: AttrDict) -> None:
+        """Initialize index map from problem and method configs."""
         # IndexMap should be fully defined from the configs
         self.problem_config = config.problem
         self.method_config  = config.method
@@ -22,21 +24,19 @@ class IndexMap:
 
         self.N = AttrDict({
             # core method dims
-            "time_grid":            self.method_config['time_grid']
+            "time_grid":            self.method_config["time_grid"],
         })
 
         self.update_indices()
-    
+
 ############################################################
 # INDEX PACKING / UNPACKING UTILITIES
 ############################################################
 
-    def unpack_z(self, z):
-        """
-        Unpack augmented state z = [x, t, beta].
-        Supports both:
-          - z shaped (n_z,)
-          - z shaped (N, n_z)
+    def unpack_z(self, z: np.ndarray | Array) -> tuple[np.ndarray | Array, np.ndarray | Array, np.ndarray | Array]:
+        """Unpack augmented state z = [x, t, beta].
+
+        Supports both z shaped (n_z,) and z shaped (N, n_z).
         """
         z_ndim = getattr(z, "ndim", np.ndim(z))
         if z_ndim == 2:
@@ -50,12 +50,10 @@ class IndexMap:
         return x, t, beta
 
 
-    def unpack_nu(self, nu):
-        """
-        Unpack augmented control nu = [u, s].
-        Supports both:
-          - nu shaped (n_nu,)
-          - nu shaped (N, n_nu)
+    def unpack_nu(self, nu: np.ndarray | Array) -> tuple[np.ndarray | Array, np.ndarray | Array]:
+        """Unpack augmented control nu = [u, s].
+
+        Supports both nu shaped (n_nu,) and nu shaped (N, n_nu).
         """
         nu_ndim = getattr(nu, "ndim", np.ndim(nu))
         if nu_ndim == 2:
@@ -67,18 +65,16 @@ class IndexMap:
         return u, s
 
 
-    def unpack_znu(self, z, nu):
-        """
-        Unpack augmented state/control into physically meaningful variables.
-        """
+    def unpack_znu(self, z: np.ndarray | Array, nu: np.ndarray | Array) -> tuple[np.ndarray | Array, ...]:
+        """Unpack augmented state and control into physically meaningful variables."""
         x, t, beta  = self.unpack_z(z)
         u, s        = self.unpack_nu(nu)
         return x, t, beta, u, s
 
 
-    def pack_z(self, x, t, beta):
-        """
-        Pack physical variables into augmented state z = [x, t, beta].
+    def pack_z(self, x: np.ndarray | Array, t: np.ndarray | Array, beta: np.ndarray | Array) -> np.ndarray:
+        """Pack physical variables into augmented state z = [x, t, beta].
+
         Supports both per-time-step vectors and time-stacked matrices.
         """
         x_ndim = getattr(x, "ndim", np.ndim(x))
@@ -105,9 +101,9 @@ class IndexMap:
         return z
 
 
-    def pack_nu(self, u, s):
-        """
-        Pack physical variables into augmented control nu = [u, s].
+    def pack_nu(self, u: np.ndarray | Array, s: float | np.ndarray | Array) -> np.ndarray:
+        """Pack physical variables into augmented control nu = [u, s].
+
         Supports both per-time-step vectors and time-stacked matrices.
         """
         u_ndim = getattr(u, "ndim", np.ndim(u))
@@ -123,37 +119,33 @@ class IndexMap:
             nu[self.indices.nu.control] = u
             nu[self.indices.nu.dilation_factor] = s
         return nu
-    
-    def pack_znu(self, x, t, beta, u, s):
-        """
-        Unpack augmented state/control into physically meaningful variables.
-        """
+
+    def pack_znu(
+        self,
+        x: np.ndarray | Array,
+        t: np.ndarray | Array,
+        beta: np.ndarray | Array,
+        u: np.ndarray | Array,
+        s: float | np.ndarray | Array,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Pack physical variables into augmented state and control."""
         z   = self.pack_z(x, t, beta)
         nu  = self.pack_nu(u,s)
         return z, nu
 
 
-    def wrap_txu_fcn(self, f_phys):
-        """
-        Wrap a physical-system function f_phys(t, x, u, params)
-        so it can be called as f_alg(z, nu, params).
-        """
+    def wrap_txu_fcn(self, f_phys: Callable) -> Callable:
+        """Wrap f_phys(t, x, u, params) to be callable as f_alg(z, nu, params)."""
         def f_alg(z, nu, params):
             x, t, beta, u, s = self.unpack_znu(z, nu)
             return f_phys(t, x, u, params)
 
         return f_alg
 
-    def wrap_znu_fcn(self, f_alg, beta=None, s=1.0):
-        """
-        Wrap an algorithm-level function f_alg(z, nu, params)
-        so it can be called as f_phys(t, x, u, params).
-        """
+    def wrap_znu_fcn(self, f_alg: Callable, beta: np.ndarray | None = None, s: float = 1.0) -> Callable:
+        """Wrap f_alg(z, nu, params) to be callable as f_phys(t, x, u, params)."""
         def f_phys(t, x, u, params):
-            if beta is None:
-                beta_vec = np.zeros(len(self.indices.z.ctcs))
-            else:
-                beta_vec = beta
+            beta_vec = np.zeros(len(self.indices.z.ctcs)) if beta is None else beta
 
             z = self.pack_z(x, t, beta_vec)
             nu = self.pack_nu(u, s)
@@ -162,20 +154,23 @@ class IndexMap:
         return f_phys
 
 
-    def evaluate_f_phys(self, f_phys, z, nu, params):
-        """
-        Evaluate physical-model function f_phys(t, x, u, params)
-        from augmented variables (z, nu).
-        """
+    def evaluate_f_phys(self, f_phys: Callable, z: np.ndarray | Array, nu: np.ndarray | Array, params: AttrDict) -> Array:
+        """Evaluate f_phys(t, x, u, params) from augmented variables (z, nu)."""
         x, t, beta, u, s = self.unpack_znu(z, nu)
         return f_phys(t, x, u, params)
 
 
-    def evaluate_f_alg(self, f_alg, t, x, u, params, beta=None, s=1.0):
-        """
-        Evaluate algorithm-level function f_alg(z, nu, params)
-        from physical variables (t, x, u).
-        """
+    def evaluate_f_alg(
+        self,
+        f_alg: Callable,
+        t: float,
+        x: np.ndarray | Array,
+        u: np.ndarray | Array,
+        params: AttrDict,
+        beta: np.ndarray | None = None,
+        s: float = 1.0,
+    ) -> Array:
+        """Evaluate f_alg(z, nu, params) from physical variables (t, x, u)."""
         if beta is None:
             beta = np.zeros(len(self.indices.z.ctcs))
 
@@ -187,7 +182,7 @@ class IndexMap:
 # BUILD INDICES OBJECTS FROM CONFIGS
 ############################################################
 
-    def _infer_constraint_dimensions(self):
+    def _infer_constraint_dimensions(self) -> None:
         """Infer and inject 'dimension' into each constraint config from its fields.
 
         Handles all constraint types:
@@ -222,10 +217,7 @@ class IndexMap:
             if "dimension" in cfg:
                 base_dim = int(cfg["dimension"])
             elif ctype in ("initial_state", "final_state"):
-                if "idx" in cfg:
-                    base_dim = len(cfg["idx"])
-                else:
-                    base_dim = sum(1 for v in cfg["value"] if v is not None)
+                base_dim = len(cfg["idx"]) if "idx" in cfg else sum(1 for v in cfg["value"] if v is not None)
             elif ctype in ("state_limits", "control_limits"):
                 raw_lower = cfg.get("lower", [])
                 raw_upper = cfg.get("upper", [])
@@ -247,15 +239,18 @@ class IndexMap:
                 cfg["dimension"] = 1
                 continue
             else:
-                raise ValueError(
+                msg = (
                     f"Cannot infer dimension for constraint '{name}' of type '{ctype}': "
                     f"provide 'dimension' in config"
+                )
+                raise ValueError(
+                    msg,
                 )
 
             cfg["dimension"] = base_dim
 
-    def update_indices(self):
-        
+    def update_indices(self) -> None:
+        """Build and store all index arrays and dimension counts from the problem config."""
         nx      = self.n.state
         n_u     = self.n.control
 
@@ -304,7 +299,7 @@ class IndexMap:
         Bk_ind          = np.arange(Ak_ind[-1] + 1, Ak_ind[-1] + 1 + nz * n_nu)
         Bkp_ind         = np.arange(Bk_ind[-1] + 1, Bk_ind[-1] + 1 + nz * n_nu)
 
-        time_grid       = self.N.time_grid 
+        time_grid       = self.N.time_grid
 
         n_real = nx + n_t
 
@@ -406,26 +401,27 @@ class IndexMap:
             "final_time":           1,
             "equality_bc":          1,
             "inequality_bc":        1,
-            'time_grid':            time_grid,
+            "time_grid":            time_grid,
             "real":                 time_grid,
         })
 
     # TODO(Skye): Update this summary
-    def summary(self):
+    def summary(self) -> None:
+        """Print a human-readable summary of all index arrays and dimension counts."""
         print("==== Problem Indices Summary ====")
         print("\nN (TIME-RELATED INDICES):")
         for k, v in self.N.items():
             print(f"  {k:25s}: {v}")
-        
+
         print("\nINDEX ARRAYS:")
-        for obj_name in ['z', 'nu', 'ctcs']:
+        for obj_name in ["z", "nu", "ctcs"]:
             obj = self.indices[obj_name]
             print(f"  {obj_name.upper()}:")
             for k, v in obj.items():
                 print(f"    {k:25s}: {v.shape if hasattr(v,'shape') else len(v)}")
 
         print("\nCONSTRAINTS:")
-        for constraint_type in ['nonlinear_inequality', 'final_state', 'dynamics']:
+        for constraint_type in ["nonlinear_inequality", "final_state", "dynamics"]:
             constraint_obj = getattr(self.indices.constraints, constraint_type)
             print(f"    {constraint_type.upper()}:")
             for k, v in constraint_obj.items():
