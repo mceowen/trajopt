@@ -1,13 +1,14 @@
 import numpy as np
+
+from trajopt.core.indexing import IndexMap
 from trajopt.utils.tools import AttrDict
 
+
 class Nondim:
-    def __init__(self, config, index_map):
+    """Nondimensionalize utility class for use in TrajectoryAnalyzer."""
 
-        """
-        Initializes all nondimensional parameters
-        """
-
+    def __init__(self, config: AttrDict, index_map: IndexMap) -> None:
+        """Initialize all nondimensional parameters."""
         n_x                 = index_map.n.state
         n_u                 = index_map.n.get('control')
 
@@ -28,7 +29,7 @@ class Nondim:
 
         for control_group_name, control_group in config.problem.control.items():
             provided_scale = control_group.get("scale", None)
-            
+
             if provided_scale is None:
                 print(f"Warning: no scale provided for control group '{control_group_name}', defaulting to 1.0.")
                 group_scale = 1.0
@@ -53,7 +54,7 @@ class Nondim:
         self.M.state.d2nd   = np.diag(1 / self.state_scales).copy()
         self.M.control.nd2d = np.diag(self.control_scales).copy()
         self.M.control.d2nd = np.diag(1 / self.control_scales).copy()
-        
+
         self.M.time.d2nd    = 1 / self.time_scale
         self.M.time.nd2d    = self.time_scale
 
@@ -71,7 +72,7 @@ class Nondim:
         def wrapped_fcn(t, z, nu, params, *args, **kwargs):
             return M_out_d2nd @ fcn(t, M_state_nd2d @ z, M_ctrl_nd2d @ nu, params, *args, **kwargs)
         return wrapped_fcn
-    
+
 # old nondim:
 
 # TODO (Carlos): revisit this for systematic, physically meaningful scaling

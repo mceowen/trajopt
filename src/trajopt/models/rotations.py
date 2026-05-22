@@ -4,7 +4,7 @@ from jax import Array
 
 # Direction Cosine Matrix Function
 def DCM(q: Array) -> Array:
-    """Direction cosine matrix (inertial → body) from unit quaternion [q0, q1, q2, q3]. (scalar first)"""
+    """Direction cosine matrix (inertial → body) from unit quaternion [q0, q1, q2, q3] (scalar first)."""
     return jnp.array(
         [
             [1 - 2 * (q[2] ** 2 + q[3] ** 2), 2 * (q[1] * q[2] + q[0] * q[3]), 2 * (q[1] * q[3] - q[0] * q[2])],
