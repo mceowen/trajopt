@@ -1,0 +1,1 @@
+"""Trajectory containers and types."""

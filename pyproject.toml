@@ -39,6 +39,12 @@ dev = [
     "mypy",
     "ruff",
 ]
+docs = [
+    "sphinx>=7.0",
+    "sphinx-autoapi>=3.0",
+    "myst-nb>=1.0",
+    "furo",
+]
 
 [project.urls]
 Homepage =      "https://github.com/skye/trajopt"
