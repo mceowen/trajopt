@@ -8,6 +8,7 @@ import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.lines import Line2D
 from matplotlib.ticker import MaxNLocator
+
 from trajopt.utils.tools import AttrDict, recursive_attrdict, resolve_function_from_string
 
 plt.rcParams["text.usetex"] = False

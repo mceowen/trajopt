@@ -12,7 +12,7 @@ time_grid: 40
 flags:
   equal_dt: 1
   zoh_dilation: 1
-  free_final_time: 1
+  free_final_time: 0
   flag_conv: 1
   
 

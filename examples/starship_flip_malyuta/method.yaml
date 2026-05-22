@@ -20,7 +20,6 @@ guess:
   T_init: 20
   T_min:  5
   T_max:  30
-  dT_max: 3
 
   nl_guess_u_start: [500000, 0]
   nl_guess_u_stop:  [500000, 0]
@@ -32,11 +31,11 @@ guess:
 # ===============================
 
 conv:
-  eps_state:  0.00001
-  eps_dyn:    0.00001
+  eps_state:  0.001
+  eps_dyn:    0.001
   eps_defect: 1.0
   eps_cost:   1
-  iter_max: 100
+  iter_max: 300
 
 solver_opts:
   solver: CLARABEL

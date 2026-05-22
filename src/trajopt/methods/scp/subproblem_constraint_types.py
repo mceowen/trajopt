@@ -217,7 +217,6 @@ def create_cvxpy_constraints_control_rate_limit(method):
 # =============================================================================
 
 def create_cvxpy_parameters_free_final_time(method):
-    method.cp_params.ddt_max      = cp.Parameter(nonneg=True, name="ddt_max")
     method.cp_params.dt_interval_min = cp.Parameter(nonneg=True, name="dt_interval_min")
 
 
@@ -231,7 +230,6 @@ def create_cvxpy_constraints_free_final_time(method):
 
         t_kp = method.t_ref[k + 1, 0] + method.dt[k + 1, 0]
 
-        method.cp_constraints.append(cp.abs(method.dt[k, 0]) <= method.cp_params.ddt_max)
         method.cp_constraints.append(t_k >= 0)
         method.cp_constraints.append(t_kp - t_k >= method.cp_params.dt_interval_min)
         method.cp_constraints.append(0.0 <= method.s_ref[k, 0] + method.ds[k, 0])
@@ -568,16 +566,10 @@ def create_cvxpy_cost_rate_regularization(method):
 
 def create_cvxpy_cost_trust_region(method):
     N = method.N.time_grid
-    # mu = 1.0 / method.config.method.weights.alpha_z
     for k in range(N):
         w_k = cp.hstack([method.dz[k], method.dnu[k]])
         method.cp_cost += 0.5 * cp.sum_squares(method.cp_params.L[k] @ w_k)
     # method.cp_cost += 0.001 * (cp.sum_squares(method.dz) + cp.sum_squares(method.dnu))
-
-    # method.cp_constraints.append(method.dz <= method.cp_params.tr_z)
-    # method.cp_constraints.append(method.dz >= -method.cp_params.tr_z)
-    # method.cp_constraints.append(method.dnu <= method.cp_params.tr_nu)
-    # method.cp_constraints.append(method.dnu >= -method.cp_params.tr_nu)
 
 def create_cvxpy_cost_quadratic_penalty(method):
     VB_quad = 0.0
@@ -778,7 +770,7 @@ def compile_merit_function(method):
     method._phi_history = []
 
 
-def armijo_line_search(method, dz, dnu, c1=1e-4, beta=0.5, max_ls_iter=20, alpha_min=0.0001, m=5):
+def armijo_line_search(method, dz, dnu, c1=1e-4, beta=0.5, max_ls_iter=20, alpha_min=0.2, m=5):
     z_ref   = jnp.asarray(method.current_iter_data.z_opt)
     nu_ref  = jnp.asarray(method.current_iter_data.nu_opt)
     dz_jax  = jnp.asarray(dz)
@@ -825,12 +817,12 @@ def update_cvxpy_parameters_dynamics(method):
 
         H = np.zeros((N, n_w, n_w))
 
-        H[:-1, :n_z, :n_z]     += np.asarray(method.H_z_k[0])
-        H[:-1, :n_z, n_z:]     += np.asarray(method.H_z_k[1])
-        H[:-1, n_z:, :n_z]     += np.asarray(method.H_nu_k[0])
-        H[:-1, n_z:, n_z:]     += np.asarray(method.H_nu_k[1])
+        H[:-1, :n_z, :n_z] += np.asarray(method.H_z_k[0])
+        H[:-1, :n_z, n_z:] += np.asarray(method.H_z_k[1])
+        H[:-1, n_z:, :n_z] += np.asarray(method.H_nu_k[0])
+        H[:-1, n_z:, n_z:] += np.asarray(method.H_nu_k[1])
 
-        H[1:, n_z:, n_z:]      += np.asarray(method.H_nu_kp[2])
+        H[1:, n_z:, n_z:] += np.asarray(method.H_nu_kp[2])
 
         H_cost_z, H_cost_nu, H_cost_znu = discretize.compute_nonconvex_cost_hessians(z_opt, nu_opt, method.problem, method)
         w_cost = method.cp_params.w_cost.value
@@ -843,9 +835,8 @@ def update_cvxpy_parameters_dynamics(method):
         H_ineq = discretize.compute_nonconvex_constraint_hessians(z_opt, nu_opt, method.problem, method)
         H += H_ineq
 
-        # mu = 1.0 / method.config.method.weights.alpha_z
-        # H += mu * np.eye(n_w)[np.newaxis, :, :]
         method.cp_params.L.value = _psd_sqrt(H)
+        # method.cp_params.L.value += 0.001 * np.eye(n_w)[np.newaxis, :, :]
 
     if method.flags.discretize == "ps":
         f_ref_col, Ac_col, Bc_col = discretize.compute_ps_dynamics_and_jacobians(z_opt, nu_opt, method.problem, method)
@@ -881,7 +872,6 @@ def update_cvxpy_parameters_nonconvex_costs(method):
 
 def update_cvxpy_parameters_free_final_time_(method):
     if bool(method.flags.free_final_time):
-        method.cp_params.ddt_max.value = float(method.ddt_max)
         method.cp_params.dt_interval_min.value = 0.2 * method.dt_init_min
 
 

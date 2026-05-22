@@ -21,7 +21,7 @@ constraints:
   
   initial_state:
     type: initial_state
-    value: [100.0, 600.0, 0, "${-params.vterm}", "${np.deg2rad(90.0)}", 0.0]
+    value: [100.0, 600.0, 0, "${-params.vterm}", "${np.deg2rad(85.0)}", 0.0]
   
   final_state:
     type: final_state
@@ -54,6 +54,7 @@ costs:
   u_squared:
     type: running
     fcn: fcns.u_squared_cost
+    scale: 1000000000000
     w: 10
 
 constraint_list:

@@ -1,5 +1,6 @@
 import cvxpy as cp
 import jax.numpy as jnp
+import numpy as np
 from jax import Array
 
 
@@ -84,3 +85,9 @@ def thrust_y(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
 
 def thrust_z(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([nu[2]])
+
+
+def obstacle_xy(params, ax) -> np.ndarray:
+    """Circle boundary of the obstacle in the xy-plane (center (5,5), radius 4)."""
+    th = np.linspace(0, 2 * np.pi, 200)
+    return np.column_stack([5.0 + 4.0 * np.cos(th), 5.0 + 4.0 * np.sin(th)])

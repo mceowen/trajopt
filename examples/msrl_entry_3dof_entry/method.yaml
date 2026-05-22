@@ -21,7 +21,7 @@ guess:
 flags:
   equal_dt: 1
   zoh_dilation: 1
-  free_final_time: 0
+  free_final_time: 1
 
 # ===============================
 # CONVERGENCE TOLERANCES

@@ -86,12 +86,6 @@ class SCP:
 
         discretize.compile_rk4_discretization(problem, self)
 
-        dT_max = getattr(self.config.method.guess, "dT_max", None)
-        if dT_max is not None:
-            self.ddt_max = dT_max / ((self.index_map.N.time_grid - 1) * self.problem.nondim.time_scale)
-        else:
-            self.ddt_max = np.inf
-
         initial_guess.set_initial_guess(problem, self)
 
         self.lagrangian_duals = AttrDict()
@@ -317,7 +311,6 @@ class SCP:
         self.current_iter_data.dnu = dnu_new
 
         alpha = armijo_line_search(self, dz_new, dnu_new)
-        # alpha = 1.0
         self.current_iter_data.alpha = alpha
 
         z_new  = self.current_iter_data.z_opt  + alpha * dz_new
@@ -356,7 +349,7 @@ class SCP:
             if constraint_type in UPDATE_CURRENT_ITER_DATA_REGISTRY:
                 UPDATE_CURRENT_ITER_DATA_REGISTRY[constraint_type](self)
 
-        self.current_iter_data.iter_num  = len(self.iter_data_list)
+        self.current_iter_data.iter_num += 1
 
         self.current_iter_data.vb   = copy.deepcopy(self.vb_stack)
         self.current_iter_data.W    = copy.deepcopy(self.W_stack)
@@ -370,8 +363,6 @@ class SCP:
 
     def update_W_dual(self):
 
-        alpha = self.current_iter_data.alpha
-
         for cnstr_type, cnstr_penalty_cfg in self.penalty_config.items():
             if cnstr_type not in self.W_stack:
                 continue
@@ -382,33 +373,25 @@ class SCP:
 
             eps = np.atleast_1d(self.eps_stack[cnstr_type])
 
-            W_cfg = cnstr_penalty_cfg["W"]
-            if W_cfg["autotune"]:
-                eps_floor  = W_cfg["eps_floor"]
-                fac_eps    = W_cfg["fac_eps"]
-                fac_target = W_cfg["fac_target"]
-                eps_target = fac_target * eps
-                Wh = np.where(eps_target > 0, np.abs(W * vb / eps_target), 0.0)
-
-                if np.sum(W) > 0:
-                    Wh = np.maximum(Wh, eps_floor)
-
-                W_max = 1e3 if self.current_iter_data.iter_num < 5 else 1e8
-                Wh = np.minimum(Wh, W_max)
-                Wh = np.maximum(Wh, W)
-                self.W_stack[cnstr_type] = Wh
-
             dual_cfg = cnstr_penalty_cfg["dual"]
+            
             if dual_cfg["autotune"]:
-
                 dual_new = dual + W * vb
 
                 if cnstr_type in {"nonconvex_inequality", "convex_inequality"}:
                     dual_new = np.maximum(0, dual_new)
 
                 self.dual_stack[cnstr_type] = dual_new
-                # satisfied = np.abs(vb) <= eps
-                # self.dual_stack[cnstr_type] = np.where(satisfied, dual, dual_new)
+
+            W_cfg = cnstr_penalty_cfg["W"]
+            if W_cfg["autotune"]:
+                W_min = 0.00001
+                W_max = 1e8
+
+                Wh = np.abs(dual_new) / (0.01*eps)
+                Wh = np.clip(Wh, W_min, W_max)
+
+                self.W_stack[cnstr_type] = Wh
 
     def solve(self):
 

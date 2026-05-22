@@ -17,7 +17,7 @@ flags:
 
 guess:
   type: straight_line
-  T_init: 6.0
+  T_init: 10.0
   T_min:  3
   T_max:  10
   dT_max: 5.0

@@ -3,19 +3,19 @@ inherit: trajopt/methods/configs/autoscvx.yaml
 # ===============================
 # GRID SETTINGS
 # ===============================
-time_grid: 50
+time_grid: 100
 
 flags:
   equal_dt: 1
   flag_conv: 1
-  free_final_time: 0
+  free_final_time: 1
 
 # ===============================
 # INITIAL GUESS SETTINGS
 # ===============================
 guess:
-  T_init: 1700.0
-  T_min:  550.0
+  T_init: 500.0
+  T_min:  500.0
   T_max:  3000.0
   dT_max: 100.0
 

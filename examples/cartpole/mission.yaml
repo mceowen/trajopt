@@ -46,5 +46,5 @@ constraint_list:
   - control_limits
 
 cost_list:
-  - min_time
-  # - u_squared
+  # - min_time
+  - u_squared
