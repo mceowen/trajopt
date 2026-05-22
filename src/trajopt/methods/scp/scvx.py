@@ -1,22 +1,24 @@
-import numpy as np
-import cvxpy as cp
-
 import copy
 import time
 
-from trajopt.methods.scp import convergence, initial_guess, discretize
+import cvxpy as cp
+import numpy as np
+
+from trajopt.core.indexing import IndexMap
+from trajopt.core.problem import Problem
+from trajopt.methods.scp import convergence, discretize, initial_guess
+from trajopt.methods.scp.subproblem_constraint_types import (
+    CREATE_CONSTRAINT_REGISTRY,
+    CREATE_COST_REGISTRY,
+    CREATE_PARAMETER_REGISTRY,
+    CREATE_VARIABLE_REGISTRY,
+    UPDATE_CURRENT_ITER_DATA_REGISTRY,
+    UPDATE_PARAMETER_REGISTRY,
+)
+
 # from trajopt.methods.scp.subproblem_constraints import SubproblemConstraints
 from trajopt.utils import tools
 from trajopt.utils.tools import AttrDict, recursive_attrdict
-
-from trajopt.methods.scp.subproblem_constraint_types import (
-    CREATE_PARAMETER_REGISTRY,
-    CREATE_VARIABLE_REGISTRY,
-    CREATE_CONSTRAINT_REGISTRY,
-    CREATE_COST_REGISTRY,
-    UPDATE_PARAMETER_REGISTRY,
-    UPDATE_CURRENT_ITER_DATA_REGISTRY,
-)
 
 # =========================
 # Subproblem (build-once)
@@ -25,13 +27,14 @@ from trajopt.methods.scp.subproblem_constraint_types import (
 class SCvx:
     """Reusable convex SCP with full baseline functionality & DPP updates."""
 
-    def __init__(self, config, index_map, problem) -> None:
+    def __init__(self, config: AttrDict, index_map: IndexMap, problem: Problem) -> None:
+        """Build the reusable convex subproblem from config, index map, and problem."""
         self.problem   = problem
         self.index_map = self.problem.index_map
         self.indices   = self.index_map.indices
 
         # configs
-        self.config         = config 
+        self.config         = config
         self.flags          = config.method.flags
         self.conv_config    = config.method.conv
         self.penalty_config = config.method.penalty
@@ -50,7 +53,7 @@ class SCvx:
         self.W_stack, self.dual_stack, self.vb_stack = self.create_W_dual_vb_stack(self.penalty_config)
         self.W_stack, self.dual_stack                = self.initialize_W_dual(self.penalty_config, self.W_stack, self.dual_stack)
         self.eps_stack                               = convergence.create_eps_stack(self)
-        
+
         self.initialize()
 
         # cvxpy problem definition
@@ -66,12 +69,13 @@ class SCvx:
 
         self.cp_subproblem  = cp.Problem(cp.Minimize(self.cp_cost), self.cp_constraints)
         total_param_scalars = sum(p.size for p in self.cp_subproblem.parameters())
-        
+
         print("subproblem stats:")
         print("------------------------------------------------------------")
         print(f"total number of cvxpy parameters: {total_param_scalars}")
 
-    def initialize(self):
+    def initialize(self) -> None:
+        """Initialize the time grid, initial guess, and iteration history."""
         problem = self.problem
 
         self.initial_guess = AttrDict()
@@ -107,13 +111,18 @@ class SCvx:
                     "vb": copy.deepcopy(self.vb_stack),
                     "W": copy.deepcopy(self.W_stack),
                     "dual": copy.deepcopy(self.dual_stack),
-                }
+                },
             )
-        
+
         self.iter_data_list.append(copy.deepcopy(self.current_iter_data))
 
-    def create_W_dual_vb_stack(self, penalty_config):
-        
+    def create_W_dual_vb_stack(self, penalty_config: AttrDict) -> tuple[AttrDict, AttrDict, AttrDict]:
+        """Allocate the penalty-weight, dual, and virtual-buffer stacks.
+
+        Returns:
+            Tuple of (W_stack, dual_stack, vb_stack).
+
+        """
         W_stack    = tools.AttrDict()
         dual_stack = tools.AttrDict()
         vb_stack   = tools.AttrDict()
@@ -132,14 +141,21 @@ class SCvx:
 
             if penalty_config[cnstr_type].W.penalty:
                 W_stack[cnstr_type] = np.zeros(shape)
-            
+
             if penalty_config[cnstr_type].dual.penalty:
                 dual_stack[cnstr_type] = np.zeros(shape)
 
         return W_stack, dual_stack, vb_stack
 
-    def initialize_W_dual(self, penalty_config, W_stack, dual_stack):
-        
+    def initialize_W_dual(
+        self, penalty_config: AttrDict, W_stack: AttrDict, dual_stack: AttrDict,
+    ) -> tuple[AttrDict, AttrDict]:
+        """Seed the penalty-weight and dual stacks with their configured initial values.
+
+        Returns:
+            Tuple of (W_stack, dual_stack).
+
+        """
         for cnstr_type in W_stack.keys():
                 W_stack[cnstr_type] += penalty_config[cnstr_type].W.init
 
@@ -147,8 +163,9 @@ class SCvx:
                 W_stack[cnstr_type] += penalty_config[cnstr_type].dual.init
 
         return  W_stack, dual_stack
-    
-    def create_W_dual_parameters(self):
+
+    def create_W_dual_parameters(self) -> None:
+        """Create cvxpy parameters for the penalty-weight and dual stacks."""
         self.cp_params.W_sqrt = tools.AttrDict()
         self.cp_params.dual   = tools.AttrDict()
 
@@ -157,14 +174,15 @@ class SCvx:
             n_type = self.index_map.n[cnstr_type]
             shape  = (N_type, n_type)
             self.cp_params.W_sqrt[cnstr_type] = cp.Parameter(shape, nonneg=True, name=f"W_{cnstr_type}_sqrt", value=np.zeros(shape))
-        
+
         for cnstr_type in self.dual_stack.keys():
             N_type = self.index_map.N[cnstr_type]
             n_type = self.index_map.n[cnstr_type]
             shape  = (N_type, n_type)
             self.cp_params.dual[cnstr_type] = cp.Parameter(shape, name=f"dual_{cnstr_type}", value=np.zeros(shape))
 
-    def create_vb_cvxpy_variables(self):
+    def create_vb_cvxpy_variables(self) -> None:
+        """Create cvxpy virtual-buffer variables for each penalized constraint type."""
         self.cp_vars.vb_stack = tools.AttrDict()
 
         for cnstr_type in self.W_stack.keys() | self.dual_stack.keys():
@@ -174,20 +192,20 @@ class SCvx:
             N_type = self.index_map.N[cnstr_type]
             n_type = self.index_map.n[cnstr_type]
             shape = (N_type, n_type)
-            
+
             if vb_type == "standard":
                 self.cp_vars.vb_stack[cnstr_type] = cp.Variable(shape, name=f"vb_{cnstr_type}")
-            
+
             elif vb_type == "split":
                 vb_plus  = cp.Variable(shape, name=f"vb_{cnstr_type}_plus")
                 vb_minus = cp.Variable(shape, name=f"vb_{cnstr_type}_minus")
-                
+
                 self.cp_vars.vb_stack[f"{cnstr_type}_plus"]  = vb_plus
                 self.cp_vars.vb_stack[f"{cnstr_type}_minus"] = vb_minus
                 self.cp_vars.vb_stack[cnstr_type]            = vb_plus - vb_minus
 
     def create_cvxpy_parameters(self) -> None:
-
+        """Create the cvxpy parameters for the convex subproblem."""
         N, n_z, n_nu = self.N.time_grid, self.n.z, self.n.nu
 
         self.cp_params.z_ref  = cp.Parameter((N, n_z),  name="z_ref")
@@ -211,7 +229,8 @@ class SCvx:
             if constraint_type in CREATE_PARAMETER_REGISTRY.keys():
                 CREATE_PARAMETER_REGISTRY[constraint_type](self)
 
-    def create_cvxpy_variables(self):
+    def create_cvxpy_variables(self) -> None:
+        """Create the cvxpy decision variables for the convex subproblem."""
         N, n_x, n_t, n_u, n_ctcs = (self.N.time_grid, self.n.state, self.n.time, self.n.control, self.n.ctcs)
 
         self.cp_vars.dx    = cp.Variable((N, n_x),    name="dx")
@@ -226,10 +245,10 @@ class SCvx:
             self.cp_vars.ds = cp.Constant(np.zeros((N, 1)))
 
         dz_components = [self.cp_vars.dx, self.cp_vars.dt]
-        
+
         if n_ctcs > 0:
             dz_components.append(self.cp_vars.dbeta)
-        
+
         self.dz  = cp.hstack(dz_components)
         self.dnu = cp.hstack([self.cp_vars.du, self.cp_vars.ds])
         self.dt  = self.cp_vars.dt
@@ -241,23 +260,25 @@ class SCvx:
             if constraint_type in CREATE_VARIABLE_REGISTRY:
                 CREATE_VARIABLE_REGISTRY[constraint_type](self)
 
-    def create_cvxpy_constraints(self):
+    def create_cvxpy_constraints(self) -> None:
+        """Create the cvxpy constraints for each registered constraint type."""
         for constraint_type in self.problem.constraints.constraint_type_list:
             if constraint_type in CREATE_CONSTRAINT_REGISTRY:
                 CREATE_CONSTRAINT_REGISTRY[constraint_type](self)
 
-    def create_cvxpy_cost(self):
+    def create_cvxpy_cost(self) -> None:
+        """Assemble the cvxpy objective from each registered cost type."""
         for cost_type in self.problem.costs.cost_type_list:
             if cost_type in CREATE_COST_REGISTRY:
                 CREATE_COST_REGISTRY[cost_type](self)
 
         METHOD_COSTS = ["trust_region", "quadratic_penalty", "dual"]
-        
+
         for cost_type in METHOD_COSTS:
             CREATE_COST_REGISTRY[cost_type](self)
-        
-    def update_cvxpy_parameters(self):
 
+    def update_cvxpy_parameters(self) -> None:
+        """Refresh all cvxpy parameter values from the current iterate."""
         z_opt  = self.current_iter_data.z_opt
         nu_opt = self.current_iter_data.nu_opt
 
@@ -282,14 +303,14 @@ class SCvx:
             W_param = self.cp_params.W_sqrt.get(cnstr_type)
             if W_param is not None and hasattr(W_param, "value"):
                 W_param.value = np.sqrt(W_val)
-        
+
         for cnstr_type, dual_val in self.dual_stack.items():
             dual_param = self.cp_params.dual.get(cnstr_type)
             if dual_param is not None and hasattr(dual_param, "value"):
                 dual_param.value = dual_val
 
-    def update_current_iter_data(self):
-
+    def update_current_iter_data(self) -> None:
+        """Record the solved subproblem result and advance the iteration history."""
         dz_new  = self.dz.value
         dnu_new = self.dnu.value
 
@@ -341,8 +362,8 @@ class SCvx:
         # update iter_data
         self.iter_data_list.append(copy.deepcopy(self.current_iter_data))
 
-    def update_W_dual(self):
-
+    def update_W_dual(self) -> None:
+        """Autotune the penalty weights and dual variables for the next iteration."""
         for cnstr_type, cnstr_penalty_cfg in self.penalty_config.items():
             if cnstr_type not in self.W_stack:
                 continue
@@ -365,7 +386,7 @@ class SCvx:
                 Wh = np.where(eps_target > 0, np.abs(W * vb / eps_target), 0.0)
 
                 active = np.sum(W) > 0
-                
+
                 if active:
                     Wh = np.maximum(Wh, eps_floor)
 
@@ -382,9 +403,9 @@ class SCvx:
                     dual_new = np.maximum(0, dual_new)
 
                 self.dual_stack[cnstr_type] = dual_new
-    
-    def solve(self):
 
+    def solve(self) -> None:
+        """Run the SCP iteration loop until convergence or the iteration cap."""
         # subproblem convergence header
         print("-" * 164)
         print("  Iteration |  Discretization |   Solve   |    Parse   |  log(dx/eps) | log(vb_ineq/eps) | log(vb_term/eps) | log(vb_dyn/eps) | Solve status |  Time of    |   Cost    ")
@@ -396,7 +417,7 @@ class SCvx:
         for _ in range(max_iter + 1):
             self.update_cvxpy_parameters()
             self.cp_subproblem.solve(warm_start=False, **self.config.method.solver_opts)
-            
+
             if self.cp_subproblem.status == "infeasible":
                 print("Terminated from infeasible convex subproblem!")
                 break
@@ -410,11 +431,12 @@ class SCvx:
 
         if self.iter_data_list[-1].iter_num > 0 and not self.iter_data_list[-1].converged:
             print("Terminated from hitting maximum iterations!")
-    
-    def display_subprob_status(self):
+
+    def display_subprob_status(self) -> None:
+        """Print a one-line status summary for the current SCP iteration."""
         current_iter_data = self.current_iter_data
 
-        with np.errstate(divide='ignore'):
+        with np.errstate(divide="ignore"):
             log_dz_ratio      = float(np.log10(current_iter_data.chk.dz))
             log_vb_ineq_ratio = float(np.log10(current_iter_data.chk.nonconvex_inequality))
             log_vb_term_ratio = float(np.log10(current_iter_data.chk.final_state))
@@ -431,17 +453,5 @@ class SCvx:
         parse_ms = float(current_iter_data.parse_time)
 
         print(
-            "{:^12d}|{:^17.1f}|{:^11.1f}|{:^12.1f}|{:^+14.1f}|{:^+18.1f}|{:^+18.1f}|{:^+17.1f}|{:^14s}|{:^13.2f}|{:^11.1f}".format(
-                iter_num,
-                discretization_ms,
-                solve_ms,
-                parse_ms,
-                log_dz_ratio,
-                log_vb_ineq_ratio,
-                log_vb_term_ratio,
-                log_vb_dyn_ratio,
-                str(solve_stat),
-                T,
-                cost
-            )
+            f"{iter_num:^12d}|{discretization_ms:^17.1f}|{solve_ms:^11.1f}|{parse_ms:^12.1f}|{log_dz_ratio:^+14.1f}|{log_vb_ineq_ratio:^+18.1f}|{log_vb_term_ratio:^+18.1f}|{log_vb_dyn_ratio:^+17.1f}|{solve_stat!s:^14s}|{T:^13.2f}|{cost:^11.1f}",
         )

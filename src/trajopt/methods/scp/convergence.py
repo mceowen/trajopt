@@ -1,8 +1,15 @@
+from typing import TYPE_CHECKING
+
 import numpy as np
-import trajopt.utils.tools as tools
 
-def create_eps_stack(method):
+from trajopt.utils import tools
+from trajopt.utils.tools import AttrDict
 
+if TYPE_CHECKING:
+    from trajopt.methods.scp.scvx import SCvx
+
+def create_eps_stack(method: "SCvx") -> AttrDict:
+    """Build the stack of per-quantity convergence tolerances for the method."""
     problem = method.problem
     nondim  = problem.nondim
     n       = problem.index_map.n
@@ -25,22 +32,22 @@ def create_eps_stack(method):
     eps_stack.defect = nondim.M.state.d2nd @ eps_defect
 
     # set nodal nonconvex inequality constraint tolerances
-    if problem.constraints.has(ct=0, type='nonconvex_inequality'):
-        eps_stack.nonconvex_inequality = np.concatenate([c.eps for c in problem.constraints.get(ct=0, type='nonconvex_inequality')])
+    if problem.constraints.has(ct=0, type="nonconvex_inequality"):
+        eps_stack.nonconvex_inequality = np.concatenate([c.eps for c in problem.constraints.get(ct=0, type="nonconvex_inequality")])
 
     if problem.constraints.has(type="final_state"):
         for c in problem.constraints.get(type="final_state"):
             eps_stack.final_state = np.concatenate([method.conv_config.eps_term, np.atleast_1d(c.eps)])
 
-    eps_stack = augment_convergence_tolerance(method, eps_stack)
-
-    return eps_stack
+    return augment_convergence_tolerance(method, eps_stack)
 
 
-def augment_convergence_tolerance(method, eps_stack):
-    """
-    Augment convergence tolerances to the full z space, adding time (z.time
-    indices) and CTCS (z.ctcs indices) components to eps_dyn and eps_term.
+def augment_convergence_tolerance(method: "SCvx", eps_stack: AttrDict) -> AttrDict:
+    """Augment convergence tolerances to the full z space.
+
+    Adds time (z.time indices) and CTCS (z.ctcs indices) components to eps_dyn
+    and eps_term.
+
     """
     idx = method.index_map.indices
     n   = method.index_map.n
@@ -60,8 +67,8 @@ def augment_convergence_tolerance(method, eps_stack):
     return eps_stack
 
 
-def check_convergence_tolerance(method):
-
+def check_convergence_tolerance(method: "SCvx") -> None:
+    """Evaluate convergence criteria and record the result on current_iter_data."""
     # --- Load convergence data
     prev_iter_data = method.iter_data_list[-1]
     current_iter_data = method.current_iter_data
@@ -71,7 +78,7 @@ def check_convergence_tolerance(method):
     # dz and dcost to measure optimality
     dstate  = current_iter_data.dz[:, index_map.indices.z.state]
     dcost   = current_iter_data.cost - prev_iter_data.cost
-    
+
     # linearized constraint violations
     vb_dyn  = current_iter_data.vb.get("dynamics", 0)
     vb_ineq = current_iter_data.vb.get("nonconvex_inequality", 0)
@@ -110,22 +117,22 @@ def check_convergence_tolerance(method):
     bool_ncvx_dyn_state = np.all(abs_ncvx_dyn <= 1.0*eps_dyn)
     bool_ncvx_ineq = np.all(abs_ncvx_ineq <= 1.0*eps_ineq)
 
-    # convergence criteria option 1: 
+    # convergence criteria option 1:
     # check optimality with dz and feasibility with linearized constraint violations
     bool_opt1  = bool_dz
     bool_feas1 = bool_term and bool_vb_ineq and bool_vb_dyn
 
-    # convergence criteria option 2: 
+    # convergence criteria option 2:
     # check optimality with dcost and feasibility with nonlinear constraint violations
     bool_opt2  = bool_dcost
     bool_feas2 = bool_term and bool_ncvx_ineq and bool_ncvx_dyn_state
 
     if method.flags.flag_conv == 0:
-        bool_conv = (bool_opt1 and bool_feas1) or (bool_opt2 and bool_feas2) 
+        bool_conv = (bool_opt1 and bool_feas1) or (bool_opt2 and bool_feas2)
     elif method.flags.flag_conv == 1:
-        bool_conv = (bool_opt1 and bool_feas1) 
+        bool_conv = (bool_opt1 and bool_feas1)
     elif method.flags.flag_conv == 2:
-        bool_conv = (bool_opt2 and bool_feas2) 
+        bool_conv = (bool_opt2 and bool_feas2)
 
     # === Populate convergence summary
     current_iter_data.bool_conv = bool_conv

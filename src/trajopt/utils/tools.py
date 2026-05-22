@@ -4,12 +4,13 @@ import inspect
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import jax
 import numpy as np
 
-from trajopt.core.scaling.nondim import Nondim
+if TYPE_CHECKING:
+    from trajopt.core.scaling.nondim import Nondim
 
 
 class _FcnExpr:
@@ -280,7 +281,7 @@ def resolve_function_from_string(fcn_string: str, fcns: "AttrDict | None" = None
             f"  available: {available}",
         ) from None
 
-def update_problem_from_config(problem: Any, updated_config_vals_flat: dict[str, Any], nondim: Nondim) -> None:
+def update_problem_from_config(problem: Any, updated_config_vals_flat: dict[str, Any], nondim: "Nondim") -> None:
     """Update problem constraints, costs, and params from a flat config dict."""
     for path, value in updated_config_vals_flat.items():
 

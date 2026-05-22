@@ -1,17 +1,22 @@
+from typing import TYPE_CHECKING
+
 import numpy as np
-from trajopt.methods.scp import discretize
-from trajopt.methods.scp import integrators
 from scipy.interpolate import interp1d
-from trajopt.utils.tools import AttrDict
+
+from trajopt.core.problem import Problem
+from trajopt.methods.scp import discretize, integrators
+
+if TYPE_CHECKING:
+    from trajopt.methods.scp.scvx import SCvx
 
 
-def set_initial_guess(problem,method):
-        
+def set_initial_guess(problem: Problem, method: "SCvx") -> None:
+        """Build the initial guess on method, dispatching on the configured type."""
         initial_guess_type = getattr(method.config.method.guess, "type", "propagation")
 
         if initial_guess_type == "propagation":
             nonlinear_initial_guess(problem, method)
-        
+
         elif initial_guess_type == "straight_line":
             straight_line_initial_guess(problem, method)
 
@@ -20,7 +25,13 @@ def set_initial_guess(problem,method):
         method.cost_init = discretize.compute_nonconvex_costs(method.initial_guess.z, method.initial_guess.nu, problem, method)
 
 # TODO(Skye): Possibly add actual computation of beta using index_map helpers
-def augment_initial_guess(problem, method):
+def augment_initial_guess(problem: Problem, method: "SCvx") -> tuple[np.ndarray, np.ndarray]:
+    """Assemble the z and nu initial-guess arrays from the t/x/u guess.
+
+    Returns:
+        Tuple of (z_init, nu_init).
+
+    """
     idx     = problem.index_map.indices
     N       = method.index_map.N.time_grid
 
@@ -30,14 +41,14 @@ def augment_initial_guess(problem, method):
     x_init                      = np.asarray(init.x)
     u_init                      = np.asarray(init.u)
 
-    discretize_flag = getattr(method.flags, 'discretize', 'ms')
+    discretize_flag = getattr(method.flags, "discretize", "ms")
 
-    if  discretize_flag == 'ps':
+    if  discretize_flag == "ps":
         _, etau, _, _ = discretize.compute_ps_differentiation_matrix(N - 1)
         t0, tf = t_init[0], t_init[-1]
         t_lgr  = t0 + (etau + 1.0) / 2.0 * (tf - t0)
-        x_init = interp1d(t_init, x_init, axis=0, fill_value='extrapolate')(t_lgr)
-        u_init = interp1d(t_init, u_init, axis=0, fill_value='extrapolate')(t_lgr)
+        x_init = interp1d(t_init, x_init, axis=0, fill_value="extrapolate")(t_lgr)
+        u_init = interp1d(t_init, u_init, axis=0, fill_value="extrapolate")(t_lgr)
         t_init = t_lgr
         init.t = t_init
 
@@ -52,7 +63,7 @@ def augment_initial_guess(problem, method):
     dt_ref                      = np.diff(t_init.reshape(-1, 1), axis=0)
     init.dt                     = dt_ref
 
-    if discretize_flag == 'ps':
+    if discretize_flag == "ps":
         T                           = float(t_init[-1] - t_init[0])
         nu_init[:, idx.nu.dilation_factor] = T
     else:
@@ -65,7 +76,7 @@ def augment_initial_guess(problem, method):
     init.z  = z_init
     init.nu = nu_init
 
-    if hasattr(init, 't_dense'):
+    if hasattr(init, "t_dense"):
         t_d  = np.asarray(init.t_dense).reshape(-1)
         x_d  = np.asarray(init.x_dense)
         u_d  = np.asarray(init.u_dense)
@@ -83,21 +94,26 @@ def augment_initial_guess(problem, method):
 
     return z_init, nu_init
 
-def straight_line_initial_guess(problem, method):
+def straight_line_initial_guess(problem: Problem, method: "SCvx") -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Build a straight-line t/x/u initial guess between boundary states.
 
+    Returns:
+        Tuple of (t_init, x_init, u_init).
+
+    """
     init = method.initial_guess
 
     line_init_u_init            = method.config.method.guess.line_guess_u_init @ problem.nondim.M.control["d2nd"]
     t_init                      = np.asarray(init.t).reshape(-1)
 
-    
+
     init_state_constraint       = problem.constraints.get(type="initial_state")[0]
     terminal_state_constraint   = problem.constraints.get(type="final_state")[0]
 
     if len(init_state_constraint.idx) == problem.index_map.n.state:
         xi_full = init_state_constraint.value
     else:
-        xi_guess = getattr(init_state_constraint, 'value_guess', None)
+        xi_guess = getattr(init_state_constraint, "value_guess", None)
         if xi_guess is not None:
             xi_full = xi_guess
         else:
@@ -106,7 +122,7 @@ def straight_line_initial_guess(problem, method):
     if len(terminal_state_constraint.idx) == problem.index_map.n.state:
         xf_full = terminal_state_constraint.value
     else:
-        xf_guess = getattr(terminal_state_constraint, 'value_guess', None)
+        xf_guess = getattr(terminal_state_constraint, "value_guess", None)
         if xf_guess is not None:
             xf_full = xf_guess
         else:
@@ -131,7 +147,13 @@ def straight_line_initial_guess(problem, method):
 
     return t_init, x_init, u_init
 
-def nonlinear_initial_guess(problem, method):
+def nonlinear_initial_guess(problem: Problem, method: "SCvx") -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Build a t/x/u initial guess by propagating the nonlinear dynamics.
+
+    Returns:
+        Tuple of (t_init, x_nl, u_init).
+
+    """
     init                = method.initial_guess
 
     x0                  = problem.constraints.get(type="initial_state")[0].value

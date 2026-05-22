@@ -1,9 +1,16 @@
-import numpy as np
-import jax
-import jax.numpy as jnp
+from typing import TYPE_CHECKING
+
 import cvxpy as cp
 import diffrax
-import trajopt.methods.scp.pseudospectral as pseudospectral
+import jax
+import jax.numpy as jnp
+import numpy as np
+
+from trajopt.core.problem import Problem
+from trajopt.methods.scp import pseudospectral
+
+if TYPE_CHECKING:
+    from trajopt.methods.scp.scvx import SCvx
 
 jax.config.update("jax_enable_x64", True)
 jax.config.update("jax_compilation_cache_dir", "/tmp/jax_cache")
@@ -11,7 +18,15 @@ jax.config.update("jax_persistent_cache_min_entry_size_bytes", -1)
 jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
 jax.config.update("jax_persistent_cache_enable_xla_caches", "xla_gpu_per_fusion_autotune_cache_dir")
 
-def compute_nonconvex_constraints(z, nu, problem, method):
+def compute_nonconvex_constraints(
+    z: np.ndarray, nu: np.ndarray, problem: Problem, method: "SCvx",
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Evaluate nonconvex inequality constraints and their Jacobians.
+
+    Returns:
+        Tuple of (g, dgdz, dgdnu) over the time grid.
+
+    """
     n_ineq    = problem.index_map.n.nonconvex_inequality
     n_z       = problem.index_map.n.z
     n_nu      = problem.index_map.n.nu
@@ -40,7 +55,15 @@ def compute_nonconvex_constraints(z, nu, problem, method):
     return g, dgdz, dgdnu
 
 
-def compute_nonconvex_costs(z, nu, problem, method):
+def compute_nonconvex_costs(
+    z: np.ndarray, nu: np.ndarray, problem: Problem, method: "SCvx",
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Evaluate nonconvex/terminal/running costs and their Jacobians.
+
+    Returns:
+        Tuple of (cost, dcostdz, dcostdnu) over the time grid.
+
+    """
     N         = method.index_map.N.time_grid
     n_z       = problem.index_map.n.z
     n_nu       = problem.index_map.n.nu
@@ -91,17 +114,18 @@ def compute_nonconvex_costs(z, nu, problem, method):
 
 
 
-def compile_jax_discretization(problem, method):
+def compile_jax_discretization(problem: Problem, method: "SCvx") -> None:
+    """Build and cache the JIT-compiled discretization propagator on method."""
     n_z  = problem.index_map.n.z
     n_nu = problem.index_map.n.nu
 
-    # define static indices for stacked RHS vector 
+    # define static indices for stacked RHS vector
     Ak_ind0   = n_z
     Bk_ind0   = Ak_ind0  + n_z*n_z
     Bkp_ind0  = Bk_ind0  + n_z*n_nu
 
     # pull ltv dynamics
-    lin_dyn = problem.constraints.get(type='dynamics')[0].lin_dyn
+    lin_dyn = problem.constraints.get(type="dynamics")[0].lin_dyn
 
     # packs the derivative of stacked RHS vector for node k
     def pack_lds_dot(tau, k, lds_k, nu_k, nu_kp, params):
@@ -131,7 +155,7 @@ def compile_jax_discretization(problem, method):
         k, nu_k, nu_kp, params = args
         return pack_lds_dot(tau, k, lds_k, nu_k, nu_kp, params)
 
-    # initilize stacked propagation vector  
+    # initilize stacked propagation vector
     def pack_lds0(z_k):
         P1 = z_k
         P2 = jnp.eye(n_z).reshape(n_z*n_z)
@@ -149,7 +173,7 @@ def compile_jax_discretization(problem, method):
 
         return (A_jax_k, B_jax_k, Bp_jax_k, z_minus_k)
 
-    use_fixed_dt = int(getattr(method.flags, 'ode_fixed_dt', 0))
+    use_fixed_dt = int(getattr(method.flags, "ode_fixed_dt", 0))
     N_grid = problem.index_map.N.time_grid
 
     if use_fixed_dt:
@@ -207,8 +231,15 @@ def compile_jax_discretization(problem, method):
     method.propagate_discretization_jax = propagate
 
 # inverse free discretize with jax
-def discretize_inv_free_jax(z_ref_np, nu_ref_np, problem, method):
+def discretize_inv_free_jax(
+    z_ref_np: np.ndarray, nu_ref_np: np.ndarray, problem: Problem, method: "SCvx",
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Run the JAX inverse-free discretization over all nodes.
 
+    Returns:
+        Tuple of (Ak, Bk, Bkp, z_minus).
+
+    """
     # convert numpy arrays to jax
     z_ref = jnp.asarray(z_ref_np)
     nu_ref = jnp.asarray(nu_ref_np)
@@ -221,24 +252,27 @@ def discretize_inv_free_jax(z_ref_np, nu_ref_np, problem, method):
 
     # print(f"actual_prop_time: {(start - time.time())*1000}")
     z_ref_0 = z_ref[[0], :]
-    
+
     return np.asarray(A_jax), np.asarray(B_jax), np.asarray(Bp_jax), np.asarray(jnp.vstack([z_ref_0, z_minus]))
 
 
-def compute_linsys_discrete(z_ref, nu_ref, problem, method):
+def compute_linsys_discrete(
+    z_ref: np.ndarray, nu_ref: np.ndarray, problem: Problem, method: "SCvx",
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Compute the linear system in discrete form.
+
+    Parameters
+    ----------
+        z_ref (numpy.ndarray): Reference state trajectory.
+        nu_ref (numpy.ndarray): Reference control trajectory.
+        t_ref (numpy.ndarray): Node time values.
+        trajopt_obj (dict): Dictionary containing trajopt_obj parameters.
+
+    Returns
+    -------
+        tuple: Ak, Bk, Bkp, z_minus.
+
     """
-    Compute the linear system in discrete form.
-
-    Parameters:
-    z_ref (numpy.ndarray): Reference state trajectory.
-    nu_ref (numpy.ndarray): Reference control trajectory.
-    t_ref (numpy.ndarray): Node time values.
-    trajopt_obj (dict): Dictionary containing trajopt_obj parameters.
-
-    Returns:
-    tuple: Ak, Bk, Bkp, z_minus
-    """
-
     if method.flags.jax_dyn:
         Ak, Bk, Bkp, z_minus = discretize_inv_free_jax(z_ref, nu_ref, problem, method)
     else:
@@ -246,15 +280,14 @@ def compute_linsys_discrete(z_ref, nu_ref, problem, method):
 
     return Ak, Bk, Bkp, z_minus
 
-def build_ps_dyn_constraints(subproblem):
-    """
-    Build pseudospectral dynamics constraints as a single block matrix equation.
+def build_ps_dyn_constraints(subproblem: "SCvx") -> cp.Constraint:
+    """Build pseudospectral dynamics constraints as a single block matrix equation.
+
     At collocation node k: state is z[k+1], control is nu[k+1] (both at etau[k+1]).
 
     Returns:
-    --------
-    cp.Constraint
-        Single constraint for all collocation nodes, shape (N_col, n_z)
+        cp.Constraint: Single constraint for all collocation nodes, shape (N_col, n_z).
+
     """
     N_col  = subproblem.index_map.N.time_grid - 1
 
@@ -271,16 +304,22 @@ def build_ps_dyn_constraints(subproblem):
     return lhs == rhs
 
 
-def compute_ps_dynamics_and_jacobians(z_ref, nu_ref, problem, method):
-    """
-    Compute dynamics and Jacobians at reference trajectory for pseudospectral collocation.
+def compute_ps_dynamics_and_jacobians(
+    z_ref: np.ndarray, nu_ref: np.ndarray, problem: Problem, method: "SCvx",
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Compute dynamics and Jacobians at reference trajectory for pseudospectral collocation.
+
     State and control at collocation node k are both at etau[k+1]: z[k+1], nu[k+1].
+
+    Returns:
+        Tuple of (f_ref_col, Ac_col, Bc_col).
+
     """
     N_col = problem.index_map.N.time_grid - 1
     n_z = problem.index_map.n.z
     n_nu = problem.index_map.n.nu
 
-    lin_dyn = problem.constraints.get(type='dynamics')[0].lin_dyn
+    lin_dyn = problem.constraints.get(type="dynamics")[0].lin_dyn
     params = problem.params
 
     f_ref_col = np.zeros((N_col, n_z))
@@ -300,9 +339,14 @@ def compute_ps_dynamics_and_jacobians(z_ref, nu_ref, problem, method):
     return f_ref_col, Ac_col, Bc_col
 
 
-def compute_ps_differentiation_matrix(N_col):
-    """
-    Compute the pseudospectral differentiation matrix D for fLGR collocation.
+def compute_ps_differentiation_matrix(
+    N_col: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Compute the pseudospectral differentiation matrix D for fLGR collocation.
+
+    Returns:
+        Tuple of (tau, etau, w, D).
+
     """
     tau, etau, w, D = pseudospectral.flipped_radau_differential_operator(N_col)
     return tau, etau, w, D

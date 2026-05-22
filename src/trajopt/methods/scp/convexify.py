@@ -1,18 +1,21 @@
-import sympy as sp
+from collections.abc import Callable
+
 import jax
-import jax.numpy as jnp
+import sympy as sp
+
 
 # jax autodiff for affine approximations
-def linearize_jax(fcn):
-
+def linearize_jax(fcn: Callable) -> tuple[Callable, Callable, Callable]:
+    """Build JIT-compiled callables for fcn and its Jacobians w.r.t. z and nu."""
     dfcn_dz = jax.jit(jax.jacfwd(fcn, argnums=0))
     dfcn_dnu = jax.jit(jax.jacfwd(fcn, argnums=1))
     f = jax.jit(fcn)
 
     return f, dfcn_dz, dfcn_dnu
 
-# PROTOTYPE 
-def linearize_sympy(fcn, trajopt_obj):
+# PROTOTYPE
+def linearize_sympy(fcn: Callable, trajopt_obj: object) -> tuple:
+    """Build symbolic expressions for fcn and its Jacobians w.r.t. z and nu."""
     z, nu = trajopt_obj.method.initial_guess.z, trajopt_obj.method.initial_guess.nu
     n = trajopt_obj.model.n
     m = trajopt_obj.model.m
