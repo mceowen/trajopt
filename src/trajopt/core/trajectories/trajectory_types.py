@@ -1,11 +1,20 @@
-import numpy as np
+from collections.abc import Callable
+
 import jax
 import jax.numpy as jnp
-import trajopt.utils.tools as tools
+import numpy as np
+from jax import Array
+
+from trajopt.core.indexing import IndexMap
+from trajopt.utils import tools
+from trajopt.utils.tools import AttrDict
 
 
 class spatial:
-    def __init__(self, cnstr_config, index_map, fcns=None, **kwargs):
+    """Trajectory type for 3D spatial plots."""
+
+    def __init__(self, cnstr_config: AttrDict, index_map: IndexMap, fcns: AttrDict | None = None, **kwargs) -> None:
+        """Initialize spatial trajectory from config."""
         self.type       = "spatial"
         self.name       = cnstr_config["name"]
         self.group      = cnstr_config.get("group", None)
@@ -30,14 +39,16 @@ class spatial:
         self.quiver_fcns_batched = []
         self.quiver_origin_fcns_batched = []
 
-    def _wrap(self, fn):
+    def _wrap(self, fn: Callable) -> Callable:
+        """Wrap fn as a batched, JIT-compiled (z, nu, params) -> output function."""
         def fcn(z, nu, params):
             x, t, beta = self.index_map.unpack_z(z)
             u, s       = self.index_map.unpack_nu(nu)
             return fn(t, x, u, params)
         return jax.jit(jax.vmap(fcn, in_axes=(0, 0, None)))
 
-    def compile_function(self):
+    def compile_function(self) -> None:
+        """Compile batched JIT functions for trajectory and quiver evaluations."""
         self.fcn_batched = self._wrap(self.fcn_dim)
         self.quiver_fcns_batched = [self._wrap(f) for f in self.quiver_fcn_dims]
         self.quiver_origin_fcns_batched = [
@@ -45,7 +56,8 @@ class spatial:
             for f in self.quiver_origin_fcn_dims
         ]
 
-    def compute_trajectory_values(self, z, nu, params):
+    def compute_trajectory_values(self, z: np.ndarray | Array, nu: np.ndarray | Array, params: AttrDict) -> dict:
+        """Evaluate the spatial trajectory and quivers over the time grid."""
         z_jax, nu_jax = jnp.asarray(z), jnp.asarray(nu)
         values = np.asarray(self.fcn_batched(z_jax, nu_jax, params))
         quivers = [
@@ -60,7 +72,10 @@ class spatial:
 
 
 class time_series:
-    def __init__(self, cnstr_config, index_map, fcns=None, **kwargs):
+    """Trajectory type for time-series plots."""
+
+    def __init__(self, cnstr_config: AttrDict, index_map: IndexMap, fcns: AttrDict | None = None, **kwargs) -> None:
+        """Initialize time-series trajectory from config."""
         self.type       = "time_series"
         self.name       = cnstr_config["name"]
         self.group      = cnstr_config.get("group", None)
@@ -86,21 +101,24 @@ class time_series:
 
         self.fcn_dim = tools.resolve_function_from_string(cnstr_config["fcn"], fcns)
 
-    def _wrap(self, fn):
+    def _wrap(self, fn: Callable) -> Callable:
+        """Wrap fn as a batched, JIT-compiled (z, nu, params) -> output function."""
         def fcn(z, nu, params):
             x, t, beta = self.index_map.unpack_z(z)
             u, s       = self.index_map.unpack_nu(nu)
             return fn(t, x, u, params)
         return jax.jit(jax.vmap(fcn, in_axes=(0, 0, None)))
 
-    def compile_function(self):
+    def compile_function(self) -> None:
+        """Compile batched JIT functions for trajectory and optional limit evaluations."""
         self.fcn_batched = self._wrap(self.fcn_dim)
         if self.upper_limit_fn:
             self.upper_limit_fn_batched = self._wrap(self.upper_limit_fn)
         if self.lower_limit_fn:
             self.lower_limit_fn_batched = self._wrap(self.lower_limit_fn)
 
-    def compute_trajectory_values(self, z, nu, params):
+    def compute_trajectory_values(self, z: np.ndarray | Array, nu: np.ndarray | Array, params: AttrDict) -> dict:
+        """Evaluate the time-series trajectory values and limits over the time grid."""
         z_jax, nu_jax = jnp.asarray(z), jnp.asarray(nu)
         values = np.asarray(self.fcn_batched(z_jax, nu_jax, params))
         upper  = self.upper_limit if not self.upper_limit_fn else np.asarray(self.upper_limit_fn_batched(z_jax, nu_jax, params)).flatten()
