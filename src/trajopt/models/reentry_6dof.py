@@ -2,9 +2,11 @@ import jax
 import jax.numpy as jnp
 from jax import Array
 
-import trajopt.models.rotations as rotations
+from trajopt.models import rotations
+from trajopt.utils.tools import AttrDict
 
-def dynamics(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+
+def dynamics(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """6-DoF atmospheric reentry dynamics."""
     r = z[0:3]
     v_body = z[3:6]
@@ -41,14 +43,14 @@ def dynamics(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.concatenate([v_inertial, v_body_dot, q_dot, w_dot])
 
 
-def control_torques_dt(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def control_torques_dt(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """Constraint: control torques must equal the required aero moments (== 0)."""
     aero = fcns.nonlinear_aero(t, z, nu, params, fcns)
 
     return nu[:3] - aero.m_rot  # == 0
 
 
-def heat_rate(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def heat_rate(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """Convective heat rate (W/m²)."""
     v = jnp.linalg.norm(z[3:6])
     rho = fcns.density_model(t, z, nu, params, fcns)
@@ -56,7 +58,7 @@ def heat_rate(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([params.vehicle.kQ * rho**0.5 * v**3])
 
 
-def dynamic_pressure(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def dynamic_pressure(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """Dynamic pressure q-bar (Pa)."""
     v = jnp.linalg.norm(z[3:6])
     rho = fcns.density_model(t, z, nu, params, fcns)
@@ -64,7 +66,7 @@ def dynamic_pressure(t: float, z: Array, nu: Array, params: dict, fcns: dict) ->
     return jnp.array([0.5 * rho * v**2])
 
 
-def aero_load(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def aero_load(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """Aerodynamic translational acceleration magnitude (m / (s^2))."""
     aero = fcns.nonlinear_aero(t, z, nu, params, fcns)
 
@@ -73,17 +75,17 @@ def aero_load(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([jnp.linalg.norm(aero.f_trans / mass)])
 
 
-def quaternion_norm(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def quaternion_norm(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """Quaternion norm (should be 1 for a unit quaternion)."""
     return jnp.array([jnp.linalg.norm(z[6:10])])
 
 
-def velocity(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def velocity(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """Body-frame velocity (m/s)."""
     return jnp.array([jnp.linalg.norm(z[3:6])])
 
 
-def aoa(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def aoa(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """Angle of attack (deg)."""
     v = z[3:6]
     v_norm = jnp.maximum(jnp.linalg.norm(v), 1e-10)
@@ -93,7 +95,7 @@ def aoa(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([alpha])
 
 
-def sideslip(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def sideslip(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """Sideslip angle (deg)."""
     v = z[3:6]
     v_norm = jnp.linalg.norm(v)
@@ -103,7 +105,7 @@ def sideslip(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([beta])
 
 
-def altitude(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def altitude(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """Altitude above planet surface (m)."""
     return jnp.array([(jnp.linalg.norm(z[0:3]) - params.planet.r)])
 
@@ -211,7 +213,7 @@ def quat_mult(q1: Array, q2: Array) -> Array:
     return jnp.array([w, x, y, z])
 
 
-def long_lat(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def long_lat(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """Longitude and latitude from Cartesian position [theta, phi] (deg, deg)."""
     theta = jnp.rad2deg(jnp.atan2(z[1], z[0]))
     phi = jnp.rad2deg(jnp.atan2(z[2], jnp.sqrt(z[0] ** 2 + z[1] ** 2)))
@@ -219,7 +221,7 @@ def long_lat(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([theta, phi])
 
 
-def long_lat_alt(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def long_lat_alt(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """Longitude, latitude, and altitude from Cartesian position [theta, phi, h] (deg, deg, m)."""
     r = jnp.linalg.norm(z[0:3])
 
@@ -230,7 +232,7 @@ def long_lat_alt(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Arr
     return jnp.array([theta, phi, alt])
 
 
-def r_v(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def r_v(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """Radial distance and velocity [r, v] (m, m/s)."""
     r = jnp.linalg.norm(z[0:3])
     v = jnp.linalg.norm(z[3:6])
@@ -238,27 +240,27 @@ def r_v(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([r, v])
 
 
-def polar_radius(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def polar_radius(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """Polar radius / distance from planet center (m)."""
     return jnp.array([jnp.linalg.norm(z[0:3])])
 
 
-def polar_longitude(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def polar_longitude(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """Polar longitude (deg)."""
     return jnp.array([jnp.rad2deg(jnp.arctan2(z[1], z[0]))])
 
 
-def polar_latitude(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def polar_latitude(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """Polar latitude (deg)."""
     return jnp.array([jnp.rad2deg(jnp.arctan2(z[2], jnp.sqrt(z[0] ** 2 + z[1] ** 2)))])
 
 
-def polar_velocity(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def polar_velocity(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """Polar velocity magnitude (m/s)."""
     return jnp.array([jnp.linalg.norm(z[3:6])])
 
 
-def polar_fpa(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def polar_fpa(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """Polar flight-path angle (deg), derived from 6-DoF Cartesian state."""
     r = z[0:3]
     v_body = z[3:6]
@@ -272,7 +274,7 @@ def polar_fpa(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
     return jnp.array([gamma])
 
 
-def polar_heading(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def polar_heading(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """Polar heading angle (deg), measured from north (increasing latitude)."""
     r = z[0:3]
     v_body = z[3:6]

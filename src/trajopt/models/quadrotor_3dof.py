@@ -2,8 +2,10 @@ import cvxpy as cp
 import jax.numpy as jnp
 from jax import Array
 
+from trajopt.utils.tools import AttrDict
 
-def dynamics_jax(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+
+def dynamics_jax(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """3-DoF quadrotor dynamics (double integrator with gravity)."""
     g = params.planet.g
     mass = params.vehicle.mass
@@ -14,12 +16,12 @@ def dynamics_jax(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Arr
     return jnp.concatenate([v, T / mass + g_vec])
 
 
-def thrust_norm(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def thrust_norm(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """Thrust magnitude."""
     return jnp.array([jnp.linalg.norm(nu)])
 
 
-def obstacle(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def obstacle(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """Distance from circular obstacle centered at (5,5) in xy-plane."""
     r = z[0:2]
     pos_obs = jnp.array([5, 5])
@@ -32,55 +34,55 @@ def max_thrust_cone(t, x, u, params):
     return cp.norm(u[0:3]) - T_max
 
 
-def pos_x(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def pos_x(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """x-position."""
     return jnp.array([z[0]])
 
 
-def pos_y(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def pos_y(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """y-position."""
     return jnp.array([z[1]])
 
 
-def height(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def height(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """Height (z-position)."""
     return jnp.array([z[2]])
 
 
-def xy(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def xy(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """xy-position."""
     return z[0:2]
 
 
-def xz(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def xz(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """xz-position."""
     return jnp.array([z[0], z[2]])
 
 
-def yz(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def yz(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """yz-position."""
     return jnp.array([z[1], z[2]])
 
 
-def xyz(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def xyz(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """xyz-position."""
     return z[0:3]
 
 
-def vel_x(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def vel_x(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     return jnp.array([z[3]])
 
-def vel_y(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def vel_y(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     return jnp.array([z[4]])
 
-def vel_z(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def vel_z(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     return jnp.array([z[5]])
 
-def thrust_x(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def thrust_x(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     return jnp.array([nu[0]])
 
-def thrust_y(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def thrust_y(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     return jnp.array([nu[1]])
 
-def thrust_z(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def thrust_z(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     return jnp.array([nu[2]])

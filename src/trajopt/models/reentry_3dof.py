@@ -8,9 +8,8 @@ jax.config.update("jax_enable_x64", True)
 # ===============================
 # JAX MODEL
 # ===============================
-def dynamics(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
+def dynamics(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     """3-DoF atmospheric reentry dynamics."""
-
     Om = jnp.deg2rad(params.planet.omega)
     mu = params.planet.mu
 
