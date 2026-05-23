@@ -3,8 +3,8 @@ import time
 import numpy as np
 import cvxpy as cp
 
-from trajopt.core.indexing import IndexMap
-from trajopt.core.problem import Problem
+from trajopt.indexing import IndexMap
+from trajopt.problem import Problem
 from trajopt.methods.scp import convergence, initial_guess, discretize
 from trajopt.utils import tools
 from trajopt.utils.tools import AttrDict, recursive_attrdict

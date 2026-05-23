@@ -1,0 +1,190 @@
+
+# ===============================
+# FUNCTION REGISTRY
+# ===============================
+
+fcns:
+  dynamics:        ../quadrotor_3dof.py:dynamics_jax
+  thrust_norm:     ../quadrotor_3dof.py:thrust_norm
+  max_thrust_cone: ../quadrotor_3dof.py:max_thrust_cone
+  obstacle:        ../quadrotor_3dof.py:obstacle
+  obstacle_xy:     ../quadrotor_3dof.py:obstacle_xy
+  height:          ../quadrotor_3dof.py:height
+  pos_x:           ../quadrotor_3dof.py:pos_x
+  pos_y:           ../quadrotor_3dof.py:pos_y
+  vel_x:           ../quadrotor_3dof.py:vel_x
+  vel_y:           ../quadrotor_3dof.py:vel_y
+  vel_z:           ../quadrotor_3dof.py:vel_z
+  thrust_x:        ../quadrotor_3dof.py:thrust_x
+  thrust_y:        ../quadrotor_3dof.py:thrust_y
+  thrust_z:        ../quadrotor_3dof.py:thrust_z
+  xy:              ../quadrotor_3dof.py:xy
+  xyz:             ../quadrotor_3dof.py:xyz
+  xz:              ../quadrotor_3dof.py:xz
+  yz:              ../quadrotor_3dof.py:yz
+
+# ===============================
+# MODEL CONFIGURATION
+# ===============================
+
+state:
+  x:
+    idx: [0]
+  y:
+    idx: [1]
+  z:
+    idx: [2]
+  vx:
+    idx: [3]
+  vy:
+    idx: [4]
+  vz:
+    idx: [5]
+
+control:
+  Tx:
+    idx: [0]
+  Ty:
+    idx: [1]
+  Tz:
+    idx: [2]
+
+time.scale: 1.0
+
+# ===============================
+# TRAJECTORIES
+# ===============================
+
+trajectories:
+  pos_x:
+    type: time_series
+    fcn: fcns.pos_x
+    group: state_pos
+    title: "X Position vs Time"
+    xlabel: "Time (s)"
+    ylabel: "X (m)"
+
+  pos_y:
+    type: time_series
+    fcn: fcns.pos_y
+    group: state_pos
+    title: "Y Position vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Y (m)"
+
+  height:
+    type: time_series
+    fcn: fcns.height
+    group: state_pos
+    title: "Z Position vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Z (m)"
+
+  vel_x:
+    type: time_series
+    fcn: fcns.vel_x
+    group: state_vel
+    title: "X Velocity vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Vx (m/s)"
+
+  vel_y:
+    type: time_series
+    fcn: fcns.vel_y
+    group: state_vel
+    title: "Y Velocity vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Vy (m/s)"
+
+  vel_z:
+    type: time_series
+    fcn: fcns.vel_z
+    group: state_vel
+    title: "Z Velocity vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Vz (m/s)"
+
+  thrust_x:
+    type: time_series
+    fcn: fcns.thrust_x
+    group: control
+    title: "Tx vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Tx (N)"
+
+  thrust_y:
+    type: time_series
+    fcn: fcns.thrust_y
+    group: control
+    title: "Ty vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Ty (N)"
+
+  thrust_z:
+    type: time_series
+    fcn: fcns.thrust_z
+    group: control
+    title: "Tz vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Tz (N)"
+
+  thrust_norm_traj:
+    type: time_series
+    fcn: fcns.thrust_norm
+    group: control
+    title: "Thrust Magnitude vs Time"
+    xlabel: "Time (s)"
+    ylabel: "‖T‖ (N)"
+
+  xy_trajectory:
+    type: spatial
+    fcn: fcns.xy
+    group: position_trajectories
+    title: "XY Trajectory"
+    xlabel: "X (m)"
+    ylabel: "Y (m)"
+    equal_aspect: true
+    overlays:
+      obstacle:
+        fcn: fcns.obstacle_xy
+        color: [0.8, 0.0, 0.0]
+        ls: "--"
+        lw: 1.5
+        alpha: 0.7
+
+  xyz_trajectory:
+    type: spatial
+    fcn: fcns.xyz
+    group: position_trajectories
+    title: "XYZ Trajectory"
+    xlabel: "X (m)"
+    ylabel: "Y (m)"
+
+# ===============================
+# PLOT CONFIGURATION
+# ===============================
+
+plot_config:
+  limits_all_iters: true
+  trajectory_groups:
+    state_pos:
+      figsize: [12, 2.8]
+      grid_gap_x: 0.08
+      margins: [0.08, 0.02, 0.06, 0.14]
+
+    state_vel:
+      figsize: [12, 2.8]
+      grid_gap_x: 0.08
+      margins: [0.08, 0.02, 0.06, 0.14]
+
+    control:
+      figsize: [12, 2.8]
+      grid_gap_x: 0.08
+      margins: [0.08, 0.02, 0.06, 0.14]
+
+    position_trajectories:
+      figsize: [10, 3.2]
+      width_ratios: [1, 2]
+      grid_gap_x: -0.10
+      pad_3d: 0.0
+      margins: [0.08, 0.02, 0.06, 0.14]

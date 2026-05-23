@@ -1,9 +1,9 @@
-"""YAML config loader:
-- Dot notation: 'foo.bar.x: 1' expands to '{foo: {bar: {x: 1}}}'
-- Inheritance: 'foo.inherit: path' or top-level 'inherit: path'
-- Expressions: '${expr}' evaluates Python with access to config values and numpy
-- Functions: 'path:func' loads a function from a Python file
-- Array conversion: lists of numbers become numpy arrays
+"""YAML config loader with inheritance, dot-notation, and expression evaluation.
+
+Path resolution:
+- inherit paths: resolved relative to the declaring file. Paths starting
+  with 'trajopt/' are resolved to the installed package (src/trajopt/).
+- .py:func paths: always resolved relative to the declaring YAML file.
 """
 
 import importlib.resources
@@ -26,223 +26,169 @@ from trajopt.utils.tools import (
 # MAIN CONFIG LOADER
 # =============================================================================
 
-def load_trajopt_config(
-    mission_path: str,
-    model_path: str,
-    method_path: str,
-    variations_path: str | None = None,
-) -> AttrDict:
-    """Load and combine mission, model, and method configs."""
-    _files = f"mission='{mission_path}', model='{model_path}', method='{method_path}'"
+def load_trajopt_config(config_path: str) -> AttrDict:
+    """Load a single config file, resolving all inheritance and expressions."""
+    config = load_yaml(config_path)
+    config = _resolve_inheritance(config, _source=config_path)
 
-    # load mission and model configs and merge mission into model to form problem config
-    mission_config = load_yaml(mission_path)
-    mission_config = resolve_inheritance(mission_config, _source=mission_path)
+    problem = config.get("problem", AttrDict({}))
+    method  = config.get("method", AttrDict({}))
 
-    model_config   = load_yaml(model_path)
-    model_config   = resolve_inheritance(model_config, _source=model_path)
-
+    ctx = {**flatten_dict(problem), **flatten_dict(method), "np": np}
     try:
-        problem_config = deep_merge(model_config, mission_config)
+        problem = _eval_values(problem, ctx)
+        method  = _eval_values(method, ctx)
     except Exception as e:
-        raise type(e)(f"error merging model and mission configs ({_files}): {e}") from None
+        raise type(e)(f"error evaluating expressions in '{config_path}': {e}") from None
 
-    method_config  = load_yaml(method_path)
-    method_config  = resolve_inheritance(method_config, _source=method_path)
+    constraints = deep_merge(problem.get("constraints", {}), method.get("constraints", {}))
+    costs       = deep_merge(problem.get("costs", {}), method.get("costs", {}))
+    trajectories = problem.get("trajectories", {})
 
-    # optionally load variations config if provided
-    variations_config = load_yaml(variations_path) if variations_path is not None else AttrDict({})
-
-    # setup a a context dictionary so that we can evaluate the expressions
-    # specified by  ${ }
-    # we do this by flattening problem and method configs into one dict so we can access
-    # via dot notation like:
-    # ${params.vehicle.mass + 3} -> eval_context["params"]["vehicle"]["mass"] + 3
-
-    problem_config_flat = flatten_dict(problem_config)
-    method_config_flat  = flatten_dict(method_config)
-    eval_context        = {**problem_config_flat, **method_config_flat, "np": np}
-
-    # evaluate expressions
-    try:
-        problem_config = eval_values(problem_config, eval_context)
-        method_config  = eval_values(method_config, eval_context)
-        mission_config = eval_values(mission_config, eval_context)
-        model_config   = eval_values(model_config, eval_context)
-    except Exception as e:
-        raise type(e)(f"error evaluating expressions ({_files}): {e}") from None
-
-    # remove inactive constraints from the problem config
-    try:
-        constraint_config  = problem_config.constraints
-    except (KeyError, AttributeError):
-        raise KeyError(f"'constraints' not found — check model ('{model_path}') and mission ('{mission_path}')") from None
+    active_constraints = problem.get("constraint_list", [])
+    active_costs       = problem.get("cost_list", [])
 
     try:
-        cost_config = problem_config.costs
-    except (KeyError, AttributeError):
-        raise KeyError(f"'costs' not found — check model ('{model_path}') and mission ('{mission_path}')") from None
-
-    trajectory_config  = problem_config.get("trajectories", {})
-
-    # update constraints and cost with any method-specific specfications
-    constraint_config = deep_merge(constraint_config, method_config.get("constraints", {}))
-    cost_config       = deep_merge(cost_config, method_config.get("costs", {}))
-
-    # only keep active constraints specified in the mission config
-    try:
-        active_constraint_list = problem_config.constraint_list
-    except (KeyError, AttributeError):
-        raise KeyError(f"'constraint_list' not found — check mission ('{mission_path}')") from None
-
-    try:
-        active_cost_list = problem_config.cost_list
-    except (KeyError, AttributeError):
-        raise KeyError(f"'cost_list' not found — check mission ('{mission_path}')") from None
-
-    try:
-        constraint_config = AttrDict({name: {"name": name, **constraint_config[name]} for name in active_constraint_list})
+        constraints = AttrDict({n: {"name": n, **constraints[n]} for n in active_constraints})
     except KeyError as e:
-        raise KeyError(f"constraint {e} is in 'constraint_list' but not defined in 'constraints' — check model ('{model_path}') and mission ('{mission_path}')") from None
+        raise KeyError(f"constraint {e} in 'constraint_list' but not defined") from None
 
-    for name in constraint_config:
-        if "ct" not in constraint_config[name]:
-            constraint_config[name]["ct"] = 0
+    for c in constraints.values():
+        c.setdefault("ct", 0)
 
     try:
-        cost_config = AttrDict({name: {"name": name, **cost_config[name]} for name in active_cost_list})
+        costs = AttrDict({n: {"name": n, **costs[n]} for n in active_costs})
     except KeyError as e:
-        raise KeyError(f"cost {e} is in 'cost_list' but not defined in 'costs' — check model ('{model_path}') and mission ('{mission_path}')") from None
+        raise KeyError(f"cost {e} in 'cost_list' but not defined") from None
 
-    trajectory_config = AttrDict({name: {"name": name, **trajectory_config[name]} for name in trajectory_config if trajectory_config[name] is not None})
-
-    # extract parameters and functions
-    params_config = problem_config.get("params", {})
-    fcns_config   = problem_config.get("fcns", {})
-
-    # exctract state, control, and time config
-    state_config = problem_config.state
-    control_config = problem_config.control
-    time_config = problem_config.time
-
-    config = recursive_attrdict({
-        "problem": {
-            "state": state_config,
-            "control": control_config,
-            "time": time_config,
-            "constraints": constraint_config,
-            "constraint_list": active_constraint_list,
-            "trajectories": trajectory_config,
-            "costs": cost_config,
-            "cost_list": active_cost_list,
-            "params": params_config,
-            "fcns": fcns_config,
-            "mission": mission_config,
-            "model": model_config,
-            "plot_config": problem_config.get("plot_config", {}),
-        },
-
-        "method": method_config,
-        "variations": variations_config,
+    trajectories = AttrDict({
+        n: {"name": n, **trajectories[n]}
+        for n in trajectories if trajectories[n] is not None
     })
 
-    return config
+    return recursive_attrdict({
+        "problem": {
+            "state":           problem.state,
+            "control":         problem.control,
+            "time":            problem.get("time", {}),
+            "constraints":     constraints,
+            "constraint_list": active_constraints,
+            "trajectories":    trajectories,
+            "costs":           costs,
+            "cost_list":       active_costs,
+            "params":          problem.get("params", {}),
+            "fcns":            problem.get("fcns", {}),
+            "plot_config":     problem.get("plot_config", {}),
+        },
+        "method":     method,
+        "variations": config.get("variations", {}),
+    })
 
 # =============================================================================
-# PATH AND FUNCTION RESOLUTION
+# YAML LOADING
 # =============================================================================
 
-def resolve_path(path_str: str) -> Path:
-    """Resolve a path string to a Path object, handling local and package paths."""
-    # Package path: trajopt/... -> importlib.resources
-    if path_str.startswith("trajopt/") or path_str.startswith("/trajopt/"):
-        path_str = path_str.lstrip("/")
-        parts    = path_str.split("/")
+def load_yaml(path_str: str) -> AttrDict:
+    """Load a YAML file, resolving .py:func paths relative to the file's directory."""
+    path     = Path(path_str)
+    base_dir = path.resolve().parent
 
-        path = importlib.resources.files(".".join(parts[:-1])).joinpath(parts[-1])
-    else:
-        path = Path(path_str)
+    try:
+        with open(path) as f:
+            raw = yaml.safe_load(f)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"config not found: '{path_str}'") from None
 
-    return path
+    config = expand_dot_keys(recursive_attrdict(raw))
+    return _resolve_fcn_paths(config, base_dir)
 
-def resolve_inheritance(d: Any, _source: str = "unknown") -> Any:
-    """Recursively resolve 'inherit' keys by merging parent configs into child dicts."""
+# =============================================================================
+# INHERITANCE
+# =============================================================================
+
+def _resolve_inheritance(d: Any, _source: str = "unknown") -> Any:
+    """Recursively resolve 'inherit' keys, merging parent configs in.
+
+    Inherit paths are resolved relative to the file that declares them.
+    """
     if not isinstance(d, dict):
         return d
-    d = {k: resolve_inheritance(v, _source=_source) for k, v in d.items()}
+
+    d = {k: _resolve_inheritance(v, _source=_source) for k, v in d.items()}
 
     if "inherit" in d:
-        parent_path = d["inherit"]
+        raw = d["inherit"]
+        if raw.startswith("trajopt/"):
+            parts = raw.lstrip("/").split("/")
+            parent_path = str(importlib.resources.files(".".join(parts[:-1])).joinpath(parts[-1]))
+        else:
+            source_dir  = Path(_source).resolve().parent if _source != "unknown" else Path.cwd()
+            parent_path = str((source_dir / raw).resolve())
         try:
-            parent = resolve_inheritance(load_yaml(parent_path), _source=parent_path)
+            parent = _resolve_inheritance(load_yaml(parent_path), _source=parent_path)
             d = deep_merge(parent, d)
         except Exception as e:
-            raise type(e)(f"error resolving 'inherit: {parent_path}' (referenced from '{_source}'): {e}") from None
+            raise type(e)(f"error resolving 'inherit: {raw}' (from '{_source}'): {e}") from None
         d.pop("inherit", None)
 
     return recursive_attrdict(d)
 
 # =============================================================================
-# CONFIG LOADING AND MERGING
+# FUNCTION PATH RESOLUTION
 # =============================================================================
 
-def load_yaml(path_str: str) -> AttrDict:
-    """Load a YAML file to a nested AttrDict."""
-    path = resolve_path(path_str)
+def _resolve_fcn_paths(d: Any, base_dir: Path) -> Any:
+    """Resolve file.py:func references to absolute paths relative to base_dir.
 
-    try:
-        with open(path) as f:
-            raw_config = recursive_attrdict(yaml.safe_load(f))
-    except FileNotFoundError:
-        raise FileNotFoundError(f"file not found: '{path_str}' (resolved to '{path}')") from None
-    except yaml.YAMLError as e:
-        raise yaml.YAMLError(f"YAML syntax error in '{path_str}': {e}") from None
-
-    try:
-        config = expand_dot_keys(raw_config)
-    except Exception as e:
-        raise type(e)(f"error expanding dot-keys in '{path_str}': {e}") from None
-
-    return config
+    Called at load time so that after inheritance merging, every function
+    reference carries its own absolute path regardless of which file declared it.
+    """
+    if isinstance(d, dict):
+        return {k: _resolve_fcn_paths(v, base_dir) for k, v in d.items()}
+    if isinstance(d, list):
+        return [_resolve_fcn_paths(item, base_dir) for item in d]
+    if isinstance(d, str) and ".py:" in d:
+        file_part, func = d.rsplit(":", 1)
+        fp = Path(file_part)
+        if not fp.is_absolute():
+            fp = (base_dir / fp).resolve()
+        return f"{fp}:{func}"
+    return d
 
 # =============================================================================
 # EXPRESSION EVALUATION
 # =============================================================================
 
-def eval_expr(expr_str: str, ctx: dict[str, Any]) -> Any:
-    """Evaluate a Python expression with dotted references resolved."""
-    # Find dotted references like params.planet.r
-    refs  = re.findall(r"\b([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)+)\b", expr_str)
+def _eval_expr(expr: str, ctx: dict) -> Any:
+    """Evaluate a Python expression, resolving dotted references from ctx."""
+    refs = re.findall(r"\b([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)+)\b", expr)
     local = ctx
-
     for ref in sorted(refs, key=len, reverse=True):
         val = ctx.get(ref) or ctx.get(ref.replace(".", "_"))
-
         if val is not None:
-            safe_name = ref.replace(".", "_")
-            local[safe_name] = val
-            expr_str = expr_str.replace(ref, safe_name)
+            safe = ref.replace(".", "_")
+            local[safe] = val
+            expr = expr.replace(ref, safe)
+    return eval(expr, local)
 
-    return eval(expr_str, local)
 
-def eval_values(obj: Any, ctx: dict[str, Any], key: str | None = None, _path: str = "") -> Any:
-    """Recursively evaluate expressions in a config object."""
+def _eval_values(obj: Any, ctx: dict, key: str | None = None, _path: str = "") -> Any:
+    """Recursively evaluate ${} expressions in a config tree."""
     if isinstance(obj, dict):
         result = AttrDict({})
         for k, v in obj.items():
             local_ctx = dict(ctx)
             for sk, sv in obj.items():
-                bare_val = result[sk] if sk in result else sv
-                if not isinstance(bare_val, dict):
-                    local_ctx[sk] = bare_val
-            evaluated = eval_values(v, local_ctx, key=k, _path=f"{_path}.{k}")
+                bare = result[sk] if sk in result else sv
+                if not isinstance(bare, dict):
+                    local_ctx[sk] = bare
+            evaluated = _eval_values(v, local_ctx, key=k, _path=f"{_path}.{k}")
             result[k] = evaluated
-            full_key = f"{_path}.{k}".lstrip(".")
-            ctx[full_key] = evaluated
+            ctx[f"{_path}.{k}".lstrip(".")] = evaluated
         return result
 
     if isinstance(obj, list):
-        results = [eval_values(item, ctx, _path=f"{_path}[{i}]") for i, item in enumerate(obj)]
+        results = [_eval_values(item, ctx, _path=f"{_path}[{i}]") for i, item in enumerate(obj)]
         if all(isinstance(x, (int, float, np.number, np.ndarray)) for x in results):
             arr = np.array(results)
             if key and "idx" in key and arr.dtype.kind == "f" and np.all(arr == np.round(arr)):
@@ -250,24 +196,19 @@ def eval_values(obj: Any, ctx: dict[str, Any], key: str | None = None, _path: st
             return arr
         return results
 
-    if isinstance(obj, str):
-        # Expression: ${...}
-        if "${" in obj:
-            # If the whole string is a single ${...}, evaluate and return the result directly
-            m = re.fullmatch(r"\$\{([^}]+)\}", obj.strip())
-            if m:
-                try:
-                    result = eval_expr(m.group(1), ctx)
-                except Exception as e:
-                    raise type(e)(f"error evaluating '${{  {m.group(1)}  }}' at key '{_path}': {e}") from None
-                return eval_values(result, ctx, _path=_path)
-            # Mixed expression (e.g. "${params.x_ub} * fcns.q_s") — substitute the
-            # template parts but leave the rest as a string for resolve_fcn to handle
-            def _sub(match):
-                try:
-                    return str(eval_expr(match.group(1), ctx))
-                except Exception as e:
-                    raise type(e)(f"error evaluating '${{  {match.group(1)}  }}' at key '{_path}': {e}") from None
-            return re.sub(r"\$\{([^}]+)\}", _sub, obj)
+    if isinstance(obj, str) and "${" in obj:
+        m = re.fullmatch(r"\$\{([^}]+)\}", obj.strip())
+        if m:
+            try:
+                return _eval_values(_eval_expr(m.group(1), ctx), ctx, _path=_path)
+            except Exception as e:
+                raise type(e)(f"error evaluating '${{{m.group(1)}}}' at '{_path}': {e}") from None
+
+        def _sub(match):
+            try:
+                return str(_eval_expr(match.group(1), ctx))
+            except Exception as e:
+                raise type(e)(f"error evaluating '${{{match.group(1)}}}' at '{_path}': {e}") from None
+        return re.sub(r"\$\{([^}]+)\}", _sub, obj)
 
     return obj

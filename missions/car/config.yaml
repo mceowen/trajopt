@@ -1,0 +1,72 @@
+problem:
+  # source: https://underactuated.mit.edu/trajopt.html#perching
+
+  # ===============================
+  # INHERIT MODEL CONFIGS
+  # ===============================
+  inherit: model.yaml
+
+  # ===============================
+  # PARAMETERS
+  # ===============================
+  params:
+    obs1_x: -0.2
+    obs1_y: 0.3
+    obs1_r: 0.25
+
+    obs2_x: 0.2
+    obs2_y: 0.7
+    obs2_r: 0.25
+
+  # ===============================
+  # CONSTRAINTS
+  # ===============================
+  constraints:
+    dynamics:
+      type: dynamics
+      fcn: fcns.dynamics
+
+    initial_state:
+      type: initial_state
+      value: [-0.25, 0, "${np.deg2rad(90)}"]
+
+    final_state:
+      type: final_state
+      value: [0.25, 1.0, "${np.deg2rad(90)}"]
+
+    control_limits:
+      type: control_limits
+      lower: [-3.0, -3.0]
+      upper: [3.0, 3.0]
+
+    obstacle:
+      type: nonconvex_inequality
+      fcn: fcns.obstacle
+      lower: ["${params.obs1_r}", "${params.obs2_r}"]
+
+  # ===============================
+  # COSTS
+  # ===============================
+  costs:
+    u_squared:
+      type: running
+      fcn: fcns.u_squared_cost
+      w: 10
+
+  # ===============================
+  # ACTIVE CONSTRAINTS AND COSTS
+  # ===============================
+  constraint_list:
+    - dynamics
+    - initial_state
+    - final_state
+    - control_limits
+    - obstacle
+
+  cost_list:
+    - u_squared
+
+# ===============================
+# METHOD CONFIGURATION
+# ===============================
+method.inherit: method.yaml

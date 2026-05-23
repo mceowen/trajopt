@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from trajopt.core.problem import Problem
+from trajopt.problem import Problem
 from trajopt.methods.scp import pseudospectral
 
 if TYPE_CHECKING:
@@ -302,7 +302,6 @@ def compile_jax_discretization(problem: Problem, method: "SCvx") -> None:
 
 def compile_rk4_discretization(problem, method):
 
-    # pull ltv dynamics
     dyn_fcn = jax.jit(problem.constraints.get(type='dynamics')[0].fcn)
     N_grid  = problem.index_map.N.time_grid
     nsub    = 20

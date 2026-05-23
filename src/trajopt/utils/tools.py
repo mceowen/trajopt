@@ -1,4 +1,3 @@
-import importlib.resources
 import importlib.util
 import inspect
 from collections.abc import Callable
@@ -10,7 +9,7 @@ import jax
 import numpy as np
 
 if TYPE_CHECKING:
-    from trajopt.core.scaling.nondim import Nondim
+    from trajopt.scaling.nondim import Nondim
 
 
 class _FcnExpr:
@@ -242,7 +241,7 @@ def resolve_function_from_string(fcn_string: str, fcns: "AttrDict | None" = None
                 )
 
             if has_stl:
-                from trajopt.core.constraints.stl import parse_stl_expression
+                from trajopt.constraints.stl import parse_stl_expression
                 return parse_stl_expression(fcn_string, fcns)
 
             if has_fcns_ref:
@@ -257,12 +256,7 @@ def resolve_function_from_string(fcn_string: str, fcns: "AttrDict | None" = None
                 return result._fcn if isinstance(result, _FcnExpr) else result
 
     file_path_str, func_name = fcn_string.rsplit(":", 1)
-    if file_path_str.startswith(("trajopt/", "/trajopt/")):
-        file_path_str = file_path_str.lstrip("/")
-        parts = file_path_str.split("/")
-        file_path = importlib.resources.files(".".join(parts[:-1])).joinpath(parts[-1])
-    else:
-        file_path = Path(file_path_str)
+    file_path = Path(file_path_str)
 
     try:
         spec = importlib.util.spec_from_file_location("dynamic_module", file_path)

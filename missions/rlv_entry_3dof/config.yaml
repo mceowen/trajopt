@@ -1,0 +1,80 @@
+problem:
+  # ===============================
+  # INHERIT MODEL CONFIGS
+  # ===============================
+  inherit: ../../models/configs/reentry_3dof.yaml
+
+  # ===============================
+  # FUNCTION REGISTRY
+  # ===============================
+  fcns:
+    nonlinear_aero: rlv_entry.py:nonlinear_aero
+
+  # ===============================
+  # PARAMETERS
+  # ===============================
+  params:
+    planet:
+      inherit: ../configs/planets/earth.yaml
+      omega: 0.0
+
+    vehicle:
+      inherit: ../configs/vehicles/rlv.yaml
+
+  # ===============================
+  # CONSTRAINTS
+  # ===============================
+  constraints:
+    dynamics:
+      type: dynamics
+      fcn: fcns.dynamics
+
+    initial_state:
+      type: initial_state
+      value: ["${params.planet.r + 79248.0}", 0.0, 0.0, 7802.88, -1.0, 90.0]
+
+    final_state:
+      type: final_state
+      value: ["${params.planet.r + 24384.0}", null, null, 762.0, -5.0, null]
+      eps: [100, 10, 0.1]
+
+    state_limits:
+      type: state_limits
+      lower: ["${params.planet.r}",           null, null,   500.0, -80.0, null]
+      upper: ["${params.planet.r + 400000.0}", null, null, 10000.0,  80.0, null]
+
+    control_limits:
+      type: control_limits
+      lower: [-90.0, -90]
+      upper: [1.0, 90]
+
+  # ===============================
+  # COSTS
+  # ===============================
+  costs:
+    max_crossrange:
+      type: terminal_state
+      idx: [2]
+      sign: -1
+
+    min_terminal_velocity:
+      type: terminal
+      fcn: fcns.velocity
+
+  # ===============================
+  # ACTIVE CONSTRAINTS AND COSTS
+  # ===============================
+  constraint_list:
+    - dynamics
+    - initial_state
+    - final_state
+    - state_limits
+    - control_limits
+
+  cost_list:
+    - max_crossrange
+
+# ===============================
+# METHOD CONFIGURATION
+# ===============================
+method.inherit: method.yaml

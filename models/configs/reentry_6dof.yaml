@@ -1,0 +1,298 @@
+# ===============================
+# PARAMETERS AND FUNCTIONS
+# ===============================
+params:
+  planet.inherit: ../../missions/configs/planets/mars.yaml
+  vehicle.inherit: ../../local/vehicles/cobra.yaml
+
+fcns:
+  # aero angles
+  aoa: ../reentry_6dof.py:aoa
+  sideslip: ../reentry_6dof.py:sideslip
+
+  # path constraints
+  heat_rate: ../reentry_6dof.py:heat_rate
+  dynamic_pressure: ../reentry_6dof.py:dynamic_pressure
+  aero_load: ../reentry_6dof.py:aero_load
+  altitude: ../reentry_6dof.py:altitude
+  long_lat_alt: ../reentry_6dof.py:long_lat_alt
+
+  # polar coordinate trajectories
+  polar_radius: ../reentry_6dof.py:polar_radius
+  polar_longitude: ../reentry_6dof.py:polar_longitude
+  polar_latitude: ../reentry_6dof.py:polar_latitude
+  polar_velocity: ../reentry_6dof.py:polar_velocity
+  polar_fpa: ../reentry_6dof.py:polar_fpa
+  polar_heading: ../reentry_6dof.py:polar_heading
+
+# ===============================
+# STATE AND CONTROL DEFINITIONS
+# ===============================
+
+state.pos:
+  idx: [0, 1, 2]
+  units: d
+  title: "Position vs Time"
+  xlabel: "Time (s)"
+  ylabel: "Position (m)"
+
+state.vel:
+  idx: [3, 4, 5]
+  units: v
+  title: "Velocity vs Time"
+  xlabel: "Time (s)"
+  ylabel: "Velocity (m/s)"
+
+state.quat:
+  idx: [6, 7, 8, 9]
+  units: none
+  title: "Quaternion vs Time"
+  xlabel: "Time (s)"
+  ylabel: "Quaternion"
+
+state.omega:
+  idx: [10, 11, 12]
+  units: angv
+  title: "Angular Velocity vs Time"
+  xlabel: "Time (s)"
+  ylabel: "Angular Velocity (rad/s)"
+
+control.torque:
+  idx: [0, 1, 2]
+  units: mom
+  title: "Torque vs Time"
+  xlabel: "Time (s)"
+  ylabel: "Torque (N·m)"
+
+# control.flap_deflections:
+#   idx: [3, 4]
+#   units: ang
+
+# ===============================
+# CONSTRAINT MODELS
+# ===============================
+
+constraints.dynamics:
+  type: dynamics
+  fcn: ../reentry_6dof.py:dynamics
+
+constraints.initial_state:
+  type: equality_bc
+  set: state
+  boundary: init
+
+constraints.final_state:
+  type: equality_bc
+  set: state
+  boundary: final
+
+constraints.state_limits:
+  type: box
+  set: state
+
+constraints.control_limits:
+  type: box
+  set: control
+
+constraints.control_rate_limits:
+  type: control_rate_limit
+
+constraints.max_Q:
+  type: nonconvex_inequality
+  group: path
+  fcn: ../reentry_6dof.py:heat_rate
+
+constraints.max_q:
+  type: nonconvex_inequality
+  group: path
+  fcn: ../reentry_6dof.py:dynamic_pressure
+
+constraints.max_load:
+  type: nonconvex_inequality
+  group: path
+  fcn: ../reentry_6dof.py:aero_load
+
+constraints.minimum_velocity:
+  type: nonconvex_inequality
+  group: path
+  fcn: ../reentry_6dof.py:velocity
+
+constraints.minimum_altitude:
+  type: nonconvex_inequality
+  group: path
+  fcn: ../reentry_6dof.py:altitude
+
+constraints.aoa_limits:
+  type: nonconvex_inequality
+  group: path
+  fcn: ../reentry_6dof.py:aoa
+
+constraints.sideslip_limits:
+  type: nonconvex_inequality
+  group: path
+  fcn: ../reentry_6dof.py:sideslip
+
+constraints.terminal_altitude:
+  type: nonconvex_inequality
+  group: path
+  fcn: ../reentry_6dof.py:altitude
+
+costs.min_time:
+  type: min_time
+
+# ===============================
+# COST MODELS
+# ===============================
+
+costs.min_terminal_velocity:
+  type: min_norm_terminal
+  idx: [3, 4, 5]
+
+costs.min_terminal_vel_1:
+  type: terminal_state
+  idx: 3
+
+# ===============================
+# TRAJECTORY DEFINITIONS
+# ===============================
+
+trajectories:
+  long_lat_trajectory_plot:
+    type: spatial
+    fcn: ../reentry_6dof.py:long_lat
+    group: state_trajplots
+    title: "Longitude vs Latitude"
+    xlabel: "Longitude (deg)"
+    ylabel: "Latitude (deg)"
+    tick_nbins: 4
+  
+  long_lat_alt_trajectory_plot:
+    type : spatial
+    fcn: "fcns.long_lat_alt * [1, 1, 0.001]"
+    group: state_trajplots
+    title: "3D Trajectory"
+    xlabel: "Longitude (deg)"
+    ylabel: "Latitude (deg)"
+    zlabel: "Altitude (km)"
+    tick_nbins: 4
+
+  rv_plot:
+    type: spatial
+    fcn: ../reentry_6dof.py:r_v
+    group: rv
+    title: "Position vs Velocity"
+    xlabel: "Position (m)"
+    ylabel: "Velocity (m/s)"
+
+  lut_density:
+    type: time_series
+    fcn: ../../local/aero/cobra_aero_6dof.py:lut_density_jax
+    group: density_comparison
+    title: "LUT Density vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Density (kg/m³)"
+  
+  exp_density:
+    type: time_series
+    fcn: ../../local/aero/cobra_aero_6dof.py:exp_density
+    group: density_comparison
+    title: "Exponential Density vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Density (kg/m³)"
+
+  heat_rate:
+    type: time_series
+    fcn: "fcns.heat_rate * 0.0001"
+    upper_limit: 30.0
+    group: path
+    title: "Heat Rate vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Heat Rate (W/cm²)"
+
+  dynamic_pressure_path:
+    type: time_series
+    fcn: "fcns.dynamic_pressure * 0.001"
+    upper_limit: 10.0
+    group: path
+    title: "Dynamic Pressure vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Dynamic Pressure (kPa)"
+
+  aero_load:
+    type: time_series
+    fcn: "fcns.aero_load / 9.81"
+    upper_limit: 3.0
+    group: path
+    title: "Aerodynamic Load vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Aerodynamic Load (g)"
+
+# ===============================
+# PLOT CONFIGURATION
+# ===============================
+# per-group figure and layout settings (override defaults)
+# figsize: [width, height] in inches
+# grid_gap_x / grid_gap_y: horizontal / vertical gap between subplots (fraction of figure)
+# width_ratios: relative widths of subplots (list, one per subplot)
+# margins: [left, right, top, bottom] as fractions of figure
+
+plot_config:
+  limits_all_iters: true
+  trajectory_groups:
+    state_trajplots:
+      figsize: [10, 3.0]
+      width_ratios: [1, 2]
+      grid_gap_x: -0.10
+      pad_3d: 0.0
+      margins: [0.08, 0.02, 0.04, 0.14]
+
+    rv:
+      figsize: [5, 2.6]
+      margins: [0.12, 0.02, 0.04, 0.14]
+
+    path:
+      figsize: [12, 2.6]
+      grid_gap_x: 0.08
+      margins: [0.07, 0.02, 0.04, 0.14]
+
+    density_comparison:
+      figsize: [10, 2.6]
+      grid_gap_x: 0.08
+      margins: [0.07, 0.02, 0.04, 0.14]
+
+    dynamic_pressure:
+      figsize: [5, 2.6]
+      margins: [0.12, 0.02, 0.04, 0.14]
+
+    mach:
+      figsize: [5, 2.6]
+      margins: [0.12, 0.02, 0.04, 0.14]
+
+    bank_angle:
+      figsize: [5, 2.6]
+      margins: [0.12, 0.02, 0.04, 0.14]
+
+    body_torque_bounds:
+      figsize: [12, 2.6]
+      grid_gap_x: 0.08
+      margins: [0.07, 0.02, 0.04, 0.14]
+
+    max_body_torque_coeffs:
+      figsize: [12, 2.6]
+      grid_gap_x: 0.08
+      margins: [0.07, 0.02, 0.04, 0.14]
+
+    state_polar:
+      figsize: [12, 4.2]
+      grid_gap_x: 0.06
+      grid_gap_y: 0.14
+      margins: [0.07, 0.02, 0.04, 0.12]
+
+    aoa_sideslip:
+      figsize: [8, 2.6]
+      grid_gap_x: 0.08
+      margins: [0.08, 0.02, 0.04, 0.14]
+
+    control_torque:
+      figsize: [6.5, 3.0]
+      margins: [0.10, 0.02, 0.04, 0.14]
