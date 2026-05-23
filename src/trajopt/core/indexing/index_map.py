@@ -225,7 +225,14 @@ class IndexMap:
                           + sum(1 for v in raw_upper if v is not None))
             elif ctype == "control_rate_limit":
                 base_dim = len(cfg["idx"])
-            elif ctype in ("convex_inequality", "nonconvex_inequality"):
+            elif ctype == "convex_inequality":
+                fcn = resolve_function_from_string(cfg["fcn"], resolved_fcns)
+                _out = fcn(np.ones((1, nx)), np.ones((1, nu)), params)
+                try:
+                    base_dim = 1 if _out.ndim == 1 else _out.shape[1]
+                except (TypeError, AttributeError):
+                    base_dim = 1
+            elif ctype == "nonconvex_inequality":
                 fcn = resolve_function_from_string(cfg["fcn"], resolved_fcns)
                 _out = fcn(0, np.ones(nx), np.ones(nu), params)
                 try:
@@ -238,14 +245,6 @@ class IndexMap:
             elif ctype == "final_time":
                 cfg["dimension"] = 1
                 continue
-            else:
-                msg = (
-                    f"Cannot infer dimension for constraint '{name}' of type '{ctype}': "
-                    f"provide 'dimension' in config"
-                )
-                raise ValueError(
-                    msg,
-                )
 
             cfg["dimension"] = base_dim
 
@@ -259,6 +258,12 @@ class IndexMap:
 
         # infer dimensions for all constraints from config fields
         self._infer_constraint_dimensions()
+
+        # if the method-level ctcs flag is set, enable ct for all nonconvex inequality constraints
+        if self.method_config.get("flags", {}).get("ctcs", 0):
+            for name in constraint_name_list:
+                if constraint_configs[name].get("type") == "nonconvex_inequality":
+                    constraint_configs[name]["ct"] = 1
 
         # count ctcs dimensions (constraints with ct=1)
         n_ctcs = 0
@@ -389,6 +394,7 @@ class IndexMap:
         self.N = AttrDict({
             "nonconvex_inequality": time_grid,
             "dynamics":             time_grid - 1,
+            "initial_state":        1,
             "final_state":          1,
             "box":                  time_grid,
             "control_rate_limit":   time_grid - 1,

@@ -37,7 +37,8 @@ constraints:
 
   final_state:
     type: final_state
-    value: ["${params.planet.r + 10e3}", null, null, null, null, null]
+    # value: ["${params.planet.r + 10e3}", null, null, null, null, null]
+    value: [3404010, 76.14, 17.91, null, null, 64.5]
 
   state_limits:
     type: state_limits
@@ -53,6 +54,22 @@ constraints:
     value: [10]
     idx: [0]
 
+  fpa_upper_bound:
+    type: nonconvex_inequality
+    fcn: fcns.fpa
+    upper: 2
+    scale: [1]
+    eps: [0.01]
+
+  terminal_fpa:
+    type: nonconvex_inequality
+    fcn: fcns.fpa
+    lower: -2
+    upper: 2
+    scale: [1]
+    eps: [0.01]
+    nodes: [-1]
+
 # ===============================
 # COSTS
 # ===============================
@@ -62,10 +79,10 @@ costs:
     type: terminal
     fcn: fcns.velocity
 
-  control_rate_regularization:
+  control_regularization:
     type: rate_regularization
     set: control
-    w: 0.1
+    w: 10.0
 
 # ===============================
 # ACTIVE CONSTRAINTS AND COSTS
@@ -74,12 +91,14 @@ costs:
 constraint_list:
   - dynamics
   - initial_state
-  - initial_bank_angle
+  # - initial_bank_angle
   - final_state
   - state_limits
   - bank_aoa_angle_limits
   - bank_angle_rate_limit
+  # - fpa_upper_bound
+  # - terminal_fpa
 
 cost_list:
   - min_terminal_velocity
-  - control_rate_regularization
+  # - control_regularization

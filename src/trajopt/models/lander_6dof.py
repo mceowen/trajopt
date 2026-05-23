@@ -45,6 +45,9 @@ def dynamics(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) ->
 
     return x_dot
 
+def u_squared_cost(t, x, u, params):
+    return jnp.atleast_1d(jnp.sum(u**2))
+
 # =============================================================================
 # nonconvex inequality constraint functions
 # =============================================================================
@@ -97,35 +100,36 @@ def los(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Arra
 
 # =============================================================================
 # convex inequality constraint functions (CVXPY expressions)
-# g(t, x, u, params) <= 0
+# g(x, u, params) <= 0
+# Vectorized: x is (N, n_state), u is (N, n_ctrl), returns (N,) expression
 # =============================================================================
 
-def cvx_gimbal_limit(t, x, u, params):
+def cvx_gimbal_limit(x, u, params):
     """Gimbal angle limit: thrust vector within theta_gimbal of body x-axis."""
     cos_theta = np.cos(np.deg2rad(float(params.theta_gimbal)))
-    return cos_theta * cp.norm(u[:3]) - u[0]
+    return cos_theta * cp.norm(u[:, :3], axis=1) - u[:, 0]
 
 
-def cvx_glide_slope(t, x, u, params):
+def cvx_glide_slope(x, u, params):
     """Glide slope cone: horizontal distance bounded by altitude."""
     tan_theta = np.tan(np.deg2rad(float(params.theta_gs)))
-    return tan_theta * cp.norm(x[2:4]) - x[1]
+    return tan_theta * cp.norm(x[:, 2:4], axis=1) - x[:, 1]
 
 
-def cvx_max_thrust(t, x, u, params):
+def cvx_max_thrust(x, u, params):
     """Maximum thrust magnitude."""
-    return cp.norm(u[:3]) - float(params.max_thrust)
+    return cp.norm(u[:, :3], axis=1) - float(params.max_thrust)
 
 
-def cvx_max_angular_velocity(t, x, u, params):
+def cvx_max_angular_velocity(x, u, params):
     """Maximum angular velocity magnitude."""
-    return cp.norm(x[11:14]) - float(params.angular_speed_limit)
+    return cp.norm(x[:, 11:14], axis=1) - float(params.angular_speed_limit)
 
 
-def cvx_tilt_limit(t, x, u, params):
+def cvx_tilt_limit(x, u, params):
     """Tilt angle limit via quaternion components q2, q3."""
     rhs = np.sqrt((1.0 - np.cos(np.deg2rad(float(params.theta_tilt)))) / 2.0)
-    return cp.norm(x[9:11]) - rhs
+    return cp.norm(x[:, 9:11], axis=1) - rhs
 
 
 # =============================================================================

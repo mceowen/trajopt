@@ -1,4 +1,4 @@
-inherit: trajopt/methods/configs/autoscvx-term.yaml
+inherit: trajopt/methods/configs/autoscvx.yaml
 
 # ===============================
 # GRID SETTINGS
@@ -11,18 +11,18 @@ time_grid: 40
 
 flags:
   equal_dt: 1
+  zoh_dilation: 1
+  free_final_time: 0
+  flag_conv: 1
+  
 
 guess:
   type: straight_line
-  T_init: 2.0
-  T_min:  0.5
-  T_max:  4.0
-  dT_max: 0.5
+  t_start: 0.0
+  t_stop: 2.0
 
-  nl_guess_u_start: [0]
-  nl_guess_u_stop:  [0]
-
-  line_guess_u_init: "${np.tile([0.0], (time_grid, 1))}"
+  u_start: [0]
+  u_stop: [0]
 
 # ===============================
 # CONVERGENCE TOLERANCES

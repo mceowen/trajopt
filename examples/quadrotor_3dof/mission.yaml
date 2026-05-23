@@ -84,6 +84,7 @@ trajectories:
     fcn: fcns.yz
     group: stc_check
 
+
 # ===============================
 # ACTIVE CONSTRAINTS AND COSTS
 # ===============================

@@ -1,4 +1,4 @@
-inherit: trajopt/methods/configs/autoscvx-term.yaml
+inherit: trajopt/methods/configs/autoscvx.yaml
 
 # ===============================
 # GRID SETTINGS
@@ -11,16 +11,16 @@ time_grid: 20
 
 flags:
   equal_dt: 1
+  free_final_time: 1
+  
 
 guess:
   type: propagation
-  T_init: 0.8
-  T_min:  0.5
-  T_max:  1.5
-  dT_max: 0.1
+  t_start: 0.0
+  t_stop: 0.8
 
-  nl_guess_u_start: [0]
-  nl_guess_u_stop:  [0]
+  u_start: [0]
+  u_stop: [0]
 
 # ===============================
 # CONVERGENCE TOLERANCES
@@ -31,3 +31,6 @@ conv:
   eps_dyn:    0.00001
   eps_defect: 1.0
   eps_cost:   1
+
+solver_opts:
+  solver: CLARABEL

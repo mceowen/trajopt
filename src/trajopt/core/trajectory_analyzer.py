@@ -1,5 +1,5 @@
 from trajopt.core.problem import Problem
-import trajopt.methods.scp.scvx as scvx
+import trajopt.methods.scp.scp as scp
 import trajopt.utils.config_loader as config_loader
 from trajopt.core.indexing.index_map import IndexMap
 from trajopt.core.scaling.nondim import Nondim
@@ -16,7 +16,7 @@ class TrajectoryAnalyzer:
         self.problem = Problem(self.config, self.index_map, self.nondim)
 
         # TODO (Carlos): directly pointing to GeneralSCvx method, need to generalize path
-        SolutionMethod = getattr(scvx, "SCvx")
+        SolutionMethod = getattr(scp, "SCP")
         self.method = SolutionMethod(self.config, self.index_map, self.problem)
 
         self.solution         = None

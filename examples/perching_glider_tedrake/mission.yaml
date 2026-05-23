@@ -39,7 +39,7 @@ constraints:
 
 costs:
   u_squared:
-    type: convex_running
+    type: running
     fcn: fcns.u_squared_cost
     w: 100
 

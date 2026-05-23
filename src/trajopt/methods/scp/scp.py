@@ -1,30 +1,30 @@
 import copy
 import time
-
-import cvxpy as cp
 import numpy as np
+import cvxpy as cp
 
 from trajopt.core.indexing import IndexMap
 from trajopt.core.problem import Problem
-from trajopt.methods.scp import convergence, discretize, initial_guess
-from trajopt.methods.scp.subproblem_constraint_types import (
-    CREATE_CONSTRAINT_REGISTRY,
-    CREATE_COST_REGISTRY,
-    CREATE_PARAMETER_REGISTRY,
-    CREATE_VARIABLE_REGISTRY,
-    UPDATE_CURRENT_ITER_DATA_REGISTRY,
-    UPDATE_PARAMETER_REGISTRY,
-)
-
-# from trajopt.methods.scp.subproblem_constraints import SubproblemConstraints
+from trajopt.methods.scp import convergence, initial_guess, discretize
 from trajopt.utils import tools
 from trajopt.utils.tools import AttrDict, recursive_attrdict
+
+from trajopt.methods.scp.subproblem_constraint_types import (
+    CREATE_PARAMETER_REGISTRY,
+    CREATE_VARIABLE_REGISTRY,
+    CREATE_CONSTRAINT_REGISTRY,
+    CREATE_COST_REGISTRY,
+    UPDATE_PARAMETER_REGISTRY,
+    UPDATE_CURRENT_ITER_DATA_REGISTRY,
+    INITIALIZE_METHOD_REGISTRY,
+    armijo_line_search,
+)
 
 # =========================
 # Subproblem (build-once)
 # =========================
 
-class SCvx:
+class SCP:
     """Reusable convex SCP with full baseline functionality & DPP updates."""
 
     def __init__(self, config: AttrDict, index_map: IndexMap, problem: Problem) -> None:
@@ -46,10 +46,7 @@ class SCvx:
         if bool(self.flags.free_final_time):
             if "free_final_time" not in self.problem.constraints.constraint_type_list:
                 self.problem.constraints.constraint_type_list.append("free_final_time")
-
-        # self.constraint = SubproblemConstraints(self.problem, self.penalty_config)
-
-        # hyperparameters (numpy)
+                
         self.W_stack, self.dual_stack, self.vb_stack = self.create_W_dual_vb_stack(self.penalty_config)
         self.W_stack, self.dual_stack                = self.initialize_W_dual(self.penalty_config, self.W_stack, self.dual_stack)
         self.eps_stack                               = convergence.create_eps_stack(self)
@@ -73,6 +70,8 @@ class SCvx:
         print("subproblem stats:")
         print("------------------------------------------------------------")
         print(f"total number of cvxpy parameters: {total_param_scalars}")
+        print(f"total number of cvxpy constraints: {len(self.cp_constraints)}")
+        print(f"is DPP: {self.cp_subproblem.is_dcp(dpp=True)}")
 
     def initialize(self) -> None:
         """Initialize the time grid, initial guess, and iteration history."""
@@ -80,22 +79,22 @@ class SCvx:
 
         self.initial_guess = AttrDict()
 
-        # ---- Time grid initialization ----
-        self.Ts_init          = self.config.method.guess.T_init / self.problem.nondim.time_scale
-        t_init                = np.linspace(0.0, self.Ts_init, self.index_map.N.time_grid).reshape(-1, 1)
-        dt_init               = np.diff(t_init, axis=0)
-        self.initial_guess.t  = t_init.reshape(-1)
+        # time grid initialization
+        cfg_guess             = self.config.method.guess
+        t_start               = getattr(cfg_guess, 't_start', 0.0)
+        self.Ts_init          = (cfg_guess.t_stop - t_start) / self.problem.nondim.time_scale
+        t_init                = np.linspace(0.0, self.Ts_init, self.index_map.N.time_grid)
+        dt_init               = np.diff(t_init)
+        self.initial_guess.t  = t_init
         self.initial_guess.dt = dt_init
 
-        discretize.compile_jax_discretization(problem, self)
-
-        dT_max = getattr(self.config.method.guess, "dT_max", None)
-        if dT_max is not None:
-            self.ddt_max = dT_max / ((self.index_map.N.time_grid - 1) * self.problem.nondim.time_scale)
-        else:
-            self.ddt_max = np.inf
-
+        discretize.compile_rk4_discretization(problem, self)
         initial_guess.set_initial_guess(problem, self)
+
+        self.lagrangian_duals = AttrDict()
+        self.lagrangian_duals.dynamics = np.zeros((self.N.time_grid - 1, self.n.z))
+        if hasattr(self.n, 'nonconvex_inequality'):
+            self.lagrangian_duals.nonconvex_inequality = np.zeros((self.N.time_grid, self.n.nonconvex_inequality))
 
         # --------------------------
         # Initialize unified history
@@ -116,13 +115,11 @@ class SCvx:
 
         self.iter_data_list.append(copy.deepcopy(self.current_iter_data))
 
-    def create_W_dual_vb_stack(self, penalty_config: AttrDict) -> tuple[AttrDict, AttrDict, AttrDict]:
-        """Allocate the penalty-weight, dual, and virtual-buffer stacks.
+        for key, fn in INITIALIZE_METHOD_REGISTRY.items():
+            fn(self)
 
-        Returns:
-            Tuple of (W_stack, dual_stack, vb_stack).
-
-        """
+    def create_W_dual_vb_stack(self, penalty_config):
+        
         W_stack    = tools.AttrDict()
         dual_stack = tools.AttrDict()
         vb_stack   = tools.AttrDict()
@@ -196,14 +193,6 @@ class SCvx:
             if vb_type == "standard":
                 self.cp_vars.vb_stack[cnstr_type] = cp.Variable(shape, name=f"vb_{cnstr_type}")
 
-            elif vb_type == "split":
-                vb_plus  = cp.Variable(shape, name=f"vb_{cnstr_type}_plus")
-                vb_minus = cp.Variable(shape, name=f"vb_{cnstr_type}_minus")
-
-                self.cp_vars.vb_stack[f"{cnstr_type}_plus"]  = vb_plus
-                self.cp_vars.vb_stack[f"{cnstr_type}_minus"] = vb_minus
-                self.cp_vars.vb_stack[cnstr_type]            = vb_plus - vb_minus
-
     def create_cvxpy_parameters(self) -> None:
         """Create the cvxpy parameters for the convex subproblem."""
         N, n_z, n_nu = self.N.time_grid, self.n.z, self.n.nu
@@ -213,20 +202,22 @@ class SCvx:
 
         self.x_ref, self.t_ref, self.beta_ref, self.u_ref, self.s_ref = self.index_map.unpack_znu(self.cp_params.z_ref, self.cp_params.nu_ref)
 
-        self.cp_params.w_cost = cp.Constant(value=self.config.method.weights.w_cost, name="w_cost")
-        self.cp_params.tr_z   = cp.Parameter(nonneg=True, name="tr_z")
-        self.cp_params.tr_nu  = cp.Parameter(nonneg=True, name="tr_u")
+        self.cp_params.w_cost      = cp.Constant(value=self.config.method.weights.w_cost, name="w_cost")
+        self.cp_params.tr_z        = cp.Parameter(nonneg=True, name="tr_z")
+        self.cp_params.tr_nu       = cp.Parameter(nonneg=True, name="tr_u")
 
-        self.cp_params.w_cost_times_dcostdx = cp.Parameter((N, 1, n_z),  name="w_cost_times_dcostdx")
-        self.cp_params.w_cost_times_dcostdu = cp.Parameter((N, 1, n_nu), name="w_cost_times_dcostdu")
-        self.cp_params.w_cost_times_cost0   = cp.Parameter((N, 1),       name="w_cost_times_cost0")
+        self.cp_params.w_cost_times_dcostdx = cp.Parameter((N, n_z),  name="w_cost_times_dcostdx")
+        self.cp_params.w_cost_times_dcostdu = cp.Parameter((N, n_nu), name="w_cost_times_dcostdu")
+        self.cp_params.w_cost_times_cost0   = cp.Parameter((N,),      name="w_cost_times_cost0")
 
         self.cp_params.eps_ctcs = cp.Parameter(nonneg=True, name="eps_ctcs")
 
         self.create_W_dual_parameters()
 
+        print("  [parameters]")
         for constraint_type in self.problem.constraints.constraint_type_list:
             if constraint_type in CREATE_PARAMETER_REGISTRY.keys():
+                print(f"    + {constraint_type}")
                 CREATE_PARAMETER_REGISTRY[constraint_type](self)
 
     def create_cvxpy_variables(self) -> None:
@@ -254,27 +245,39 @@ class SCvx:
         self.dt  = self.cp_vars.dt
         self.ds  = self.cp_vars.ds
 
+        print("  [variables]")
+        print(f"    dx: {self.cp_vars.dx.shape}, du: {self.cp_vars.du.shape}")
+        print(f"    dz: {self.dz.shape}, dnu: {self.dnu.shape}")
+        print(f"    free_final_time: {bool(self.flags.free_final_time)}")
+        print(f"    W_stack keys: {list(self.W_stack.keys())}")
+        print(f"    dual_stack keys: {list(self.dual_stack.keys())}")
+
         self.create_vb_cvxpy_variables()
+        print(f"    vb_stack keys: {list(self.cp_vars.vb_stack.keys())}")
 
         for constraint_type in self.problem.constraints.constraint_type_list:
             if constraint_type in CREATE_VARIABLE_REGISTRY:
+                print(f"    + variable: {constraint_type}")
                 CREATE_VARIABLE_REGISTRY[constraint_type](self)
 
-    def create_cvxpy_constraints(self) -> None:
-        """Create the cvxpy constraints for each registered constraint type."""
+    def create_cvxpy_constraints(self):
+        print("  [constraints]")
         for constraint_type in self.problem.constraints.constraint_type_list:
             if constraint_type in CREATE_CONSTRAINT_REGISTRY:
+                print(f"    + {constraint_type}")
                 CREATE_CONSTRAINT_REGISTRY[constraint_type](self)
 
-    def create_cvxpy_cost(self) -> None:
-        """Assemble the cvxpy objective from each registered cost type."""
+    def create_cvxpy_cost(self):
+        print("  [costs]")
         for cost_type in self.problem.costs.cost_type_list:
             if cost_type in CREATE_COST_REGISTRY:
+                print(f"    + {cost_type}")
                 CREATE_COST_REGISTRY[cost_type](self)
 
         METHOD_COSTS = ["trust_region", "quadratic_penalty", "dual"]
-
+        print("  [method costs]")
         for cost_type in METHOD_COSTS:
+            print(f"    + {cost_type}")
             CREATE_COST_REGISTRY[cost_type](self)
 
     def update_cvxpy_parameters(self) -> None:
@@ -320,8 +323,11 @@ class SCvx:
         self.current_iter_data.dz  = dz_new
         self.current_iter_data.dnu = dnu_new
 
-        z_new  = dz_new  + self.current_iter_data.z_opt
-        nu_new = dnu_new + self.current_iter_data.nu_opt
+        alpha = armijo_line_search(self, dz_new, dnu_new)
+        self.current_iter_data.alpha = alpha
+
+        z_new  = self.current_iter_data.z_opt  + alpha * dz_new
+        nu_new = self.current_iter_data.nu_opt + alpha * dnu_new
 
         self.current_iter_data.z_opt  = z_new
         self.current_iter_data.nu_opt = nu_new
@@ -336,30 +342,36 @@ class SCvx:
         self.current_iter_data.beta_opt = beta_opt_new
         self.current_iter_data.u_opt    = u_opt_new
         self.current_iter_data.s_opt    = s_opt_new
-        self.current_iter_data.cost     = self.cp_cost.value / self.cp_params.w_cost.value
+        self.current_iter_data.cost     = float(np.sum(self.cp_cost.value) / self.cp_params.w_cost.value)
 
-        # copy solved cvxpy vb values into the numpy vb_stack
-        for cnstr_type in self.cp_vars.vb_stack:
-            vb_var = self.cp_vars.vb_stack[cnstr_type]
+        for cnstr_type in self.vb_stack:
+            vb_var = self.cp_vars.vb_stack.get(cnstr_type)
+            if vb_var is None:
+                continue
             self.vb_stack[cnstr_type] = np.array(vb_var.value)
+
+        # update Lagrangian multiplier estimates (for regularized Hessian)
+        lam_sp_dyn = np.array([c.dual_value for c in self.cp_dyn_constraints])
+        self.lagrangian_duals.dynamics = (1.0 - alpha) * self.lagrangian_duals.dynamics + alpha * lam_sp_dyn
+
+        if hasattr(self, 'cp_ineq_constraints') and self.cp_ineq_constraints:
+            lam_sp_ineq = np.array([c.dual_value for c in self.cp_ineq_constraints])
+            self.lagrangian_duals.nonconvex_inequality = ((1.0 - alpha) * self.lagrangian_duals.nonconvex_inequality + alpha * lam_sp_ineq)
 
         for constraint_type in self.problem.constraints.constraint_type_list:
             if constraint_type in UPDATE_CURRENT_ITER_DATA_REGISTRY:
                 UPDATE_CURRENT_ITER_DATA_REGISTRY[constraint_type](self)
 
-        self.current_iter_data.iter_num  = len(self.iter_data_list)
+        self.current_iter_data.iter_num += 1
 
         self.current_iter_data.vb   = copy.deepcopy(self.vb_stack)
         self.current_iter_data.W    = copy.deepcopy(self.W_stack)
         self.current_iter_data.dual = copy.deepcopy(self.dual_stack)
 
-        # check convergence
         convergence.check_convergence_tolerance(self)
 
-        # update dual variables
         self.update_W_dual()
 
-        # update iter_data
         self.iter_data_list.append(copy.deepcopy(self.current_iter_data))
 
     def update_W_dual(self) -> None:
@@ -374,52 +386,41 @@ class SCvx:
 
             eps = np.atleast_1d(self.eps_stack[cnstr_type])
 
-            # autotune W (penalty weight update)
-            W_cfg = cnstr_penalty_cfg["W"]
-            if W_cfg["autotune"]:
-                eps_floor  = W_cfg["eps_floor"]
-                fac_eps    = W_cfg["fac_eps"]
-                fac_target = W_cfg["fac_target"]
-
-                eps_target = np.maximum(fac_target * eps, fac_eps * np.abs(vb))
-
-                Wh = np.where(eps_target > 0, np.abs(W * vb / eps_target), 0.0)
-
-                active = np.sum(W) > 0
-
-                if active:
-                    Wh = np.maximum(Wh, eps_floor)
-
-                self.W_stack[cnstr_type] = Wh
-
-            # autotune dual (dual ascent update, autotune1 style)
             dual_cfg = cnstr_penalty_cfg["dual"]
+            
             if dual_cfg["autotune"]:
-                beta = dual_cfg["beta"]
-
-                dual_new = beta * vb + dual
+                dual_new = dual + W * vb
 
                 if cnstr_type in {"nonconvex_inequality", "convex_inequality"}:
                     dual_new = np.maximum(0, dual_new)
 
                 self.dual_stack[cnstr_type] = dual_new
 
-    def solve(self) -> None:
-        """Run the SCP iteration loop until convergence or the iteration cap."""
-        # subproblem convergence header
-        print("-" * 164)
-        print("  Iteration |  Discretization |   Solve   |    Parse   |  log(dx/eps) | log(vb_ineq/eps) | log(vb_term/eps) | log(vb_dyn/eps) | Solve status |  Time of    |   Cost    ")
-        print("            |    time [ms]    | time [ms] |  time [ms] |     (state)  |    (ncvx_ineq)   |      (terminal)  |    (dynamics)   |              |  Flight [s] |           ")
-        print("-" * 164)
+            W_cfg = cnstr_penalty_cfg["W"]
+            if W_cfg["autotune"]:
+                W_min = 0.00001
+                W_max = 1e8
+
+                Wh = np.abs(dual_new) / (0.01*eps)
+                Wh = np.clip(Wh, W_min, W_max)
+
+                self.W_stack[cnstr_type] = Wh
+
+    def solve(self):
+
+        print("-" * 172)
+        print("  Iteration |  Discretization |   Solve   |    Parse   |  log(dx/eps) | log(vb_ineq/eps) | log(vb_term/eps) | log(vb_dyn/eps) | Solve status | alpha |  Time of    |   Cost    ")
+        print("            |    time [ms]    | time [ms] |  time [ms] |     (state)  |    (ncvx_ineq)   |      (terminal)  |    (dynamics)   |              |       |  Flight [s] |           ")
+        print("-" * 172)
 
         max_iter = int(self.config.method.conv.iter_max)
 
         for _ in range(max_iter + 1):
             self.update_cvxpy_parameters()
             self.cp_subproblem.solve(warm_start=False, **self.config.method.solver_opts)
-
-            if self.cp_subproblem.status == "infeasible":
-                print("Terminated from infeasible convex subproblem!")
+            
+            if self.cp_subproblem.status not in {"optimal", "optimal_inaccurate"}:
+                print(f"Terminated from non-optimal convex subproblem! Status: {self.cp_subproblem.status}")
                 break
 
             self.update_current_iter_data()
@@ -444,6 +445,7 @@ class SCvx:
 
         solve_stat  = current_iter_data.status
         iter_num    = int(current_iter_data.iter_num)
+        alpha       = float(current_iter_data.get("alpha", 1.0))
 
         T    = float(current_iter_data.T_opt)
         cost = float(current_iter_data.cost)
@@ -453,5 +455,18 @@ class SCvx:
         parse_ms = float(current_iter_data.parse_time)
 
         print(
-            f"{iter_num:^12d}|{discretization_ms:^17.1f}|{solve_ms:^11.1f}|{parse_ms:^12.1f}|{log_dz_ratio:^+14.1f}|{log_vb_ineq_ratio:^+18.1f}|{log_vb_term_ratio:^+18.1f}|{log_vb_dyn_ratio:^+17.1f}|{solve_stat!s:^14s}|{T:^13.2f}|{cost:^11.1f}",
+            "{:^12d}|{:^17.1f}|{:^11.1f}|{:^12.1f}|{:^+14.1f}|{:^+18.1f}|{:^+18.1f}|{:^+17.1f}|{:^14s}|{:^7.3f}|{:^13.2f}|{:^11.1f}".format(
+                iter_num,
+                discretization_ms,
+                solve_ms,
+                parse_ms,
+                log_dz_ratio,
+                log_vb_ineq_ratio,
+                log_vb_term_ratio,
+                log_vb_dyn_ratio,
+                str(solve_stat),
+                alpha,
+                T,
+                cost
+            )
         )

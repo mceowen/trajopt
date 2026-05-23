@@ -134,7 +134,7 @@ class Constraints:
     # Move this to subproblem constraints
     # Generalize dynamics augmentation so users can add arbitrary states/controls
 
-    def augment_dynamics_jax(self, f_phys: Callable) -> Callable:
+    def augment_dynamics(self, f_phys: Callable) -> Callable:
         """Build augmented dynamics zdot = [xdot_tau, s, dbeta_dtau].
 
         Args:

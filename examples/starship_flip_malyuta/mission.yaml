@@ -1,4 +1,4 @@
-# source: https://underactuated.mit.edu/trajopt.html#perching
+# source: https://github.com/UW-ACL/SCPToolbox.jl/tree/master/test/examples/starship_flip
 
 params:
   gamma_gs: 60
@@ -21,7 +21,7 @@ constraints:
   
   initial_state:
     type: initial_state
-    value: [100.0, 600.0, 0.0, "${-params.vterm}", "${np.deg2rad(90.0)}", 0.0]
+    value: [100.0, 600.0, 0, "${-params.vterm}", "${np.deg2rad(90.0)}", 0.0]
   
   final_state:
     type: final_state
@@ -41,16 +41,20 @@ constraints:
     type: control_limits
     lower: ["${3 * 880000}", "${np.deg2rad(-10)}"]
     upper: [6000000, "${np.deg2rad(10)}"]
-    nodes: [0, 1, 2, 3]
+    nodes: [0, 1, 2, 3, 4, 5]
 
   glide_slope:
     type: convex_inequality
     fcn: fcns.cvx_glide_slope
 
 costs:
+  min_time:
+    type: min_time
+
   u_squared:
-    type: convex_running
+    type: running
     fcn: fcns.u_squared_cost
+    scale: 1000000000000
     w: 10
 
 constraint_list:
@@ -63,4 +67,5 @@ constraint_list:
   - glide_slope
 
 cost_list:
+  # - min_time
   - u_squared

@@ -5,6 +5,7 @@ time_grid:
 flags:
   free_final_time:    1       # 0, 1
   equal_dt:           0       # 0, 1
+  zoh_dilation:       0       # 0, 1
   ode_fixed_dt:       0       # 0, 1
   flag_conv:          0       # 0, 1, 2
   ignore_dpp:         0
@@ -29,13 +30,15 @@ penalty:
       eps_floor: 0.000001
       fac_eps: 0.3
       fac_target: 0.001
-    
-    dual: 
+      beta: 0.3
+
+
+    dual:
       penalty: True
       autotune: True
       init: 0.0
       beta: 1.0
-    
+
     vb: 'standard'
     eps: [0.01]
     ct: False
@@ -48,16 +51,16 @@ penalty:
       eps_floor: 0.000001
       fac_eps: 0.3
       fac_target: 0.001
-    dual: 
+    dual:
       penalty: False
       autotune: False
       init: 0.0
       beta: 1.0
-    
+
     vb: 'standard'
     eps: [0.01]
     ct: False
-  
+
   dynamics:
     W:
       penalty: True
@@ -66,7 +69,9 @@ penalty:
       eps_floor: 0.000001
       fac_eps: 0.3
       fac_target: 0.001
-    dual: 
+      beta: 0.3
+
+    dual:
       penalty: True
       autotune: True
       init: 0.0
@@ -76,15 +81,17 @@ penalty:
 
   initial_state:
     W:
-      penalty: False
-      autotune: False
+      penalty: True
+      autotune: True
       init: 1.0
       eps_floor: 0.000001
       fac_eps: 0.3
       fac_target: 0.001
-    dual: 
-      penalty: False
-      autotune: False
+      beta: 0.3
+
+    dual:
+      penalty: True
+      autotune: True
       init: 0.0
       beta: 1.0
     vb: 'standard'
@@ -98,7 +105,9 @@ penalty:
       eps_floor: 0.000001
       fac_eps: 0.3
       fac_target: 0.001
-    dual: 
+      beta: 0.3
+
+    dual:
       penalty: True
       autotune: True
       init: 0.0
@@ -114,7 +123,7 @@ penalty:
       eps_floor: 0.000001
       fac_eps: 0.3
       fac_target: 0.001
-    dual: 
+    dual:
       penalty: False
       autotune: False
       init: 0.0
@@ -130,7 +139,7 @@ penalty:
       eps_floor: 0.000001
       fac_eps: 0.3
       fac_target: 0.001
-    dual: 
+    dual:
       penalty: False
       autotune: False
       init: 0.0
@@ -155,4 +164,4 @@ penalty:
     eps: [0.01]
 
 solver_opts:
-  solver: QOCO
+  solver: CLARABEL

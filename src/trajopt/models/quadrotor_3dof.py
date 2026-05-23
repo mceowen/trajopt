@@ -1,5 +1,6 @@
 import cvxpy as cp
 import jax.numpy as jnp
+import numpy as np
 from jax import Array
 
 from trajopt.utils.tools import AttrDict
@@ -28,10 +29,10 @@ def obstacle(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) ->
     return jnp.array([jnp.linalg.norm(r - pos_obs)])
 
 
-def max_thrust_cone(t, x, u, params):
+def max_thrust_cone(x, u, params):
     """||T|| <= T_max as a CVXPY SOC constraint."""
     T_max = float(params.vehicle.T_max)
-    return cp.norm(u[0:3]) - T_max
+    return cp.norm(u[:, 0:3], axis=1) - T_max
 
 
 def pos_x(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
@@ -86,3 +87,9 @@ def thrust_y(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) ->
 
 def thrust_z(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
     return jnp.array([nu[2]])
+
+
+def obstacle_xy(params, ax) -> np.ndarray:
+    """Circle boundary of the obstacle in the xy-plane (center (5,5), radius 4)."""
+    th = np.linspace(0, 2 * np.pi, 200)
+    return np.column_stack([5.0 + 4.0 * np.cos(th), 5.0 + 4.0 * np.sin(th)])

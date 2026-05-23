@@ -8,6 +8,7 @@ fcns:
   angular_speed: trajopt/models/lander_6dof.py:angular_speed
   glide_slope:   trajopt/models/lander_6dof.py:glide_slope
   los:           trajopt/models/lander_6dof.py:los
+  u_squared_cost: trajopt/models/lander_6dof.py:u_squared_cost
 
 # ===============================
 # PARAMETERS
@@ -39,8 +40,8 @@ constraints:
 
   landing_initial_state:
     type: initial_state
-    value:       [2.0, 4, 4, 0, 0, -1.5, 1.5, null, null, null, null, 0, 0, 0]
-    value_guess: [2.0, 4, 4, 0, 0, -1.5, 1.5, 1.0,     0,    0,    0, 0, 0, 0]
+    value:       [2.0, 4, 4, 0, 0, -2.5, 2.5, null, null, null, null, 0, 0, 0]
+    value_guess: [2.0, 4, 4, 0, 0, -2.5, 2.5, 1.0,     0,    0,    0, 0, 0, 0]
 
   landing_final_state:
     type: final_state
@@ -100,6 +101,11 @@ costs:
   min_time:
     type: min_time
 
+  u_squared:
+    type: running
+    fcn: fcns.u_squared_cost
+    w: 1.0
+
 # ===============================
 # ACTIVE CONSTRAINTS AND COSTS
 # ===============================
@@ -108,10 +114,10 @@ constraint_list:
   - landing_initial_state
   - landing_final_state
   - gimbal_limit
-  - glide_slope
+  # - glide_slope
   - max_thrust
   - max_angular_velocity
-  - tilt_limit
+  # - tilt_limit
   - min_thrust
   # - altitude_triggered_tilt
   # - altitude_triggered_speed
@@ -120,4 +126,5 @@ constraint_list:
   # - altitude_triggered_los
 
 cost_list:
-  - min_time
+  # - min_time
+  - u_squared

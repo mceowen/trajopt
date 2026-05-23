@@ -196,9 +196,13 @@ class terminal:
         if self.backend == "jax":
             self.fcn = self.index_map.wrap_txu_fcn(self.fcn_txu)
             self.fcn_compiled, self.dfcn_dz_compiled, self.dfcn_du_compiled = convexify.linearize_jax(self.fcn)
+            self.d2fcn_dz2_compiled, self.d2fcn_dnu2_compiled, self.d2fcn_dzdnu_compiled = convexify.hessian_jax(self.fcn)
             self.fcn_batched = jax.jit(jax.vmap(self.fcn_compiled, in_axes=(0, 0, None)))
             self.dfcn_dz_batched = jax.jit(jax.vmap(self.dfcn_dz_compiled, in_axes=(0, 0, None)))
             self.dfcn_du_batched = jax.jit(jax.vmap(self.dfcn_du_compiled, in_axes=(0, 0, None)))
+            self.d2fcn_dz2_batched = jax.jit(jax.vmap(self.d2fcn_dz2_compiled, in_axes=(0, 0, None)))
+            self.d2fcn_dnu2_batched = jax.jit(jax.vmap(self.d2fcn_dnu2_compiled, in_axes=(0, 0, None)))
+            self.d2fcn_dzdnu_batched = jax.jit(jax.vmap(self.d2fcn_dzdnu_compiled, in_axes=(0, 0, None)))
 
     def g_aff(self, z: Any, nu: Any, params: Any) -> tuple:
         return (
@@ -283,9 +287,13 @@ class running:
         if self.backend == "jax":
             self.fcn = self.index_map.wrap_txu_fcn(self.fcn_txu)
             self.fcn_compiled, self.dfcn_dz_compiled, self.dfcn_du_compiled = convexify.linearize_jax(self.fcn)
+            self.d2fcn_dz2_compiled, self.d2fcn_dnu2_compiled, self.d2fcn_dzdnu_compiled = convexify.hessian_jax(self.fcn)
             self.fcn_batched = jax.jit(jax.vmap(self.fcn_compiled, in_axes=(0, 0, None)))
             self.dfcn_dz_batched = jax.jit(jax.vmap(self.dfcn_dz_compiled, in_axes=(0, 0, None)))
             self.dfcn_du_batched = jax.jit(jax.vmap(self.dfcn_du_compiled, in_axes=(0, 0, None)))
+            self.d2fcn_dz2_batched = jax.jit(jax.vmap(self.d2fcn_dz2_compiled, in_axes=(0, 0, None)))
+            self.d2fcn_dnu2_batched = jax.jit(jax.vmap(self.d2fcn_dnu2_compiled, in_axes=(0, 0, None)))
+            self.d2fcn_dzdnu_batched = jax.jit(jax.vmap(self.d2fcn_dzdnu_compiled, in_axes=(0, 0, None)))
 
     def g_aff(self, z: Any, nu: Any, params: Any) -> tuple:
         return (

@@ -35,6 +35,10 @@ def create_eps_stack(method: "SCvx") -> AttrDict:
     if problem.constraints.has(ct=0, type="nonconvex_inequality"):
         eps_stack.nonconvex_inequality = np.concatenate([c.eps for c in problem.constraints.get(ct=0, type="nonconvex_inequality")])
 
+    if problem.constraints.has(type="initial_state"):
+        for c in problem.constraints.get(type="initial_state"):
+            eps_stack.initial_state = np.concatenate([method.conv_config.eps_term, np.atleast_1d(c.eps)])
+
     if problem.constraints.has(type="final_state"):
         for c in problem.constraints.get(type="final_state"):
             eps_stack.final_state = np.concatenate([method.conv_config.eps_term, np.atleast_1d(c.eps)])
@@ -59,8 +63,11 @@ def augment_convergence_tolerance(method: "SCvx", eps_stack: AttrDict) -> AttrDi
 
     if problem.constraints.has(ct=1):
         eps_ctcs = np.concatenate([c.eps for c in problem.constraints.get(ct=1)])
-        eps_dyn[idx.z.ctcs]  = (eps_ctcs) * method.dt_min * 0.25
-        eps_stack.final_state = np.concatenate([eps_stack.final_state, eps_ctcs])
+        eps_dyn[idx.z.ctcs]  = (eps_ctcs) * 0.1 * 0.25
+        if "initial_state" in eps_stack:
+            eps_stack.initial_state = np.concatenate([eps_stack.initial_state, eps_ctcs])
+        if "final_state" in eps_stack:
+            eps_stack.final_state = np.concatenate([eps_stack.final_state, eps_ctcs])
 
     eps_stack.dynamics = eps_dyn
 
@@ -109,7 +116,8 @@ def check_convergence_tolerance(method: "SCvx") -> None:
     abs_ncvx_dyn = np.abs(defect)
     abs_ncvx_ineq = np.abs(ncvx_ineq)
 
-    bool_term = np.all(abs_vb_term <= 1.0*eps_term)
+    eps_term_trimmed = np.atleast_1d(eps_term)[:np.asarray(abs_vb_term).size] if np.ndim(eps_term) > 0 else eps_term
+    bool_term = np.all(abs_vb_term <= 1.0*eps_term_trimmed)
     bool_vb_ineq = np.all(abs_vb_ineq <= 1.0*eps_ineq)
     bool_dz = np.all(abs_dz <= 1.0*eps_z)
     bool_dcost = np.all(abs_dcost <= 1.0*eps_dcost)
@@ -139,7 +147,7 @@ def check_convergence_tolerance(method: "SCvx") -> None:
     current_iter_data.chk = tools.AttrDict(
         dz                   = np.max(abs_dz / eps_z),
         dcost                = np.max(abs_dcost / eps_dcost),
-        final_state          = np.max(abs_vb_term / eps_term),
+        final_state          = np.max(abs_vb_term / eps_term_trimmed),
         nonconvex_inequality = np.max(abs_vb_ineq / eps_ineq),
         dynamics             = np.max(abs_vb_dyn / eps_dyn),
     )

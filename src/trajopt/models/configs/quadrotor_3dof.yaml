@@ -7,6 +7,7 @@ fcns:
   thrust_norm:     trajopt/models/quadrotor_3dof.py:thrust_norm
   max_thrust_cone: trajopt/models/quadrotor_3dof.py:max_thrust_cone
   obstacle:        trajopt/models/quadrotor_3dof.py:obstacle
+  obstacle_xy:     trajopt/models/quadrotor_3dof.py:obstacle_xy
   height:          trajopt/models/quadrotor_3dof.py:height
   pos_x:           trajopt/models/quadrotor_3dof.py:pos_x
   pos_y:           trajopt/models/quadrotor_3dof.py:pos_y
@@ -141,6 +142,14 @@ trajectories:
     title: "XY Trajectory"
     xlabel: "X (m)"
     ylabel: "Y (m)"
+    equal_aspect: true
+    overlays:
+      obstacle:
+        fcn: fcns.obstacle_xy
+        color: [0.8, 0.0, 0.0]
+        ls: "--"
+        lw: 1.5
+        alpha: 0.7
 
   xyz_trajectory:
     type: spatial

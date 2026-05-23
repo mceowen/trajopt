@@ -70,7 +70,7 @@ class Problem:
         self.constraints.nondim_constraints(self.nondim)
         
         dynamics_constraint = self.constraints.get(type="dynamics")[0]
-        dynamics_constraint.fcn = self.constraints.augment_dynamics_jax(dynamics_constraint.fcn_base)
+        dynamics_constraint.fcn = self.constraints.augment_dynamics(dynamics_constraint.fcn_base)
         
         self.constraints.convexify_constraints()
 

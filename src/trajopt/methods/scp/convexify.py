@@ -13,9 +13,17 @@ def linearize_jax(fcn: Callable) -> tuple[Callable, Callable, Callable]:
 
     return f, dfcn_dz, dfcn_dnu
 
-# PROTOTYPE
-def linearize_sympy(fcn: Callable, trajopt_obj: object) -> tuple:
-    """Build symbolic expressions for fcn and its Jacobians w.r.t. z and nu."""
+
+def hessian_jax(fcn):
+
+    d2fcn_dz2 = jax.jit(jax.hessian(fcn, argnums=0))
+    d2fcn_dnu2 = jax.jit(jax.hessian(fcn, argnums=1))
+    d2fcn_dzdnu = jax.jit(jax.jacfwd(jax.jacrev(fcn, argnums=1), argnums=0))
+
+    return d2fcn_dz2, d2fcn_dnu2, d2fcn_dzdnu
+
+# PROTOTYPE 
+def linearize_sympy(fcn, trajopt_obj):
     z, nu = trajopt_obj.method.initial_guess.z, trajopt_obj.method.initial_guess.nu
     n = trajopt_obj.model.n
     m = trajopt_obj.model.m
