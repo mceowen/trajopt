@@ -45,7 +45,7 @@ class spatial:
             x, t, beta = self.index_map.unpack_z(z)
             u, s       = self.index_map.unpack_nu(nu)
             return fn(t, x, u, params)
-        return jax.vmap(fcn, in_axes=(0, 0, None))
+        return jax.jit(jax.vmap(fcn, in_axes=(0, 0, None)))
 
     def compile_function(self) -> None:
         """Compile batched JIT functions for trajectory and quiver evaluations."""
@@ -107,7 +107,7 @@ class time_series:
             x, t, beta = self.index_map.unpack_z(z)
             u, s       = self.index_map.unpack_nu(nu)
             return fn(t, x, u, params)
-        return jax.vmap(fcn, in_axes=(0, 0, None))
+        return jax.jit(jax.vmap(fcn, in_axes=(0, 0, None)))
 
     def compile_function(self) -> None:
         """Compile batched JIT functions for trajectory and optional limit evaluations."""

@@ -1,7 +1,6 @@
 import copy
 
 import jax
-import jax.numpy as jnp
 import numpy as np
 
 import trajopt.methods.scp.initial_guess as guess
@@ -40,6 +39,9 @@ def perform_analysis(trajopt_obj, compute_iters=False):
     else:
         selected_iter_data = [iter_data_list[-1]]
 
+    dynamics = problem.constraints.get(type="dynamics")[0].fcn
+    solver = integrators.make_node_propagation_solver(dynamics, problem.params, n_steps=50)
+
     for iter_idx, iter_data in enumerate(selected_iter_data):
         z_opt = np.asarray(iter_data["z_opt"])
         nu_opt = np.asarray(iter_data["nu_opt"])
@@ -56,16 +58,8 @@ def perform_analysis(trajopt_obj, compute_iters=False):
         else:
             tau_nodes = np.linspace(0.0, 1.0, N)
 
-        tau_ref = jnp.asarray(tau_nodes)
-        nu_ref  = jnp.asarray(nu_opt)
-        def nu_fn(z, tau):
-            k = jnp.clip(jnp.searchsorted(tau_ref, tau, side='right') - 1, 0, N - 2)
-            a = (tau - tau_ref[k]) / (tau_ref[k + 1] - tau_ref[k])
-            return (1 - a) * nu_ref[k] + a * nu_ref[k + 1]
-
-        dynamics = problem.constraints.get(type="dynamics")[0].fcn
         _, z_nl, nu_nl = integrators.propagate_from_nodes(
-            z_opt, tau_nodes, nu_fn, dynamics, problem.params,
+            z_opt, tau_nodes, nu_opt, dynamics, problem.params, _solver=solver,
         )
         t_nl  = z_nl[:, idx.z.time].squeeze(-1)
         x_nl  = z_nl[:, idx.z.state]

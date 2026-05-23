@@ -17,8 +17,12 @@ flags:
 
 guess:
   type: straight_line
+  
   t_start: 0.0
   t_stop: 10.0
+
+  x_start: [2.0, 4, 4, 0, 0, -2.5, 2.5, 1.0, 0, 0, 0, 0, 0, 0]
+  x_stop: [1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
 
   u_start: [2.0, 0, 0]
   u_stop: [2.0, 0, 0]

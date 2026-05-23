@@ -35,7 +35,6 @@ constraints:
   final_state:
     type: final_state
     value: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
-    value_guess: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
     eps: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
 
   max_thrust:

@@ -38,16 +38,14 @@ constraints:
     type: dynamics
     fcn: fcns.dynamics
 
-  landing_initial_state:
+  initial_state:
     type: initial_state
-    value:       [2.0, 4, 4, 0, 0, -2.5, 2.5, null, null, null, null, 0, 0, 0]
-    value_guess: [2.0, 4, 4, 0, 0, -2.5, 2.5, 1.0,     0,    0,    0, 0, 0, 0]
+    value: [2.0, 4, 4, 0, 0, -2.5, 2.5, null, null, null, null, 0, 0, 0]
 
-  landing_final_state:
+  final_state:
     type: final_state
     value: [null, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
     eps: [0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001]
-    value_guess: [1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
 
   gimbal_limit:
     type: convex_inequality
@@ -111,8 +109,8 @@ costs:
 # ===============================
 constraint_list:
   - dynamics
-  - landing_initial_state
-  - landing_final_state
+  - initial_state
+  - final_state
   - gimbal_limit
   # - glide_slope
   - max_thrust

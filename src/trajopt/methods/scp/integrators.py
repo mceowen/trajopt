@@ -2,9 +2,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from trajopt.core.problem import Problem
-from trajopt.utils import tools
-
 def _make_rk4_solver(nu_fn, dynamics, params, n_steps):
 
     @jax.jit
@@ -30,7 +27,36 @@ def _make_rk4_solver(nu_fn, dynamics, params, n_steps):
     return solve
 
 
-def propagate_rk4(z0, tau0, tau_f, nu_fn, dynamics, params, n_steps=10000):
+def make_node_propagation_solver(dynamics, params, n_steps):
+    @jax.jit
+    def solve(z0, tau0, tau_f, tau_ref, nu_ref):
+        dt   = (tau_f - tau0) / n_steps
+        taus = jnp.linspace(tau0, tau_f, n_steps + 1)
+        N_nodes = tau_ref.shape[0]
+
+        def nu_interp(z, tau):
+            k = jnp.clip(jnp.searchsorted(tau_ref, tau, side='right') - 1, 0, N_nodes - 2)
+            a = (tau - tau_ref[k]) / (tau_ref[k + 1] - tau_ref[k])
+            return (1 - a) * nu_ref[k] + a * nu_ref[k + 1]
+
+        def step(z, tau):
+            nu = nu_interp(z, tau)
+            k1 = dynamics(z,               nu,                                        params)
+            k2 = dynamics(z + (dt/2) * k1, nu_interp(z + (dt/2) * k1, tau + dt / 2), params)
+            k3 = dynamics(z + (dt/2) * k2, nu_interp(z + (dt/2) * k2, tau + dt / 2), params)
+            k4 = dynamics(z + dt * k3,     nu_interp(z + dt * k3,     tau + dt),      params)
+            z_next = z + (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
+            return z_next, (z, nu)
+
+        z_f, (z_traj, nu_traj) = jax.lax.scan(step, z0, taus[:-1])
+        z_traj  = jnp.concatenate([z_traj,  z_f[None]])
+        nu_traj = jnp.concatenate([nu_traj, nu_interp(z_f, taus[-1])[None]])
+        return taus, z_traj, nu_traj
+
+    return solve
+
+
+def propagate_rk4(z0, tau0, tau_f, nu_fn, dynamics, params, n_steps=1000):
     solve = _make_rk4_solver(nu_fn, dynamics, params, n_steps)
     taus, z_traj, nu_traj = solve(
         jnp.asarray(z0),
@@ -40,18 +66,25 @@ def propagate_rk4(z0, tau0, tau_f, nu_fn, dynamics, params, n_steps=10000):
     return np.asarray(taus), np.asarray(z_traj), np.asarray(nu_traj)
 
 
-def propagate_from_nodes(z_nodes, tau_nodes, nu_fn, dynamics, params, n_dense_per_seg=50):
+def propagate_from_nodes(z_nodes, tau_nodes, nu_nodes, dynamics, params,
+                         n_dense_per_seg=50, _solver=None):
     N   = z_nodes.shape[0]
     n_z = z_nodes.shape[1]
 
-    solve = _make_rk4_solver(nu_fn, dynamics, params, n_dense_per_seg)
+    if _solver is None:
+        _solver = make_node_propagation_solver(dynamics, params, n_dense_per_seg)
+
+    tau_ref = jnp.asarray(tau_nodes)
+    nu_ref  = jnp.asarray(nu_nodes)
 
     segments = []
     for k in range(N - 1):
-        taus_k, z_k, nu_k = solve(
+        taus_k, z_k, nu_k = _solver(
             jnp.asarray(z_nodes[k]),
             jnp.asarray(float(tau_nodes[k])),
             jnp.asarray(float(tau_nodes[k + 1])),
+            tau_ref,
+            nu_ref,
         )
         segments.append((np.asarray(taus_k), np.asarray(z_k), np.asarray(nu_k)))
 

@@ -157,7 +157,7 @@ def create_cvxpy_constraints_nonconvex_inequality(method):
             + method.cp_params.dgdnu[k] @ method.dnu[k, :]
             + method.cp_params.g0[k]
             - method.cp_vars.vb_stack.nonconvex_inequality[k]
-            <= 0,
+            <= 0
         )
         method.cp_ineq_constraints.append(cnst)
         method.cp_constraints.append(cnst)

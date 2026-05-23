@@ -21,8 +21,11 @@ guess:
   t_start: 0.0
   t_stop: 3.0
 
-  u_start: "${(np.array([0, 0, params.planet.g]) * params.vehicle.mass) + np.array([0.08, 0.08, 0.0])}"
-  u_stop: "${(np.array([0, 0, params.planet.g]) * params.vehicle.mass) + np.array([0.08, 0.08, 0.0])}"
+  x_start: [0.0, 0.0, 5.0, 0.0, 0.5, 0.0]
+  x_stop: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
+
+  u_start: [0, 0, 1]
+  u_stop: [0, 0, 1]
 
 # ===============================
 # CONVERGENCE TOLERANCES
