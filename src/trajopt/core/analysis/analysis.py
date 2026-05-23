@@ -1,15 +1,14 @@
-"""Post-processing and analysis for SCP and NLP trajectory optimization solutions."""
-
 import copy
 
 import jax
+import jax.numpy as jnp
 import numpy as np
 
 import trajopt.methods.scp.initial_guess as guess
 from trajopt.core.indexing.index_map import IndexMap
 from trajopt.core.problem import Problem
 import trajopt.methods.scp.scp as scp
-from trajopt.methods.scp import integrators
+from trajopt.methods.scp import discretize, integrators
 from trajopt.utils import tools
 from trajopt.utils.tools import AttrDict, recursive_attrdict
 
@@ -42,8 +41,6 @@ def perform_analysis(trajopt_obj, compute_iters=False):
         selected_iter_data = [iter_data_list[-1]]
 
     for iter_idx, iter_data in enumerate(selected_iter_data):
-        is_last = (iter_idx == len(selected_iter_data) - 1)
-
         z_opt = np.asarray(iter_data["z_opt"])
         nu_opt = np.asarray(iter_data["nu_opt"])
 
@@ -52,15 +49,27 @@ def perform_analysis(trajopt_obj, compute_iters=False):
         t_opt = z_opt[:, idx.z.time].squeeze(-1)
         u_opt = nu_opt[:, idx.nu.control]
 
-        if is_last:
-            if getattr(method.flags, "ode_fixed_dt", 0):
-                t_nl, z_nl, nu_nl = integrators.propagate_znu_rk4(z_opt[0], nu_opt, problem, method)
-            else:
-                t_nl, z_nl, nu_nl = integrators.propagate_znu(z_opt[0], nu_opt, problem, method)
+        N = z_opt.shape[0]
+        if getattr(method.flags, 'discretize', 'ms') == 'ps':
+            _, etau, _, _ = discretize.compute_ps_differentiation_matrix(N - 1)
+            tau_nodes = (etau + 1.0) / 2.0
         else:
-            t_nl, z_nl, nu_nl = integrators.propagate_znu_ms(z_opt, nu_opt, problem, method)
-        x_nl = z_nl[:, idx.z.state]
-        u_nl = nu_nl[:, idx.nu.control]
+            tau_nodes = np.linspace(0.0, 1.0, N)
+
+        tau_ref = jnp.asarray(tau_nodes)
+        nu_ref  = jnp.asarray(nu_opt)
+        def nu_fn(z, tau):
+            k = jnp.clip(jnp.searchsorted(tau_ref, tau, side='right') - 1, 0, N - 2)
+            a = (tau - tau_ref[k]) / (tau_ref[k + 1] - tau_ref[k])
+            return (1 - a) * nu_ref[k] + a * nu_ref[k + 1]
+
+        dynamics = problem.constraints.get(type="dynamics")[0].fcn
+        _, z_nl, nu_nl = integrators.propagate_from_nodes(
+            z_opt, tau_nodes, nu_fn, dynamics, problem.params,
+        )
+        t_nl  = z_nl[:, idx.z.time].squeeze(-1)
+        x_nl  = z_nl[:, idx.z.state]
+        u_nl  = nu_nl[:, idx.nu.control]
 
         z_init = method.initial_guess.z
         nu_init = method.initial_guess.nu

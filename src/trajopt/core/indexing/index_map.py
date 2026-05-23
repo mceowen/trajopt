@@ -253,11 +253,6 @@ class IndexMap:
             elif ctype == "final_time":
                 cfg["dimension"] = 1
                 continue
-            else:
-                raise ValueError(
-                    f"Cannot infer dimension for constraint '{name}' of type '{ctype}': "
-                    f"provide 'dimension' in config"
-                )
 
             cfg["dimension"] = base_dim
 

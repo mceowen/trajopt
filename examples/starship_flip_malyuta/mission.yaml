@@ -21,7 +21,7 @@ constraints:
   
   initial_state:
     type: initial_state
-    value: [100.0, 600.0, 0, "${-params.vterm}", "${np.deg2rad(85.0)}", 0.0]
+    value: [100.0, 600.0, 0, "${-params.vterm}", "${np.deg2rad(90.0)}", 0.0]
   
   final_state:
     type: final_state

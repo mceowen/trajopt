@@ -18,13 +18,11 @@ flags:
 # ===============================
 guess:
   type: straight_line
-  T_init: 3.0
-  dT_max: 1.0
+  t_start: 0.0
+  t_stop: 3.0
 
-  nl_guess_u_start: "${(np.array([0, 0, params.planet.g]) * params.vehicle.mass) + np.array([0.08, 0.08, 0.0])}"
-  nl_guess_u_stop:  "${(np.array([0, 0, params.planet.g]) * params.vehicle.mass) + np.array([0.08, 0.08, 0.0])}"
-
-  line_guess_u_init: "${np.tile([0, 0, 1.0], (time_grid, 1))}"
+  u_start: "${(np.array([0, 0, params.planet.g]) * params.vehicle.mass) + np.array([0.08, 0.08, 0.0])}"
+  u_stop: "${(np.array([0, 0, params.planet.g]) * params.vehicle.mass) + np.array([0.08, 0.08, 0.0])}"
 
 # ===============================
 # CONVERGENCE TOLERANCES

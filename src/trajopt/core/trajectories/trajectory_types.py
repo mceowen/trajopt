@@ -35,7 +35,7 @@ class spatial:
             x, t, beta = self.index_map.unpack_z(z)
             u, s       = self.index_map.unpack_nu(nu)
             return fn(t, x, u, params)
-        return jax.jit(jax.vmap(fcn, in_axes=(0, 0, None)))
+        return jax.vmap(fcn, in_axes=(0, 0, None))
 
     def compile_function(self):
         self.fcn_batched = self._wrap(self.fcn_dim)
@@ -91,7 +91,7 @@ class time_series:
             x, t, beta = self.index_map.unpack_z(z)
             u, s       = self.index_map.unpack_nu(nu)
             return fn(t, x, u, params)
-        return jax.jit(jax.vmap(fcn, in_axes=(0, 0, None)))
+        return jax.vmap(fcn, in_axes=(0, 0, None))
 
     def compile_function(self):
         self.fcn_batched = self._wrap(self.fcn_dim)

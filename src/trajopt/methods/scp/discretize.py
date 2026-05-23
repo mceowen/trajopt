@@ -287,51 +287,39 @@ def compile_jax_discretization(problem, method):
 def compile_rk4_discretization(problem, method):
 
     # pull ltv dynamics
-    lin_dyn = problem.constraints.get(type='dynamics')[0].lin_dyn
+    dyn_fcn = jax.jit(problem.constraints.get(type='dynamics')[0].fcn)
+    N_grid  = problem.index_map.N.time_grid
+    nsub    = 20
+    delta_tau = 1.0 / (N_grid - 1)
+    dt_rk4  = delta_tau / nsub
 
-    # dynamics derivative function
     def f_dot(k, tau, z, nu_k, nu_kp, params):
-
-        tau_k  = k / (problem.index_map.N.time_grid - 1)
-        tau_kp = (k+1) / (problem.index_map.N.time_grid - 1)
+        tau_k  = k / (N_grid - 1)
+        tau_kp = (k+1) / (N_grid - 1)
         a      = (tau_kp - tau) / (tau_kp - tau_k)
         b      = (tau - tau_k)  / (tau_kp - tau_k)
         nu     = a * nu_k + b * nu_kp
-
-        fc, _, _ = lin_dyn(z, nu, params)
-
+        fc = dyn_fcn(z, nu, params)
         return fc
 
-    # propagation flow map from z_k -> z_kp
+    def rk4_step(carry, tau):
+        z, k, nu_k, nu_kp, params = carry
+        k1 = f_dot(k, tau,            z,                    nu_k, nu_kp, params)
+        k2 = f_dot(k, tau + dt_rk4/2, z + (dt_rk4/2) * k1, nu_k, nu_kp, params)
+        k3 = f_dot(k, tau + dt_rk4/2, z + (dt_rk4/2) * k2, nu_k, nu_kp, params)
+        k4 = f_dot(k, tau + dt_rk4,   z +     dt_rk4 * k3, nu_k, nu_kp, params)
+        z_next = z + (dt_rk4 / 6) * (k1 + 2*k2 + 2*k3 + k4)
+        return (z_next, k, nu_k, nu_kp, params), None
+
     def propagate_k(k, z_k, nu_k, nu_kp, params):
-        N_grid = problem.index_map.N.time_grid
-
-        nsub      = 2
-        delta_tau = 1.0 / (N_grid - 1)
-        dt_rk4    = delta_tau / nsub
-
         tau_k = k / (N_grid - 1)
         taus  = tau_k + jnp.arange(nsub) * dt_rk4
-
-        def rk4_step(z, tau):
-
-            k1 = f_dot(k, tau,            z,                    nu_k, nu_kp, params)
-            k2 = f_dot(k, tau + dt_rk4/2, z + (dt_rk4/2) * k1,  nu_k, nu_kp, params)
-            k3 = f_dot(k, tau + dt_rk4/2, z + (dt_rk4/2) * k2,  nu_k, nu_kp, params)
-            k4 = f_dot(k, tau + dt_rk4,   z +     dt_rk4 * k3,  nu_k, nu_kp, params)
-            
-            return z + (dt_rk4 / 6) * (k1 + 2*k2 + 2*k3 + k4), None
-        
-        # propagate z_k -> z_kp
-        z_kp, _ = jax.lax.scan(rk4_step, z_k, taus)
-
+        carry_init = (z_k, k, nu_k, nu_kp, params)
+        (z_kp, _, _, _, _), _ = jax.lax.scan(rk4_step, carry_init, taus)
         return z_kp
-    
-    # Lagrangian for the multiple shooting constraint (scalar).
-    # L is linear in z_kp so all its second derivatives w.r.t. z_kp are zero;
-    # we therefore exclude z_kp and differentiate only w.r.t. (z_k, nu_k, nu_kp).
+
     def lagrangian_k(k, lam_k, z_k, nu_k, nu_kp, params):
-        return -lam_k.T @ propagate_k(k, z_k, nu_k, nu_kp, params)
+        return -lam_k @ propagate_k(k, z_k, nu_k, nu_kp, params)
 
     prop_jacobians_k = jax.jacfwd(propagate_k, argnums=(1, 2, 3))
     cnstr_hessians_k = jax.hessian(lagrangian_k, argnums=(2, 3, 4))
@@ -339,7 +327,6 @@ def compile_rk4_discretization(problem, method):
     method.propagate           = jax.jit(jax.vmap(propagate_k,      in_axes=(0, 0, 0, 0, None)))
     method.propagate_jacobians = jax.jit(jax.vmap(prop_jacobians_k, in_axes=(0, 0, 0, 0, None)))
     method.cnstr_hessians      = jax.jit(jax.vmap(cnstr_hessians_k, in_axes=(0, 0, 0, 0, 0, None)))
-    
 
 # inverse free discretize with jax
 def discretize_ms_variational(z_ref_np, nu_ref_np, problem, method):

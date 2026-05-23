@@ -17,14 +17,14 @@ flags:
 
 guess:
   type: straight_line
-  T_init: 20
-  T_min:  5
-  T_max:  30
+  t_start: 0.0
+  t_stop: 20
 
-  nl_guess_u_start: [500000, 0]
-  nl_guess_u_stop:  [500000, 0]
-  
-  line_guess_u_init: "${np.tile([3 * 880000, 0.0], (time_grid, 1))}"
+  x_start: [100.0, 600.0, 0, "${-params.vterm}", "${np.deg2rad(85.0)}", 0.0]
+  x_stop: [0, 0, 0, -0.1, 0, 0]
+
+  u_start: [500000, 0]
+  u_stop: [500000, 0]
 
 # ===============================
 # CONVERGENCE TOLERANCES

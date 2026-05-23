@@ -293,8 +293,8 @@ ITER_DATA_KEYS_TO_KEEP = {
 }
 
 METHOD_DATA_KEYS_TO_KEEP = {
-    'time_grid', 'N_dens', 'Npm', 'T_init', 'Ts_init', 'conv', 'conv_data', 'cost_init',
-    'dT_max', 'ddt_max', 'flags', 'line_guess_u_init',
-    'name', 'n_minus', 'n_plus', 'nl_guess_u_start', 'nl_guess_u_stop', 'solver_opts',
+    'time_grid', 'N_dens', 'Npm', 't_start', 't_stop', 'Ts_init', 'conv', 'conv_data', 'cost_init',
+    'flags', 'u_start', 'u_stop',
+    'name', 'n_minus', 'n_plus', 'solver_opts',
     'nondim', 'initial_guess', 'penalty', 'z_ind'
 }

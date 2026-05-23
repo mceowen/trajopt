@@ -33,7 +33,6 @@ class initial_state:
         self.nodes = cnstr_config.get("nodes", np.array([self.node]))
         self.ct = cnstr_config.get("ct", 0)
         self.group = cnstr_config.get("group")
-        self.value_guess = cnstr_config.get("value_guess")
 
         raw_value = cnstr_config["value"]
 
@@ -51,13 +50,9 @@ class initial_state:
         if self.set == "state":
             self.value = nondim.M.state.d2nd[np.ix_(self.idx, self.idx)] @ self.value
             self.eps = nondim.M.state.d2nd[np.ix_(self.idx, self.idx)] @ self.eps
-            if self.value_guess is not None:
-                self.value_guess = np.asarray(nondim.M.state.d2nd) @ np.atleast_1d(self.value_guess)
         elif self.set == "control":
             self.value = nondim.M.control.d2nd[np.ix_(self.idx, self.idx)] @ self.value
             self.eps = nondim.M.control.d2nd[np.ix_(self.idx, self.idx)] @ self.eps
-            if self.value_guess is not None:
-                self.value_guess = np.asarray(nondim.M.control.d2nd) @ np.atleast_1d(self.value_guess)
 
 
 class final_state:
@@ -70,7 +65,6 @@ class final_state:
         self.nodes = cnstr_config.get("nodes", np.array([index_map.N.time_grid - 1]))
         self.ct = cnstr_config.get("ct", 0)
         self.group = cnstr_config.get("group")
-        self.value_guess = cnstr_config.get("value_guess")
 
         raw_value = cnstr_config["value"]
 
@@ -88,13 +82,9 @@ class final_state:
         if self.set == "state":
             self.value = nondim.M.state.d2nd[np.ix_(self.idx, self.idx)] @ self.value
             self.eps = nondim.M.state.d2nd[np.ix_(self.idx, self.idx)] @ self.eps
-            if self.value_guess is not None:
-                self.value_guess = np.asarray(nondim.M.state.d2nd) @ np.atleast_1d(self.value_guess)
         elif self.set == "control":
             self.value = nondim.M.control.d2nd[np.ix_(self.idx, self.idx)] @ self.value
             self.eps = nondim.M.control.d2nd[np.ix_(self.idx, self.idx)] @ self.eps
-            if self.value_guess is not None:
-                self.value_guess = np.asarray(nondim.M.control.d2nd) @ np.atleast_1d(self.value_guess)
 
 
 class state_limits:

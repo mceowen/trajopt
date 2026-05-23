@@ -76,16 +76,16 @@ class SCP:
 
         self.initial_guess = AttrDict()
 
-        # ---- Time grid initialization ----
-        self.Ts_init          = self.config.method.guess.T_init / self.problem.nondim.time_scale
-        t_init                = np.linspace(0.0, self.Ts_init, self.index_map.N.time_grid).reshape(-1, 1)
-        dt_init               = np.diff(t_init, axis=0)
-        self.initial_guess.t  = t_init.reshape(-1)
+        # time grid initialization
+        cfg_guess             = self.config.method.guess
+        t_start               = getattr(cfg_guess, 't_start', 0.0)
+        self.Ts_init          = (cfg_guess.t_stop - t_start) / self.problem.nondim.time_scale
+        t_init                = np.linspace(0.0, self.Ts_init, self.index_map.N.time_grid)
+        dt_init               = np.diff(t_init)
+        self.initial_guess.t  = t_init
         self.initial_guess.dt = dt_init
-        self.dt_init_min      = float(np.min(dt_init))
 
         discretize.compile_rk4_discretization(problem, self)
-
         initial_guess.set_initial_guess(problem, self)
 
         self.lagrangian_duals = AttrDict()

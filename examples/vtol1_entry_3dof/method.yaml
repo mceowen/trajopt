@@ -14,13 +14,11 @@ flags:
 # INITIAL GUESS SETTINGS
 # ===============================
 guess:
-  T_init: 500.0
-  T_min:  500.0
-  T_max:  3000.0
-  dT_max: 100.0
+  t_start: 0.0
+  t_stop: 500.0
 
-  nl_guess_u_start: [0.0, 0.0]
-  nl_guess_u_stop:  [0.0, 0.0]
+  u_start: [0.0, 0.0]
+  u_stop: [0.0, 0.0]
 
 # ===============================
 # CONVERGENCE TOLERANCES

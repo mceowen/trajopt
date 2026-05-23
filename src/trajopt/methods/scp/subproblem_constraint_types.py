@@ -13,10 +13,12 @@ CREATE_COST_REGISTRY:              dict = {}
 UPDATE_PARAMETER_REGISTRY:         dict = {}
 UPDATE_CURRENT_ITER_DATA_REGISTRY: dict = {}
 INITIALIZE_METHOD_REGISTRY:        dict = {}
+MERIT_COST_REGISTRY:               dict = {}
+MERIT_PENALTY_REGISTRY:            dict = {}
 
 
 # =============================================================================
-# DYNAMICS
+# CREATE PARAMETERS
 # =============================================================================
 
 def create_cvxpy_parameters_dynamics(method):
@@ -39,6 +41,45 @@ def create_cvxpy_parameters_dynamics(method):
         method.cp_params.ps_f_ref = cp.Parameter((N_col, n_z),       name="ps_f_ref")
         method.cp_params.ps_Ac    = cp.Parameter((N_col, n_z, n_z),  name="ps_Ac")
         method.cp_params.ps_Bc    = cp.Parameter((N_col, n_z, n_nu), name="ps_Bc")
+
+
+def create_cvxpy_parameters_nonconvex_inequality(method):
+    if not method.problem.constraints.has(ct=0, type="nonconvex_inequality"):
+        return
+
+    N, n_z, n_nu = method.N.time_grid, method.n.z, method.n.nu
+    n_ineq       = method.problem.index_map.n.nonconvex_inequality
+
+    method.cp_params.dgdz  = cp.Parameter((N, n_ineq, n_z),  name="dgdz")
+    method.cp_params.dgdnu = cp.Parameter((N, n_ineq, n_nu), name="dgdnu")
+    method.cp_params.g0    = cp.Parameter((N, n_ineq),        name="g0")
+
+
+def create_cvxpy_parameters_final_time(method):
+    method.cp_params.T_min   = cp.Parameter(nonneg=True, name="T_min")
+    method.cp_params.T_max   = cp.Parameter(nonneg=True, name="T_max")
+    method.cp_params.dt_min  = cp.Parameter(nonneg=True, name="dt_min")
+    method.cp_params.dt_max  = cp.Parameter(nonneg=True, name="dt_max")
+
+
+# =============================================================================
+# CREATE VARIABLES
+# =============================================================================
+
+def create_cvxpy_variables_minimax_epigraph(method):
+    if method.problem.costs.has(type="nonconvex", minimax=1):
+        method.minimax_epigraph_upperbound = cp.Variable((1,), name="minimax_epigraph_upperbound")
+
+
+# =============================================================================
+# CREATE CONSTRAINTS
+# =============================================================================
+
+def _active_at(k, N, time_steps):
+    if time_steps == "all":
+        return True
+    return k in time_steps or (k - N) in time_steps
+
 
 def create_cvxpy_constraints_dynamics(method):
 
@@ -79,10 +120,6 @@ def create_cvxpy_constraints_dynamics(method):
                 - (method.cp_params.z_ref[k, method.indices.z.ctcs] + method.dz[k, method.indices.z.ctcs])
                 <= method.cp_params.eps_ctcs)
 
-# =============================================================================
-# INITIAL STATE
-# =============================================================================
-
 
 def create_cvxpy_constraints_initial_state(method):
     for constraint in method.problem.constraints.get(type="initial_state"):
@@ -94,10 +131,6 @@ def create_cvxpy_constraints_initial_state(method):
             method.cp_constraints.append(method.dz[0, cnst_idx] + method.cp_params.z_ref[0, cnst_idx] == constraint.value)
 
 
-# =============================================================================
-# FINAL STATE
-# =============================================================================
-
 def create_cvxpy_constraints_final_state(method):
     for constraint in method.problem.constraints.get(type="final_state"):
         cnst_idx = constraint.idx
@@ -105,22 +138,6 @@ def create_cvxpy_constraints_final_state(method):
         vb_term  = method.cp_vars.vb_stack.final_state if method.cp_vars.vb_stack.final_state is not None else 0.0
 
         method.cp_constraints.append(method.dz[-1, cnst_idx] + method.cp_params.z_ref[-1, cnst_idx] - vb_term == value)
-
-
-# =============================================================================
-# NONCONVEX INEQUALITY
-# =============================================================================
-
-def create_cvxpy_parameters_nonconvex_inequality(method):
-    if not method.problem.constraints.has(ct=0, type="nonconvex_inequality"):
-        return
-
-    N, n_z, n_nu = method.N.time_grid, method.n.z, method.n.nu
-    n_ineq       = method.problem.index_map.n.nonconvex_inequality
-
-    method.cp_params.dgdz  = cp.Parameter((N, n_ineq, n_z),  name="dgdz")
-    method.cp_params.dgdnu = cp.Parameter((N, n_ineq, n_nu), name="dgdnu")
-    method.cp_params.g0    = cp.Parameter((N, n_ineq),        name="g0")
 
 
 def create_cvxpy_constraints_nonconvex_inequality(method):
@@ -140,10 +157,6 @@ def create_cvxpy_constraints_nonconvex_inequality(method):
         method.cp_constraints.append(cnst)
         method.cp_constraints.append(method.cp_vars.vb_stack.nonconvex_inequality[k] >= 0)
 
-
-# =============================================================================
-# CONVEX INEQUALITY
-# =============================================================================
 
 def create_cvxpy_constraints_convex_inequality(method):
     convex_ineq_constraints = method.problem.constraints.get(ct=0, type="convex_inequality")
@@ -165,10 +178,6 @@ def create_cvxpy_constraints_convex_inequality(method):
         method.cp_constraints.append(expr <= 0)
 
 
-# =============================================================================
-# STATE LIMITS
-# =============================================================================
-
 def create_cvxpy_constraints_state_limits(method):
     for k in range(method.N.time_grid):
         for constraint in method.problem.constraints.get(ct=0, type="state_limits"):
@@ -179,10 +188,6 @@ def create_cvxpy_constraints_state_limits(method):
                 if constraint.upper_idx:
                     method.cp_constraints.append(x_k[constraint.upper_idx] <= constraint.upper_value)
 
-
-# =============================================================================
-# CONTROL LIMITS
-# =============================================================================
 
 def create_cvxpy_constraints_control_limits(method):
     for k in range(method.N.time_grid):
@@ -195,10 +200,6 @@ def create_cvxpy_constraints_control_limits(method):
                     method.cp_constraints.append(u_k[constraint.upper_idx] <= constraint.upper_value)
 
 
-# =============================================================================
-# CONTROL RATE LIMIT
-# =============================================================================
-
 def create_cvxpy_constraints_control_rate_limit(method):
     for k in range(method.N.time_grid - 1):
         for constraint in method.problem.constraints.get(ct=0, type="control_rate_limit"):
@@ -210,52 +211,6 @@ def create_cvxpy_constraints_control_rate_limit(method):
             )
             dt_k = (method.t_ref[k + 1, 0] + method.dt[k + 1, 0]) - (method.t_ref[k, 0] + method.dt[k, 0])
             method.cp_constraints.append(M_sel @ du_k <= dt_k * np.concatenate([value, value]))
-
-
-# =============================================================================
-# FREE FINAL TIME
-# =============================================================================
-
-def create_cvxpy_parameters_free_final_time(method):
-    method.cp_params.dt_interval_min = cp.Parameter(nonneg=True, name="dt_interval_min")
-
-
-def create_cvxpy_constraints_free_final_time(method):
-    N = method.N.time_grid
-
-    method.cp_constraints.append(method.dt[0, 0] == 0)
-
-    for k in range(N - 1):
-        t_k = method.t_ref[k, 0] + method.dt[k, 0]
-
-        t_kp = method.t_ref[k + 1, 0] + method.dt[k + 1, 0]
-
-        method.cp_constraints.append(t_k >= 0)
-        method.cp_constraints.append(t_kp - t_k >= method.cp_params.dt_interval_min)
-        method.cp_constraints.append(0.0 <= method.s_ref[k, 0] + method.ds[k, 0])
-
-        if hasattr(method.flags, "equal_dt") and bool(method.flags.equal_dt) and k >= 1:
-            interval_k = (method.t_ref[k + 1, 0] + method.dt[k + 1, 0]) - (method.t_ref[k, 0] + method.dt[k, 0])
-            interval_0 = (method.t_ref[1, 0] + method.dt[1, 0]) - (method.t_ref[0, 0] + method.dt[0, 0])
-            method.cp_constraints.append(interval_k == interval_0)
-
-        if hasattr(method.flags, "zoh_dilation") and bool(method.flags.zoh_dilation):
-            s_k  = method.s_ref[k, 0] + method.ds[k, 0]
-            s_kp = method.s_ref[k + 1, 0] + method.ds[k + 1, 0]
-            method.cp_constraints.append(s_k == s_kp)
-
-    method.cp_constraints.append(0.0 <= method.s_ref[N - 1, 0] + method.ds[N - 1, 0])
-
-
-# =============================================================================
-# FINAL TIME
-# =============================================================================
-
-def create_cvxpy_parameters_final_time(method):
-    method.cp_params.T_min   = cp.Parameter(nonneg=True, name="T_min")
-    method.cp_params.T_max   = cp.Parameter(nonneg=True, name="T_max")
-    method.cp_params.dt_min  = cp.Parameter(nonneg=True, name="dt_min")
-    method.cp_params.dt_max  = cp.Parameter(nonneg=True, name="dt_max")
 
 
 def create_cvxpy_constraints_final_time(method):
@@ -275,19 +230,28 @@ def create_cvxpy_constraints_final_time(method):
     method.cp_constraints.append(method.t_ref[-1, 0] + method.dt[-1, 0] <= method.cp_params.T_max)
 
 
-def update_cvxpy_parameters_final_time_values(method):
-    for constraint in method.problem.constraints.get(type="final_time"):
-        if constraint.lower is not None:
-            method.cp_params.T_min.value  = float(constraint.lower)
-            method.cp_params.dt_min.value = float(constraint.dt_min)
-        if constraint.upper is not None:
-            method.cp_params.T_max.value  = float(constraint.upper)
-            method.cp_params.dt_max.value = float(constraint.dt_max)
+def create_cvxpy_constraints_free_final_time(method):
+    N = method.N.time_grid
 
+    method.cp_constraints.append(method.dt[0, 0] == 0)
 
-# =============================================================================
-# AXIS ANGLE CONE
-# =============================================================================
+    for k in range(N - 1):
+        t_k = method.t_ref[k, 0] + method.dt[k, 0]
+        method.cp_constraints.append(t_k >= 0)
+        method.cp_constraints.append(0.0 <= method.s_ref[k, 0] + method.ds[k, 0])
+
+        if hasattr(method.flags, "equal_dt") and bool(method.flags.equal_dt) and k >= 1:
+            interval_k = (method.t_ref[k + 1, 0] + method.dt[k + 1, 0]) - (method.t_ref[k, 0] + method.dt[k, 0])
+            interval_0 = (method.t_ref[1, 0] + method.dt[1, 0]) - (method.t_ref[0, 0] + method.dt[0, 0])
+            method.cp_constraints.append(interval_k == interval_0)
+
+        if hasattr(method.flags, "zoh_dilation") and bool(method.flags.zoh_dilation):
+            s_k  = method.s_ref[k, 0] + method.ds[k, 0]
+            s_kp = method.s_ref[k + 1, 0] + method.ds[k + 1, 0]
+            method.cp_constraints.append(s_k == s_kp)
+
+    method.cp_constraints.append(0.0 <= method.s_ref[N - 1, 0] + method.ds[N - 1, 0])
+
 
 def create_cvxpy_constraints_axis_angle_cone(method):
     for k in range(method.N.time_grid):
@@ -306,10 +270,6 @@ def create_cvxpy_constraints_axis_angle_cone(method):
                 )
 
 
-# =============================================================================
-# MAX NORM CONE
-# =============================================================================
-
 def create_cvxpy_constraints_max_norm_cone(method):
     for k in range(method.N.time_grid):
         for constraint in method.problem.constraints.get(ct=0, type="max_norm_cone"):
@@ -321,10 +281,6 @@ def create_cvxpy_constraints_max_norm_cone(method):
                 method.cp_constraints.append(cp.norm(method.cp_params.nu_ref[k, cnst_idx] + method.dnu[k, cnst_idx]) <= upper)
 
 
-# =============================================================================
-# QUATERNION CONE
-# =============================================================================
-
 def create_cvxpy_constraints_quaternion_cone(method):
     for k in range(method.N.time_grid):
         for constraint in method.problem.constraints.get(ct=0, type="quaternion_cone"):
@@ -335,10 +291,6 @@ def create_cvxpy_constraints_quaternion_cone(method):
                 ) <= constraint.rhs
             )
 
-
-# =============================================================================
-# AFFINE
-# =============================================================================
 
 def create_cvxpy_constraints_AFFINE(method):
     N = method.N.time_grid
@@ -356,10 +308,6 @@ def create_cvxpy_constraints_AFFINE(method):
                 method.cp_constraints.append(AA @ (method.cp_params.nu_ref[k, cnst_idx] + method.dnu[k, cnst_idx]) == bb)
 
 
-# =============================================================================
-# POLYTOPE
-# =============================================================================
-
 def create_cvxpy_constraints_POLYTOPE(method):
     N = method.N.time_grid
     for k in range(N):
@@ -375,10 +323,6 @@ def create_cvxpy_constraints_POLYTOPE(method):
             elif constraint.set == "control":
                 method.cp_constraints.append(AA @ (method.cp_params.nu_ref[k, cnst_idx] + method.dnu[k, cnst_idx]) <= bb)
 
-
-# =============================================================================
-# SOC
-# =============================================================================
 
 def create_cvxpy_constraints_SOC(method):
     N = method.N.time_grid
@@ -402,15 +346,6 @@ def create_cvxpy_constraints_SOC(method):
                 )
 
 
-# =============================================================================
-# MINIMAX EPIGRAPH
-# =============================================================================
-
-def create_cvxpy_variables_minimax_epigraph(method):
-    if method.problem.costs.has(type="nonconvex", minimax=1):
-        method.minimax_epigraph_upperbound = cp.Variable((1,), name="minimax_epigraph_upperbound")
-
-
 def create_cvxpy_constraints_minimax_epigraph(method):
     for k in range(method.N.time_grid):
         for cost in method.problem.costs.get(type="nonconvex", minimax=1):
@@ -423,18 +358,7 @@ def create_cvxpy_constraints_minimax_epigraph(method):
 
 
 # =============================================================================
-# Utility
-# =============================================================================
-
-def _active_at(k, N, time_steps):
-    if time_steps == "all":
-        return True
-    return k in time_steps or (k - N) in time_steps
-
-
-# =============================================================================
-# COSTS
-# Each function receives `method` and accumulates into method.cp_cost.
+# CREATE COSTS
 # =============================================================================
 
 def create_cvxpy_cost_nonconvex(method):
@@ -600,205 +524,14 @@ def create_cvxpy_cost_dual(method):
     method.cp_cost += DUAL
 
 
-
+# =============================================================================
+# UPDATE PARAMETERS
+# =============================================================================
 
 def _psd_sqrt(H_batch):
     eigvals, eigvecs = np.linalg.eigh(H_batch)
     sqrt_eigvals = np.sqrt(np.maximum(eigvals, 1e-6))
     return sqrt_eigvals[..., :, np.newaxis] * np.transpose(eigvecs, (0, 2, 1))
-
-
-# =============================================================================
-# MERIT FUNCTION & LINE SEARCH
-# =============================================================================
-
-def compile_merit_function(method):
-    """Build JIT-compiled augmented Lagrangian merit function and its
-    alpha-gradient for Armijo line search.
-
-    phi(z,nu) = objective + sum_types[ dual^T viol + 0.5 W * viol^2 ]
-    """
-    propagate = method.propagate
-    ks = jnp.arange(method.N.time_grid - 1)
-    N_grid = method.N.time_grid
-    w_cost = float(method.config.method.weights.w_cost)
-
-    indices = method.index_map.indices
-
-    # --- Collect all cost contributions ---
-    running_cost_fns = [
-        cost_fn.fcn_batched
-        for cost_fn in (
-            method.problem.costs.get(type="nonconvex")
-            + method.problem.costs.get(type="running")
-        )
-    ]
-    terminal_cost_fns = [
-        (cost_fn.fcn_batched, jnp.asarray(cost_fn.nodes))
-        for cost_fn in method.problem.costs.get(type="terminal")
-    ]
-
-    # terminal_state costs: sign * z[-1, idx]
-    terminal_state_info = [
-        (cost_fn.sign, jnp.array(cost_fn.idx))
-        for cost_fn in method.problem.costs.get(type="terminal_state")
-    ]
-
-    # min_time costs: sum of time components
-    has_min_time = len(method.problem.costs.get(type="min_time")) > 0
-    time_idx = jnp.array(indices.z.time) if has_min_time else None
-
-    # regularization costs: w * ||traj||^2 or w * ||traj||_1
-    reg_info = []
-    for cost_fn in method.problem.costs.get(type="regularization"):
-        is_nu = (cost_fn.set == "control")
-        reg_info.append((cost_fn.w, cost_fn.norm_type, is_nu))
-
-    # rate_regularization costs: w * ||diff(traj)||^2 or w * ||diff(traj)||_1
-    rate_reg_info = []
-    for cost_fn in method.problem.costs.get(type="rate_regularization"):
-        is_nu = (cost_fn.set == "control")
-        rate_reg_info.append((cost_fn.w, cost_fn.norm_type, is_nu))
-
-    # --- Penalty setup ---
-    penalty_types = set(method.W_stack.keys()) | set(method.dual_stack.keys())
-
-    has_dyn       = "dynamics" in penalty_types
-    has_dyn_W     = "dynamics" in method.W_stack
-    has_dyn_dual  = "dynamics" in method.dual_stack
-
-    has_ineq      = "nonconvex_inequality" in penalty_types
-    has_ineq_W    = "nonconvex_inequality" in method.W_stack
-    has_ineq_dual = "nonconvex_inequality" in method.dual_stack
-    ineq_info = []
-    n_ineq = 0
-    if has_ineq and hasattr(method.n, "nonconvex_inequality"):
-        n_ineq = method.n.nonconvex_inequality
-        col = 0
-        if method.problem.constraints.has(ct=0, type="nonconvex_inequality"):
-            for c in method.problem.constraints.get(ct=0, type="nonconvex_inequality"):
-                ineq_info.append((c.fcn_batched, jnp.asarray(c.nodes), col, c.dimension))
-                col += c.dimension
-
-    has_final      = "final_state" in penalty_types
-    has_final_W    = "final_state" in method.W_stack
-    has_final_dual = "final_state" in method.dual_stack
-    final_info = []
-    n_final = 0
-    if has_final and hasattr(method.n, "final_state"):
-        n_final = method.n.final_state
-        col = 0
-        for c in method.problem.constraints.get(type="final_state"):
-            dim_c = len(c.idx)
-            final_info.append((jnp.array(c.idx), jnp.asarray(c.value), col, dim_c))
-            col += dim_c
-
-    def merit_fn(z, nu, W_dict, dual_dict, params):
-        obj = 0.0
-
-        # nonconvex / running / terminal costs (JAX-based)
-        for fcn_b in running_cost_fns:
-            obj = obj + jnp.sum(fcn_b(z, nu, params))
-        for fcn_b, nodes in terminal_cost_fns:
-            obj = obj + jnp.sum(fcn_b(z[nodes], nu[nodes], params))
-
-        # terminal_state costs: sign * sum(z[-1, idx])
-        for sign, idx in terminal_state_info:
-            obj = obj + sign * jnp.sum(z[-1, idx])
-
-        # min_time cost: sum of all time values
-        if has_min_time:
-            obj = obj + jnp.sum(z[:, time_idx])
-
-        # regularization costs
-        for w, norm_type, is_nu in reg_info:
-            traj = nu if is_nu else z
-            if norm_type == "l2":
-                obj = obj + w * jnp.sum(traj ** 2)
-            else:
-                obj = obj + w * jnp.sum(jnp.abs(traj))
-
-        # rate regularization costs
-        for w, norm_type, is_nu in rate_reg_info:
-            traj = nu if is_nu else z
-            delta = traj[1:] - traj[:-1]
-            if norm_type == "l2":
-                obj = obj + w * jnp.sum(delta ** 2)
-            else:
-                obj = obj + w * jnp.sum(jnp.abs(delta))
-
-        obj = w_cost * obj
-
-        al = 0.0
-
-        if has_dyn:
-            z_minus = propagate(ks, z[:-1], nu[:-1], nu[1:], params)
-            viol = z[1:] - z_minus
-            if has_dyn_dual:
-                al = al + jnp.sum(dual_dict["dynamics"] * viol)
-            if has_dyn_W:
-                al = al + 0.5 * jnp.sum(W_dict["dynamics"] * viol ** 2)
-
-        if has_ineq and n_ineq > 0:
-            viol_ineq = jnp.zeros((N_grid, n_ineq))
-            for fcn_b, nodes, cs, dc in ineq_info:
-                g = jnp.maximum(0.0, fcn_b(z[nodes], nu[nodes], params))
-                viol_ineq = viol_ineq.at[nodes, cs:cs + dc].set(g.reshape(-1, dc))
-            if has_ineq_dual:
-                al = al + jnp.sum(dual_dict["nonconvex_inequality"] * viol_ineq)
-            if has_ineq_W:
-                al = al + 0.5 * jnp.sum(W_dict["nonconvex_inequality"] * viol_ineq ** 2)
-
-        if has_final and n_final > 0:
-            viol_f = jnp.zeros((1, n_final))
-            for idx, val, cs, dc in final_info:
-                viol_f = viol_f.at[0, cs:cs + dc].set(z[-1, idx] - val)
-            if has_final_dual:
-                al = al + jnp.sum(dual_dict["final_state"] * viol_f)
-            if has_final_W:
-                al = al + 0.5 * jnp.sum(W_dict["final_state"] * viol_f ** 2)
-
-        return obj + al
-
-    def merit_along_line(alpha, z_ref, dz, nu_ref, dnu, W_dict, dual_dict, params):
-        return merit_fn(z_ref + alpha * dz, nu_ref + alpha * dnu, W_dict, dual_dict, params)
-
-    method._merit_fn_jax = jax.jit(merit_fn)
-    method._merit_value_and_grad_alpha = jax.jit(
-        jax.value_and_grad(merit_along_line, argnums=0)
-    )
-    method._phi_history = []
-
-
-def armijo_line_search(method, dz, dnu, c1=1e-4, beta=0.5, max_ls_iter=20, alpha_min=0.2, m=5):
-    z_ref   = jnp.asarray(method.current_iter_data.z_opt)
-    nu_ref  = jnp.asarray(method.current_iter_data.nu_opt)
-    dz_jax  = jnp.asarray(dz)
-    dnu_jax = jnp.asarray(dnu)
-    W_dict    = {t: jnp.asarray(v) for t, v in method.W_stack.items()}
-    dual_dict = {t: jnp.asarray(v) for t, v in method.dual_stack.items()}
-    params    = method.problem.params
-
-    phi_0, dphi = method._merit_value_and_grad_alpha(0.0, z_ref, dz_jax, nu_ref, dnu_jax, W_dict, dual_dict, params)
-    phi_0, dphi = float(phi_0), float(dphi)
-
-    phi_ref = max(method._phi_history[-m:]) if method._phi_history else phi_0
-    method._phi_history.append(phi_0)
-
-    slope = min(dphi, -abs(dphi) * 1e-6)
-
-    alpha = 1.0
-    for _ in range(max_ls_iter):
-        phi_trial = float(method._merit_fn_jax(
-            z_ref + alpha * dz_jax, nu_ref + alpha * dnu_jax, W_dict, dual_dict, params
-        ))
-        if np.isfinite(phi_trial) and phi_trial <= phi_ref + c1 * alpha * slope:
-            return alpha
-        alpha *= beta
-        if alpha < alpha_min:
-            return alpha_min
-
-    return alpha_min
 
 
 def update_cvxpy_parameters_dynamics(method):
@@ -870,9 +603,14 @@ def update_cvxpy_parameters_nonconvex_costs(method):
     method.cp_params.w_cost_times_cost0.value   = method.cp_params.w_cost.value * cost.squeeze(axis=1)
 
 
-def update_cvxpy_parameters_free_final_time_(method):
-    if bool(method.flags.free_final_time):
-        method.cp_params.dt_interval_min.value = 0.2 * method.dt_init_min
+def update_cvxpy_parameters_final_time_values(method):
+    for constraint in method.problem.constraints.get(type="final_time"):
+        if constraint.lower is not None:
+            method.cp_params.T_min.value  = float(constraint.lower)
+            method.cp_params.dt_min.value = float(constraint.dt_min)
+        if constraint.upper is not None:
+            method.cp_params.T_max.value  = float(constraint.upper)
+            method.cp_params.dt_max.value = float(constraint.dt_max)
 
 
 # =============================================================================
@@ -901,14 +639,287 @@ def update_current_iter_data_nonconvex_inequality(method):
 
 
 # =============================================================================
+# INITIALIZE METHOD
+# =============================================================================
+
+def compile_merit_function(method):
+    """Build JIT-compiled augmented Lagrangian merit function and its
+    alpha-gradient for Armijo line search.
+
+    phi(z,nu) = objective + sum_types[ dual^T viol + 0.5 W * viol^2 ]
+    """
+    w_cost = float(method.config.method.weights.w_cost)
+
+    cost_eval_fns = [
+        fn for setup in MERIT_COST_REGISTRY.values()
+        if (fn := setup(method)) is not None
+    ]
+    penalty_eval_fns = [
+        fn for setup in MERIT_PENALTY_REGISTRY.values()
+        if (fn := setup(method)) is not None
+    ]
+
+    def merit_fn(z, nu, W_dict, dual_dict, params):
+        obj = 0.0
+        for fn in cost_eval_fns:
+            obj = obj + fn(z, nu, params)
+        obj = w_cost * obj
+
+        al = 0.0
+        for fn in penalty_eval_fns:
+            al = al + fn(z, nu, W_dict, dual_dict, params)
+
+        return obj + al
+
+    def merit_along_line(alpha, z_ref, dz, nu_ref, dnu, W_dict, dual_dict, params):
+        return merit_fn(z_ref + alpha * dz, nu_ref + alpha * dnu, W_dict, dual_dict, params)
+
+    method._merit_fn_jax = jax.jit(merit_fn)
+    method._merit_value_and_grad_alpha = jax.jit(jax.value_and_grad(merit_along_line, argnums=0))
+    method._phi_history = []
+
+
+def armijo_line_search(method, dz, dnu, c1=1e-4, beta=0.5, max_ls_iter=20, alpha_min=0.2, m=5):
+    z_ref   = jnp.asarray(method.current_iter_data.z_opt)
+    nu_ref  = jnp.asarray(method.current_iter_data.nu_opt)
+    dz_jax  = jnp.asarray(dz)
+    dnu_jax = jnp.asarray(dnu)
+    W_dict    = {t: jnp.asarray(v) for t, v in method.W_stack.items()}
+    dual_dict = {t: jnp.asarray(v) for t, v in method.dual_stack.items()}
+    params    = method.problem.params
+
+    phi_0, dphi = method._merit_value_and_grad_alpha(0.0, z_ref, dz_jax, nu_ref, dnu_jax, W_dict, dual_dict, params)
+    phi_0, dphi = float(phi_0), float(dphi)
+
+    phi_ref = max(method._phi_history[-m:]) if method._phi_history else phi_0
+    method._phi_history.append(phi_0)
+
+    slope = min(dphi, -abs(dphi) * 1e-6)
+
+    alpha = 1.0
+    for _ in range(max_ls_iter):
+        phi_trial = float(method._merit_fn_jax(
+            z_ref + alpha * dz_jax, nu_ref + alpha * dnu_jax, W_dict, dual_dict, params
+        ))
+        if np.isfinite(phi_trial) and phi_trial <= phi_ref + c1 * alpha * slope:
+            return alpha
+        alpha *= beta
+        if alpha < alpha_min:
+            return alpha_min
+
+    return alpha_min
+
+
+# =============================================================================
+# MERIT COST SETUP FUNCTIONS
+# Each receives `method`, returns a callable (z, nu, params) -> scalar or None.
+# =============================================================================
+
+def _merit_cost_setup_running(method):
+    fns = [
+        c.fcn_batched
+        for c in (
+            method.problem.costs.get(type="nonconvex")
+            + method.problem.costs.get(type="running")
+        )
+    ]
+    if not fns:
+        return None
+
+    def eval_fn(z, nu, params):
+        val = 0.0
+        for fcn_b in fns:
+            val = val + jnp.sum(fcn_b(z, nu, params))
+        return val
+    return eval_fn
+
+
+def _merit_cost_setup_terminal(method):
+    fns = [
+        (c.fcn_batched, jnp.asarray(c.nodes))
+        for c in method.problem.costs.get(type="terminal")
+    ]
+    if not fns:
+        return None
+
+    def eval_fn(z, nu, params):
+        val = 0.0
+        for fcn_b, nodes in fns:
+            val = val + jnp.sum(fcn_b(z[nodes], nu[nodes], params))
+        return val
+    return eval_fn
+
+
+def _merit_cost_setup_terminal_state(method):
+    info = [
+        (c.sign, jnp.array(c.idx))
+        for c in method.problem.costs.get(type="terminal_state")
+    ]
+    if not info:
+        return None
+
+    def eval_fn(z, nu, params):
+        val = 0.0
+        for sign, idx in info:
+            val = val + sign * jnp.sum(z[-1, idx])
+        return val
+    return eval_fn
+
+
+def _merit_cost_setup_min_time(method):
+    if not method.problem.costs.get(type="min_time"):
+        return None
+    time_idx = jnp.array(method.index_map.indices.z.time)
+
+    def eval_fn(z, nu, params):
+        return jnp.sum(z[:, time_idx])
+    return eval_fn
+
+
+def _merit_cost_setup_regularization(method):
+    info = [
+        (c.w, c.norm_type, c.set == "control")
+        for c in method.problem.costs.get(type="regularization")
+    ]
+    if not info:
+        return None
+
+    def eval_fn(z, nu, params):
+        val = 0.0
+        for w, norm_type, is_nu in info:
+            traj = nu if is_nu else z
+            if norm_type == "l2":
+                val = val + w * jnp.sum(traj ** 2)
+            else:
+                val = val + w * jnp.sum(jnp.abs(traj))
+        return val
+    return eval_fn
+
+
+def _merit_cost_setup_rate_regularization(method):
+    info = [
+        (c.w, c.norm_type, c.set == "control")
+        for c in method.problem.costs.get(type="rate_regularization")
+    ]
+    if not info:
+        return None
+
+    def eval_fn(z, nu, params):
+        val = 0.0
+        for w, norm_type, is_nu in info:
+            traj = nu if is_nu else z
+            delta = traj[1:] - traj[:-1]
+            if norm_type == "l2":
+                val = val + w * jnp.sum(delta ** 2)
+            else:
+                val = val + w * jnp.sum(jnp.abs(delta))
+        return val
+    return eval_fn
+
+
+# =============================================================================
+# MERIT PENALTY SETUP FUNCTIONS
+# Each receives `method`, returns a callable (z, nu, W_dict, dual_dict, params) -> scalar or None.
+# =============================================================================
+
+def _merit_penalty_setup_dynamics(method):
+    penalty_types = set(method.W_stack.keys()) | set(method.dual_stack.keys())
+    if "dynamics" not in penalty_types:
+        return None
+
+    propagate = method.propagate
+    ks        = jnp.arange(method.N.time_grid - 1)
+    has_W     = "dynamics" in method.W_stack
+    has_dual  = "dynamics" in method.dual_stack
+
+    def eval_fn(z, nu, W_dict, dual_dict, params):
+        z_minus = propagate(ks, z[:-1], nu[:-1], nu[1:], params)
+        viol = z[1:] - z_minus
+        al = 0.0
+        if has_dual:
+            al = al + jnp.sum(dual_dict["dynamics"] * viol)
+        if has_W:
+            al = al + 0.5 * jnp.sum(W_dict["dynamics"] * viol ** 2)
+        return al
+    return eval_fn
+
+
+def _merit_penalty_setup_nonconvex_inequality(method):
+    penalty_types = set(method.W_stack.keys()) | set(method.dual_stack.keys())
+    if "nonconvex_inequality" not in penalty_types:
+        return None
+    if not hasattr(method.n, "nonconvex_inequality") or method.n.nonconvex_inequality == 0:
+        return None
+
+    n_ineq   = method.n.nonconvex_inequality
+    N_grid   = method.N.time_grid
+    has_W    = "nonconvex_inequality" in method.W_stack
+    has_dual = "nonconvex_inequality" in method.dual_stack
+
+    ineq_info = []
+    if method.problem.constraints.has(ct=0, type="nonconvex_inequality"):
+        col = 0
+        for c in method.problem.constraints.get(ct=0, type="nonconvex_inequality"):
+            ineq_info.append((c.fcn_batched, jnp.asarray(c.nodes), col, c.dimension))
+            col += c.dimension
+    if not ineq_info:
+        return None
+
+    def eval_fn(z, nu, W_dict, dual_dict, params):
+        viol_ineq = jnp.zeros((N_grid, n_ineq))
+        for fcn_b, nodes, cs, dc in ineq_info:
+            g = jnp.maximum(0.0, fcn_b(z[nodes], nu[nodes], params))
+            viol_ineq = viol_ineq.at[nodes, cs:cs + dc].set(g.reshape(-1, dc))
+        al = 0.0
+        if has_dual:
+            al = al + jnp.sum(dual_dict["nonconvex_inequality"] * viol_ineq)
+        if has_W:
+            al = al + 0.5 * jnp.sum(W_dict["nonconvex_inequality"] * viol_ineq ** 2)
+        return al
+    return eval_fn
+
+
+def _merit_penalty_setup_final_state(method):
+    penalty_types = set(method.W_stack.keys()) | set(method.dual_stack.keys())
+    if "final_state" not in penalty_types:
+        return None
+    if not hasattr(method.n, "final_state") or method.n.final_state == 0:
+        return None
+
+    n_final  = method.n.final_state
+    has_W    = "final_state" in method.W_stack
+    has_dual = "final_state" in method.dual_stack
+
+    final_info = []
+    col = 0
+    for c in method.problem.constraints.get(type="final_state"):
+        dim_c = len(c.idx)
+        final_info.append((jnp.array(c.idx), jnp.asarray(c.value), col, dim_c))
+        col += dim_c
+    if not final_info:
+        return None
+
+    def eval_fn(z, nu, W_dict, dual_dict, params):
+        viol_f = jnp.zeros((1, n_final))
+        for idx, val, cs, dc in final_info:
+            viol_f = viol_f.at[0, cs:cs + dc].set(z[-1, idx] - val)
+        al = 0.0
+        if has_dual:
+            al = al + jnp.sum(dual_dict["final_state"] * viol_f)
+        if has_W:
+            al = al + 0.5 * jnp.sum(W_dict["final_state"] * viol_f ** 2)
+        return al
+    return eval_fn
+
+
+# =============================================================================
 # REGISTRIES
 # =============================================================================
 
 CREATE_PARAMETER_REGISTRY.update({
     "dynamics":               create_cvxpy_parameters_dynamics,
     "nonconvex_inequality":   create_cvxpy_parameters_nonconvex_inequality,
-    "final_time":             create_cvxpy_parameters_final_time,
-    "free_final_time":        create_cvxpy_parameters_free_final_time,
+    "final_time":             create_cvxpy_parameters_final_time
 })
 
 CREATE_VARIABLE_REGISTRY.update({
@@ -956,8 +967,7 @@ UPDATE_PARAMETER_REGISTRY.update({
     "dynamics":               update_cvxpy_parameters_dynamics,
     "nonconvex_inequality":   update_cvxpy_parameters_nonconvex_inequality,
     "costs":                  update_cvxpy_parameters_nonconvex_costs,
-    "final_time":             update_cvxpy_parameters_final_time_values,
-    "free_final_time":        update_cvxpy_parameters_free_final_time_,
+    "final_time":             update_cvxpy_parameters_final_time_values
 })
 
 UPDATE_CURRENT_ITER_DATA_REGISTRY.update({
@@ -967,4 +977,19 @@ UPDATE_CURRENT_ITER_DATA_REGISTRY.update({
 
 INITIALIZE_METHOD_REGISTRY.update({
     "merit_function":         compile_merit_function,
+})
+
+MERIT_COST_REGISTRY.update({
+    "running":                _merit_cost_setup_running,
+    "terminal":               _merit_cost_setup_terminal,
+    "terminal_state":         _merit_cost_setup_terminal_state,
+    "min_time":               _merit_cost_setup_min_time,
+    "regularization":         _merit_cost_setup_regularization,
+    "rate_regularization":    _merit_cost_setup_rate_regularization,
+})
+
+MERIT_PENALTY_REGISTRY.update({
+    "dynamics":               _merit_penalty_setup_dynamics,
+    "nonconvex_inequality":   _merit_penalty_setup_nonconvex_inequality,
+    "final_state":            _merit_penalty_setup_final_state,
 })
