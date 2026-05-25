@@ -76,7 +76,7 @@ def nonlinear_aero(t: float, x: Array, u: Array, params: dict, fcns: dict) -> di
 
 
 def heat_rate(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
-    """Convective heat rate (W/m²)."""
+    """Convective heat rate (W/(cm)²)."""
     v = z[3]
     rho = fcns.density_model(t, z, nu, params, fcns)
 
@@ -84,7 +84,7 @@ def heat_rate(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
 
 
 def dynamic_pressure(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> Array:
-    """Dynamic pressure q-bar (Pa)."""
+    """Dynamic pressure q-bar (kPa)."""
     v = z[3]
     rho = fcns.density_model(t, z, nu, params, fcns)
 
