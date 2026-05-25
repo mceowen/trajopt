@@ -47,6 +47,12 @@ problem:
       type: control_limits
       lower: [-90.0, -90]
       upper: [1.0, 90]
+    
+    # # uncomment this to solve with max heat rate constraint!
+    # max_heat_rate:
+    #   type: nonconvex_inequality
+    #   fcn: fcns.heat_rate
+    #   upper: [5]
 
   # ===============================
   # COSTS
@@ -56,10 +62,6 @@ problem:
       type: terminal_state
       idx: [2]
       sign: -1
-
-    # min_terminal_velocity:
-    #   type: terminal
-    #   fcn: fcns.velocity
 
 # ===============================
 # METHOD CONFIGURATION
