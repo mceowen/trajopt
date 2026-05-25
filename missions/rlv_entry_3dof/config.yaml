@@ -41,7 +41,7 @@ problem:
     state_limits:
       type: state_limits
       lower: ["${params.planet.r}",            -180, -70,    10.0, -80.0, -180]
-      upper: ["${params.planet.r + 400000.0}",  180,  70, 45000.0,  80.0, 180]
+      upper: ["${params.planet.r + 79248.0}",   180,  70, 45000.0,  80.0,  180]
 
     control_limits:
       type: control_limits
