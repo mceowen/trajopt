@@ -1,6 +1,7 @@
 from trajopt.trajectory_analyzer import TrajectoryAnalyzer
 
-trajopt = TrajectoryAnalyzer("config.yaml")
+config_path = "config.yaml"
+trajopt = TrajectoryAnalyzer(config_path)
 
 trajopt.solve()
 

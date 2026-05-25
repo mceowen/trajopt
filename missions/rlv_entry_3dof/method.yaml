@@ -18,11 +18,16 @@ flags:
 # INITIAL GUESS SETTINGS
 # ===============================
 guess:
+  type: straight_line
+  
   t_start: 0.0
-  t_stop: 1000.0
+  t_stop:  1000.0
 
-  u_start: [-0.0, 10.0]
-  u_stop: [-0.0, 10.0]
+  x_start: ["${params.planet.r + 79248.0}", 0.0, 0.0, 7802.88, -1.0,  90.0]
+  x_stop:  ["${params.planet.r + 24384.0}" , 10,  10,   762.0, -5.0, -90.0]
+
+  u_start: [0.0, 0.0]
+  u_stop:  [0.0, 0.0]
 
 # ===============================
 # CONVERGENCE TOLERANCES

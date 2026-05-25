@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 from jax import Array
 
-from trajopt.models import rotations
+from . import rotations
 from trajopt.utils.tools import AttrDict
 
 

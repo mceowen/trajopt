@@ -89,22 +89,18 @@ problem:
       fcn: fcns.yz
       group: stc_check
 
-  # ===============================
-  # ACTIVE CONSTRAINTS AND COSTS
-  # ===============================
-  constraint_list:
-    - dynamics
-    - initial_state
-    - final_state
-    - max_thrust
-    - min_thrust
-    - obstacle
-    - final_time
-
-  cost_list:
-    - min_time
-
 # ===============================
 # METHOD CONFIGURATION
 # ===============================
 method.inherit: method.yaml
+
+# ===============================
+# ANALYSIS CONFIGURATION
+# ===============================
+analysis:
+  type: standalone
+  
+  compute_iters: true
+  show_iters: true
+  show_convergence: false
+  show_weights: false

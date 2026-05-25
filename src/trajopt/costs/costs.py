@@ -14,6 +14,7 @@ class Costs:
 
         # build cost_ids mapping
         for i, (cost_name, cost_config_i) in enumerate(config.problem.costs.items()):
+            cost_config_i["name"] = cost_name
             print(f"  {i}: {cost_name}: {cost_name}")
             self.register_cost(cost_config_i, index_map, fcns=fcns)
 

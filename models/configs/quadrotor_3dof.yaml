@@ -159,32 +159,3 @@ trajectories:
     title: "XYZ Trajectory"
     xlabel: "X (m)"
     ylabel: "Y (m)"
-
-# ===============================
-# PLOT CONFIGURATION
-# ===============================
-
-plot_config:
-  limits_all_iters: true
-  trajectory_groups:
-    state_pos:
-      figsize: [12, 2.8]
-      grid_gap_x: 0.08
-      margins: [0.08, 0.02, 0.06, 0.14]
-
-    state_vel:
-      figsize: [12, 2.8]
-      grid_gap_x: 0.08
-      margins: [0.08, 0.02, 0.06, 0.14]
-
-    control:
-      figsize: [12, 2.8]
-      grid_gap_x: 0.08
-      margins: [0.08, 0.02, 0.06, 0.14]
-
-    position_trajectories:
-      figsize: [10, 3.2]
-      width_ratios: [1, 2]
-      grid_gap_x: -0.10
-      pad_3d: 0.0
-      margins: [0.08, 0.02, 0.06, 0.14]

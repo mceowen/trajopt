@@ -53,20 +53,18 @@ problem:
       fcn: fcns.u_squared_cost
       w: 10
 
-  # ===============================
-  # ACTIVE CONSTRAINTS AND COSTS
-  # ===============================
-  constraint_list:
-    - dynamics
-    - initial_state
-    - final_state
-    - control_limits
-    - obstacle
-
-  cost_list:
-    - u_squared
-
 # ===============================
 # METHOD CONFIGURATION
 # ===============================
 method.inherit: method.yaml
+
+# ===============================
+# ANALYSIS CONFIGURATION
+# ===============================
+analysis:
+  type: standalone
+  
+  compute_iters: false
+  show_iters: false
+  show_convergence: false
+  show_weights: false

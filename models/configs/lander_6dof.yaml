@@ -52,10 +52,6 @@ fcns:
   tilt_traj:          ../lander_6dof.py:tilt_traj
   los_traj:           ../lander_6dof.py:los_traj
 
-  # spatial overlays
-  glideslope_cone:    ../lander_6dof.py:glideslope_cone
-  glideslope_cone_3d: ../lander_6dof.py:glideslope_cone_3d
-
 # ===============================
 # STATE AND CONTROL CONFIG
 # ===============================
@@ -298,43 +294,3 @@ trajectories:
     ylabel: "Angle (deg)"
     upper_limit: ${params.los_limit}
 
-# ===============================
-# PLOT CONFIGURATION
-# ===============================
-
-plot_config:
-  limits_all_iters: true
-  trajectory_groups:
-    state_mass:
-      figsize: [5, 2.8]
-      margins: [0.14, 0.02, 0.08, 0.14]
-
-    state:
-      figsize: [12, 5.5]
-      grid_gap_x: 0.10
-      grid_gap_y: 0.20
-      margins: [0.08, 0.02, 0.06, 0.12]
-
-    control:
-      figsize: [12, 2.8]
-      grid_gap_x: 0.08
-      margins: [0.08, 0.02, 0.06, 0.14]
-
-    position_traj_yz:
-      figsize: [5, 5]
-      margins: [0.14, 0.04, 0.10, 0.14]
-
-    position_traj_y_alt:
-      figsize: [6, 5]
-      margins: [0.14, 0.04, 0.10, 0.14]
-
-    position_traj_3d:
-      figsize: [6, 5]
-      pad_3d: 0.0
-      margins: [0.08, 0.04, 0.08, 0.12]
-
-    stl_constraints:
-      figsize: [14, 5.5]
-      grid_gap_x: 0.08
-      grid_gap_y: 0.20
-      margins: [0.06, 0.02, 0.06, 0.12]

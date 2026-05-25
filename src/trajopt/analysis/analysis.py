@@ -166,11 +166,13 @@ def perform_analysis(trajopt_obj, compute_iters=False):
 # STANDALONE ANALYSIS
 # ======================================================================
 
-def run_standalone_analysis(trajopt_obj, show_iters = True):
-    config  = trajopt_obj.config.method
+def run_standalone_analysis(trajopt_obj):
+    config = trajopt_obj.config.method
     method_name = config.get("name", "method1")
+    analysis_cfg = trajopt_obj.config.get("analysis", {})
+    compute_iters = analysis_cfg.get("compute_iters", False)
 
-    run_0_data = perform_analysis(trajopt_obj, compute_iters=show_iters)
+    run_0_data = perform_analysis(trajopt_obj, compute_iters=compute_iters)
 
     method_data = {"runs": [run_0_data]}
     

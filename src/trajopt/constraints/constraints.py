@@ -26,6 +26,7 @@ class Constraints:
         self.params = config.problem.params
 
         for i, (cnstr_name, cnstr_config_i) in enumerate(config.problem.constraints.items()):
+            cnstr_config_i["name"] = cnstr_name
             print(f"  {i}: {cnstr_name}: type: {cnstr_config_i.type}")
             self.register_constraint(cnstr_config_i, index_map, fcns=fcns)
 

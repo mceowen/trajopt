@@ -196,7 +196,7 @@ class IndexMap:
         nx = self.n.state
         nu = self.n.control
 
-        constraint_name_list = self.problem_config.constraint_list
+        constraint_name_list = list(self.problem_config.constraints.keys())
         constraint_configs   = self.problem_config.constraints
 
         # resolve the raw fcns config so we can probe function-based constraints
@@ -253,7 +253,7 @@ class IndexMap:
         nx      = self.n.state
         n_u     = self.n.control
 
-        constraint_name_list = self.problem_config.constraint_list
+        constraint_name_list = list(self.problem_config.constraints.keys())
         constraint_configs   = self.problem_config.constraints
 
         # infer dimensions for all constraints from config fields

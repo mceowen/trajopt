@@ -13,23 +13,23 @@ from trajopt.utils.tools import AttrDict
 class spatial:
     """Trajectory type for 3D spatial plots."""
 
-    def __init__(self, cnstr_config: AttrDict, index_map: IndexMap, fcns: AttrDict | None = None, **kwargs) -> None:
+    def __init__(self, traj_config: AttrDict, index_map: IndexMap, fcns: AttrDict | None = None, **kwargs) -> None:
         """Initialize spatial trajectory from config."""
         self.type       = "spatial"
-        self.name       = cnstr_config["name"]
-        self.group      = cnstr_config.get("group", None)
-        self.units      = cnstr_config.get("units", None)
-        self.title      = cnstr_config.get("title", None)
-        self.xlabel     = cnstr_config.get("xlabel", None)
-        self.ylabel     = cnstr_config.get("ylabel", None)
-        self.zlabel     = cnstr_config.get("zlabel", None)
-        self.tick_nbins = cnstr_config.get("tick_nbins", None)
-        self.markers    = cnstr_config.get("markers", None)
-        self.invert_x   = cnstr_config.get("invert_x", False)
+        self.name       = traj_config["name"]
+        self.group      = traj_config.get("group", None)
+        self.units      = traj_config.get("units", None)
+        self.title      = traj_config.get("title", None)
+        self.xlabel     = traj_config.get("xlabel", None)
+        self.ylabel     = traj_config.get("ylabel", None)
+        self.zlabel     = traj_config.get("zlabel", None)
+        self.tick_nbins = traj_config.get("tick_nbins", None)
+        self.markers    = traj_config.get("markers", None)
+        self.invert_x   = traj_config.get("invert_x", False)
         self.index_map  = index_map
-        self.fcn_dim    = tools.resolve_function_from_string(cnstr_config["fcn"], fcns)
+        self.fcn_dim    = tools.resolve_function_from_string(traj_config["fcn"], fcns)
 
-        raw_quivers = cnstr_config.get("quivers", {}) or {}
+        raw_quivers = traj_config.get("quivers", {}) or {}
         self.quiver_configs      = list(raw_quivers.values()) if isinstance(raw_quivers, dict) else list(raw_quivers)
         self.quiver_fcn_dims     = [tools.resolve_function_from_string(qcfg["fcn"], fcns) for qcfg in self.quiver_configs]
         self.quiver_origin_fcn_dims = [
@@ -74,21 +74,21 @@ class spatial:
 class time_series:
     """Trajectory type for time-series plots."""
 
-    def __init__(self, cnstr_config: AttrDict, index_map: IndexMap, fcns: AttrDict | None = None, **kwargs) -> None:
+    def __init__(self, traj_config: AttrDict, index_map: IndexMap, fcns: AttrDict | None = None, **kwargs) -> None:
         """Initialize time-series trajectory from config."""
         self.type       = "time_series"
-        self.name       = cnstr_config["name"]
-        self.group      = cnstr_config.get("group", None)
-        self.units      = cnstr_config.get("units", None)
-        self.title      = cnstr_config.get("title", None)
-        self.xlabel     = cnstr_config.get("xlabel", None)
-        self.ylabel     = cnstr_config.get("ylabel", None)
-        self.zlabel     = cnstr_config.get("zlabel", None)
-        self.tick_nbins = cnstr_config.get("tick_nbins", None)
-        self.show_iters = cnstr_config.get("show_iters", None)
+        self.name       = traj_config["name"]
+        self.group      = traj_config.get("group", None)
+        self.units      = traj_config.get("units", None)
+        self.title      = traj_config.get("title", None)
+        self.xlabel     = traj_config.get("xlabel", None)
+        self.ylabel     = traj_config.get("ylabel", None)
+        self.zlabel     = traj_config.get("zlabel", None)
+        self.tick_nbins = traj_config.get("tick_nbins", None)
+        self.show_iters = traj_config.get("show_iters", None)
         self.index_map  = index_map
-        self.upper_limit    = cnstr_config.get("upper_limit", None)
-        self.lower_limit    = cnstr_config.get("lower_limit", None)
+        self.upper_limit    = traj_config.get("upper_limit", None)
+        self.lower_limit    = traj_config.get("lower_limit", None)
         self.upper_limit_fn = None
         self.lower_limit_fn = None
 
@@ -99,7 +99,7 @@ class time_series:
             self.lower_limit_fn = tools.resolve_function_from_string(self.lower_limit, fcns)
             self.lower_limit = None
 
-        self.fcn_dim = tools.resolve_function_from_string(cnstr_config["fcn"], fcns)
+        self.fcn_dim = tools.resolve_function_from_string(traj_config["fcn"], fcns)
 
     def _wrap(self, fn: Callable) -> Callable:
         """Wrap fn as a batched, JIT-compiled (z, nu, params) -> output function."""

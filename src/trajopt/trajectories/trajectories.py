@@ -21,6 +21,7 @@ class Trajectories:
         self.trajectory_type_list = []
 
         for i, (traj_name, traj_config_i) in enumerate(config.problem.trajectories.items()):
+            traj_config_i["name"] = traj_name
             self.register_trajectory(traj_config_i, index_map, fcns=fcns)
 
     def register_trajectory(self, traj_config, index_map, fcns=None):

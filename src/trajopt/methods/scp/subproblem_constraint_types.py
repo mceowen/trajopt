@@ -699,7 +699,7 @@ def compile_merit_function(method):
     method._phi_history = []
 
 
-def armijo_line_search(method, dz, dnu, c1=1e-4, beta=0.5, max_ls_iter=20, alpha_min=0.2, m=5):
+def armijo_line_search(method, dz, dnu, c1=1e-4, beta=0.5, max_ls_iter=20, alpha_min=0.001, m=5):
     z_ref   = jnp.asarray(method.current_iter_data.z_opt)
     nu_ref  = jnp.asarray(method.current_iter_data.nu_opt)
     dz_jax  = jnp.asarray(dz)

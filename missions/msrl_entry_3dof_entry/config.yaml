@@ -32,11 +32,11 @@ problem:
       type: initial_state
       value: [3456160, 68.20, 14.12, 7935.15, -7.7075, 62.2803]
 
-    initial_bank_angle:
-      type: control_limits
-      lower: [120, null]
-      upper: [120, null]
-      nodes: [0]
+    # initial_bank_angle:
+    #   type: control_limits
+    #   lower: [120, null]
+    #   upper: [120, null]
+    #   nodes: [0]
 
     final_state:
       type: final_state
@@ -57,21 +57,21 @@ problem:
       value: [10]
       idx: [0]
 
-    fpa_upper_bound:
-      type: nonconvex_inequality
-      fcn: fcns.fpa
-      upper: 2
-      scale: [1]
-      eps: [0.01]
+    # fpa_upper_bound:
+    #   type: nonconvex_inequality
+    #   fcn: fcns.fpa
+    #   upper: 2
+    #   scale: [1]
+    #   eps: [0.01]
 
-    terminal_fpa:
-      type: nonconvex_inequality
-      fcn: fcns.fpa
-      lower: -2
-      upper: 2
-      scale: [1]
-      eps: [0.01]
-      nodes: [-1]
+    # terminal_fpa:
+    #   type: nonconvex_inequality
+    #   fcn: fcns.fpa
+    #   lower: -2
+    #   upper: 2
+    #   scale: [1]
+    #   eps: [0.01]
+    #   nodes: [-1]
 
   # ===============================
   # COSTS
@@ -81,30 +81,23 @@ problem:
       type: terminal
       fcn: fcns.velocity
 
-    control_regularization:
-      type: rate_regularization
-      set: control
-      w: 10.0
-
-  # ===============================
-  # ACTIVE CONSTRAINTS AND COSTS
-  # ===============================
-  constraint_list:
-    - dynamics
-    - initial_state
-    # - initial_bank_angle
-    - final_state
-    - state_limits
-    - bank_aoa_angle_limits
-    - bank_angle_rate_limit
-    # - fpa_upper_bound
-    # - terminal_fpa
-
-  cost_list:
-    - min_terminal_velocity
-    # - control_regularization
+    # control_regularization:
+    #   type: rate_regularization
+    #   set: control
+    #   w: 10.0
 
 # ===============================
 # METHOD CONFIGURATION
 # ===============================
 method.inherit: method.yaml
+
+# ===============================
+# ANALYSIS CONFIGURATION
+# ===============================
+analysis:
+  type: standalone
+  
+  compute_iters: false
+  show_iters: false
+  show_convergence: false
+  show_weights: false

@@ -41,48 +41,15 @@ def load_trajopt_config(config_path: str) -> AttrDict:
     except Exception as e:
         raise type(e)(f"error evaluating expressions in '{config_path}': {e}") from None
 
-    constraints = deep_merge(problem.get("constraints", {}), method.get("constraints", {}))
-    costs       = deep_merge(problem.get("costs", {}), method.get("costs", {}))
-    trajectories = problem.get("trajectories", {})
+    problem.setdefault("trajectories", {})
 
-    active_constraints = problem.get("constraint_list", [])
-    active_costs       = problem.get("cost_list", [])
-
-    try:
-        constraints = AttrDict({n: {"name": n, **constraints[n]} for n in active_constraints})
-    except KeyError as e:
-        raise KeyError(f"constraint {e} in 'constraint_list' but not defined") from None
-
-    for c in constraints.values():
+    for c in problem.constraints.values():
         c.setdefault("ct", 0)
 
-    try:
-        costs = AttrDict({n: {"name": n, **costs[n]} for n in active_costs})
-    except KeyError as e:
-        raise KeyError(f"cost {e} in 'cost_list' but not defined") from None
+    config.problem = problem
+    config.method  = method
 
-    trajectories = AttrDict({
-        n: {"name": n, **trajectories[n]}
-        for n in trajectories if trajectories[n] is not None
-    })
-
-    return recursive_attrdict({
-        "problem": {
-            "state":           problem.state,
-            "control":         problem.control,
-            "time":            problem.get("time", {}),
-            "constraints":     constraints,
-            "constraint_list": active_constraints,
-            "trajectories":    trajectories,
-            "costs":           costs,
-            "cost_list":       active_costs,
-            "params":          problem.get("params", {}),
-            "fcns":            problem.get("fcns", {}),
-            "plot_config":     problem.get("plot_config", {}),
-        },
-        "method":     method,
-        "variations": config.get("variations", {}),
-    })
+    return config
 
 # =============================================================================
 # YAML LOADING

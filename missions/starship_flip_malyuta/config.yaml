@@ -63,8 +63,8 @@ problem:
   # COSTS
   # ===============================
   costs:
-    min_time:
-      type: min_time
+    # min_time:
+    #   type: min_time
 
     u_squared:
       type: running
@@ -72,23 +72,18 @@ problem:
       scale: 1000000000000
       w: 10
 
-  # ===============================
-  # ACTIVE CONSTRAINTS AND COSTS
-  # ===============================
-  constraint_list:
-    - dynamics
-    - initial_state
-    - final_state
-    - state_limits
-    - control_limits1
-    - control_limits
-    - glide_slope
-
-  cost_list:
-    # - min_time
-    - u_squared
-
 # ===============================
 # METHOD CONFIGURATION
 # ===============================
 method.inherit: method.yaml
+
+# ===============================
+# ANALYSIS CONFIGURATION
+# ===============================
+analysis:
+  type: standalone
+  
+  compute_iters: false
+  show_iters: false
+  show_convergence: false
+  show_weights: false

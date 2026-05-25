@@ -304,7 +304,7 @@ def compile_rk4_discretization(problem, method):
 
     dyn_fcn = jax.jit(problem.constraints.get(type='dynamics')[0].fcn)
     N_grid  = problem.index_map.N.time_grid
-    nsub    = 20
+    nsub    = 2
     delta_tau = 1.0 / (N_grid - 1)
     dt_rk4  = delta_tau / nsub
 

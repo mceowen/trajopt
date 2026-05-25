@@ -82,24 +82,6 @@ problem:
       fcn: fcns.velocity
 
   # ===============================
-  # ACTIVE CONSTRAINTS AND COSTS
-  # ===============================
-  constraint_list:
-    - dynamics
-    - initial_state
-    - final_state
-    - state_limits
-    - bank_angle_limit
-    - bank_angle_rate_limit
-    - max_Q
-    - max_q
-    - max_load
-    - final_time
-
-  cost_list:
-    - min_terminal_velocity
-
-  # ===============================
   # TRAJECTORIES
   # ===============================
   trajectories:
@@ -116,3 +98,14 @@ problem:
 # METHOD CONFIGURATION
 # ===============================
 method.inherit: method.yaml
+
+# ===============================
+# ANALYSIS CONFIGURATION
+# ===============================
+analysis:
+  type: standalone
+  
+  compute_iters: false
+  show_iters: false
+  show_convergence: false
+  show_weights: false

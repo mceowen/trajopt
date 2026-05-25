@@ -44,11 +44,11 @@ problem:
       type: control_limits
       lower: [-178.0, -10.0]
       upper: [178.0, 10.0]
-    
-    final_time:
-      type: final_time
-      lower: 200.0
-      upper:  8000.0
+
+    # final_time:
+    #   type: final_time
+    #   lower: 200.0
+    #   upper: 8000.0
 
   # ===============================
   # COSTS
@@ -59,27 +59,23 @@ problem:
       type: terminal
       fcn: fcns.velocity
 
-    control_rate_regularization:
-      type: rate_regularization
-      set: control
-      w: 1.0
-
-  # ===============================
-  # ACTIVE CONSTRAINTS AND COSTS
-  # ===============================
-
-  constraint_list:
-    - dynamics
-    - initial_state
-    - final_state
-    - state_limits
-    - bank_aoa_angle_limits
-
-  cost_list:
-    - min_terminal_velocity
+    # control_rate_regularization:
+    #   type: rate_regularization
+    #   set: control
+    #   w: 1.0
 
 # ===============================
 # METHOD CONFIGURATION
 # ===============================
-
 method.inherit: method.yaml
+
+# ===============================
+# ANALYSIS CONFIGURATION
+# ===============================
+analysis:
+  type: standalone
+  
+  compute_iters: false
+  show_iters: false
+  show_convergence: false
+  show_weights: false

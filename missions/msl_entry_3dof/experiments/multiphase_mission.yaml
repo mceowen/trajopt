@@ -44,13 +44,3 @@ constraints:
     scale: [10000]
     eps: [100]
 
-constraint_list:
-  - dynamics
-  - initial_state
-  - final_state
-  - state_limits
-  - bank_aoa_angle_limits
-  - chute_deploy
-
-cost_list:
-  - min_terminal_velocity

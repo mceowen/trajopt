@@ -57,9 +57,9 @@ problem:
       type: convex_inequality
       fcn: fcns.cvx_gimbal_limit
 
-    glide_slope:
-      type: convex_inequality
-      fcn: fcns.cvx_glide_slope
+    # glide_slope:
+    #   type: convex_inequality
+    #   fcn: fcns.cvx_glide_slope
 
     max_thrust:
       type: convex_inequality
@@ -69,71 +69,59 @@ problem:
       type: convex_inequality
       fcn: fcns.cvx_max_angular_velocity
 
-    tilt_limit:
-      type: convex_inequality
-      fcn: fcns.cvx_tilt_limit
+    # tilt_limit:
+    #   type: convex_inequality
+    #   fcn: fcns.cvx_tilt_limit
 
     min_thrust:
       type: nonconvex_inequality
       fcn: fcns.thrust
       lower: "${params.min_thrust}"
 
-    altitude_triggered_tilt:
-      type: nonconvex_inequality
-      fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.tilt <= 0)"
+    # altitude_triggered_tilt:
+    #   type: nonconvex_inequality
+    #   fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.tilt <= 0)"
 
-    altitude_triggered_speed:
-      type: nonconvex_inequality
-      fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.speed <= ${params.speed_limit})"
+    # altitude_triggered_speed:
+    #   type: nonconvex_inequality
+    #   fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.speed <= ${params.speed_limit})"
 
-    altitude_triggered_angular_speed:
-      type: nonconvex_inequality
-      fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.angular_speed <= ${params.angular_speed_limit})"
+    # altitude_triggered_angular_speed:
+    #   type: nonconvex_inequality
+    #   fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.angular_speed <= ${params.angular_speed_limit})"
 
-    altitude_triggered_glideslope:
-      type: nonconvex_inequality
-      fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.glide_slope <= ${params.theta_gs})"
+    # altitude_triggered_glideslope:
+    #   type: nonconvex_inequality
+    #   fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.glide_slope <= ${params.theta_gs})"
 
-    altitude_triggered_los:
-      type: nonconvex_inequality
-      fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.los <= ${params.los_limit})"
+    # altitude_triggered_los:
+    #   type: nonconvex_inequality
+    #   fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.los <= ${params.los_limit})"
 
   # ===============================
   # COSTS
   # ===============================
   costs:
-    min_time:
-      type: min_time
+    # min_time:
+    #   type: min_time
 
     u_squared:
       type: running
       fcn: fcns.u_squared_cost
       w: 1.0
 
-  # ===============================
-  # ACTIVE CONSTRAINTS AND COSTS
-  # ===============================
-  constraint_list:
-    - dynamics
-    - initial_state
-    - final_state
-    - gimbal_limit
-    # - glide_slope
-    - max_thrust
-    - max_angular_velocity
-    # - tilt_limit
-    - min_thrust
-    # - altitude_triggered_tilt
-    # - altitude_triggered_speed
-    # - altitude_triggered_angular_speed
-    # - altitude_triggered_glideslope
-    # - altitude_triggered_los
-
-  cost_list:
-    # - min_time
-    - u_squared
-
 # ===============================
 # METHOD CONFIGURATION
 # ===============================
 method.inherit: method.yaml
+
+# ===============================
+# ANALYSIS CONFIGURATION
+# ===============================
+analysis:
+  type: standalone
+  
+  compute_iters: false
+  show_iters: false
+  show_convergence: false
+  show_weights: false

@@ -1,11 +1,7 @@
-"""Default plotting routines for standalone and Monte Carlo SCP analysis results."""
-
 import os
 import warnings
 import numpy as np
 import matplotlib.pyplot as plt
-import numpy as np
-from matplotlib.axes import Axes
 from matplotlib.lines import Line2D
 from matplotlib.ticker import MaxNLocator
 
@@ -23,20 +19,19 @@ plt.rcParams.update({
 })
 
 plot_options = AttrDict({
-    'figsize':     (10, 2.6),
-    'dpi':         300,
+    'figsize':     (12, 3.5),
+    'save_dpi':    300,
     'grid_gap_x':  0.06,
     'grid_gap_y':  0.12,
-    'margins':     [0.08, 0.02, 0.04, 0.12],
+    'margins':     [0.08, 0.02, 0.08, 0.14],
     'title_fontsize': 10,
     'title_pad':   4,
 })
 
-# pen = {frgba, lrgba, lw, ls, msty, msz}  (fill rgba, line rgba, linewidth, linestyle, marker style/size)
 pens = recursive_attrdict({
     'init':    {'frgba': [0,0,0,.1], 'lrgba': [0,0,0,1.],   'lw': 1, 'ls': '--', 'msty': '',  'msz': 3},
     'nl':      {'frgba': [0,0,0,.1], 'lrgba': [1,0,0,1.],   'lw': 2, 'ls': '-',  'msty': '',  'msz': 3},
-    'opt':     {'frgba': [0,0,0,.1], 'lrgba': [0,0,1,1.],   'lw': 1, 'ls': '',   'msty': 'o', 'msz': 3},
+    'opt':     {'frgba': [0,0,0,.1], 'lrgba': [0,0,1,1.],   'lw': 1, 'ls': '',   'msty': 'o', 'msz': 1},
     'itr_opt': {'frgba': [0,0,0,.1], 'lrgba': [.7,0,.3,.2], 'lw': 1, 'ls': '',   'msty': 'o', 'msz': 3},
     'itr_nl':  {'frgba': [0,0,0,.1], 'lrgba': [.7,0,.3,.4], 'lw': 1, 'ls': '-',  'msty': '',  'msz': 3},
 })
@@ -47,31 +42,26 @@ MARKER_DEFAULTS = {
 }
 
 
-# ======================================================================
-# MAIN ENTRY POINT
-# ======================================================================
-
-def plot(trajopt_obj, data, show_iters=False):
+def plot(trajopt_obj, data):
+    analysis_cfg = trajopt_obj.config.get("analysis", {})
+    show_iters = analysis_cfg.get("show_iters", False)
     method         = list(data.keys())[0]
     iters_all      = data[method]["runs"][0]["iter_data_list"]
     last_iter      = iters_all[-1]
     traj_data      = last_iter["trajectory_data"]
     problem_config = trajopt_obj.problem.config.problem
-    traj_group_cfg = problem_config.get('plot_config', {}).get('trajectory_groups', {})
     traj_configs   = problem_config.get('trajectories', {})
     fcns           = problem_config.get('fcns', {})
 
-    # --- create figures and axes for each trajectory group ---
     figs, axs = {}, {}
     for group_name, group_data in traj_data.items():
-        grp_cfg = traj_group_cfg.get(group_name, {})
-        figsize = grp_cfg.get('figsize', plot_options.figsize)
-        pad_3d  = grp_cfg.get('pad_3d', 0.08)
-        grid    = _create_grid(len(group_data), cfg=grp_cfg)
+        figsize = plot_options.figsize
+        pad_3d  = 0.08
+        grid    = _create_grid(len(group_data))
         is_3d   = {i: (d.type == "spatial" and d.opt_vals["values"].shape[1] == 3)
                    for i, d in enumerate(group_data.values())}
 
-        fig = plt.figure(figsize=figsize, dpi=plot_options.dpi)
+        fig = plt.figure(figsize=figsize)
         axs[group_name] = {}
         for idx, rect in grid.items():
             if is_3d.get(idx):
@@ -83,7 +73,6 @@ def plot(trajopt_obj, data, show_iters=False):
 
     iters_to_show = iters_all[1:] if show_iters else []
 
-    # --- draw trajectories ---
     for group_name, group_data in traj_data.items():
         for i, (traj_name, traj) in enumerate(group_data.items()):
             ax = axs[group_name][i]
@@ -93,7 +82,6 @@ def plot(trajopt_obj, data, show_iters=False):
             else:
                 _plot_time_series(ax, traj, iters_to_show, last_iter)
 
-    # --- draw overlays (ground contours, terrain, etc.) ---
     for group_name, group_data in traj_data.items():
         for i, (traj_name, traj) in enumerate(group_data.items()):
             if traj.type == "spatial":
@@ -114,7 +102,6 @@ def plot(trajopt_obj, data, show_iters=False):
                     if zlim is not None and hasattr(ax, 'set_zlim'):
                         ax.set_zlim(zlim)
 
-    # --- set axis limits from optimal + initial guess + quiver data ---
     for group_name, group_data in traj_data.items():
         for i, (traj_name, traj) in enumerate(group_data.items()):
             ax   = axs[group_name][i]
@@ -134,7 +121,6 @@ def plot(trajopt_obj, data, show_iters=False):
                 t = last_iter["t_opt"]
                 _set_time_series_limits(ax, t[:vals.shape[0]], vals)
 
-    # --- legend ---
     legend_entries = [('init', 'Initial Guess'), ('opt', 'Optimal'), ('nl', 'Nonlinear')]
     if show_iters:
         legend_entries.append(('itr_nl', 'Iterations'))
@@ -142,22 +128,23 @@ def plot(trajopt_obj, data, show_iters=False):
     for fig in figs.values():
         fig.axes[0].legend(handles=handles, loc='best', fontsize=8, framealpha=0.8)
 
-    # --- save ---
     save_dir = os.path.join("plots", "standalone")
     os.makedirs(save_dir, exist_ok=True)
     for name, fig in figs.items():
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
             fig.tight_layout()
-        fig.savefig(os.path.join(save_dir, f"{name}.pdf"), pad_inches=0.02)
+        fig.savefig(os.path.join(save_dir, f"{name}.pdf"), dpi=plot_options.save_dpi, pad_inches=0.02)
     print(f"Saved {len(figs)} figures to {save_dir}/")
+
+    if analysis_cfg.get('show_convergence', False):
+        convergence_plots(trajopt_obj)
+
+    if analysis_cfg.get('show_weights', False):
+        convergence_weight_plots(trajopt_obj)
+
     plt.show()
-    convergence_plots(trajopt_obj)
 
-
-# ======================================================================
-# AXIS SETUP
-# ======================================================================
 
 def _setup_ax(ax, traj):
     if traj.get("title"):
@@ -174,10 +161,6 @@ def _setup_ax(ax, traj):
         if hasattr(ax, 'zaxis'):
             ax.zaxis.set_major_locator(MaxNLocator(nbins=nbins))
 
-
-# ======================================================================
-# DRAWING PRIMITIVES
-# ======================================================================
 
 def _draw(ax, x, y, pen, z=None, n_iters=1, i=0):
     first_frac = pen.get('first_frac', 0.2)
@@ -200,10 +183,6 @@ def _draw(ax, x, y, pen, z=None, n_iters=1, i=0):
         ax.plot(x, y, **kwargs)
 
 
-# ======================================================================
-# TRAJECTORY PLOTTING
-# ======================================================================
-
 def _plot_spatial(ax, traj, iters_to_show, last_iter):
     dim   = traj.opt_vals["values"].shape[1]
     is_3d = dim == 3
@@ -212,7 +191,6 @@ def _plot_spatial(ax, traj, iters_to_show, last_iter):
         v = vals["values"]
         return (v[:, 0], v[:, 1], v[:, 2]) if is_3d else (v[:, 0], v[:, 1])
 
-    # iteration history (faded)
     n = len(iters_to_show)
     for i, it in enumerate(iters_to_show):
         traj_it = it["trajectory_data"]
@@ -225,7 +203,6 @@ def _plot_spatial(ax, traj, iters_to_show, last_iter):
         coords = unpack(t.opt_vals)
         _draw(ax, *coords[:2], pens.itr_opt, z=coords[2] if is_3d else None, n_iters=n, i=i)
 
-    # final solution
     coords = unpack(traj.init_nl_vals)
     _draw(ax, *coords[:2], pens.init, z=coords[2] if is_3d else None)
     coords = unpack(traj.nl_vals)
@@ -238,7 +215,6 @@ def _plot_spatial(ax, traj, iters_to_show, last_iter):
 
 
 def _plot_time_series(ax, traj, iters_to_show, last_iter):
-    # iteration history (faded)
     n = len(iters_to_show)
     for i, it in enumerate(iters_to_show):
         traj_it = it["trajectory_data"]
@@ -249,12 +225,10 @@ def _plot_time_series(ax, traj, iters_to_show, last_iter):
         _draw(ax, it["t_nl"],  t.nl_vals["values"].squeeze(),  pens.itr_nl,  n_iters=n, i=i)
         _draw(ax, it["t_opt"], t.opt_vals["values"].squeeze(), pens.itr_opt, n_iters=n, i=i)
 
-    # final solution
     _draw(ax, last_iter["t_init_nl"], traj.init_nl_vals["values"].squeeze(), pens.init)
     _draw(ax, last_iter["t_nl"],      traj.nl_vals["values"].squeeze(),      pens.nl)
     _draw(ax, last_iter["t_opt"],     traj.opt_vals["values"].squeeze(),     pens.opt)
 
-    # constraint limits
     upper = traj.get("upper_limit") or traj.nl_vals.get("limits", {}).get("upper")
     lower = traj.get("lower_limit") or traj.nl_vals.get("limits", {}).get("lower")
     for val in filter(None, [upper, lower]):
@@ -264,10 +238,6 @@ def _plot_time_series(ax, traj, iters_to_show, last_iter):
         else:
             ax.axhline(val, color='k', ls='--', lw=1, alpha=0.5)
 
-
-# ======================================================================
-# OVERLAYS: MARKERS, QUIVERS, CUSTOM CURVES
-# ======================================================================
 
 def _plot_markers(ax, traj, dim):
     for m in (traj.get("markers") or []):
@@ -323,19 +293,11 @@ def _plot_overlays(ax, traj, dim, params, fcns=None):
                 zorder= 3)
 
 
-# ======================================================================
-# LEGEND
-# ======================================================================
-
 def _legend_handle(pen_name, label):
     p = pens[pen_name]
     return Line2D([], [], color=p.lrgba[:3], alpha=p.lrgba[3], lw=p.lw,
                   ls=p.ls or 'None', marker=p.msty or None, markersize=p.msz, label=label)
 
-
-# ======================================================================
-# GRID LAYOUT
-# ======================================================================
 
 def _create_grid(n, cfg=None):
     cfg      = cfg or {}
@@ -370,10 +332,6 @@ def _create_grid(n, cfg=None):
     return grid
 
 
-# ======================================================================
-# UTILITIES
-# ======================================================================
-
 def _padded_lim(lo, hi, margin=0.08):
     pad = margin * (hi - lo) if hi > lo else 0.1
     return lo - pad, hi + pad
@@ -391,7 +349,6 @@ def _set_limits_from_data(ax, vals, margin=0.08, equal_aspect=False):
 
 
 def _set_equal_aspect_3d(ax):
-    """Force equal scaling on all three axes of a 3D plot."""
     xlim = np.array(ax.get_xlim())
     ylim = np.array(ax.get_ylim())
     zlim = np.array(ax.get_zlim())
@@ -399,23 +356,17 @@ def _set_equal_aspect_3d(ax):
     spans = np.array([xlim[1] - xlim[0], ylim[1] - ylim[0], zlim[1] - zlim[0]])
     max_span = spans.max()
 
-    mid_x = xlim.mean()
-    mid_y = ylim.mean()
-    mid_z = zlim.mean()
-
-    ax.set_xlim(mid_x - max_span / 2, mid_x + max_span / 2)
-    ax.set_ylim(mid_y - max_span / 2, mid_y + max_span / 2)
-    ax.set_zlim(mid_z - max_span / 2, mid_z + max_span / 2)
+    ax.set_xlim(xlim.mean() - max_span / 2, xlim.mean() + max_span / 2)
+    ax.set_ylim(ylim.mean() - max_span / 2, ylim.mean() + max_span / 2)
+    ax.set_zlim(zlim.mean() - max_span / 2, zlim.mean() + max_span / 2)
 
 
 def _set_time_series_limits(ax, t, vals, margin=0.08):
     ax.set_xlim(*_padded_lim(t.min(), t.max(), margin))
-    lo, hi = vals.min(), vals.max()
-    ax.set_ylim(*_padded_lim(lo, hi, margin))
+    ax.set_ylim(*_padded_lim(vals.min(), vals.max(), margin))
 
 
 def _include_quiver_extents(all_vals, traj):
-    """Expand the point set with quiver tip positions so axis limits fit them."""
     for q in (traj.opt_vals.get("quivers") or []):
         cfg      = q["config"]
         stride   = int(cfg.get("stride", 1))
@@ -425,7 +376,7 @@ def _include_quiver_extents(all_vals, traj):
         origins = traj.opt_vals["values"][::stride]
         if q.get("origins") is not None:
             origins = origins + q["origins"][::stride]
-        dirs    = q["dirs"][::stride] * scale
+        dirs = q["dirs"][::stride] * scale
         if centered:
             tips = np.vstack([origins - dirs / 2, origins + dirs / 2])
         else:
@@ -451,7 +402,7 @@ def convergence_plots(traj, save=True):
         vb_series[ct] = [float(np.max(np.abs(it.vb[ct]) / eps_ct)) for it in iters]
 
     grid  = _create_grid(3)
-    fig   = plt.figure(figsize=(14, 3.5), dpi=plot_options.dpi)
+    fig   = plt.figure(figsize=(14, 4.5))
     axes  = [fig.add_axes(grid[i]) for i in range(3)]
 
     markers = ['o', 's', '^', 'v', 'D', 'P', 'X', 'h']
@@ -482,79 +433,8 @@ def convergence_plots(traj, save=True):
     if save:
         save_dir = os.path.join("plots", "standalone")
         os.makedirs(save_dir, exist_ok=True)
-        fig.savefig(os.path.join(save_dir, "convergence.pdf"), pad_inches=0.02)
-    plt.show()
+        fig.savefig(os.path.join(save_dir, "convergence.pdf"), dpi=plot_options.save_dpi, pad_inches=0.02)
 
-    convergence_step_plots(traj, save=save)
-    convergence_weight_plots(traj, save=save)
-
-    return fig
-
-
-def convergence_step_plots(traj, save=True):
-    """Per-node |dx| and |du| across SCP iterations to identify which
-    state/control components are still changing at convergence."""
-    method = traj.method
-    iters  = method.iter_data_list[1:]
-    if not iters:
-        return
-
-    idx_state   = method.index_map.indices.z.state
-    idx_control = method.index_map.indices.nu.control
-    n_state     = method.index_map.n.state
-    n_control   = method.index_map.n.control
-    N           = method.index_map.N.time_grid
-    nodes       = np.arange(N)
-
-    state_cfg   = traj.config.problem.state
-    control_cfg = traj.config.problem.control
-    state_names   = sorted(state_cfg.keys(),   key=lambda s: min(state_cfg[s]["idx"]))
-    control_names = sorted(control_cfg.keys(), key=lambda s: min(control_cfg[s]["idx"]))
-    state_names   += [f"z_{j}" for j in range(len(state_names), n_state)]
-    control_names += [f"u_{j}" for j in range(len(control_names), n_control)]
-
-    n_iters = len(iters)
-    cmap_state   = plt.cm.tab10(np.linspace(0, 1, 10))
-    cmap_control = plt.cm.tab10(np.linspace(0, 1, 10))
-
-    fig, (ax_dx, ax_du) = plt.subplots(1, 2, figsize=(14, 4), dpi=plot_options.dpi)
-
-    for i, it in enumerate(iters):
-        alpha_step = float(it.get("alpha", 1.0))
-        dx = np.abs(alpha_step * np.asarray(it.dz)[:, idx_state])
-        du = np.abs(alpha_step * np.asarray(it.dnu)[:, idx_control])
-
-        frac = 0.08 + 0.92 * (i / max(n_iters - 1, 1))
-        is_last = (i == n_iters - 1)
-        lw = 1.6 if is_last else 0.6
-
-        for j in range(n_state):
-            ax_dx.plot(nodes, dx[:, j],
-                       color=cmap_state[j % 10], alpha=frac, lw=lw,
-                       label=state_names[j] if is_last else None)
-
-        for j in range(n_control):
-            ax_du.plot(nodes, du[:, j],
-                       color=cmap_control[j % 10], alpha=frac, lw=lw,
-                       label=control_names[j] if is_last else None)
-
-    for ax, title, ylabel in [
-        (ax_dx, r'State Step $|\alpha \cdot \delta x|$ per Node',   r'$|\alpha \cdot \delta x|$'),
-        (ax_du, r'Control Step $|\alpha \cdot \delta u|$ per Node', r'$|\alpha \cdot \delta u|$'),
-    ]:
-        ax.set_yscale('log')
-        ax.set_xlabel('Node')
-        ax.set_ylabel(ylabel)
-        ax.set_title(title, fontsize=plot_options.title_fontsize, pad=plot_options.title_pad)
-        ax.legend(fontsize=7, loc='best')
-        ax.grid(True, alpha=0.3)
-
-    plt.tight_layout()
-    if save:
-        save_dir = os.path.join("plots", "standalone")
-        os.makedirs(save_dir, exist_ok=True)
-        fig.savefig(os.path.join(save_dir, "convergence_steps.pdf"), pad_inches=0.02)
-    plt.show()
     return fig
 
 
@@ -570,7 +450,7 @@ def convergence_weight_plots(traj, save=True):
         return
 
     k = np.arange(1, len(iters) + 1)
-    fig, axes = plt.subplots(1, 2, figsize=(14, 3.5), dpi=plot_options.dpi)
+    fig, axes = plt.subplots(1, 2, figsize=(14, 4.5))
 
     if has_W:
         ax = axes[0]
@@ -598,8 +478,8 @@ def convergence_weight_plots(traj, save=True):
     if save:
         save_dir = os.path.join("plots", "standalone")
         os.makedirs(save_dir, exist_ok=True)
-        fig.savefig(os.path.join(save_dir, "convergence_weights.pdf"), pad_inches=0.02)
-    plt.show()
+        fig.savefig(os.path.join(save_dir, "convergence_weights.pdf"), dpi=plot_options.save_dpi, pad_inches=0.02)
+
     return fig
 
 

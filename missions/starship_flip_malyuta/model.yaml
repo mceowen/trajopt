@@ -48,11 +48,6 @@ control:
 time: 
   scale: 1
 
-plot_config:
-  trajectory_groups:
-    spatial:
-      figsize: [4, 6]
-
 trajectories:
   spatial:
     type: spatial

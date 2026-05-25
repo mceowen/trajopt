@@ -26,16 +26,17 @@ class TrajectoryAnalyzer:
     def solve(self):
         self.method.solve()
 
-    def analyze(self, analysis_type="standalone", compute_iters=False):
+    def analyze(self):
+        analysis_cfg = self.config.get("analysis", {})
+        analysis_type = analysis_cfg.get("type", "standalone")
         self.analysis_type = analysis_type
 
         if analysis_type == "standalone":
-            self.results = analysis.run_standalone_analysis(self, show_iters=compute_iters)
-        
+            self.results = analysis.run_standalone_analysis(self)
         elif analysis_type == "mc":
             self.results = analysis.run_mc_analysis(self)
 
         return self.results
 
-    def plot(self, data, analysis_type="standalone", show_iters=False, animate=False, show_runs=None):
-        plotting.plot(self, data, show_iters=show_iters)
+    def plot(self, data):
+        plotting.plot(self, data)

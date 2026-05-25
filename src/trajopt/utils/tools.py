@@ -1,5 +1,6 @@
 import importlib.util
 import inspect
+import sys
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
@@ -256,12 +257,33 @@ def resolve_function_from_string(fcn_string: str, fcns: "AttrDict | None" = None
                 return result._fcn if isinstance(result, _FcnExpr) else result
 
     file_path_str, func_name = fcn_string.rsplit(":", 1)
-    file_path = Path(file_path_str)
+    file_path = Path(file_path_str).resolve()
+
+    parent_dir = file_path.parent
+    pkg_init = parent_dir / "__init__.py"
 
     try:
-        spec = importlib.util.spec_from_file_location("dynamic_module", file_path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        if pkg_init.exists():
+            pkg_name = parent_dir.name
+            mod_name = f"{pkg_name}.{file_path.stem}"
+
+            if pkg_name not in sys.modules:
+                pkg_spec = importlib.util.spec_from_file_location(
+                    pkg_name, pkg_init, submodule_search_locations=[str(parent_dir)],
+                )
+                pkg_mod = importlib.util.module_from_spec(pkg_spec)
+                sys.modules[pkg_name] = pkg_mod
+                pkg_spec.loader.exec_module(pkg_mod)
+
+            spec = importlib.util.spec_from_file_location(mod_name, file_path)
+            module = importlib.util.module_from_spec(spec)
+            module.__package__ = pkg_name
+            sys.modules[mod_name] = module
+            spec.loader.exec_module(module)
+        else:
+            spec = importlib.util.spec_from_file_location("dynamic_module", file_path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
     except Exception as e:
         raise type(e)(f"could not load file '{file_path}' (from '{fcn_string}'): {e}") from None
 

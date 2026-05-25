@@ -399,7 +399,7 @@ class SCP:
             W_cfg = cnstr_penalty_cfg["W"]
             if W_cfg["autotune"]:
                 W_min = 0.00001
-                W_max = 1e8
+                W_max = 1e5
 
                 Wh = np.abs(dual_new) / (0.01*eps)
                 Wh = np.clip(Wh, W_min, W_max)
