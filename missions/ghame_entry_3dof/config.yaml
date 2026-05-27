@@ -8,14 +8,14 @@ problem:
   # FUNCTION REGISTRY
   # ===============================
   fcns:
-    coeffs: msl.py:coeffs_entry
+    nonlinear_aero: "./ghame.py:nonlinear_aero"
 
   # ===============================
   # PARAMETERS
   # ===============================
   params:
-    planet.inherit: ../configs/planets/mars.yaml
-    vehicle.inherit: ../configs/vehicles/msl.yaml
+    planet.inherit: ../configs/planets/earth.yaml
+    vehicle.inherit: ../configs/vehicles/ghame.yaml
 
   # ===============================
   # CONSTRAINTS
@@ -27,39 +27,34 @@ problem:
 
     initial_state:
       type: initial_state
-      value: ["${params.planet.r + 126e3}", 0.0, 0.0, 5845, -15.47, 0.0]
+      value: ["${params.planet.r + 80e3}",  0.0, 0.0, 5612, -0.5,  90.0]
 
     final_state:
       type: final_state
-      value: ["${params.planet.r + 10e3}", 0.0, 10.5768, null, null, null]
+      value: ["${params.planet.r + 10e3}", null, null, 100, -10, null]
 
     state_limits:
       type: state_limits
-      lower: ["${params.planet.r + 5e3}", -10.0, -5.0, 10.0, -90.0, -180.0]
-      upper: ["${params.planet.r + 140e3}", 10.0, 20.0, 6500.0, 5.0, 180.0]
+      lower: ["${params.planet.r}", null, null, 50, null, null]
 
-    bank_aoa_angle_limits:
+    control_limits:
       type: control_limits
-      lower: [-178.0, -10.0]
-      upper: [178.0, 10.0]
+      lower: [-80.0, 10]
+      upper: [80.0, 20]
 
-    # final_time:
-    #   type: final_time
-    #   lower: 200.0
-    #   upper: 8000.0
+    bank_angle_rate_limit:
+      type: control_rate_limit
+      value: [5, 5]
+      idx: [0, 1]
 
   # ===============================
   # COSTS
   # ===============================
   costs:
-    min_terminal_velocity:
-      type: terminal
-      fcn: fcns.velocity
-
-    # control_rate_regularization:
-    #   type: rate_regularization
-    #   set: control
-    #   w: 1.0
+    max_crossrange:
+      type: terminal_state
+      idx: [2]
+      sign: -1
 
 # ===============================
 # METHOD CONFIGURATION
