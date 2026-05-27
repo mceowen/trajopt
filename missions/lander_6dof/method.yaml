@@ -11,9 +11,9 @@ time_grid: 25
 # ===============================
 
 flags:
-  equal_dt: 1
+  equal_dt: 0
   zoh_dilation: 1
-  free_final_time: 0
+  free_final_time: 1
 
 guess:
   type: straight_line
@@ -32,7 +32,7 @@ guess:
 # ===============================
 
 conv:
-  eps_state:  0.00001
+  eps_state:  0.001
   eps_dyn:    0.00001
   eps_defect: 1.0
   eps_cost:   1
@@ -41,4 +41,4 @@ conv:
 # SOLVER OPTIONS
 # ===============================
 solver_opts:
-  solver: QOCO
+  solver: CLARABEL

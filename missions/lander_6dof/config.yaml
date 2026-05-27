@@ -28,12 +28,12 @@ problem:
     min_thrust:   0.3
     max_thrust:   5
     theta_gimbal: 20
-    theta_tilt:   10
+    theta_tilt:   20
 
     alt_trigger:         1.0
-    speed_limit:         0.5
+    speed_limit:         1.3
     angular_speed_limit: 0.5
-    theta_gs:            20.0
+    theta_gs:            45.0
     los_limit:           5.0
 
   # ===============================
@@ -65,9 +65,9 @@ problem:
       type: convex_inequality
       fcn: fcns.cvx_max_thrust
 
-    max_angular_velocity:
-      type: convex_inequality
-      fcn: fcns.cvx_max_angular_velocity
+    # max_angular_velocity:
+    #   type: convex_inequality
+    #   fcn: fcns.cvx_max_angular_velocity
 
     # tilt_limit:
     #   type: convex_inequality
@@ -78,21 +78,21 @@ problem:
       fcn: fcns.thrust
       lower: "${params.min_thrust}"
 
-    # altitude_triggered_tilt:
-    #   type: nonconvex_inequality
-    #   fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.tilt <= 0)"
+    altitude_triggered_tilt:
+      type: nonconvex_inequality
+      fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.tilt <= 0)"
 
-    # altitude_triggered_speed:
-    #   type: nonconvex_inequality
-    #   fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.speed <= ${params.speed_limit})"
+    altitude_triggered_speed:
+      type: nonconvex_inequality
+      fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.speed <= ${params.speed_limit})"
 
-    # altitude_triggered_angular_speed:
-    #   type: nonconvex_inequality
-    #   fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.angular_speed <= ${params.angular_speed_limit})"
+    altitude_triggered_angular_speed:
+      type: nonconvex_inequality
+      fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.angular_speed <= ${params.angular_speed_limit})"
 
-    # altitude_triggered_glideslope:
-    #   type: nonconvex_inequality
-    #   fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.glide_slope <= ${params.theta_gs})"
+    altitude_triggered_glideslope:
+      type: nonconvex_inequality
+      fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.glide_slope <= 0)"
 
     # altitude_triggered_los:
     #   type: nonconvex_inequality
@@ -102,13 +102,13 @@ problem:
   # COSTS
   # ===============================
   costs:
-    # min_time:
-    #   type: min_time
+    min_time:
+      type: min_time
 
-    u_squared:
-      type: running
-      fcn: fcns.u_squared_cost
-      w: 10.0
+    # u_squared:
+    #   type: running
+    #   fcn: fcns.u_squared_cost
+    #   w: 10.0
 
 # ===============================
 # METHOD CONFIGURATION
