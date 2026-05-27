@@ -1,0 +1,127 @@
+problem:
+  # ===============================
+  # INHERIT MODEL CONFIGS
+  # ===============================
+  inherit: ../../models/configs/lander_6dof.yaml
+
+  # ===============================
+  # FUNCTION REGISTRY
+  # ===============================
+  fcns:
+    altitude:      ../../models/lander_6dof.py:altitude
+    speed:         ../../models/lander_6dof.py:speed
+    tilt:          ../../models/lander_6dof.py:tilt
+    angular_speed: ../../models/lander_6dof.py:angular_speed
+    glide_slope:   ../../models/lander_6dof.py:glide_slope
+    los:           ../../models/lander_6dof.py:los
+    u_squared_cost: ../../models/lander_6dof.py:u_squared_cost
+
+  # ===============================
+  # PARAMETERS
+  # ===============================
+  params:
+    planet:
+      inherit: ../configs/planets/nondim_planet.yaml
+    vehicle:
+      inherit: ../configs/vehicles/mikilander.yaml
+
+    min_thrust:   0.3
+    max_thrust:   5
+    theta_gimbal: 20
+    theta_tilt:   20
+
+    alt_trigger:         1.0
+    speed_limit:         1.3
+    angular_speed_limit: 0.5
+    theta_gs:            45.0
+    los_limit:           5.0
+
+  # ===============================
+  # CONSTRAINTS
+  # ===============================
+  constraints:
+    dynamics:
+      type: dynamics
+      fcn: fcns.dynamics
+
+    initial_state:
+      type: initial_state
+      value: [2.0, 4, 4, 0, 0, -2.5, 2.5, null, null, null, null, 0, 0, 0]
+
+    final_state:
+      type: final_state
+      value: [null, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
+      eps: [0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001]
+
+    gimbal_limit:
+      type: convex_inequality
+      fcn: fcns.cvx_gimbal_limit
+
+    # glide_slope:
+    #   type: convex_inequality
+    #   fcn: fcns.cvx_glide_slope
+
+    max_thrust:
+      type: convex_inequality
+      fcn: fcns.cvx_max_thrust
+
+    # max_angular_velocity:
+    #   type: convex_inequality
+    #   fcn: fcns.cvx_max_angular_velocity
+
+    # tilt_limit:
+    #   type: convex_inequality
+    #   fcn: fcns.cvx_tilt_limit
+
+    min_thrust:
+      type: nonconvex_inequality
+      fcn: fcns.thrust
+      lower: "${params.min_thrust}"
+
+    altitude_triggered_tilt:
+      type: nonconvex_inequality
+      fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.tilt <= 0)"
+
+    altitude_triggered_speed:
+      type: nonconvex_inequality
+      fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.speed <= ${params.speed_limit})"
+
+    altitude_triggered_angular_speed:
+      type: nonconvex_inequality
+      fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.angular_speed <= ${params.angular_speed_limit})"
+
+    altitude_triggered_glideslope:
+      type: nonconvex_inequality
+      fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.glide_slope <= 0)"
+
+    # altitude_triggered_los:
+    #   type: nonconvex_inequality
+    #   fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.los <= ${params.los_limit})"
+
+  # ===============================
+  # COSTS
+  # ===============================
+  costs:
+    min_time:
+      type: min_time
+
+    # u_squared:
+    #   type: running
+    #   fcn: fcns.u_squared_cost
+    #   w: 10.0
+
+# ===============================
+# METHOD CONFIGURATION
+# ===============================
+method.inherit: method.yaml
+
+# ===============================
+# ANALYSIS CONFIGURATION
+# ===============================
+analysis:
+  type: standalone
+  
+  compute_iters: false
+  show_iters: false
+  show_convergence: false
+  show_weights: false

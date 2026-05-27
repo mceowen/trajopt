@@ -1,0 +1,24 @@
+# ===============================
+# MISSION VARIATIONS
+# ===============================
+mission:
+  num: 10
+  seed: 42
+
+  constraints:
+    initial_state.value:
+      type: uniform
+      lb: [0, 0, 0, 0, 0.0, 0.0]
+      ub: [0, 0, 0,  0, 0.0, 0.0]
+
+  params:
+    vehicle.bc:
+      type: uniform
+      lb: -20
+      ub: 20
+
+# ===============================
+# METHOD VARIATIONS
+# ===============================
+method:
+  autotune.flags.flag_autotune: "3"

@@ -1,0 +1,70 @@
+problem:
+  # source: https://underactuated.mit.edu/acrobot.html#cart_pole
+
+  # ===============================
+  # INHERIT MODEL CONFIGS
+  # ===============================
+  inherit: model.yaml
+
+  # ===============================
+  # PARAMETERS
+  # ===============================
+  params:
+    g: 9.81
+    mp: 0.3
+    mc: 1
+    l: 0.5
+
+  # ===============================
+  # CONSTRAINTS
+  # ===============================
+  constraints:
+    dynamics:
+      type: dynamics
+      fcn: fcns.dynamics
+
+    initial_state:
+      type: initial_state
+      value: [0, 0, 0, 0]
+
+    final_state:
+      type: final_state
+      value: [1, "${np.pi}", 0, 0]
+
+    state_limits:
+      type: state_limits
+      lower: [-4, null, null, null]
+      upper: [ 4, null, null, null]
+
+    control_limits:
+      type: control_limits
+      lower: [-20]
+      upper: [20]
+
+  # ===============================
+  # COSTS
+  # ===============================
+  costs:
+    # min_time:
+    #   type: min_time
+
+    u_squared:
+      type: running
+      fcn: fcns.u_squared_cost
+      w: 1.0
+
+# ===============================
+# METHOD CONFIGURATION
+# ===============================
+method.inherit: method.yaml
+
+# ===============================
+# ANALYSIS CONFIGURATION
+# ===============================
+analysis:
+  type: standalone
+  
+  compute_iters: false
+  show_iters: false
+  show_convergence: false
+  show_weights: false

@@ -1,4 +1,4 @@
-inherit: trajopt/methods/configs/autoscvx-term.yaml
+inherit: autoscvx-term.yaml
 
 flags:
   free_final_time: 0

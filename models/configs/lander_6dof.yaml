@@ -1,0 +1,296 @@
+# ===============================
+# MODEL FUNCTIONS
+# ===============================
+
+fcns:
+  # dynamics
+  dynamics:               ../lander_6dof.py:dynamics
+  thrust:                 ../lander_6dof.py:thrust
+
+  # convex inequality constraints (CVXPY expressions)
+  cvx_gimbal_limit:       ../lander_6dof.py:cvx_gimbal_limit
+  cvx_glide_slope:        ../lander_6dof.py:cvx_glide_slope
+  cvx_max_thrust:         ../lander_6dof.py:cvx_max_thrust
+  cvx_max_angular_velocity: ../lander_6dof.py:cvx_max_angular_velocity
+  cvx_tilt_limit:         ../lander_6dof.py:cvx_tilt_limit
+
+  # state trajectories
+  mass:               ../lander_6dof.py:mass
+  pos_vec:            ../lander_6dof.py:pos_vec
+  vel_vec:            ../lander_6dof.py:vel_vec
+  quat_vec:           ../lander_6dof.py:quat_vec
+  ang_vel_vec:        ../lander_6dof.py:ang_vel_vec
+
+  # control trajectories
+  thrust_x:           ../lander_6dof.py:thrust_x
+  thrust_y:           ../lander_6dof.py:thrust_y
+  thrust_z:           ../lander_6dof.py:thrust_z
+  thrust_mag:         ../lander_6dof.py:thrust_mag
+
+  # spatial trajectories
+  traj_yz:            ../lander_6dof.py:traj_yz
+  traj_y_alt:         ../lander_6dof.py:traj_y_alt
+  traj_3d:            ../lander_6dof.py:traj_3d
+
+  # quiver directions — Y-Z footprint
+  body_x_dir_yz:      ../lander_6dof.py:body_x_dir_yz
+  thrust_dir_yz:      ../lander_6dof.py:thrust_dir_yz
+
+  # quiver directions — Y vs altitude
+  body_x_dir_y_alt:   ../lander_6dof.py:body_x_dir_y_alt
+  thrust_dir_y_alt:   ../lander_6dof.py:thrust_dir_y_alt
+
+  # quiver directions — 3D
+  body_x_dir_3d:      ../lander_6dof.py:body_x_dir_3d
+  thrust_dir_3d:      ../lander_6dof.py:thrust_dir_3d
+
+  # constraint plot trajectories
+  altitude_traj:      ../lander_6dof.py:altitude_traj
+  speed_traj:         ../lander_6dof.py:speed_traj
+  angular_speed_traj: ../lander_6dof.py:angular_speed_traj
+  glide_slope_traj:   ../lander_6dof.py:glide_slope_traj
+  tilt_traj:          ../lander_6dof.py:tilt_traj
+  los_traj:           ../lander_6dof.py:los_traj
+
+# ===============================
+# STATE AND CONTROL CONFIG
+# ===============================
+
+state:
+  mass:
+    idx: [0]
+    scale: 1
+  pos:
+    idx: [1, 2, 3]
+    scale: 1
+  vel:
+    idx: [4, 5, 6]
+    scale: 1
+  quat:
+    idx: [7, 8, 9, 10]
+    scale: 1
+  angv:
+    idx: [11, 12, 13]
+    scale: 1
+
+control:
+  thrust:
+    idx: [0, 1, 2]
+    scale: 1
+
+time:
+  scale: 1
+
+# ===============================
+# TRAJECTORIES
+# ===============================
+
+trajectories:
+  position:
+    type: time_series
+    fcn: fcns.pos_vec
+    group: state
+    title: "Position vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Position (m)"
+
+  velocity:
+    type: time_series
+    fcn: fcns.vel_vec
+    group: state
+    title: "Velocity vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Velocity (m/s)"
+
+  quaternion:
+    type: time_series
+    fcn: fcns.quat_vec
+    group: state
+    title: "Quaternion vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Quaternion"
+
+  angular_velocity:
+    type: time_series
+    fcn: fcns.ang_vel_vec
+    group: state
+    title: "Angular Velocity vs Time"
+    xlabel: "Time (s)"
+    ylabel: "$\\omega$ (rad/s)"
+
+  thrust_x:
+    type: time_series
+    fcn: fcns.thrust_x
+    group: control
+    title: "Tx vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Tx (N)"
+
+  thrust_y:
+    type: time_series
+    fcn: fcns.thrust_y
+    group: control
+    title: "Ty vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Ty (N)"
+
+  thrust_z:
+    type: time_series
+    fcn: fcns.thrust_z
+    group: control
+    title: "Tz vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Tz (N)"
+
+  thrust_mag:
+    type: time_series
+    fcn: fcns.thrust_mag
+    group: control
+    title: "Thrust Magnitude vs Time"
+    xlabel: "Time (s)"
+    ylabel: "$\\|T\\|$ (N)"
+
+  mass:
+    type: time_series
+    fcn: fcns.mass
+    group: state_mass
+    title: "Mass vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Mass (kg)"
+
+  traj_yz:
+    type: spatial
+    fcn: fcns.traj_yz
+    group: position_traj_yz
+    title: "Y-Z Footprint"
+    xlabel: "Y (m)"
+    ylabel: "Z (m)"
+    equal_aspect: true
+    limits_opt_only: true
+    quivers:
+      body_x:
+        fcn: fcns.body_x_dir_yz
+        scale: 0.25
+        color: [0, 0, 0]
+        alpha: 1.0
+        stride: 1
+        linewidth: 2.5
+      thrust:
+        fcn: fcns.thrust_dir_yz
+        scale: 0.25
+        color: [0.95, 0.45, 0.0]
+        alpha: 0.9
+        stride: 1
+        linewidth: 1.5
+        negate: true
+
+  traj_y_alt:
+    type: spatial
+    fcn: fcns.traj_y_alt
+    group: position_traj_y_alt
+    title: "Altitude vs Y"
+    xlabel: "Y (m)"
+    ylabel: "Altitude (m)"
+    equal_aspect: true
+    limits_opt_only: true
+    quivers:
+      body_x:
+        fcn: fcns.body_x_dir_y_alt
+        scale: 0.25
+        color: [0, 0, 0]
+        alpha: 1.0
+        stride: 1
+        linewidth: 2.5
+      thrust:
+        fcn: fcns.thrust_dir_y_alt
+        scale: 0.25
+        color: [0.95, 0.45, 0.0]
+        alpha: 0.9
+        stride: 1
+        linewidth: 1.5
+        negate: true
+
+  traj_3d:
+    type: spatial
+    fcn: fcns.traj_3d
+    group: position_traj_3d
+    title: "3D Trajectory"
+    xlabel: "Y (m)"
+    ylabel: "Z (m)"
+    zlabel: "Altitude (m)"
+    equal_aspect: true
+    limits_opt_only: true
+    quivers:
+      body_x:
+        fcn: fcns.body_x_dir_3d
+        scale: 0.15
+        color: [0, 0, 0]
+        alpha: 1.0
+        stride: 1
+        linewidth: 1.2
+      thrust:
+        fcn: fcns.thrust_dir_3d
+        scale: 0.15
+        color: [0.95, 0.45, 0.0]
+        alpha: 0.9
+        stride: 1
+        linewidth: 0.8
+        negate: true
+
+  stl_altitude:
+    type: time_series
+    fcn: fcns.altitude_traj
+    group: stl_constraints
+    title: "Altitude vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Altitude"
+    upper_limit: ${params.alt_trigger}
+    trigger_line:
+      threshold: ${params.alt_trigger}
+      direction: below
+
+  stl_speed:
+    type: time_series
+    fcn: fcns.speed_traj
+    group: stl_constraints
+    title: "Speed vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Speed"
+    upper_limit: ${params.speed_limit}
+
+  stl_angular_speed:
+    type: time_series
+    fcn: fcns.angular_speed_traj
+    group: stl_constraints
+    title: "Angular Speed vs Time"
+    xlabel: "Time (s)"
+    ylabel: "$\\|\\omega\\|$ (rad/s)"
+    upper_limit: ${params.angular_speed_limit}
+
+  stl_glide_slope:
+    type: time_series
+    fcn: fcns.glide_slope_traj
+    group: stl_constraints
+    title: "Glide Slope Angle vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Angle (deg)"
+    upper_limit: ${params.theta_gs}
+
+  stl_tilt:
+    type: time_series
+    fcn: fcns.tilt_traj
+    group: stl_constraints
+    title: "Tilt Angle vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Angle (deg)"
+    upper_limit: ${params.theta_tilt}
+
+  stl_los:
+    type: time_series
+    fcn: fcns.los_traj
+    group: stl_constraints
+    title: "LOS Angle vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Angle (deg)"
+    upper_limit: ${params.los_limit}
+

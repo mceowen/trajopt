@@ -1,0 +1,73 @@
+problem:
+  # ===============================
+  # INHERIT MODEL CONFIGS
+  # ===============================
+  inherit: ../../models/configs/reentry_3dof.yaml
+
+  # ===============================
+  # FUNCTION REGISTRY
+  # ===============================
+  fcns:
+    nonlinear_aero: "./ghame.py:nonlinear_aero"
+
+  # ===============================
+  # PARAMETERS
+  # ===============================
+  params:
+    planet.inherit: ../configs/planets/earth.yaml
+    vehicle.inherit: ../configs/vehicles/ghame.yaml
+
+  # ===============================
+  # CONSTRAINTS
+  # ===============================
+  constraints:
+    dynamics:
+      type: dynamics
+      fcn: fcns.dynamics
+
+    initial_state:
+      type: initial_state
+      value: ["${params.planet.r + 80e3}",  0.0, 0.0, 5612, -0.5,  90.0]
+
+    final_state:
+      type: final_state
+      value: ["${params.planet.r + 10e3}", null, null, 100, -10, null]
+
+    state_limits:
+      type: state_limits
+      lower: ["${params.planet.r}", null, null, 50, null, null]
+
+    control_limits:
+      type: control_limits
+      lower: [-80.0, 10]
+      upper: [80.0, 20]
+
+    bank_angle_rate_limit:
+      type: control_rate_limit
+      value: [5, 5]
+      idx: [0, 1]
+
+  # ===============================
+  # COSTS
+  # ===============================
+  costs:
+    max_crossrange:
+      type: terminal_state
+      idx: [2]
+      sign: -1
+
+# ===============================
+# METHOD CONFIGURATION
+# ===============================
+method.inherit: method.yaml
+
+# ===============================
+# ANALYSIS CONFIGURATION
+# ===============================
+analysis:
+  type: standalone
+  
+  compute_iters: false
+  show_iters: false
+  show_convergence: false
+  show_weights: false

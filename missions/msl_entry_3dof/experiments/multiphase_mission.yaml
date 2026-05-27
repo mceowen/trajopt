@@ -1,0 +1,46 @@
+inherit: mission.yaml
+
+# ===============================
+# FUNCTION REGISTRY
+# ===============================
+
+fcns:
+  altitude: ../../../models/reentry_3dof.py:altitude
+  coeffs_entry: ../msl.py:coeffs_entry
+  coeffs_descent: ../msl.py:coeffs_descent
+
+# ===============================
+# PHASES
+# ===============================
+
+phases:
+  entry:
+    start: 0
+    
+    fcns:
+      coeffs: fcns.coeffs_entry
+
+  descent:
+    start: 35
+    fcns:
+      coeffs: fcns.coeffs_descent
+
+# ===============================
+# CONSTRAINT OVERRIDES
+# ===============================
+
+constraints:
+  final_state:
+    value: ["${params.planet.r + 3e3}"]
+    idx: [0]
+    eps: [500]
+
+  chute_deploy:
+    type: nonconvex_inequality
+    fcn: fcns.altitude
+    nodes: ["${phases.descent.start}"]
+    lower: [8000]
+    upper: [12000]
+    scale: [10000]
+    eps: [100]
+

@@ -8,3 +8,5 @@ local
 local/
 **/plots/
 .mpypy_cache/
+docs/_build/
+docs/examples/notebooks/

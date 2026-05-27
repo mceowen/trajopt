@@ -1,197 +1,106 @@
-import numpy as np
 import jax
 import jax.numpy as jnp
-import diffrax
-import trajopt.utils.tools as tools
-from scipy.integrate import solve_ivp
-from scipy.interpolate import interp1d
+import numpy as np
 
+def _make_rk4_solver(nu_fn, dynamics, params, n_steps):
 
-def _foh(t, t_ref, vals):
-    k = jnp.clip(jnp.searchsorted(t_ref, t, side='right') - 1, 0, t_ref.shape[0] - 2)
-    a = (t_ref[k + 1] - t) / (t_ref[k + 1] - t_ref[k])
-    return a * vals[k] + (1 - a) * vals[k + 1]
+    @jax.jit
+    def solve(z0, tau0, tau_f):
+        dt   = (tau_f - tau0) / n_steps
+        taus = jnp.linspace(tau0, tau_f, n_steps + 1)
 
-
-def _barycentric_weights(t_ref):
-    n    = t_ref.shape[0]
-    diff = t_ref[:, None] - t_ref[None, :]
-    diff = diff.at[jnp.arange(n), jnp.arange(n)].set(1.0)
-    return 1.0 / jnp.prod(diff, axis=1)
-
-
-def _lagrange(t, t_ref, vals, w):
-    diffs = jnp.where(t - t_ref == 0.0, 1e-30, t - t_ref)
-    terms = w / diffs
-    return (terms @ vals) / jnp.sum(terms)
-
-
-def _jit_cached(method, name, fn):
-    if not hasattr(method, name):
-        setattr(method, name, jax.jit(fn))
-    return getattr(method, name)
-
-
-def propagate_znu(z0, nu, problem, method, compiled_attr_name="_jit_propagate_znu"):
-    dynamics    = problem.constraints.get(type="dynamics")[0].fcn
-    params      = problem.params
-    idx         = problem.index_map.indices
-    N           = nu.shape[0]
-    use_ps      = getattr(method.flags, 'discretize', 'ms') == 'ps'
-    z0_jax      = jnp.asarray(z0)
-    nu_jax      = jnp.asarray(nu)
-    tau_dense   = jnp.linspace(0.0, 1.0, 1000)
-    phase_sched = {k: jnp.asarray(v) for k, v in params.pop('_phase_schedule', {}).items()}
-
-    if use_ps:
-        from trajopt.methods.scp.discretize import compute_ps_differentiation_matrix
-        _, etau, _, _      = compute_ps_differentiation_matrix(N - 1)
-        tau_ref            = jnp.asarray((etau + 1.0) / 2.0)
-        bary_w             = _barycentric_weights(tau_ref)
-        compiled_attr_name = "_jit_propagate_znu_ps"
-    else:
-        tau_ref = jnp.linspace(0.0, 1.0, N)
-        bary_w  = None
-
-    def interp(tau, nu, tau_ref, bary_w):
-        return _lagrange(tau, tau_ref, nu, bary_w) if bary_w is not None else _foh(tau, tau_ref, nu)
-
-    def _solve(z0, nu, tau_ref, tau_dense, bary_w):
-        def f_dot(tau, z, _):
-            k = jnp.clip(jnp.floor(tau * (N - 1)).astype(jnp.int32), 0, N - 1)
-            p = tools.AttrDict({**params, **{key: arr[k] for key, arr in phase_sched.items()}})
-            return dynamics(z, interp(tau, nu, tau_ref, bary_w), p)
-        return diffrax.diffeqsolve(
-            diffrax.ODETerm(f_dot), diffrax.Dopri5(),
-            t0=0.0, t1=1.0, dt0=None, y0=z0,
-            stepsize_controller=diffrax.PIDController(rtol=1e-6, atol=1e-6),
-            saveat=diffrax.SaveAt(ts=tau_dense),
-            max_steps=65536,
-        )
-
-    sol   = _jit_cached(method, compiled_attr_name, _solve)(z0_jax, nu_jax, tau_ref, tau_dense, bary_w)
-    z_nl  = np.asarray(sol.ys)
-    nu_nl = np.asarray(jax.vmap(lambda tau: interp(tau, nu_jax, tau_ref, bary_w))(tau_dense))
-    t_nl  = z_nl[:, idx.z.time].squeeze(-1)
-
-    return t_nl, z_nl, nu_nl
-
-
-def propagate_znu_rk4(z0, nu, problem, method, n_steps=10000):
-    """Fixed-step RK4 propagation of the augmented state (z,nu) system."""
-    dynamics    = problem.constraints.get(type="dynamics")[0].fcn
-    params      = problem.params
-    idx         = problem.index_map.indices
-    N           = nu.shape[0]
-    use_ps      = getattr(method.flags, 'discretize', 'ms') == 'ps'
-    z0_jax      = jnp.asarray(z0)
-    nu_jax      = jnp.asarray(nu)
-    phase_sched = {k: jnp.asarray(v) for k, v in params.pop('_phase_schedule', {}).items()}
-
-    if use_ps:
-        from trajopt.methods.scp.discretize import compute_ps_differentiation_matrix
-        _, etau, _, _      = compute_ps_differentiation_matrix(N - 1)
-        tau_ref            = jnp.asarray((etau + 1.0) / 2.0)
-        bary_w             = _barycentric_weights(tau_ref)
-    else:
-        tau_ref = jnp.linspace(0.0, 1.0, N)
-        bary_w  = None
-
-    dt = 1.0 / n_steps
-    taus = jnp.linspace(0.0, 1.0, n_steps + 1)
-
-    def interp(tau, nu, tau_ref, bary_w):
-        return _lagrange(tau, tau_ref, nu, bary_w) if bary_w is not None else _foh(tau, tau_ref, nu)
-
-    def _solve(z0, nu, tau_ref, bary_w):
-        def f(tau, z):
-            k = jnp.clip(jnp.floor(tau * (N - 1)).astype(jnp.int32), 0, N - 1)
-            p = tools.AttrDict({**params, **{key: arr[k] for key, arr in phase_sched.items()}})
-            return dynamics(z, interp(tau, nu, tau_ref, bary_w), p)
-
-        def rk4_step(z, tau):
-            k1 = f(tau,          z)
-            k2 = f(tau + dt / 2, z + (dt / 2) * k1)
-            k3 = f(tau + dt / 2, z + (dt / 2) * k2)
-            k4 = f(tau + dt,     z + dt * k3)
+        def step(z, tau):
+            nu = nu_fn(z, tau)
+            k1 = dynamics(z,                nu,                                     params)
+            k2 = dynamics(z + (dt/2) * k1,  nu_fn(z + (dt/2) * k1, tau + dt / 2),   params)
+            k3 = dynamics(z + (dt/2) * k2,  nu_fn(z + (dt/2) * k2, tau + dt / 2),   params)
+            k4 = dynamics(z + dt * k3,      nu_fn(z + dt * k3,     tau + dt),       params)
             z_next = z + (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
-            return z_next, z_next
+            return z_next, (z, nu)
 
-        _, z_all = jax.lax.scan(rk4_step, z0, taus[:-1])
-        return z_all
+        z_f, (z_traj, nu_traj) = jax.lax.scan(step, z0, taus[:-1])
 
-    solve_fn = _jit_cached(method, "_jit_propagate_znu_rk4", _solve)
-    z_all    = np.asarray(solve_fn(z0_jax, nu_jax, tau_ref, bary_w))
-    nu_all   = np.asarray(jax.vmap(lambda tau: interp(tau, nu_jax, tau_ref, bary_w))(taus[1:]))
-    t_nl     = z_all[:, idx.z.time].squeeze(-1)
+        z_traj  = jnp.concatenate([z_traj,  z_f[None]])
+        nu_traj = jnp.concatenate([nu_traj, nu_fn(z_f, taus[-1])[None]])
+        return taus, z_traj, nu_traj
 
-    return t_nl, z_all, nu_all
+    return solve
 
 
-def propagate_txu(x0, u, t_ref, t_nl, problem, method, compiled_attr_name=None):
-    dynamics  = problem.constraints.get(type="dynamics")[0].fcn_base
-    params    = problem.params
-    x0_jax    = jnp.asarray(x0)
-    u_jax     = jnp.asarray(u)
-    t_ref_jax = jnp.asarray(t_ref)
-    t_nl_jax  = jnp.asarray(t_nl)
+def make_node_propagation_solver(dynamics, params, n_steps):
+    @jax.jit
+    def solve(z0, tau0, tau_f, tau_ref, nu_ref):
+        dt   = (tau_f - tau0) / n_steps
+        taus = jnp.linspace(tau0, tau_f, n_steps + 1)
+        N_nodes = tau_ref.shape[0]
 
-    def _solve(x0, u, t_ref, t_nl):
-        def f_dot(t, x, _):
-            return dynamics(t, x, _foh(t, t_ref, u), params)
-        return diffrax.diffeqsolve(
-            diffrax.ODETerm(f_dot), diffrax.Dopri5(),
-            t0=t_ref[0], t1=t_ref[-1], dt0=None, y0=x0,
-            stepsize_controller=diffrax.PIDController(rtol=1e-6, atol=1e-6),
-            saveat=diffrax.SaveAt(ts=t_nl),
+        def nu_interp(z, tau):
+            k = jnp.clip(jnp.searchsorted(tau_ref, tau, side='right') - 1, 0, N_nodes - 2)
+            a = (tau - tau_ref[k]) / (tau_ref[k + 1] - tau_ref[k])
+            return (1 - a) * nu_ref[k] + a * nu_ref[k + 1]
+
+        def step(z, tau):
+            nu = nu_interp(z, tau)
+            k1 = dynamics(z,               nu,                                        params)
+            k2 = dynamics(z + (dt/2) * k1, nu_interp(z + (dt/2) * k1, tau + dt / 2), params)
+            k3 = dynamics(z + (dt/2) * k2, nu_interp(z + (dt/2) * k2, tau + dt / 2), params)
+            k4 = dynamics(z + dt * k3,     nu_interp(z + dt * k3,     tau + dt),      params)
+            z_next = z + (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
+            return z_next, (z, nu)
+
+        z_f, (z_traj, nu_traj) = jax.lax.scan(step, z0, taus[:-1])
+        z_traj  = jnp.concatenate([z_traj,  z_f[None]])
+        nu_traj = jnp.concatenate([nu_traj, nu_interp(z_f, taus[-1])[None]])
+        return taus, z_traj, nu_traj
+
+    return solve
+
+
+def propagate_rk4(z0, tau0, tau_f, nu_fn, dynamics, params, n_steps=1000):
+    solve = _make_rk4_solver(nu_fn, dynamics, params, n_steps)
+    taus, z_traj, nu_traj = solve(
+        jnp.asarray(z0),
+        jnp.asarray(float(tau0)),
+        jnp.asarray(float(tau_f)),
+    )
+    return np.asarray(taus), np.asarray(z_traj), np.asarray(nu_traj)
+
+
+def propagate_from_nodes(z_nodes, tau_nodes, nu_nodes, dynamics, params,
+                         n_dense_per_seg=50, _solver=None):
+    N   = z_nodes.shape[0]
+    n_z = z_nodes.shape[1]
+
+    if _solver is None:
+        _solver = make_node_propagation_solver(dynamics, params, n_dense_per_seg)
+
+    tau_ref = jnp.asarray(tau_nodes)
+    nu_ref  = jnp.asarray(nu_nodes)
+
+    segments = []
+    for k in range(N - 1):
+        taus_k, z_k, nu_k = _solver(
+            jnp.asarray(z_nodes[k]),
+            jnp.asarray(float(tau_nodes[k])),
+            jnp.asarray(float(tau_nodes[k + 1])),
+            tau_ref,
+            nu_ref,
         )
+        segments.append((np.asarray(taus_k), np.asarray(z_k), np.asarray(nu_k)))
 
-    sol   = _jit_cached(method, compiled_attr_name, _solve)(x0_jax, u_jax, t_ref_jax, t_nl_jax) \
-            if compiled_attr_name else _solve(x0_jax, u_jax, t_ref_jax, t_nl_jax)
-    u_out = np.asarray(jax.vmap(lambda t: _foh(t, t_ref_jax, u_jax))(t_nl_jax))
+    n_nu    = segments[0][2].shape[1]
+    nan_tau = np.array([np.nan])
+    nan_z   = np.full((1, n_z),  np.nan)
+    nan_nu  = np.full((1, n_nu), np.nan)
 
-    return np.asarray(t_nl_jax), np.asarray(sol.ys), u_out
+    flat_tau, flat_z, flat_nu = [], [], []
+    for k, (tau_k, z_k, nu_k) in enumerate(segments):
+        flat_tau.append(tau_k)
+        flat_z.append(z_k)
+        flat_nu.append(nu_k)
+        if k < N - 2:
+            flat_tau.append(nan_tau)
+            flat_z.append(nan_z)
+            flat_nu.append(nan_nu)
 
-
-def propagate_txu_rk4(x0, u, t_ref, problem, method, n_substeps=50):
-    """Fixed-step RK4 propagation of physical dynamics dx/dt = f(t, x, u)."""
-    dynamics = problem.constraints.get(type="dynamics")[0].fcn_base
-    params   = problem.params
-    N        = t_ref.shape[0]
-    x0_jax   = jnp.asarray(x0)
-    u_jax    = jnp.asarray(u)
-    t_jax    = jnp.asarray(t_ref)
-
-    def _solve(x0, u, t_ref):
-        def propagate_interval(x, k):
-            t_k  = t_ref[k]
-            t_kp = t_ref[k + 1]
-            dt   = (t_kp - t_k) / n_substeps
-            ts   = t_k + jnp.arange(n_substeps) * dt
-
-            def rk4_step(x, t):
-                u_t = _foh(t, t_ref, u)
-                k1 = dynamics(t,          x,                  u_t, params)
-                k2 = dynamics(t + dt / 2, x + (dt / 2) * k1, _foh(t + dt/2, t_ref, u), params)
-                k3 = dynamics(t + dt / 2, x + (dt / 2) * k2, _foh(t + dt/2, t_ref, u), params)
-                k4 = dynamics(t + dt,     x + dt * k3,       _foh(t + dt, t_ref, u), params)
-                return x + (dt / 6) * (k1 + 2*k2 + 2*k3 + k4), None
-
-            x_next, _ = jax.lax.scan(rk4_step, x, ts)
-            return x_next, x_next
-
-        _, x_all = jax.lax.scan(propagate_interval, x0, jnp.arange(N - 1))
-        return jnp.concatenate([x0[None, :], x_all])
-
-    solve_fn = _jit_cached(method, "_jit_propagate_txu_rk4", _solve)
-    x_out    = np.asarray(solve_fn(x0_jax, u_jax, t_jax))
-    return np.asarray(t_ref), x_out, np.asarray(u)
-
-
-def propagate_scipy_rk45(x0, u_ref, t_ref, t_nl, problem, method, dynamics=None):
-    dynamics = problem.constraints.get(type="dynamics")[0].fcn_base if dynamics is None else dynamics
-    params   = problem.params
-    u_interp = interp1d(t_ref, u_ref, axis=0, fill_value="extrapolate")
-    def f_dot(t, x): return np.array(dynamics(t, x, u_interp(t), params))
-    sol      = solve_ivp(f_dot, [t_nl[0], t_nl[-1]], x0, t_eval=t_nl, method='RK45', rtol=1e-8, atol=1e-8)
-    return sol.t, sol.y.T, u_interp(sol.t)
+    return np.concatenate(flat_tau), np.concatenate(flat_z), np.concatenate(flat_nu)

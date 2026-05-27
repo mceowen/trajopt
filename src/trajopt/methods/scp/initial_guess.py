@@ -1,168 +1,108 @@
+from typing import TYPE_CHECKING
+
 import numpy as np
+import jax.numpy as jnp
 from trajopt.methods.scp import discretize
 from trajopt.methods.scp import integrators
-from scipy.interpolate import interp1d
-from trajopt.utils.tools import AttrDict
 
 
-def set_initial_guess(problem,method):
-        
-        initial_guess_type = getattr(method.config.method.guess, "type", "propagation")
+def set_initial_guess(problem, method):
+    guess_type = getattr(method.config.method.guess, "type", "propagation")
 
-        if initial_guess_type == "propagation":
-            nonlinear_initial_guess(problem, method)
-        
-        elif initial_guess_type == "straight_line":
-            straight_line_initial_guess(problem, method)
+    if guess_type == "propagation":
+        nonlinear_initial_guess(problem, method)
+    elif guess_type == "straight_line":
+        straight_line_initial_guess(problem, method)
 
-        augment_initial_guess(problem, method)
-
-        method.cost_init = discretize.compute_nonconvex_costs(method.initial_guess.z, method.initial_guess.nu, problem, method)
-
-# TODO(Skye): Possibly add actual computation of beta using index_map helpers
-def augment_initial_guess(problem, method):
-    idx     = problem.index_map.indices
-    N       = method.index_map.N.time_grid
-
-    init                        = method.initial_guess
-
-    t_init                      = np.asarray(init.t).reshape(-1)
-    x_init                      = np.asarray(init.x)
-    u_init                      = np.asarray(init.u)
-
-    discretize_flag = getattr(method.flags, 'discretize', 'ms')
-
-    if  discretize_flag == 'ps':
-        _, etau, _, _ = discretize.compute_ps_differentiation_matrix(N - 1)
-        t0, tf = t_init[0], t_init[-1]
-        t_lgr  = t0 + (etau + 1.0) / 2.0 * (tf - t0)
-        x_init = interp1d(t_init, x_init, axis=0, fill_value='extrapolate')(t_lgr)
-        u_init = interp1d(t_init, u_init, axis=0, fill_value='extrapolate')(t_lgr)
-        t_init = t_lgr
-        init.t = t_init
-
-    z_init                      = np.zeros((N, problem.index_map.n.z))
-    z_init[:, idx.z.state]      = x_init
-    z_init[:, idx.z.time]       = t_init.reshape(-1, 1)
-    z_init[:, idx.z.ctcs]       = 0.0
-
-    nu_init                     = np.zeros((N, problem.index_map.n.nu))
-    nu_init[:, idx.nu.control]  = u_init
-
-    dt_ref                      = np.diff(t_init.reshape(-1, 1), axis=0)
-    init.dt                     = dt_ref
-
-    if discretize_flag == 'ps':
-        T                           = float(t_init[-1] - t_init[0])
-        nu_init[:, idx.nu.dilation_factor] = T
-    else:
-        delta_tau                   = 1.0 / (N - 1)
-        dt_init                     = np.zeros((N, 1))
-        dt_init[:-1, 0]             = dt_ref[:, 0]
-        dt_init[-1, 0]              = dt_ref[-1, 0]
-        nu_init[:, idx.nu.dilation_factor] = dt_init / delta_tau
-
-    init.z  = z_init
-    init.nu = nu_init
-
-    if hasattr(init, 't_dense'):
-        t_d  = np.asarray(init.t_dense).reshape(-1)
-        x_d  = np.asarray(init.x_dense)
-        u_d  = np.asarray(init.u_dense)
-        N_d  = len(t_d)
-        z_dense              = np.zeros((N_d, problem.index_map.n.z))
-        z_dense[:, idx.z.state] = x_d
-        z_dense[:, idx.z.time]  = t_d.reshape(-1, 1)
-        nu_dense                = np.zeros((N_d, problem.index_map.n.nu))
-        nu_dense[:, idx.nu.control] = u_d
-        init.z_dense  = z_dense
-        init.nu_dense = nu_dense
-    else:
-        init.z_dense  = z_init
-        init.nu_dense = nu_init
-
-    return z_init, nu_init
-
-def straight_line_initial_guess(problem, method):
-
-    init = method.initial_guess
-
-    line_init_u_init            = method.config.method.guess.line_guess_u_init @ problem.nondim.M.control["d2nd"]
-    t_init                      = np.asarray(init.t).reshape(-1)
-
-    
-    init_state_constraint       = problem.constraints.get(type="initial_state")[0]
-    terminal_state_constraint   = problem.constraints.get(type="final_state")[0]
-
-    if len(init_state_constraint.idx) == problem.index_map.n.state:
-        xi_full = init_state_constraint.value
-    else:
-        xi_guess = getattr(init_state_constraint, 'value_guess', None)
-        if xi_guess is not None:
-            xi_full = xi_guess
-        else:
-            raise ValueError("Initial_state.xi_guess must be provided for straight_line_initial_guess if initial_state is not fully defined")
-
-    if len(terminal_state_constraint.idx) == problem.index_map.n.state:
-        xf_full = terminal_state_constraint.value
-    else:
-        xf_guess = getattr(terminal_state_constraint, 'value_guess', None)
-        if xf_guess is not None:
-            xf_full = xf_guess
-        else:
-            raise ValueError("Final_state.xf_guess must be provided for straight_line_initial_guess if final_state is not fully defined")
-
-    # Initial state
-    t_start_end_pts     = np.array([t_init[0], t_init[-1]])
-    x_start_end_pts     = np.vstack([xi_full, xf_full])
-    x_init_interp_func  = interp1d(t_start_end_pts, x_start_end_pts, axis=0)
-    x_init              = x_init_interp_func(t_init)
-
-    # Initial control
-    u_init_interp_func  = interp1d(t_init, line_init_u_init, axis=0)
-    u_init              = u_init_interp_func(t_init)
-
-    init.t       = t_init
-    init.x       = x_init
-    init.u       = u_init
-    init.t_dense = t_init
-    init.x_dense = x_init
-    init.u_dense = u_init
-
-    return t_init, x_init, u_init
-
-def nonlinear_initial_guess(problem, method):
-    init                = method.initial_guess
-
-    x0                  = problem.constraints.get(type="initial_state")[0].value
-    dynamics_cnstr      = problem.constraints.get(type="dynamics")[0]
-
-    # ---- Control initialization ----
-    nl_init_u_start     = problem.nondim.M.control.d2nd @ method.config.method.guess.nl_guess_u_start
-    nl_init_u_stop      = problem.nondim.M.control.d2nd @ method.config.method.guess.nl_guess_u_stop
-
-    t_init              = np.asarray(init.t).reshape(-1)
-
-    # Linearly interpolate control between start and stop values
-    t_start_end_pts     = np.array([t_init[0], t_init[-1]])
-    u_start_end_pts     = np.vstack([nl_init_u_start, nl_init_u_stop])
-    u_init_interp_func  = interp1d(t_start_end_pts, u_start_end_pts, axis=0)
-    u_init              = u_init_interp_func(t_init)
-
-    # Propagate physical dynamics dx/dt = f(t, x, u) using fixed-step RK4
-    t_nl_out, x_nl, _ = integrators.propagate_txu_rk4(
-        x0,
-        u_init,
-        t_init,
-        problem,
-        method,
+    method.cost_init = discretize.compute_nonconvex_costs(
+        method.initial_guess.z, method.initial_guess.nu, problem, method
     )
 
-    init.t        = t_init
-    init.x        = x_nl
-    init.u        = u_init
-    init.t_dense  = t_nl_out
-    init.x_dense  = x_nl
-    init.u_dense  = u_init
 
-    return t_init, x_nl, u_init
+def straight_line_initial_guess(problem, method):
+    imap = problem.index_map
+    init = method.initial_guess
+    N    = method.index_map.N.time_grid
+    cfg  = method.config.method.guess
+
+    x0 = problem.nondim.M.state.d2nd   @ np.atleast_1d(cfg.x_start)
+    xf = problem.nondim.M.state.d2nd   @ np.atleast_1d(cfg.x_stop)
+    u0 = problem.nondim.M.control.d2nd @ np.atleast_1d(cfg.u_start)
+    uf = problem.nondim.M.control.d2nd @ np.atleast_1d(cfg.u_stop)
+
+    t = np.asarray(init.t).reshape(-1)
+    if getattr(method.flags, 'discretize', 'ms') == 'ps':
+        _, etau, _, _ = discretize.compute_ps_differentiation_matrix(N - 1)
+        tau = (etau + 1.0) / 2.0
+        t   = t[0] + tau * (t[-1] - t[0])
+
+    Ts    = float(t[-1] - t[0])
+    alpha = np.linspace(0, 1, N).reshape(-1, 1)
+
+    x = (1 - alpha) * x0 + alpha * xf
+    u = (1 - alpha) * u0 + alpha * uf
+
+    beta = np.zeros((N, imap.n.ctcs))
+    s    = np.full((N, 1), Ts)
+    z, nu = imap.pack_znu(x, t.reshape(-1, 1), beta, u, s)
+
+    init.t        = t
+    init.dt       = np.diff(t.reshape(-1, 1), axis=0)
+    init.z        = z
+    init.nu       = nu
+    init.z_dense  = z
+    init.nu_dense = nu
+
+
+def nonlinear_initial_guess(problem, method):
+    init     = method.initial_guess
+    idx      = problem.index_map.indices
+    N        = method.index_map.N.time_grid
+    n_z      = problem.index_map.n.z
+    n_nu     = problem.index_map.n.nu
+    dynamics = problem.constraints.get(type="dynamics")[0].fcn
+    params   = problem.params
+
+    x0      = problem.constraints.get(type="initial_state")[0].value
+    u_start = problem.nondim.M.control.d2nd @ method.config.method.guess.u_start
+    u_stop  = problem.nondim.M.control.d2nd @ method.config.method.guess.u_stop
+
+    t = np.asarray(init.t).reshape(-1)
+    if getattr(method.flags, 'discretize', 'ms') == 'ps':
+        _, etau, _, _ = discretize.compute_ps_differentiation_matrix(N - 1)
+        tau = (etau + 1.0) / 2.0
+        t   = t[0] + tau * (t[-1] - t[0])
+    else:
+        tau = np.linspace(0.0, 1.0, N)
+    Ts     = float(t[-1] - t[0])
+
+    z0 = np.zeros(n_z)
+    z0[idx.z.state] = x0
+    z0[idx.z.time]  = t[0]
+
+    tau_ref  = jnp.linspace(0.0, 1.0, N)
+    u_ref    = jnp.asarray(np.linspace(0, 1, N).reshape(-1, 1) * (u_stop - u_start) + u_start)
+    ctrl_sl  = jnp.array(idx.nu.control)
+    dil_sl   = jnp.array(idx.nu.dilation_factor)
+    sigma    = jnp.asarray(Ts)
+
+    def nu_fn(z, tau):
+        k = jnp.clip(jnp.searchsorted(tau_ref, tau, side='right') - 1, 0, N - 2)
+        a = (tau - tau_ref[k]) / (tau_ref[k + 1] - tau_ref[k])
+        u = (1 - a) * u_ref[k] + a * u_ref[k + 1]
+        return jnp.zeros(n_nu).at[ctrl_sl].set(u).at[dil_sl].set(sigma)
+
+    n_sub   = 100
+    n_total = n_sub * (N - 1)
+    _, z_dense, nu_dense = integrators.propagate_rk4(
+        z0, 0.0, 1.0, nu_fn, dynamics, params, n_steps=n_total,
+    )
+
+    node_idx = np.clip(np.round(tau * n_total).astype(int), 0, n_total)
+
+    init.t        = t
+    init.dt       = np.diff(t.reshape(-1, 1), axis=0)
+    init.z        = z_dense[node_idx]
+    init.nu       = nu_dense[node_idx]
+    init.z_dense  = z_dense
+    init.nu_dense = nu_dense

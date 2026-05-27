@@ -11,17 +11,17 @@ USE_HARDCODED_NEWTON = False
 # Legendre polynomial helper
 # ---------------------------------------------------------------------
 def compute_legendre(N: int, x: np.ndarray, use_spartan: bool = USE_SPARTAN) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Evaluate the Legendre polynomial P_n(x) and its derivative P_n'(x).
+    """Evaluate the Legendre polynomial P_n(x) and its derivative P_n'(x).
 
     Inputs:
-    N :             Polynomial order.
-    x : Evaluation points.
-    use_spartan :   Use SPARTAN-style Legendre recursive computation if True, scipy computation if False.
+        N :             Polynomial order.
+        x : Evaluation points.
+        use_spartan :   Use SPARTAN-style Legendre recursive computation if True, scipy computation if False.
 
     Outputs:
-    Pn :            Legendre polynomial evaluated at x.
-    dPn :           Derivative d/dx P_n(x) evaluated at x.
+        Pn :            Legendre polynomial evaluated at x.
+        dPn :           Derivative d/dx P_n(x) evaluated at x.
+
     """
     x = np.asarray(x, dtype=float)
 
@@ -30,7 +30,7 @@ def compute_legendre(N: int, x: np.ndarray, use_spartan: bool = USE_SPARTAN) -> 
 
         if N == 0:
             return np.ones_like(x), np.zeros_like(x)
-        elif N == 1:
+        if N == 1:
             return x.copy(), np.ones_like(x)
 
         # P_{0}, P'_{0}
@@ -56,29 +56,30 @@ def compute_legendre(N: int, x: np.ndarray, use_spartan: bool = USE_SPARTAN) -> 
             Pn, Dn = P_temp, D_temp
 
         return Pn, Dn
-    
-    else:
-        if N == 0:
-            return np.ones_like(x), np.zeros_like(x)
 
-        Pn      = sp.special.eval_legendre(N, x)
-        Pnm1    = sp.special.eval_legendre(N - 1, x)
+    if N == 0:
+        return np.ones_like(x), np.zeros_like(x)
 
-        dPn     = N * (x * Pn - Pnm1) / (x**2 - 1.0)
+    Pn      = sp.special.eval_legendre(N, x)
+    Pnm1    = sp.special.eval_legendre(N - 1, x)
 
-        return Pn, dPn
- 
+    dPn     = N * (x * Pn - Pnm1) / (x**2 - 1.0)
+
+    return Pn, dPn
+
 # ---------------------------------------------------------------------
 # Flipped Legendre-Radau polynomial
 # ---------------------------------------------------------------------
 def flipped_radau_polynomial(N: int, tau: np.ndarray, use_spartan: bool = USE_SPARTAN) -> np.ndarray:
-    """
+    """Evaluate the flipped Legendre-Radau polynomial R_n(tau).
+
     Inputs:
-    N :             Polynomial order
-    tau :           Points to evaluate.
-    use_spartan :   Legendre polynomimal computation method
+        N :             Polynomial order
+        tau :           Points to evaluate.
+        use_spartan :   Legendre polynomimal computation method
 
     Outputs:        R_n(tau).
+
     """
     tau     = np.asarray(tau, dtype=float)
 
@@ -89,13 +90,11 @@ def flipped_radau_polynomial(N: int, tau: np.ndarray, use_spartan: bool = USE_SP
 
 
 def flipped_radau_polynomial_derivative(N: int, tau: np.ndarray) -> np.ndarray:
-    """
-    Derivative of the flipped Legendre-Radau polynomial
-    """
+    """Derivative of the flipped Legendre-Radau polynomial."""
     tau         = np.asarray(tau, dtype=float)
     _, dLn      = compute_legendre(N, tau, use_spartan=USE_SPARTAN)
     _, dLnm1    = compute_legendre(N - 1, tau, use_spartan=USE_SPARTAN)
-    
+
     return dLn - dLnm1
 
 
@@ -104,14 +103,16 @@ def flipped_radau_polynomial_derivative(N: int, tau: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------------
 # computes flipped Radau collocation nodes, full node set, quadrature weights
 def flipped_radau_nodes_and_weights(N: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
+    """Compute flipped Radau collocation nodes, full node set, and quadrature weights.
+
     Inputs:
-    N :     # of collocation nodes.
+        N :     # of collocation nodes.
 
     Outputs:
-    tau :   Collocation nodes (including +1, excluding -1).
-    etau :  Full discrete node set for interpolation (includes -1).
-    w :     Quadrature weights associated with tau-vector.
+        tau :   Collocation nodes (including +1, excluding -1).
+        etau :  Full discrete node set for interpolation (includes -1).
+        w :     Quadrature weights associated with tau-vector.
+
     """
     if N < 1:
         raise ValueError("N must be >= 1")
@@ -164,7 +165,7 @@ def flipped_radau_nodes_and_weights(N: int) -> tuple[np.ndarray, np.ndarray, np.
 
             tau_std[idx] = tau_old[idx] - ((1 - tau_old[idx]) / N) * \
                 (L[idx, N-1] + L[idx, N]) / (L[idx, N-1] - L[idx, N])
-    
+
     # SciPy-based Newton-Raphson root finding for LGR nodes
     else:
 
@@ -202,10 +203,12 @@ def flipped_radau_nodes_and_weights(N: int) -> tuple[np.ndarray, np.ndarray, np.
 # computes the differentiation matrix D, shape (N, N+1)
 
 def differentiation_matrix(etau: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
+    """Compute the pseudospectral differentiation matrix from the full node set.
+
     Inputs:  - 1D array of length m = N+1 containing the full node set (including -1).
     Outputs: D - differentiation matrix of shape (N, N+1) mapping state values at `full_nodes`
                  to derivatives at the collocation nodes (all nodes except the initial node).
+
     """
     xxPlusEnd = np.asarray(etau, dtype=float)
     M = len(xxPlusEnd)
@@ -234,6 +237,7 @@ def differentiation_matrix(etau: np.ndarray) -> tuple[np.ndarray, np.ndarray, np
     return D, D_full, D2
 
 def differentiation_matrix_compare(full_nodes: np.ndarray) -> np.ndarray:
+    """Compute the fLGR differentiation matrix via an alternative barycentric form."""
     x = np.asarray(full_nodes, dtype=float)
     m = len(x)
 
@@ -260,22 +264,24 @@ def differentiation_matrix_compare(full_nodes: np.ndarray) -> np.ndarray:
 
 
 def flipped_radau_differential_operator(N: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """
+    """Compute the flipped Legendre-Radau nodes, weights, and differential operator.
+
     Inputs:
-    N : Number of collocation nodes.
+        N : Number of collocation nodes.
 
     Outputs:
-    tau : Collocation nodes.
-    etau : Full node set including -1.
-    w : Quadrature weights.
-    D : Differential operator mapping state values at etau to derivatives at collocation nodes tau.
+        tau : Collocation nodes.
+        etau : Full node set including -1.
+        w : Quadrature weights.
+        D : Differential operator mapping state values at etau to derivatives at collocation nodes tau.
+
     """
     tau, etau, w    = flipped_radau_nodes_and_weights(N)
     D, _, _         = differentiation_matrix(etau)
 
     #D_compare       = differentiation_matrix_compare(etau)
     #D = D_compare
-   
+
     return tau, etau, w, D
 
 
@@ -283,10 +289,8 @@ def flipped_radau_differential_operator(N: int) -> tuple[np.ndarray, np.ndarray,
 # Lagrange interpolation (Eq. 9, CEAS2017)
 # ---------------------------------------------------------------------
 
-def lagrange_basis(eval_points, nodes):
-    """
-    Compute Lagrange basis polynomials P_i(t) evaluated at eval_points.
-    """
+def lagrange_basis(eval_points: np.ndarray, nodes: np.ndarray) -> np.ndarray:
+    """Compute Lagrange basis polynomials P_i(t) evaluated at eval_points."""
     t = np.asarray(eval_points, dtype=float)
     ti = np.asarray(nodes, dtype=float)
 
@@ -303,10 +307,8 @@ def lagrange_basis(eval_points, nodes):
     return P
 
 
-def lagrange_interpolate(eval_points, nodes, values):
-    """
-    Evaluate interpolating polynomial.
-    """
+def lagrange_interpolate(eval_points: np.ndarray, nodes: np.ndarray, values: np.ndarray) -> np.ndarray:
+    """Evaluate interpolating polynomial."""
     P = lagrange_basis(eval_points, nodes)
     return P @ values
 
