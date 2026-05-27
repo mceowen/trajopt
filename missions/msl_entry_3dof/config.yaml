@@ -59,10 +59,10 @@ problem:
       type: terminal
       fcn: fcns.velocity
 
-    # control_rate_regularization:
+    # control_regularization:
     #   type: rate_regularization
     #   set: control
-    #   w: 1.0
+    #   w: 0.1
 
 # ===============================
 # METHOD CONFIGURATION

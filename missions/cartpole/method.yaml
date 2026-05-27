@@ -21,6 +21,9 @@ guess:
   t_start: 0.0
   t_stop: 2.0
 
+  x_start: [0, 0, 0, 0]
+  x_stop: [1, "${np.pi}", 0, 0]
+
   u_start: [0]
   u_stop: [0]
 
@@ -29,7 +32,7 @@ guess:
 # ===============================
 
 conv:
-  eps_state:  0.01
+  eps_state:  0.001
   eps_dyn:    0.00001
   eps_defect: 1.0
   eps_cost:   1

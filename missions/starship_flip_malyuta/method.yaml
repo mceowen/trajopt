@@ -20,7 +20,7 @@ guess:
   t_start: 0.0
   t_stop: 20
 
-  x_start: [100.0, 600.0, 0, "${-params.vterm}", "${np.deg2rad(85.0)}", 0.0]
+  x_start: [100.0, 600.0, 0, "${-params.vterm}", "${np.deg2rad(90.0)}", 0.0]
   x_stop: [0, 0, 0, -0.1, 0, 0]
 
   u_start: [500000, 0]
@@ -31,7 +31,7 @@ guess:
 # ===============================
 
 conv:
-  eps_state:  0.001
+  eps_state:  0.0001
   eps_dyn:    0.001
   eps_defect: 1.0
   eps_cost:   1

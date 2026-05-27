@@ -108,7 +108,7 @@ problem:
     u_squared:
       type: running
       fcn: fcns.u_squared_cost
-      w: 1.0
+      w: 10.0
 
 # ===============================
 # METHOD CONFIGURATION
