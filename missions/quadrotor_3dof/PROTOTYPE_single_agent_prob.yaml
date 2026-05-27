@@ -1,0 +1,75 @@
+# ===============================
+# INHERIT MODEL CONFIGS
+# ===============================
+inherit: ../../models/configs/quadrotor_3dof.yaml
+
+# ===============================
+# FUNCTION REGISTRY
+# ===============================
+fcns:
+  thrust_norm: ../../models/quadrotor_3dof.py:thrust_norm
+  obstacle:    ../../models/quadrotor_3dof.py:obstacle
+  max_thrust_cone: ../../models/quadrotor_3dof.py:max_thrust_cone
+  height:      ../../models/quadrotor_3dof.py:height
+  pos_x:       ../../models/quadrotor_3dof.py:pos_x
+  pos_y:       ../../models/quadrotor_3dof.py:pos_y
+  xz:          ../../models/quadrotor_3dof.py:xz
+  yz:          ../../models/quadrotor_3dof.py:yz
+
+# ===============================
+# PARAMETERS
+# ===============================
+params:
+  planet:
+    inherit: ../configs/planets/earth.yaml
+  vehicle:
+    inherit: ../configs/vehicles/quadrotor.yaml
+
+# ===============================
+# CONSTRAINTS
+# ===============================
+constraints:
+  dynamics:
+    type: dynamics
+    fcn: fcns.dynamics
+
+  initial_state:
+    type: initial_state
+    value: [0.0, 0.0, 5.0, 0.0, 0.5, 0.0]
+
+  final_state:
+    type: final_state
+    value: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
+    eps: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
+
+  max_thrust:
+    type: convex_inequality
+    fcn: fcns.max_thrust_cone
+    dimension: 1
+    scale: [1.0]
+
+  min_thrust:
+    type: nonconvex_inequality
+    fcn: fcns.thrust_norm
+    lower: "${params.vehicle.T_min}"
+    dimension: 1
+    scale: [1.0]
+
+  obstacle:
+    type: nonconvex_inequality
+    fcn: fcns.obstacle
+    lower: 4.0
+    dimension: 1
+    scale: [4.0]
+
+  final_time:
+    type: final_time
+    lower: 1.0
+    upper: 10.0
+
+# ===============================
+# COSTS
+# ===============================
+costs:
+  min_time:
+    type: min_time

@@ -1,0 +1,38 @@
+problem:
+  segments:
+    drone1:
+      inherit: ./single_agent_prob.yaml
+
+    drone2:
+      inherit: ./single_agent_prob.yaml
+  
+
+  # ===============================
+  # TRAJECTORIES
+  # ===============================
+  trajectories:
+    xz:
+      type: spatial
+      fcn: fcns.xz
+      group: stc_check
+
+    yz:
+      type: spatial
+      fcn: fcns.yz
+      group: stc_check
+
+# ===============================
+# METHOD CONFIGURATION
+# ===============================
+method.inherit: method.yaml
+
+# ===============================
+# ANALYSIS CONFIGURATION
+# ===============================
+analysis:
+  type: standalone
+  
+  compute_iters: true
+  show_iters: true
+  show_convergence: false
+  show_weights: false
