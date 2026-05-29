@@ -415,7 +415,9 @@ class SCP:
 
         max_iter = int(self.config.method.conv.iter_max)
 
-        for _ in range(max_iter + 1):
+        solve_start = None
+
+        for i in range(max_iter + 1):
             self.update_cvxpy_parameters()
             self.cp_subproblem.solve(warm_start=False, **self.config.method.solver_opts)
             
@@ -426,12 +428,19 @@ class SCP:
             self.update_current_iter_data()
             self.display_subprob_status()
 
+            if i == 0:
+                solve_start = time.perf_counter()
+
             if self.iter_data_list[-1].converged:
                 print("Terminated from convergence criteria!")
                 break
 
         if self.iter_data_list[-1].iter_num > 0 and not self.iter_data_list[-1].converged:
             print("Terminated from hitting maximum iterations!")
+
+        if solve_start is not None:
+            total_elapsed_ms = (time.perf_counter() - solve_start) * 1000.0
+            print(f"\nTotal elapsed time (from iteration 2 onward): {total_elapsed_ms:.1f} ms")
 
     def display_subprob_status(self) -> None:
         """Print a one-line status summary for the current SCP iteration."""
