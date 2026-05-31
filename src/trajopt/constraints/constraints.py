@@ -2,9 +2,7 @@ import inspect
 from collections.abc import Callable
 from functools import partial
 from typing import Any
-
 import jax.numpy as jnp
-
 from trajopt.constraints import constraint_types
 
 
@@ -24,6 +22,7 @@ class Constraints:
         self.constraint_list = []
         self.constraint_type_list = []
         self.params = config.problem.params
+        self.ctcs_flag = config.method.get("flags", {}).get("ctcs", 0)
 
         for i, (cnstr_name, cnstr_config_i) in enumerate(config.problem.constraints.items()):
             cnstr_config_i["name"] = cnstr_name
@@ -117,29 +116,47 @@ class Constraints:
         for constraint in self.constraint_list:
             constraint.nondim_constraint(nondim)
 
-    def convexify_constraints(self) -> None:
-        """Convexify all constraints. If a constraint has a 'convexify_constraint' method, call it.
-
-        Args:
-            None.
+    def augment(self) -> None:
+        """Finalize the augmented z layout and dynamics once every constraint knows its dimension.
 
         Returns:
             None.
 
         """
+        index_map = self.index_map
+
+        # method-level ctcs flag promotes all nonconvex inequalities to continuous-time constraints
+        if self.ctcs_flag:
+            for constraint in self.get(type="nonconvex_inequality"):
+                constraint.ct = 1
+
+        # the augmented state grows by the total dimension of the continuous-time (ct) constraints
+        n_ctcs = sum(constraint.dimension for constraint in self.constraint_list if getattr(constraint, "ct", 0) == 1)
+        index_map.set_augmented_dims(n_ctcs)
+
+        # wrap every t-x-u constraint's non-dimensional function into augmented-vector form fcn_znu(z, nu, params)
         for constraint in self.constraint_list:
-            if getattr(constraint, "convexify_constraint", None) is not None:
-                constraint.convexify_constraint()
+            if getattr(constraint, "augment_constraint", None) is not None:
+                constraint.augment_constraint()
+
+        # the dynamics defect spans the full augmented state z = [x, t, beta]
+        dynamics = self.get(type="dynamics")[0]
+        dynamics.dimension = index_map.n.z
+        dynamics.fcn = self.augment_dynamics(dynamics.fcn_znu)
+
+        # per-type sizes used to build the penalty / dual / virtual-buffer stacks
+        for constraint in self.constraint_list:
+            index_map.n[constraint.type] = index_map.n.get(constraint.type, 0) + constraint.dimension
+            index_map.N[constraint.type] = len(constraint.nodes)
 
     # TODO(Skye): Verify nondim (specifically time)
-    # Move this to subproblem constraints
     # Generalize dynamics augmentation so users can add arbitrary states/controls
 
-    def augment_dynamics(self, f_phys: Callable) -> Callable:
+    def augment_dynamics(self, f_znu: Callable) -> Callable:
         """Build augmented dynamics zdot = [xdot_tau, s, dbeta_dtau].
 
         Args:
-            f_phys: Physical dynamics function f(t, x, u, params).
+            f_znu: Physical dynamics in augmented-vector form f(z, nu, params).
 
         Returns:
             Augmented dynamics function dynamics_z_nu(z, nu, params).
@@ -150,14 +167,14 @@ class Constraints:
             x, t, beta = self.index_map.unpack_z(z)
             u, s = self.index_map.unpack_nu(nu)
 
-            dx_dt = self.index_map.evaluate_f_phys(f_phys, z, nu, params)
+            dx_dt = f_znu(z, nu, params)
 
             dt_dt = jnp.asarray([1.0], dtype=z.dtype)
 
             ctcs_constraints = tuple(self.get(ct=1))
             if ctcs_constraints:
                 ctcs_values = jnp.concatenate(
-                    [jnp.atleast_1d(constraint.fcn(z, nu, params)) for constraint in ctcs_constraints],
+                    [jnp.atleast_1d(constraint.fcn_znu(z, nu, params)) for constraint in ctcs_constraints],
                 )
 
                 dbeta_dt = jnp.maximum(ctcs_values, 0.0)

@@ -53,9 +53,11 @@ def augment_convergence_tolerance(method: "SCvx", eps_stack: AttrDict) -> AttrDi
     and eps_term.
 
     """
-    idx = method.index_map.indices
-    n   = method.index_map.n
+    
     problem = method.problem
+
+    idx = problem.index_map.indices
+    n   = problem.index_map.n
 
     eps_dyn              = np.empty(n.z)
     eps_dyn[idx.z.state] = eps_stack.state
@@ -80,7 +82,7 @@ def check_convergence_tolerance(method: "SCvx") -> None:
     prev_iter_data = method.iter_data_list[-1]
     current_iter_data = method.current_iter_data
 
-    index_map = method.index_map
+    index_map = method.problem.index_map
 
     # dz and dcost to measure optimality
     dstate  = current_iter_data.dz[:, index_map.indices.z.state]

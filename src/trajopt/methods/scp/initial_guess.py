@@ -20,9 +20,9 @@ def set_initial_guess(problem, method):
 
 
 def straight_line_initial_guess(problem, method):
-    imap = problem.index_map
+    index_map = problem.index_map
     init = method.initial_guess
-    N    = method.index_map.N.time_grid
+    N    = index_map.N.time_grid
     cfg  = method.config.method.guess
 
     x0 = problem.nondim.M.state.d2nd   @ np.atleast_1d(cfg.x_start)
@@ -42,9 +42,9 @@ def straight_line_initial_guess(problem, method):
     x = (1 - alpha) * x0 + alpha * xf
     u = (1 - alpha) * u0 + alpha * uf
 
-    beta = np.zeros((N, imap.n.ctcs))
+    beta = np.zeros((N, index_map.n.ctcs))
     s    = np.full((N, 1), Ts)
-    z, nu = imap.pack_znu(x, t.reshape(-1, 1), beta, u, s)
+    z, nu = index_map.pack_znu(x, t.reshape(-1, 1), beta, u, s)
 
     init.t        = t
     init.dt       = np.diff(t.reshape(-1, 1), axis=0)
@@ -57,7 +57,7 @@ def straight_line_initial_guess(problem, method):
 def nonlinear_initial_guess(problem, method):
     init     = method.initial_guess
     idx      = problem.index_map.indices
-    N        = method.index_map.N.time_grid
+    N        = problem.index_map.N.time_grid
     n_z      = problem.index_map.n.z
     n_nu     = problem.index_map.n.nu
     dynamics = problem.constraints.get(type="dynamics")[0].fcn

@@ -1,3 +1,4 @@
+import types
 from typing import TYPE_CHECKING
 
 import cvxpy as cp
@@ -7,12 +8,44 @@ import jax.numpy as jnp
 import numpy as np
 
 from trajopt.problem import Problem
-from trajopt.methods.scp import pseudospectral
+from trajopt.methods.scp import convexify, pseudospectral
 
 if TYPE_CHECKING:
     from trajopt.methods.scp.scvx import SCvx
 
 jax.config.update("jax_enable_x64", True)
+
+
+def compile_constraint_linearizations(problem: Problem, method: "SCvx") -> None:
+    """Compile JAX linearizations of the dynamics and nonconvex inequality constraints (once).
+
+    The constraint objects only carry their plain functions; all jitted Jacobians, batched
+    evaluators, and Lagrangian Hessians used by the SCP iterations are built here and cached
+    on the method.
+    """
+    dynamics = problem.constraints.get(type="dynamics")[0]
+    f, df_dz, df_dnu = convexify.linearize_jax(dynamics.fcn)
+    method.lin_dyn = lambda z, nu, params: (f(z, nu, params), df_dz(z, nu, params), df_dnu(z, nu, params))
+
+    method.nonconvex_lin = {}
+    for c in problem.constraints.get(ct=0, type="nonconvex_inequality"):
+        g, dg_dz, dg_dnu = convexify.linearize_jax(c.fcn_znu)
+        g_batched     = jax.jit(jax.vmap(g,      in_axes=(0, 0, None)))
+        dg_dz_batched = jax.jit(jax.vmap(dg_dz,  in_axes=(0, 0, None)))
+        dg_dnu_batched = jax.jit(jax.vmap(dg_dnu, in_axes=(0, 0, None)))
+
+        fcn = c.fcn_znu
+        def lagrangian_k(lam, z, nu, params, fcn=fcn):
+            return lam @ fcn(z, nu, params)
+        lagrangian_hessians = jax.jit(jax.vmap(jax.hessian(lagrangian_k, argnums=(1, 2)), in_axes=(0, 0, 0, None)))
+
+        method.nonconvex_lin[c.name] = types.SimpleNamespace(
+            g_aff_batched=lambda z, nu, params, g=g_batched, dz=dg_dz_batched, dnu=dg_dnu_batched: (
+                g(z, nu, params), dz(z, nu, params), dnu(z, nu, params)
+            ),
+            fcn_batched=g_batched,
+            lagrangian_hessians=lagrangian_hessians,
+        )
 
 def compute_nonconvex_constraints(
     z: np.ndarray, nu: np.ndarray, problem: Problem, method: "SCvx",
@@ -26,7 +59,7 @@ def compute_nonconvex_constraints(
     n_ineq    = problem.index_map.n.nonconvex_inequality
     n_z       = problem.index_map.n.z
     n_nu      = problem.index_map.n.nu
-    N         = method.index_map.N.time_grid
+    N         = problem.index_map.N.time_grid
     z_jax     = jnp.asarray(z)
     nu_jax    = jnp.asarray(nu)
     params = problem.params
@@ -40,7 +73,7 @@ def compute_nonconvex_constraints(
         col_end = col_start + constraint.dimension
         nodes = np.asarray(constraint.nodes)
 
-        f_batch, dfdx_batch, dfdu_batch = constraint.g_aff_batched(z_jax[nodes], nu_jax[nodes], params)
+        f_batch, dfdx_batch, dfdu_batch = method.nonconvex_lin[constraint.name].g_aff_batched(z_jax[nodes], nu_jax[nodes], params)
 
         g[nodes, col_start:col_end]      = np.asarray(f_batch)
         dgdz[nodes, col_start:col_end, :] = np.asarray(dfdx_batch)
@@ -52,7 +85,7 @@ def compute_nonconvex_constraints(
 
 
 def compute_nonconvex_constraint_hessians(z, nu, problem, method):
-    N = method.index_map.N.time_grid
+    N = problem.index_map.N.time_grid
     n_z = problem.index_map.n.z
     n_nu = problem.index_map.n.nu
     n_w = n_z + n_nu
@@ -76,7 +109,7 @@ def compute_nonconvex_constraint_hessians(z, nu, problem, method):
         z_nodes = z_jax[nodes]
         nu_nodes = nu_jax[nodes]
 
-        H_z, H_nu = constraint.lagrangian_hessians(lam_nodes, z_nodes, nu_nodes, params)
+        H_z, H_nu = method.nonconvex_lin[constraint.name].lagrangian_hessians(lam_nodes, z_nodes, nu_nodes, params)
 
         for i, k in enumerate(nodes):
             H_ineq[k, :n_z, :n_z] += np.asarray(H_z[0][i])
@@ -90,7 +123,7 @@ def compute_nonconvex_constraint_hessians(z, nu, problem, method):
 
 
 def compute_nonconvex_costs(z, nu, problem, method):
-    N         = method.index_map.N.time_grid
+    N         = problem.index_map.N.time_grid
     n_z       = problem.index_map.n.z
     n_nu       = problem.index_map.n.nu
 
@@ -140,7 +173,7 @@ def compute_nonconvex_costs(z, nu, problem, method):
 
 
 def compute_nonconvex_cost_hessians(z, nu, problem, method):
-    N = method.index_map.N.time_grid
+    N = problem.index_map.N.time_grid
     n_z = problem.index_map.n.z
     n_nu = problem.index_map.n.nu
 
@@ -195,7 +228,7 @@ def compile_jax_discretization(problem: Problem, method: "SCvx") -> None:
     Bkp_ind0  = Bk_ind0  + n_z*n_nu
 
     # pull ltv dynamics
-    lin_dyn = problem.constraints.get(type="dynamics")[0].lin_dyn
+    lin_dyn = method.lin_dyn
 
     # packs the derivative of stacked RHS vector for node k
     def pack_lds_dot(tau, k, lds_k, nu_k, nu_kp, params):
@@ -357,7 +390,7 @@ def discretize_ms_variational(z_ref_np, nu_ref_np, problem, method):
 
     # TODO(Skye): ensure dtk is computed from the z vector correctly for each node in the jax propagator
     # call jitted propagator for each node
-    ks = jnp.arange(method.index_map.N.time_grid - 1)
+    ks = jnp.arange(problem.index_map.N.time_grid - 1)
     A_jax, B_jax, Bp_jax, z_minus = method.propagate_discretization_jax(ks, z_ref, nu_ref, params)
 
     z_ref_0 = z_ref[[0], :]
@@ -375,7 +408,7 @@ def discretize_ms_rk4(z_ref_np, nu_ref_np, problem, method):
     lam_refs   = jnp.asarray(method.lagrangian_duals.dynamics)
     params     = problem.params
 
-    ks = jnp.arange(method.index_map.N.time_grid - 1)
+    ks = jnp.arange(problem.index_map.N.time_grid - 1)
 
     z_minus              = method.propagate(ks, z_ref_ks, nu_ref_ks, nu_ref_kps, params)
     A_jax, B_jax, Bp_jax = method.propagate_jacobians(ks, z_ref_ks, nu_ref_ks, nu_ref_kps, params)
@@ -418,7 +451,7 @@ def build_ps_dyn_constraints(subproblem: "SCvx") -> cp.Constraint:
         cp.Constraint: Single constraint for all collocation nodes, shape (N_col, n_z).
 
     """
-    N_col  = subproblem.index_map.N.time_grid - 1
+    N_col  = subproblem.problem.index_map.N.time_grid - 1
 
     Z   = subproblem.cp_params.z_ref + subproblem.dz
     lhs = 2.0 * (subproblem.ps_D @ Z)
@@ -448,7 +481,7 @@ def compute_ps_dynamics_and_jacobians(
     n_z = problem.index_map.n.z
     n_nu = problem.index_map.n.nu
 
-    lin_dyn = problem.constraints.get(type="dynamics")[0].lin_dyn
+    lin_dyn = method.lin_dyn
     params = problem.params
 
     f_ref_col = np.zeros((N_col, n_z))
@@ -520,7 +553,7 @@ def compute_ps_differentiation_matrix(
 #     if method.flags.jax_dyn:
 #         Ak, Bk, Bkp, z_minus = discretize_inv_free_jax(z_ref, nu_ref, problem, method)
 #     else:
-#         t_ref = _coerce_time_grid(t_ref, method.index_map.N.time_grid)
+#         t_ref = _coerce_time_grid(t_ref, problem.index_map.N.time_grid)
 #         if method.flags.ctcs != "none":
 #             Ak, Bk, Bkp, z_minus = discretize_ctcs(z_ref, nu_ref, t_ref, problem, method)
 #         else:
@@ -532,7 +565,7 @@ def compute_ps_differentiation_matrix(
 
 # Compute exact discretize for linear dynamic system
 # def discretize_inv_foh(z_ref, nu_ref, t_ref, problem, method):
-#     N = method.index_map.N.time_grid
+#     N = problem.index_map.N.time_grid
 
 #     traj_minus_data = {"z_minus": [z_ref[0]]}
 
@@ -584,7 +617,7 @@ def compute_ps_differentiation_matrix(
 
 #     # Initialize
 #     lds_dot         = np.zeros_like(lds)
-#     N               = method.index_map.N.time_grid
+#     N               = problem.index_map.N.time_grid
 
 #     # Extract times and FOH control input
 #     Om_k            = 1 - tau

@@ -3,7 +3,6 @@ import time
 import numpy as np
 import cvxpy as cp
 
-from trajopt.indexing import IndexMap
 from trajopt.problem import Problem
 from trajopt.methods.scp import convergence, initial_guess, discretize
 from trajopt.utils import tools
@@ -27,11 +26,9 @@ from trajopt.methods.scp.subproblem_constraint_types import (
 class SCP:
     """Reusable convex SCP with full baseline functionality & DPP updates."""
 
-    def __init__(self, config: AttrDict, index_map: IndexMap, problem: Problem) -> None:
+    def __init__(self, config: AttrDict, problem: Problem) -> None:
         """Build the reusable convex subproblem from config, index map, and problem."""
-        self.problem   = problem
-        self.index_map = self.problem.index_map
-        self.indices   = self.index_map.indices
+        self.problem        = problem
 
         # configs
         self.config         = config
@@ -39,9 +36,6 @@ class SCP:
         self.conv_config    = config.method.conv
         self.penalty_config = config.method.penalty
         self.weights_config = config.method.weights
-
-        self.n = self.index_map.n
-        self.N = self.index_map.N
 
         if bool(self.flags.free_final_time):
             if "free_final_time" not in self.problem.constraints.constraint_type_list:
@@ -83,18 +77,19 @@ class SCP:
         cfg_guess             = self.config.method.guess
         t_start               = getattr(cfg_guess, 't_start', 0.0)
         self.Ts_init          = (cfg_guess.t_stop - t_start) / self.problem.nondim.time_scale
-        t_init                = np.linspace(0.0, self.Ts_init, self.index_map.N.time_grid)
+        t_init                = np.linspace(0.0, self.Ts_init, self.problem.index_map.N.time_grid)
         dt_init               = np.diff(t_init)
         self.initial_guess.t  = t_init
         self.initial_guess.dt = dt_init
 
+        discretize.compile_constraint_linearizations(problem, self)
         discretize.compile_rk4_discretization(problem, self)
         initial_guess.set_initial_guess(problem, self)
 
         self.lagrangian_duals = AttrDict()
-        self.lagrangian_duals.dynamics = np.zeros((self.N.time_grid - 1, self.n.z))
-        if hasattr(self.n, 'nonconvex_inequality'):
-            self.lagrangian_duals.nonconvex_inequality = np.zeros((self.N.time_grid, self.n.nonconvex_inequality))
+        self.lagrangian_duals.dynamics = np.zeros((problem.index_map.N.time_grid - 1, problem.index_map.n.z))
+        if hasattr(problem.index_map.n, 'nonconvex_inequality'):
+            self.lagrangian_duals.nonconvex_inequality = np.zeros((problem.index_map.N.time_grid, problem.index_map.n.nonconvex_inequality))
 
         # --------------------------
         # Initialize unified history
@@ -130,8 +125,8 @@ class SCP:
             if cnstr_type not in penalty_config:
                 continue
             if penalty_config[cnstr_type].W.penalty or penalty_config[cnstr_type].dual.penalty:
-                N_type = self.index_map.N[cnstr_type]
-                n_type = self.index_map.n[cnstr_type]
+                N_type = self.problem.index_map.N[cnstr_type]
+                n_type = self.problem.index_map.n[cnstr_type]
                 shape  = (N_type, n_type)
 
                 vb_stack[cnstr_type] = np.zeros(shape)
@@ -167,14 +162,14 @@ class SCP:
         self.cp_params.dual   = tools.AttrDict()
 
         for cnstr_type in self.W_stack.keys():
-            N_type = self.index_map.N[cnstr_type]
-            n_type = self.index_map.n[cnstr_type]
+            N_type = self.problem.index_map.N[cnstr_type]
+            n_type = self.problem.index_map.n[cnstr_type]
             shape  = (N_type, n_type)
             self.cp_params.W_sqrt[cnstr_type] = cp.Parameter(shape, nonneg=True, name=f"W_{cnstr_type}_sqrt", value=np.zeros(shape))
 
         for cnstr_type in self.dual_stack.keys():
-            N_type = self.index_map.N[cnstr_type]
-            n_type = self.index_map.n[cnstr_type]
+            N_type = self.problem.index_map.N[cnstr_type]
+            n_type = self.problem.index_map.n[cnstr_type]
             shape  = (N_type, n_type)
             self.cp_params.dual[cnstr_type] = cp.Parameter(shape, name=f"dual_{cnstr_type}", value=np.zeros(shape))
 
@@ -186,8 +181,8 @@ class SCP:
 
             vb_type = self.penalty_config[cnstr_type].vb
 
-            N_type = self.index_map.N[cnstr_type]
-            n_type = self.index_map.n[cnstr_type]
+            N_type = self.problem.index_map.N[cnstr_type]
+            n_type = self.problem.index_map.n[cnstr_type]
             shape = (N_type, n_type)
 
             if vb_type == "standard":
@@ -195,12 +190,14 @@ class SCP:
 
     def create_cvxpy_parameters(self) -> None:
         """Create the cvxpy parameters for the convex subproblem."""
-        N, n_z, n_nu = self.N.time_grid, self.n.z, self.n.nu
+        N = self.problem.index_map.N.time_grid
+        n_z = self.problem.index_map.n.z
+        n_nu = self.problem.index_map.n.nu
 
         self.cp_params.z_ref  = cp.Parameter((N, n_z),  name="z_ref")
         self.cp_params.nu_ref = cp.Parameter((N, n_nu), name="nu_ref")
 
-        self.x_ref, self.t_ref, self.beta_ref, self.u_ref, self.s_ref = self.index_map.unpack_znu(self.cp_params.z_ref, self.cp_params.nu_ref)
+        self.x_ref, self.t_ref, self.beta_ref, self.u_ref, self.s_ref = self.problem.index_map.unpack_znu(self.cp_params.z_ref, self.cp_params.nu_ref)
 
         self.cp_params.w_cost      = cp.Constant(value=self.config.method.weights.w_cost, name="w_cost")
         self.cp_params.tr_z        = cp.Parameter(nonneg=True, name="tr_z")
@@ -222,7 +219,7 @@ class SCP:
 
     def create_cvxpy_variables(self) -> None:
         """Create the cvxpy decision variables for the convex subproblem."""
-        N, n_x, n_t, n_u, n_ctcs = (self.N.time_grid, self.n.state, self.n.time, self.n.control, self.n.ctcs)
+        N, n_x, n_t, n_u, n_ctcs = (self.problem.index_map.N.time_grid, self.problem.index_map.n.state, self.problem.index_map.n.time, self.problem.index_map.n.control, self.problem.index_map.n.ctcs)
 
         self.cp_vars.dx    = cp.Variable((N, n_x),    name="dx")
         self.cp_vars.dbeta = cp.Variable((N, n_ctcs), name="dbeta") if n_ctcs > 0 else None
@@ -288,7 +285,7 @@ class SCP:
         self.cp_params.z_ref.value  = z_opt
         self.cp_params.nu_ref.value = nu_opt
 
-        self.x_ref, self.t_ref, self.beta_ref, self.u_ref, self.s_ref = self.index_map.unpack_znu(z_opt, nu_opt)
+        self.x_ref, self.t_ref, self.beta_ref, self.u_ref, self.s_ref = self.problem.index_map.unpack_znu(z_opt, nu_opt)
 
         disc_start_time = time.perf_counter()
         for fcn_type, fcn in UPDATE_PARAMETER_REGISTRY.items():
@@ -332,7 +329,7 @@ class SCP:
         self.current_iter_data.z_opt  = z_new
         self.current_iter_data.nu_opt = nu_new
 
-        x_opt_new, t_opt_new, beta_opt_new, u_opt_new, s_opt_new = self.index_map.unpack_znu(z_new, nu_new)
+        x_opt_new, t_opt_new, beta_opt_new, u_opt_new, s_opt_new = self.problem.index_map.unpack_znu(z_new, nu_new)
 
         T_opt_new  = float(np.asarray(t_opt_new[-1]).ravel()[0])
 

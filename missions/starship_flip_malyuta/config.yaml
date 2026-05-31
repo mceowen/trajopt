@@ -1,5 +1,6 @@
+# source: https://github.com/UW-ACL/SCPToolbox.jl/tree/master/test/examples/starship_flip
+
 problem:
-  # source: https://github.com/UW-ACL/SCPToolbox.jl/tree/master/test/examples/starship_flip
 
   # ===============================
   # INHERIT MODEL CONFIGS

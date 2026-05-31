@@ -10,7 +10,7 @@ import jax
 import numpy as np
 
 if TYPE_CHECKING:
-    from trajopt.scaling.nondim import Nondim
+    from trajopt.nondim.nondim import Nondim
 
 
 class _FcnExpr:

@@ -1,19 +1,21 @@
 from trajopt.constraints.constraints import Constraints
 from trajopt.costs.costs import Costs
 from trajopt.trajectories.trajectories import Trajectories
+from trajopt.indexing.index_map import IndexMap
+from trajopt.nondim.nondim import Nondim
 from trajopt.utils.tools import AttrDict, recursive_attrdict, resolve_function_from_string
 
 class Problem:
 
-    def __init__(self, config, index_map, nondim):
+    def __init__(self, config):
 
         # ------------------------------------------------------------
         # Config
         # ------------------------------------------------------------
 
         self.config    = config
-        self.index_map = index_map
-        self.nondim    = nondim
+        self.index_map = IndexMap(self.config)
+        self.nondim    = Nondim(self.config, self.index_map)
 
         # ------------------------------------------------------------
         # Functions
@@ -23,13 +25,7 @@ class Problem:
         self.fcns = AttrDict()
         
         for name, path in fcn_config.items():
-            try:
-                self.fcns[name] = resolve_function_from_string(path)
-            except Exception as e:
-                raise type(e)(
-                    f"error loading fcns.{name}: '{path}'\n"
-                    f"  {e}"
-                ) from None
+            self.fcns[name] = resolve_function_from_string(path)
 
         # ------------------------------------------------------------
         # Parameters
@@ -43,13 +39,13 @@ class Problem:
         # Constraints
         # ------------------------------------------------------------
 
-        self.constraints = Constraints(self.config, index_map, fcns=self.fcns)
+        self.constraints = Constraints(self.config, self.index_map, fcns=self.fcns)
 
         # ------------------------------------------------------------
         # Cost
         # ------------------------------------------------------------
 
-        self.costs = Costs(self.config, index_map, fcns=self.fcns)
+        self.costs = Costs(self.config, self.index_map, fcns=self.fcns)
         print("------------------------------------------------------------")
         print("\n")
 
@@ -63,16 +59,14 @@ class Problem:
         # ------------------------------------------------------------
         # Trajectories (similar to constraints but used for analysis)
         # ------------------------------------------------------------
-        self.trajectories = Trajectories(self.config, index_map, fcns=self.fcns)
+        self.trajectories = Trajectories(self.config, self.index_map, fcns=self.fcns)
         self.trajectories.resolve_functions(self.fcns)
 
-        # nondimensionalize and convexfiy constraints
+        # nondimensionalize constraints
         self.constraints.nondim_constraints(self.nondim)
-        
-        dynamics_constraint = self.constraints.get(type="dynamics")[0]
-        dynamics_constraint.fcn = self.constraints.augment_dynamics(dynamics_constraint.fcn_base)
-        
-        self.constraints.convexify_constraints()
+
+        # finalize the augmented z layout and dynamics now that every constraint knows its dimension
+        self.constraints.augment()
 
         # nondimensionalize and convexify costs
         self.costs.nondim_costs(self.nondim)
