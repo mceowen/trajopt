@@ -42,16 +42,16 @@ MARKER_DEFAULTS = {
 }
 
 
-def plot(trajopt_obj, data):
-    analysis_cfg = trajopt_obj.config.get("analysis", {})
+def plot(trajectory, data):
+    analysis_cfg = trajectory.config.get("analysis", {})
     show_iters = analysis_cfg.get("show_iters", False)
     method         = list(data.keys())[0]
     iters_all      = data[method]["runs"][0]["iter_data_list"]
     last_iter      = iters_all[-1]
-    traj_data      = last_iter["trajectory_data"]
-    problem_config = trajopt_obj.problem.config.problem
-    traj_configs   = problem_config.get('trajectories', {})
-    fcns           = problem_config.get('fcns', {})
+    traj_data      = last_iter["trajplot_data"]
+    first_segment  = next(iter(trajectory.segments.values()))
+    traj_configs   = next(iter(trajectory.config.segments.values())).get('trajplots', {})
+    fcns           = first_segment.fcns
 
     figs, axs = {}, {}
     for group_name, group_data in traj_data.items():
@@ -74,27 +74,27 @@ def plot(trajopt_obj, data):
     iters_to_show = iters_all[1:] if show_iters else []
 
     for group_name, group_data in traj_data.items():
-        for i, (traj_name, traj) in enumerate(group_data.items()):
+        for i, (traj_name, trajplot) in enumerate(group_data.items()):
             ax = axs[group_name][i]
-            _setup_ax(ax, traj)
-            if traj.type == "spatial":
-                _plot_spatial(ax, traj, iters_to_show, last_iter)
+            _setup_ax(ax, trajplot)
+            if trajplot.type == "spatial":
+                _plot_spatial(ax, trajplot, iters_to_show, last_iter)
             else:
-                _plot_time_series(ax, traj, iters_to_show, last_iter)
+                _plot_time_series(ax, trajplot, iters_to_show, last_iter)
 
     for group_name, group_data in traj_data.items():
-        for i, (traj_name, traj) in enumerate(group_data.items()):
-            if traj.type == "spatial":
+        for i, (traj_name, trajplot) in enumerate(group_data.items()):
+            if trajplot.type == "spatial":
                 ax       = axs[group_name][i]
-                dim      = traj.opt_vals["values"].shape[1]
-                traj_cfg = traj_configs.get(traj_name, traj)
+                dim      = trajplot.opt_vals["values"].shape[1]
+                traj_cfg = traj_configs.get(traj_name, trajplot)
 
                 limits_opt_only = traj_cfg.get("limits_opt_only", False)
                 if limits_opt_only:
                     xlim, ylim = ax.get_xlim(), ax.get_ylim()
                     zlim = ax.get_zlim() if hasattr(ax, 'get_zlim') else None
 
-                _plot_overlays(ax, traj_cfg, dim, trajopt_obj.problem.params, fcns)
+                _plot_overlays(ax, traj_cfg, dim, first_segment.params, fcns)
 
                 if limits_opt_only:
                     ax.set_xlim(xlim)
@@ -103,15 +103,15 @@ def plot(trajopt_obj, data):
                         ax.set_zlim(zlim)
 
     for group_name, group_data in traj_data.items():
-        for i, (traj_name, traj) in enumerate(group_data.items()):
+        for i, (traj_name, trajplot) in enumerate(group_data.items()):
             ax   = axs[group_name][i]
-            vals = traj.opt_vals["values"]
-            if traj.type == "spatial":
+            vals = trajplot.opt_vals["values"]
+            if trajplot.type == "spatial":
                 traj_cfg = traj_configs.get(traj_name, {})
                 equal_aspect = bool(traj_cfg.get("equal_aspect", False))
-                init_vals = traj.init_nl_vals.get("values", None) if hasattr(traj, "init_nl_vals") else None
+                init_vals = trajplot.init_nl_vals.get("values", None) if hasattr(trajplot, "init_nl_vals") else None
                 all_vals = np.vstack([vals, init_vals]) if init_vals is not None else vals
-                all_vals = _include_quiver_extents(all_vals, traj)
+                all_vals = _include_quiver_extents(all_vals, trajplot)
                 _set_limits_from_data(ax, all_vals, equal_aspect=equal_aspect)
                 if traj_cfg.get("xlim") is not None:
                     ax.set_xlim(traj_cfg["xlim"])
@@ -138,10 +138,10 @@ def plot(trajopt_obj, data):
     print(f"Saved {len(figs)} figures to {save_dir}/")
 
     if analysis_cfg.get('show_convergence', False):
-        convergence_plots(trajopt_obj)
+        convergence_plots(trajectory)
 
     if analysis_cfg.get('show_weights', False):
-        convergence_weight_plots(trajopt_obj)
+        convergence_weight_plots(trajectory)
 
     plt.show()
 
@@ -193,7 +193,7 @@ def _plot_spatial(ax, traj, iters_to_show, last_iter):
 
     n = len(iters_to_show)
     for i, it in enumerate(iters_to_show):
-        traj_it = it["trajectory_data"]
+        traj_it = it["trajplot_data"]
         group   = _find_group(traj_it, traj.name)
         if group is _NOT_FOUND: continue
         t = traj_it[group][traj.name]
@@ -217,7 +217,7 @@ def _plot_spatial(ax, traj, iters_to_show, last_iter):
 def _plot_time_series(ax, traj, iters_to_show, last_iter):
     n = len(iters_to_show)
     for i, it in enumerate(iters_to_show):
-        traj_it = it["trajectory_data"]
+        traj_it = it["trajplot_data"]
         group   = _find_group(traj_it, traj.name)
         if group is _NOT_FOUND: continue
         t = traj_it[group][traj.name]
@@ -261,7 +261,7 @@ def _plot_markers(ax, traj, dim):
 
 def _plot_quivers(ax, traj, dim):
     for q in (traj.opt_vals.get("quivers") or []):
-        cfg    = q["config"]
+        cfg    = dict(q["config"]) if isinstance(q["config"], tuple) else q["config"]
         stride = int(cfg.get("stride", 1))
         scale  = float(cfg.get("scale", 1.0)) * (-1.0 if cfg.get("negate") else 1.0)
 
@@ -368,7 +368,7 @@ def _set_time_series_limits(ax, t, vals, margin=0.08):
 
 def _include_quiver_extents(all_vals, traj):
     for q in (traj.opt_vals.get("quivers") or []):
-        cfg      = q["config"]
+        cfg      = dict(q["config"]) if isinstance(q["config"], tuple) else q["config"]
         stride   = int(cfg.get("stride", 1))
         scale    = float(cfg.get("scale", 1.0)) * (-1.0 if cfg.get("negate") else 1.0)
         centered = bool(cfg.get("centered", False))
@@ -385,20 +385,31 @@ def _include_quiver_extents(all_vals, traj):
     return all_vals
 
 
-def convergence_plots(traj, save=True):
-    iters   = traj.method.iter_data_list[1:]
+def convergence_plots(trajectory, save=True):
+    scp_segments = trajectory.method.scp_segments
+    multi        = len(scp_segments) > 1
+    figs         = [_convergence_plot(seg, f"_{name}" if multi else "", save) for name, seg in scp_segments.items()]
+    return figs[0] if figs else None
+
+
+def _convergence_plot(subprob, suffix, save=True):
+    iters   = subprob.iter_data_list[1:]
     k       = np.arange(1, len(iters) + 1)
     dz      = [it.chk.dz for it in iters]
     dcost   = [it.chk.dcost for it in iters]
     alphas  = [it.get("alpha", 1.0) for it in iters]
     costs   = [it.cost for it in iters]
 
-    eps_stack = traj.method.eps_stack
+    eps_by_name = {
+        sc.name: np.atleast_1d(sc.eps)
+        for sc in subprob.constraints.values()
+        if sc.shape is not None
+    }
     vb_types  = list(iters[0].vb.keys()) if hasattr(iters[0], 'vb') and iters[0].vb else []
 
     vb_series = {}
     for ct in vb_types:
-        eps_ct = np.atleast_1d(eps_stack.get(ct, 1.0))
+        eps_ct = eps_by_name.get(ct, np.atleast_1d(1.0))
         vb_series[ct] = [float(np.max(np.abs(it.vb[ct]) / eps_ct)) for it in iters]
 
     grid  = _create_grid(3)
@@ -433,13 +444,20 @@ def convergence_plots(traj, save=True):
     if save:
         save_dir = os.path.join("plots", "standalone")
         os.makedirs(save_dir, exist_ok=True)
-        fig.savefig(os.path.join(save_dir, "convergence.pdf"), dpi=plot_options.save_dpi, pad_inches=0.02)
+        fig.savefig(os.path.join(save_dir, f"convergence{suffix}.pdf"), dpi=plot_options.save_dpi, pad_inches=0.02)
 
     return fig
 
 
-def convergence_weight_plots(traj, save=True):
-    iters = traj.method.iter_data_list[1:]
+def convergence_weight_plots(trajectory, save=True):
+    scp_segments = trajectory.method.scp_segments
+    multi        = len(scp_segments) > 1
+    figs         = [_convergence_weight_plot(seg, f"_{name}" if multi else "", save) for name, seg in scp_segments.items()]
+    return figs[0] if figs else None
+
+
+def _convergence_weight_plot(subprob, suffix, save=True):
+    iters = subprob.iter_data_list[1:]
     if not iters:
         return
 
@@ -478,7 +496,7 @@ def convergence_weight_plots(traj, save=True):
     if save:
         save_dir = os.path.join("plots", "standalone")
         os.makedirs(save_dir, exist_ok=True)
-        fig.savefig(os.path.join(save_dir, "convergence_weights.pdf"), dpi=plot_options.save_dpi, pad_inches=0.02)
+        fig.savefig(os.path.join(save_dir, f"convergence_weights{suffix}.pdf"), dpi=plot_options.save_dpi, pad_inches=0.02)
 
     return fig
 

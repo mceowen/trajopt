@@ -28,7 +28,7 @@ control:
 time: 
   scale: 1
 
-trajectories:
+trajplots:
   x1x2:
     type: spatial
     fcn: fcns.x1x2

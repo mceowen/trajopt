@@ -7,29 +7,33 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from trajopt.problem import Problem
-from trajopt.methods.scp import convexify, pseudospectral
+from trajopt.segment import Segment
+from trajopt.methods.scp import pseudospectral
 
 if TYPE_CHECKING:
-    from trajopt.methods.scp.scvx import SCvx
+    from trajopt.methods.scp.subproblem import Subproblem
 
 jax.config.update("jax_enable_x64", True)
 
 
-def compile_constraint_linearizations(problem: Problem, method: "SCvx") -> None:
+def compile_constraint_linearizations(segment: Segment, subprob: "Subproblem") -> None:
     """Compile JAX linearizations of the dynamics and nonconvex inequality constraints (once).
 
     The constraint objects only carry their plain functions; all jitted Jacobians, batched
     evaluators, and Lagrangian Hessians used by the SCP iterations are built here and cached
-    on the method.
+    on the subprob.
     """
-    dynamics = problem.constraints.get(type="dynamics")[0]
-    f, df_dz, df_dnu = convexify.linearize_jax(dynamics.fcn)
-    method.lin_dyn = lambda z, nu, params: (f(z, nu, params), df_dz(z, nu, params), df_dnu(z, nu, params))
+    dynamics = next(c for c in segment.constraints.values() if c.type == "dynamics")
+    f = jax.jit(dynamics.fcn)
+    df_dz = jax.jit(jax.jacfwd(dynamics.fcn, argnums=0))
+    df_dnu = jax.jit(jax.jacfwd(dynamics.fcn, argnums=1))
+    subprob.lin_dyn = lambda z, nu, params: (f(z, nu, params), df_dz(z, nu, params), df_dnu(z, nu, params))
 
-    method.nonconvex_lin = {}
-    for c in problem.constraints.get(ct=0, type="nonconvex_inequality"):
-        g, dg_dz, dg_dnu = convexify.linearize_jax(c.fcn_znu)
+    subprob.nonconvex_lin = {}
+    for c in [c for c in segment.constraints.values() if c.type == "nonconvex_inequality" and getattr(c, "ct", 0) == 0]:
+        g = jax.jit(c.fcn_znu)
+        dg_dz = jax.jit(jax.jacfwd(c.fcn_znu, argnums=0))
+        dg_dnu = jax.jit(jax.jacfwd(c.fcn_znu, argnums=1))
         g_batched     = jax.jit(jax.vmap(g,      in_axes=(0, 0, None)))
         dg_dz_batched = jax.jit(jax.vmap(dg_dz,  in_axes=(0, 0, None)))
         dg_dnu_batched = jax.jit(jax.vmap(dg_dnu, in_axes=(0, 0, None)))
@@ -39,7 +43,7 @@ def compile_constraint_linearizations(problem: Problem, method: "SCvx") -> None:
             return lam @ fcn(z, nu, params)
         lagrangian_hessians = jax.jit(jax.vmap(jax.hessian(lagrangian_k, argnums=(1, 2)), in_axes=(0, 0, 0, None)))
 
-        method.nonconvex_lin[c.name] = types.SimpleNamespace(
+        subprob.nonconvex_lin[c.name] = types.SimpleNamespace(
             g_aff_batched=lambda z, nu, params, g=g_batched, dz=dg_dz_batched, dnu=dg_dnu_batched: (
                 g(z, nu, params), dz(z, nu, params), dnu(z, nu, params)
             ),
@@ -47,94 +51,19 @@ def compile_constraint_linearizations(problem: Problem, method: "SCvx") -> None:
             lagrangian_hessians=lagrangian_hessians,
         )
 
-def compute_nonconvex_constraints(
-    z: np.ndarray, nu: np.ndarray, problem: Problem, method: "SCvx",
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Evaluate nonconvex inequality constraints and their Jacobians.
-
-    Returns:
-        Tuple of (g, dgdz, dgdnu) over the time grid.
-
-    """
-    n_ineq    = problem.index_map.n.nonconvex_inequality
-    n_z       = problem.index_map.n.z
-    n_nu      = problem.index_map.n.nu
-    N         = problem.index_map.N.time_grid
-    z_jax     = jnp.asarray(z)
-    nu_jax    = jnp.asarray(nu)
-    params = problem.params
-
-    g     = np.zeros((N, n_ineq))
-    dgdz  = np.zeros((N, n_ineq, n_z))
-    dgdnu = np.zeros((N, n_ineq, n_nu))
-
-    col_start = 0
-    for constraint in problem.constraints.get(ct=0, type="nonconvex_inequality"):
-        col_end = col_start + constraint.dimension
-        nodes = np.asarray(constraint.nodes)
-
-        f_batch, dfdx_batch, dfdu_batch = method.nonconvex_lin[constraint.name].g_aff_batched(z_jax[nodes], nu_jax[nodes], params)
-
-        g[nodes, col_start:col_end]      = np.asarray(f_batch)
-        dgdz[nodes, col_start:col_end, :] = np.asarray(dfdx_batch)
-        dgdnu[nodes, col_start:col_end, :] = np.asarray(dfdu_batch)
-
-        col_start = col_end
-
-    return g, dgdz, dgdnu
-
-
-def compute_nonconvex_constraint_hessians(z, nu, problem, method):
-    N = problem.index_map.N.time_grid
-    n_z = problem.index_map.n.z
-    n_nu = problem.index_map.n.nu
-    n_w = n_z + n_nu
-
-    H_ineq = np.zeros((N, n_w, n_w))
-
-    if not problem.constraints.has(ct=0, type="nonconvex_inequality"):
-        return H_ineq
-
-    lam = jnp.asarray(method.lagrangian_duals.nonconvex_inequality)
-    z_jax = jnp.asarray(z)
-    nu_jax = jnp.asarray(nu)
-    params = problem.params
-
-    col_start = 0
-    for constraint in problem.constraints.get(ct=0, type="nonconvex_inequality"):
-        col_end = col_start + constraint.dimension
-        nodes = np.asarray(constraint.nodes)
-
-        lam_nodes = lam[nodes, col_start:col_end]
-        z_nodes = z_jax[nodes]
-        nu_nodes = nu_jax[nodes]
-
-        H_z, H_nu = method.nonconvex_lin[constraint.name].lagrangian_hessians(lam_nodes, z_nodes, nu_nodes, params)
-
-        for i, k in enumerate(nodes):
-            H_ineq[k, :n_z, :n_z] += np.asarray(H_z[0][i])
-            H_ineq[k, :n_z, n_z:] += np.asarray(H_z[1][i])
-            H_ineq[k, n_z:, :n_z] += np.asarray(H_nu[0][i])
-            H_ineq[k, n_z:, n_z:] += np.asarray(H_nu[1][i])
-
-        col_start = col_end
-
-    return H_ineq
-
-
-def compute_nonconvex_costs(z, nu, problem, method):
-    N         = problem.index_map.N.time_grid
-    n_z       = problem.index_map.n.z
-    n_nu       = problem.index_map.n.nu
+def compute_nonconvex_costs(z, nu, segment, subprob):
+    N         = segment.index_map.N.all
+    n_z       = segment.index_map.n.z
+    n_nu       = segment.index_map.n.nu
 
     cost     = np.zeros((N, 1))
     dcostdz  = np.zeros((N, 1, n_z))
     dcostdnu = np.zeros((N, 1, n_nu))
 
-    params = problem.params
-    nonconvex_costs = problem.costs.get(type="nonconvex")
-    terminal_costs  = problem.costs.get(type="terminal")
-    running_costs   = problem.costs.get(type="running")
+    params = segment.params
+    nonconvex_costs = [c for c in segment.costs.values() if c.type == "nonconvex"]
+    terminal_costs  = [c for c in segment.costs.values() if c.type == "terminal"]
+    running_costs   = [c for c in segment.costs.values() if c.type == "running"]
 
     if len(nonconvex_costs) + len(terminal_costs) + len(running_costs) == 0:
         return cost, dcostdz, dcostdnu
@@ -172,19 +101,19 @@ def compute_nonconvex_costs(z, nu, problem, method):
     return cost, dcostdz, dcostdnu
 
 
-def compute_nonconvex_cost_hessians(z, nu, problem, method):
-    N = problem.index_map.N.time_grid
-    n_z = problem.index_map.n.z
-    n_nu = problem.index_map.n.nu
+def compute_nonconvex_cost_hessians(z, nu, segment, subprob):
+    N = segment.index_map.N.all
+    n_z = segment.index_map.n.z
+    n_nu = segment.index_map.n.nu
 
     H_cost_z = np.zeros((N, n_z, n_z))
     H_cost_nu = np.zeros((N, n_nu, n_nu))
     H_cost_znu = np.zeros((N, n_z, n_nu))
 
-    params = problem.params
-    nonconvex_costs = problem.costs.get(type="nonconvex")
-    terminal_costs = problem.costs.get(type="terminal")
-    running_costs = problem.costs.get(type="running")
+    params = segment.params
+    nonconvex_costs = [c for c in segment.costs.values() if c.type == "nonconvex"]
+    terminal_costs = [c for c in segment.costs.values() if c.type == "terminal"]
+    running_costs = [c for c in segment.costs.values() if c.type == "running"]
 
     if len(nonconvex_costs) + len(terminal_costs) + len(running_costs) == 0:
         return H_cost_z, H_cost_nu, H_cost_znu
@@ -217,10 +146,10 @@ def compute_nonconvex_cost_hessians(z, nu, problem, method):
 
 
 
-def compile_jax_discretization(problem: Problem, method: "SCvx") -> None:
-    """Build and cache the JIT-compiled discretization propagator on method."""
-    n_z  = problem.index_map.n.z
-    n_nu = problem.index_map.n.nu
+def compile_jax_discretization(segment: Segment, subprob: "Subproblem") -> None:
+    """Build and cache the JIT-compiled discretization propagator on subprob."""
+    n_z  = segment.index_map.n.z
+    n_nu = segment.index_map.n.nu
 
     # define static indices for stacked RHS vector
     Ak_ind0   = n_z
@@ -228,7 +157,7 @@ def compile_jax_discretization(problem: Problem, method: "SCvx") -> None:
     Bkp_ind0  = Bk_ind0  + n_z*n_nu
 
     # pull ltv dynamics
-    lin_dyn = method.lin_dyn
+    lin_dyn = subprob.lin_dyn
 
     # packs the derivative of stacked RHS vector for node k
     def pack_lds_dot(tau, k, lds_k, nu_k, nu_kp, params):
@@ -238,8 +167,8 @@ def compile_jax_discretization(problem: Problem, method: "SCvx") -> None:
         phi_b_m = lds_k[Bk_ind0  : Bkp_ind0].reshape((n_z, n_nu))
         phi_b_p = lds_k[Bkp_ind0 : ].reshape((n_z, n_nu))
 
-        tau_k = k / (problem.index_map.N.time_grid - 1)
-        tau_kp = (k+1) / (problem.index_map.N.time_grid - 1)
+        tau_k = k / (segment.index_map.N.all - 1)
+        tau_kp = (k+1) / (segment.index_map.N.all - 1)
         a = (tau_kp - tau) / (tau_kp - tau_k)
         b = (tau - tau_k) / (tau_kp - tau_k)
         nu = a * nu_k + b * nu_kp
@@ -276,8 +205,8 @@ def compile_jax_discretization(problem: Problem, method: "SCvx") -> None:
 
         return (A_jax_k, B_jax_k, Bp_jax_k, z_minus_k)
 
-    use_fixed_dt = int(getattr(method.flags, "ode_fixed_dt", 0))
-    N_grid = problem.index_map.N.time_grid
+    use_fixed_dt = int(getattr(subprob.flags, "ode_fixed_dt", 0))
+    N_grid = segment.index_map.N.all
 
     if use_fixed_dt:
         nsub = 50
@@ -331,13 +260,13 @@ def compile_jax_discretization(problem: Problem, method: "SCvx") -> None:
             return unpack_ldsf(ldsf_k)
 
     propagate = jax.jit(jax.vmap(propagate_k, in_axes=(0, None, None, None)))
-    method.propagate_discretization_jax = propagate
+    subprob.propagate_discretization_jax = propagate
 
-def compile_rk4_discretization(problem, method):
+def compile_rk4_discretization(segment, subprob):
 
-    dyn_fcn = jax.jit(problem.constraints.get(type='dynamics')[0].fcn)
-    N_grid  = problem.index_map.N.time_grid
-    nsub    = 2
+    dyn_fcn = jax.jit(next(c for c in segment.constraints.values() if c.type == "dynamics").fcn)
+    N_grid  = segment.index_map.N.all
+    nsub    = 10
     delta_tau = 1.0 / (N_grid - 1)
     dt_rk4  = delta_tau / nsub
 
@@ -372,12 +301,12 @@ def compile_rk4_discretization(problem, method):
     prop_jacobians_k = jax.jacfwd(propagate_k, argnums=(1, 2, 3))
     cnstr_hessians_k = jax.hessian(lagrangian_k, argnums=(2, 3, 4))
 
-    method.propagate           = jax.jit(jax.vmap(propagate_k,      in_axes=(0, 0, 0, 0, None)))
-    method.propagate_jacobians = jax.jit(jax.vmap(prop_jacobians_k, in_axes=(0, 0, 0, 0, None)))
-    method.cnstr_hessians      = jax.jit(jax.vmap(cnstr_hessians_k, in_axes=(0, 0, 0, 0, 0, None)))
+    subprob.propagate           = jax.jit(jax.vmap(propagate_k,      in_axes=(0, 0, 0, 0, None)))
+    subprob.propagate_jacobians = jax.jit(jax.vmap(prop_jacobians_k, in_axes=(0, 0, 0, 0, None)))
+    subprob.cnstr_hessians      = jax.jit(jax.vmap(cnstr_hessians_k, in_axes=(0, 0, 0, 0, 0, None)))
 
 # inverse free discretize with jax
-def discretize_ms_variational(z_ref_np, nu_ref_np, problem, method):
+def discretize_ms_variational(z_ref_np, nu_ref_np, segment, subprob):
     """
     Returns:
         Tuple of (Ak, Bk, Bkp, z_minus).
@@ -386,34 +315,34 @@ def discretize_ms_variational(z_ref_np, nu_ref_np, problem, method):
     # convert numpy arrays to jax
     z_ref = jnp.asarray(z_ref_np)
     nu_ref = jnp.asarray(nu_ref_np)
-    params = problem.params
+    params = segment.params
 
     # TODO(Skye): ensure dtk is computed from the z vector correctly for each node in the jax propagator
     # call jitted propagator for each node
-    ks = jnp.arange(problem.index_map.N.time_grid - 1)
-    A_jax, B_jax, Bp_jax, z_minus = method.propagate_discretization_jax(ks, z_ref, nu_ref, params)
+    ks = jnp.arange(segment.index_map.N.all - 1)
+    A_jax, B_jax, Bp_jax, z_minus = subprob.propagate_discretization_jax(ks, z_ref, nu_ref, params)
 
     z_ref_0 = z_ref[[0], :]
 
     return np.asarray(A_jax), np.asarray(B_jax), np.asarray(Bp_jax), np.asarray(jnp.vstack([z_ref_0, z_minus]))
 
 # inverse free discretize with jax
-def discretize_ms_rk4(z_ref_np, nu_ref_np, problem, method):
+def discretize_ms_rk4(z_ref_np, nu_ref_np, segment, subprob):
 
     # convert numpy arrays to jax
     z_ref_ks   = jnp.asarray(z_ref_np[:-1])
     z_ref_kps  = jnp.asarray(z_ref_np[1:])
     nu_ref_ks  = jnp.asarray(nu_ref_np[:-1])
     nu_ref_kps = jnp.asarray(nu_ref_np[1:])
-    lam_refs   = jnp.asarray(method.lagrangian_duals.dynamics)
-    params     = problem.params
+    lam_refs   = jnp.asarray(subprob.lagrangian_duals.dynamics)
+    params     = segment.params
 
-    ks = jnp.arange(problem.index_map.N.time_grid - 1)
+    ks = jnp.arange(segment.index_map.N.all - 1)
 
-    z_minus              = method.propagate(ks, z_ref_ks, nu_ref_ks, nu_ref_kps, params)
-    A_jax, B_jax, Bp_jax = method.propagate_jacobians(ks, z_ref_ks, nu_ref_ks, nu_ref_kps, params)
+    z_minus              = subprob.propagate(ks, z_ref_ks, nu_ref_ks, nu_ref_kps, params)
+    A_jax, B_jax, Bp_jax = subprob.propagate_jacobians(ks, z_ref_ks, nu_ref_ks, nu_ref_kps, params)
 
-    method.H_z_k, method.H_nu_k, method.H_nu_kp = method.cnstr_hessians(ks, lam_refs, z_ref_ks, nu_ref_ks, nu_ref_kps, params)
+    subprob.H_z_k, subprob.H_nu_k, subprob.H_nu_kp = subprob.cnstr_hessians(ks, lam_refs, z_ref_ks, nu_ref_ks, nu_ref_kps, params)
 
     z_ref_0 = z_ref_ks[[0], :]
     
@@ -421,7 +350,7 @@ def discretize_ms_rk4(z_ref_np, nu_ref_np, problem, method):
 
 
 def compute_linsys_discrete(
-    z_ref: np.ndarray, nu_ref: np.ndarray, problem: Problem, method: "SCvx",
+    z_ref: np.ndarray, nu_ref: np.ndarray, segment: Segment, subprob: "Subproblem",
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Compute the linear system in discrete form.
 
@@ -430,7 +359,8 @@ def compute_linsys_discrete(
         z_ref (numpy.ndarray): Reference state trajectory.
         nu_ref (numpy.ndarray): Reference control trajectory.
         t_ref (numpy.ndarray): Node time values.
-        trajopt_obj (dict): Dictionary containing trajopt_obj parameters.
+        segment: Segment model for discretization.
+        subprob: Segment subproblem parameters for discretization.
 
     Returns
     -------
@@ -438,11 +368,11 @@ def compute_linsys_discrete(
 
     """
 
-    Ak, Bk, Bkp, z_minus = discretize_ms_rk4(z_ref, nu_ref, problem, method)
+    Ak, Bk, Bkp, z_minus = discretize_ms_rk4(z_ref, nu_ref, segment, subprob)
 
     return Ak, Bk, Bkp, z_minus
 
-def build_ps_dyn_constraints(subproblem: "SCvx") -> cp.Constraint:
+def build_ps_dyn_constraints(subprob: "Subproblem") -> cp.Constraint:
     """Build pseudospectral dynamics constraints as a single block matrix equation.
 
     At collocation node k: state is z[k+1], control is nu[k+1] (both at etau[k+1]).
@@ -451,14 +381,14 @@ def build_ps_dyn_constraints(subproblem: "SCvx") -> cp.Constraint:
         cp.Constraint: Single constraint for all collocation nodes, shape (N_col, n_z).
 
     """
-    N_col  = subproblem.problem.index_map.N.time_grid - 1
+    N_col  = subprob.segment.index_map.N.all - 1
 
-    Z   = subproblem.cp_params.z_ref + subproblem.dz
-    lhs = 2.0 * (subproblem.ps_D @ Z)
+    Z   = subprob.cp_params.z_ref + subprob.dz
+    lhs = 2.0 * (subprob.ps_D @ Z)
 
     rhs_list = []
     for k in range(N_col):
-        rhs_k = subproblem.cp_params.ps_f_ref[k] + subproblem.cp_params.ps_Ac[k] @ subproblem.dz[k + 1] + subproblem.cp_params.ps_Bc[k] @ subproblem.dnu[k + 1]
+        rhs_k = subprob.cp_params.ps_f_ref[k] + subprob.cp_params.ps_Ac[k] @ subprob.dz[k + 1] + subprob.cp_params.ps_Bc[k] @ subprob.dnu[k + 1]
         rhs_list.append(rhs_k)
 
     rhs = cp.vstack(rhs_list)
@@ -467,7 +397,7 @@ def build_ps_dyn_constraints(subproblem: "SCvx") -> cp.Constraint:
 
 
 def compute_ps_dynamics_and_jacobians(
-    z_ref: np.ndarray, nu_ref: np.ndarray, problem: Problem, method: "SCvx",
+    z_ref: np.ndarray, nu_ref: np.ndarray, segment: Segment, subprob: "Subproblem",
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Compute dynamics and Jacobians at reference trajectory for pseudospectral collocation.
 
@@ -477,12 +407,12 @@ def compute_ps_dynamics_and_jacobians(
         Tuple of (f_ref_col, Ac_col, Bc_col).
 
     """
-    N_col = problem.index_map.N.time_grid - 1
-    n_z = problem.index_map.n.z
-    n_nu = problem.index_map.n.nu
+    N_col = segment.index_map.N.all - 1
+    n_z = segment.index_map.n.z
+    n_nu = segment.index_map.n.nu
 
-    lin_dyn = method.lin_dyn
-    params = problem.params
+    lin_dyn = subprob.lin_dyn
+    params = segment.params
 
     f_ref_col = np.zeros((N_col, n_z))
     Ac_col = np.zeros((N_col, n_z, n_z))
@@ -512,158 +442,3 @@ def compute_ps_differentiation_matrix(
     """
     tau, etau, w, D = pseudospectral.flipped_radau_differential_operator(N_col)
     return tau, etau, w, D
-
-
-
-##############################################################################################################
-# ORIGINAL DISCRETIZATION METHODS - DEPRECATED
-##############################################################################################################
-
-# TODO(Skye): Clean up and make work for numpy or sympy! Currently deprecated
-
-
-# def _coerce_time_grid(t_ref, N):
-#     t_arr = np.asarray(t_ref).reshape(-1)
-
-#     # Transition helper:
-#     # - preferred input is node times of length N
-#     # - legacy support for interval lengths of length N-1
-#     if t_arr.size == N - 1:
-#         return np.concatenate(([0.0], np.cumsum(t_arr)))
-
-#     if t_arr.size != N:
-#         raise ValueError(f"Expected t_ref with length {N} (or legacy dt_ref with length {N-1}), got {t_arr.size}.")
-
-#     return t_arr
-
-# def compute_linsys_discrete(z_ref, nu_ref, t_ref, problem, method):
-#     """
-#     Compute the linear system in discrete form.
-
-#     Parameters:
-#     z_ref (numpy.ndarray): Reference state trajectory.
-#     nu_ref (numpy.ndarray): Reference control trajectory.
-#     t_ref (numpy.ndarray): Node time values.
-#     trajopt_obj (dict): Dictionary containing trajopt_obj parameters.
-
-#     Returns:
-#     tuple: Ak, Bk, Bkp, z_minus
-#     """
-
-#     if method.flags.jax_dyn:
-#         Ak, Bk, Bkp, z_minus = discretize_inv_free_jax(z_ref, nu_ref, problem, method)
-#     else:
-#         t_ref = _coerce_time_grid(t_ref, problem.index_map.N.time_grid)
-#         if method.flags.ctcs != "none":
-#             Ak, Bk, Bkp, z_minus = discretize_ctcs(z_ref, nu_ref, t_ref, problem, method)
-#         else:
-#             Ak, Bk, Bkp, z_minus = discretize_inv_foh(z_ref, nu_ref, t_ref, problem, method)
-
-#         return Ak, Bk, Bkp, z_minus
-
-#     return Ak, Bk, Bkp, z_minus
-
-# Compute exact discretize for linear dynamic system
-# def discretize_inv_foh(z_ref, nu_ref, t_ref, problem, method):
-#     N = problem.index_map.N.time_grid
-
-#     traj_minus_data = {"z_minus": [z_ref[0]]}
-
-#     # Precompute
-#     eye_flat = np.eye(problem.index_map.n.state).ravel()
-
-#     # Stack dynamics
-#     lds0_stack = []
-#     for k in range(N - 1):
-#         method.lds0[method.z_ind] = z_ref[k]
-#         method.lds0[method.Ak_ind] = eye_flat
-#         lds0_stack.append(method.lds0.copy())
-
-#     lds0_stack = np.concatenate(lds0_stack)
-
-#     def derivs_step(tau, lds):
-#         return RHS_ltv(tau, lds, nu_ref, t_ref, problem, method)
-
-#     sol = solve_ivp(derivs_step, [0, 1], lds0_stack, method="RK45", atol=1e-6, rtol=1e-6)
-
-#     lds_end = sol.y[:, -1]  # shape: (total_state_size,)
-
-#     assert lds_end.shape[0] == (N - 1) * method.lds0_size
-
-#     Ak  = np.zeros((N - 1, problem.index_map.n.state, problem.index_map.n.state))
-#     Bk  = np.zeros((N - 1, problem.index_map.n.state, problem.index_map.n.nu))
-#     Bkp = np.zeros((N - 1, problem.index_map.n.state, problem.index_map.n.nu))
-
-#     for k in range(N - 1):
-#         base    = k * method.lds0_size
-#         traj_minus_data["z_minus"].append(lds_end[base + method.z_ind])
-
-#         Ak_bar  = lds_end[base + method.Ak_ind].reshape(problem.index_map.n.state, problem.index_map.n.state)
-#         Bk_bar  = lds_end[base + method.Bk_ind].reshape(problem.index_map.n.state, problem.index_map.n.nu)
-#         Bkp_bar = lds_end[base + method.Bkp_ind].reshape(problem.index_map.n.state, problem.index_map.n.nu)
-
-#         Ak[k]   = Ak_bar
-#         Bk[k]   = Ak_bar @ Bk_bar
-#         Bkp[k]  = Ak_bar @ Bkp_bar
-
-#     z_minus    = np.array(traj_minus_data["z_minus"])
-
-#     return Ak, Bk, Bkp, z_minus
-
-# # Integrate linear system
-# def RHS_ltv(tau, lds, nu_ref, t_ref, problem, method):
-
-
-
-#     # Initialize
-#     lds_dot         = np.zeros_like(lds)
-#     N               = problem.index_map.N.time_grid
-
-#     # Extract times and FOH control input
-#     Om_k            = 1 - tau
-#     Om_kp           = tau
-
-#     nrows, ncols    = nu_ref.shape
-#     rows            = nrows if nrows > ncols else ncols
-
-#     v_1             = Om_k * np.ones((rows, 1))
-#     v_2             = Om_kp * np.ones((rows - 1, 1))
-#     Om              = np.diagflat(v_1) + np.diagflat(v_2, 1)
-
-#     nu              = Om @ nu_ref
-
-#     for k in range(N - 1):
-#         dt_k       = t_ref[k + 1] - t_ref[k]
-
-#         # Extract state info
-#         z_k         = lds[ k * method.lds0_size + method.z_ind ]
-
-#         # Extract continuous time Jacobians
-#         fc, Ac, Bc = problem.lin_dyn(tau, z_k, nu[k])
-
-#         # Extract STM
-#         Phi_tau     = lds[ k * method.lds0_size + method.Ak_ind ].reshape(problem.index_map.n.state, problem.index_map.n.state)
-
-#         # Construct Jacobians w.r.t. tau
-#         f_tau       = dt_k * fc
-#         A_tau       = dt_k * Ac
-#         B_tau       = dt_k * Om_k * Bc
-#         Bp_tau      = dt_k * Om_kp * Bc
-
-#         Phi_tau_inv = np.linalg.pinv(Phi_tau)
-
-#         # Construct derivatives
-#         z_dot       = f_tau
-#         A_tau_dot   = A_tau @ Phi_tau
-#         B_tau_dot   = Phi_tau_inv @ B_tau
-#         Bp_tau_dot  = Phi_tau_inv @ Bp_tau
-
-#         # Setup linear system properly
-#         lds_dot[ k * method.lds0_size + method.z_ind  ] = z_dot
-#         lds_dot[ k * method.lds0_size + method.Ak_ind ] = A_tau_dot.flatten()
-#         lds_dot[ k * method.lds0_size + method.Bk_ind ] = B_tau_dot.flatten()
-#         lds_dot[ k * method.lds0_size + method.Bkp_ind] = Bp_tau_dot.flatten()
-
-#     return lds_dot
-
-

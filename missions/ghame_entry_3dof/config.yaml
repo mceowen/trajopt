@@ -1,73 +1,73 @@
-problem:
-  # ===============================
-  # INHERIT MODEL CONFIGS
-  # ===============================
-  inherit: ../../models/configs/reentry_3dof.yaml
+method:
+  inherit: trajopt/methods/configs/autoscvx.yaml
 
-  # ===============================
-  # FUNCTION REGISTRY
-  # ===============================
-  fcns:
-    nonlinear_aero: "./ghame.py:nonlinear_aero"
+  flags:
+    ode_fixed_dt: 1
+    equal_dt: 1
+    free_final_time: 1
+    flag_conv: 1
+    discretize: ms
 
-  # ===============================
-  # PARAMETERS
-  # ===============================
-  params:
-    planet.inherit: ../configs/planets/earth.yaml
-    vehicle.inherit: ../configs/vehicles/ghame.yaml
+  solver_opts:
+    solver: QOCO
 
-  # ===============================
-  # CONSTRAINTS
-  # ===============================
-  constraints:
-    dynamics:
-      type: dynamics
-      fcn: fcns.dynamics
+segments:
+  entry:
+    num_nodes: 200
+    inherit: ../../models/configs/reentry_3dof.yaml
 
-    initial_state:
-      type: initial_state
-      value: ["${params.planet.r + 80e3}",  0.0, 0.0, 5612, -0.5,  90.0]
+    fcns:
+      nonlinear_aero: "./ghame.py:nonlinear_aero"
 
-    final_state:
-      type: final_state
-      value: ["${params.planet.r + 10e3}", null, null, 100, -10, null]
+    params:
+      planet.inherit: ../configs/planets/earth.yaml
+      vehicle.inherit: ../configs/vehicles/ghame.yaml
 
-    state_limits:
-      type: state_limits
-      lower: ["${params.planet.r}", null, null, 50, null, null]
+    constraints:
+      dynamics:
+        type: dynamics
+        fcn: fcns.dynamics
 
-    control_limits:
-      type: control_limits
-      lower: [-80.0, 10]
-      upper: [80.0, 20]
+      initial_state:
+        type: initial_state
+        value: ["${params.planet.r + 80e3}",  0.0, 0.0, 5612, -0.5,  90.0]
 
-    bank_angle_rate_limit:
-      type: control_rate_limit
-      value: [5, 5]
-      idx: [0, 1]
+      final_state:
+        type: final_state
+        value: ["${params.planet.r + 15000.0}", null, null, null, -5.0, null]
 
-  # ===============================
-  # COSTS
-  # ===============================
-  costs:
-    max_crossrange:
-      type: terminal_state
-      idx: [2]
-      sign: -1
+      state_limits:
+        type: state_limits
+        lower: ["${params.planet.r}", null, null, 50, null, null]
 
-# ===============================
-# METHOD CONFIGURATION
-# ===============================
-method.inherit: method.yaml
+      control_limits:
+        type: control_limits
+        lower: [-80.0, 10]
+        upper: [80.0, 20]
 
-# ===============================
-# ANALYSIS CONFIGURATION
-# ===============================
+      # uncomment this to solve with max heat rate constraint!
+      max_heat_rate:
+        type: nonconvex_inequality
+        fcn: fcns.heat_rate
+        upper: [5.3]
+        scale: 1.0
+
+    costs:
+      max_crossrange:
+        type: terminal_state
+        idx: [2]
+        sign: -1
+
+    guess:
+      type: propagation
+      t_start: 0.0
+      t_stop: 1800.0
+      u_start: [0.0, 15.0]
+      u_stop:  [0.0, 15.0]
+
 analysis:
   type: standalone
-  
-  compute_iters: false
-  show_iters: false
-  show_convergence: false
-  show_weights: false
+  compute_iters: true
+  show_iters: true
+  show_convergence: true
+  show_weights: true

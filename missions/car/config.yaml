@@ -1,69 +1,73 @@
-problem:
-  # source: https://underactuated.mit.edu/trajopt.html#perching
+method:
+  inherit: trajopt/methods/configs/autoscvx.yaml
 
-  # ===============================
-  # INHERIT MODEL CONFIGS
-  # ===============================
-  inherit: model.yaml
+  flags:
+    equal_dt: 1
+    free_final_time: 0
+    flag_conv: 1
 
-  # ===============================
-  # PARAMETERS
-  # ===============================
-  params:
-    obs1_x: -0.2
-    obs1_y: 0.3
-    obs1_r: 0.25
+  conv:
+    eps_state:  0.01
+    eps_dyn:    0.00001
+    eps_defect: 1.0
+    eps_cost:   1
 
-    obs2_x: 0.2
-    obs2_y: 0.7
-    obs2_r: 0.25
+  solver_opts:
+    solver: CLARABEL
 
-  # ===============================
-  # CONSTRAINTS
-  # ===============================
-  constraints:
-    dynamics:
-      type: dynamics
-      fcn: fcns.dynamics
+segments:
+  main:
+    num_nodes: 40
+    inherit: model.yaml
 
-    initial_state:
-      type: initial_state
-      value: [-0.25, 0, "${np.deg2rad(90)}"]
+    params:
+      obs1_x: -0.2
+      obs1_y: 0.3
+      obs1_r: 0.25
+      obs2_x: 0.2
+      obs2_y: 0.7
+      obs2_r: 0.25
 
-    final_state:
-      type: final_state
-      value: [0.25, 1.0, "${np.deg2rad(90)}"]
+    constraints:
+      dynamics:
+        type: dynamics
+        fcn: fcns.dynamics
 
-    control_limits:
-      type: control_limits
-      lower: [-3.0, -3.0]
-      upper: [3.0, 3.0]
+      initial_state:
+        type: initial_state
+        value: [-0.25, 0, "${np.deg2rad(90)}"]
 
-    obstacle:
-      type: nonconvex_inequality
-      fcn: fcns.obstacle
-      lower: ["${params.obs1_r}", "${params.obs2_r}"]
+      final_state:
+        type: final_state
+        value: [0.25, 1.0, "${np.deg2rad(90)}"]
 
-  # ===============================
-  # COSTS
-  # ===============================
-  costs:
-    u_squared:
-      type: running
-      fcn: fcns.u_squared_cost
-      w: 10
+      control_limits:
+        type: control_limits
+        lower: [-3.0, -3.0]
+        upper: [3.0, 3.0]
 
-# ===============================
-# METHOD CONFIGURATION
-# ===============================
-method.inherit: method.yaml
+      obstacle:
+        type: nonconvex_inequality
+        fcn: fcns.obstacle
+        lower: ["${params.obs1_r}", "${params.obs2_r}"]
 
-# ===============================
-# ANALYSIS CONFIGURATION
-# ===============================
+    costs:
+      u_squared:
+        type: running
+        fcn: fcns.u_squared_cost
+        w: 10
+
+    guess:
+      type: straight_line
+      t_start: 0.0
+      t_stop: 4.0
+      x_start: [-0.25, 0, "${np.deg2rad(90)}"]
+      x_stop: [0.25, 1.0, "${np.deg2rad(90)}"]
+      u_start: [0.1, 0]
+      u_stop: [0.1, 0]
+
 analysis:
   type: standalone
-  
   compute_iters: false
   show_iters: false
   show_convergence: false

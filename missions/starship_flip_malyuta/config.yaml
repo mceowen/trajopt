@@ -1,90 +1,70 @@
 # source: https://github.com/UW-ACL/SCPToolbox.jl/tree/master/test/examples/starship_flip
 
-problem:
+segments:
+  three_engine_segment:
+    num_nodes: 40
+    inherit: common_segment.yaml
 
-  # ===============================
-  # INHERIT MODEL CONFIGS
-  # ===============================
-  inherit: model.yaml
+    constraints:
+      initial_state:
+        type: initial_state
+        value: [100.0, 600.0, 0, "${-params.vterm}", "${np.deg2rad(90.0)}", 0.0]
 
-  # ===============================
-  # PARAMETERS
-  # ===============================
-  params:
-    gamma_gs: 60
-    g: 9.81
-    rs: 4.5
-    ls: 50.0
-    mass: 120000
-    Isp: 330
-    lcg: "${0.4 * ls}"
-    lcp: "${0.45 * ls}"
-    J: "${1 / 12 * mass * (6 * rs**2 + ls**2)}"
-    vterm: 85
-    cd: "${1.2 * mass * g / (vterm**2)}"
-    alpha: "${-1 / (Isp * g)}"
+      three_engine_control_limits:
+        type: control_limits
+        lower: ["${3 * 880000}", "${np.deg2rad(-10)}"]
+        upper: [6000000, "${np.deg2rad(10)}"]
 
-  # ===============================
-  # CONSTRAINTS
-  # ===============================
+    guess:
+      type: straight_line
+      t_start: 0.0
+      t_stop: 5.0
+      x_start: [100.0, 600.0, 0, "${-params.vterm}", "${np.deg2rad(90.0)}", 0.0]
+      x_stop: [0, 0, 0, -0.1, 0, 0]
+      u_start: [500000, 0]
+      u_stop: [500000, 0]
+
+  single_engine_segment:
+    num_nodes: 40
+    inherit: common_segment.yaml
+
+    constraints:
+      final_state:
+        type: final_state
+        value: [0, 0, 0, -0.1, 0, 0]
+
+    guess:
+      type: straight_line
+      t_start: 5.0
+      t_stop: 20.0
+      x_start: [0, 0, 0, -0.1, 0, 0]
+      x_stop: [0, 0, 0, -0.1, 0, 0]
+      u_start: [500000, 0]
+      u_stop: [500000, 0]
+
+links:
   constraints:
-    dynamics:
-      type: dynamics
-      fcn: fcns.dynamics
+    continuity:
+      type: continuity
+      segment1: three_engine_segment
+      segment2: single_engine_segment
 
-    initial_state:
-      type: initial_state
-      value: [100.0, 600.0, 0, "${-params.vterm}", "${np.deg2rad(90.0)}", 0.0]
+method:
+  type: SCP
+  inherit: trajopt/methods/configs/autoscvx.yaml
 
-    final_state:
-      type: final_state
-      value: [0, 0, 0, -0.1, 0, 0]
+  flags.free_final_time: 0
 
-    state_limits:
-      type: state_limits
-      lower: [null, 0,    null, null, "${np.deg2rad(-45.0)}", null]
-      upper: [null, null, null, null,  "${np.deg2rad(90.0)}", null]
+  conv:
+    eps_state:  0.0001
+    eps_dyn:    0.001
+    eps_defect: 1.0
+    eps_cost:   1
+    iter_max: 100
 
-    control_limits:
-      type: control_limits
-      lower: [880000, "${np.deg2rad(-10)}"]
-      upper: [6000000, "${np.deg2rad(10)}"]
-
-    control_limits1:
-      type: control_limits
-      lower: ["${3 * 880000}", "${np.deg2rad(-10)}"]
-      upper: [6000000, "${np.deg2rad(10)}"]
-      nodes: [0, 1, 2, 3, 4, 5]
-
-    glide_slope:
-      type: convex_inequality
-      fcn: fcns.cvx_glide_slope
-
-  # ===============================
-  # COSTS
-  # ===============================
-  costs:
-    # min_time:
-    #   type: min_time
-
-    u_squared:
-      type: running
-      fcn: fcns.u_squared_cost
-      scale: 1000000000000
-      w: 10
-
-# ===============================
-# METHOD CONFIGURATION
-# ===============================
-method.inherit: method.yaml
-
-# ===============================
-# ANALYSIS CONFIGURATION
-# ===============================
 analysis:
   type: standalone
-  
   compute_iters: true
   show_iters: true
-  show_convergence: false
-  show_weights: false
+  show_convergence: true
+  show_weights: true

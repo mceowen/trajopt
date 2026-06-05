@@ -1,1 +1,0 @@
-from .index_map import IndexMap

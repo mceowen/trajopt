@@ -31,7 +31,7 @@ control:
 time: 
   scale: 1
 
-trajectories:
+trajplots:
   position:
     type: time_series
     fcn: fcns.state_pos

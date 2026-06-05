@@ -1,9 +1,9 @@
-from trajopt.trajectory_analyzer import TrajectoryAnalyzer
+from trajopt.trajectory import Trajectory
 
 config_path = "./config.yaml"
 
-trajopt = TrajectoryAnalyzer(config_path)
-trajopt.solve()
+traj = Trajectory(config_path)
+traj.solve()
 
-data = trajopt.analyze()
-trajopt.plot(data)
+data = traj.analyze()
+traj.plot(data)

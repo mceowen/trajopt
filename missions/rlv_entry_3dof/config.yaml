@@ -1,81 +1,81 @@
-problem:
-  # ===============================
-  # INHERIT MODEL CONFIGS
-  # ===============================
-  inherit: ../../models/configs/reentry_3dof.yaml
+method:
+  inherit: trajopt/methods/configs/autoscvx.yaml
 
-  # ===============================
-  # FUNCTION REGISTRY
-  # ===============================
-  fcns:
-    nonlinear_aero: rlv_entry.py:nonlinear_aero
+  flags:
+    ode_fixed_dt: 1
+    equal_dt: 1
+    free_final_time: 1
+    flag_conv: 1
+    discretize: ms
 
-  # ===============================
-  # PARAMETERS
-  # ===============================
-  params:
-    planet:
-      inherit: ../configs/planets/earth.yaml
-      omega: 0.0
+  conv:
+    iter_max: 100
 
-    vehicle:
-      inherit: ../configs/vehicles/rlv.yaml
+  solver_opts:
+    solver: QOCO
 
-  # ===============================
-  # CONSTRAINTS
-  # ===============================
-  constraints:
-    dynamics:
-      type: dynamics
-      fcn: fcns.dynamics
+segments:
+  entry:
+    num_nodes: 150
+    inherit: ../../models/configs/reentry_3dof.yaml
 
-    initial_state:
-      type: initial_state
-      value: ["${params.planet.r + 79248.0}", 0.0, 0.0, 7802.88, -1.0, 90.0]
+    fcns:
+      nonlinear_aero: rlv_entry.py:nonlinear_aero
 
-    final_state:
-      type: final_state
-      value: ["${params.planet.r + 24384.0}", null, null, 762.0, -5.0, null]
-      eps: [100, 10, 0.1]
+    params:
+      planet:
+        inherit: ../configs/planets/earth.yaml
+        omega: 0.0
+      vehicle:
+        inherit: ../configs/vehicles/rlv.yaml
 
-    state_limits:
-      type: state_limits
-      lower: ["${params.planet.r}",            -180, -70,    10.0, -80.0, -180]
-      upper: ["${params.planet.r + 79248.0}",   180,  70, 45000.0,  80.0,  180]
+    constraints:
+      dynamics:
+        type: dynamics
+        fcn: fcns.dynamics
 
-    control_limits:
-      type: control_limits
-      lower: [-90.0, -90]
-      upper: [1.0, 90]
-    
-    # # uncomment this to solve with max heat rate constraint!
-    # max_heat_rate:
-    #   type: nonconvex_inequality
-    #   fcn: fcns.heat_rate
-    #   upper: [5]
+      initial_state:
+        type: initial_state
+        value: ["${params.planet.r + 79248.0}", 0.0, 0.0, 7802.88, -1.0, 90.0]
 
-  # ===============================
-  # COSTS
-  # ===============================
-  costs:
-    max_crossrange:
-      type: terminal_state
-      idx: [2]
-      sign: -1
+      final_state:
+        type: final_state
+        value: ["${params.planet.r + 24384.0}", null, null, 762.0, -5.0, null]
 
-# ===============================
-# METHOD CONFIGURATION
-# ===============================
-method.inherit: method.yaml
+      state_limits:
+        type: state_limits
+        lower: ["${params.planet.r}",            -180, -70,    10.0, -80.0, -180]
+        upper: ["${params.planet.r + 79248.0}",   180,  70, 45000.0,  80.0,  180]
 
+      control_limits:
+        type: control_limits
+        lower: [-90.0, -90]
+        upper: [1.0, 90]
 
-# ===============================
-# ANALYSIS CONFIGURATION
-# ===============================
+      # # uncomment this to solve with max heat rate constraint!
+      # max_heat_rate:
+      #   type: nonconvex_inequality
+      #   fcn: fcns.heat_rate
+      #   upper: [5]
+
+    costs:
+      max_crossrange:
+        type: terminal_state
+        idx: [2]
+        sign: -1
+
+    guess:
+      type: straight_line
+      t_start: 0.0
+      t_stop:  1000.0
+      x_start: ["${params.planet.r + 79248.0}", 0.0, 0.0, 7802.88, -1.0,  90.0]
+      x_stop:  ["${params.planet.r + 24384.0}" , 10,  10,   762.0, -5.0, -90.0]
+      u_start: [0.0, 0.0]
+      u_stop:  [0.0, 0.0]
+
 analysis:
   type: standalone
-  
-  compute_iters: false
-  show_iters: false
+  compute_iters: true
+  show_iters: true
   show_convergence: false
   show_weights: false

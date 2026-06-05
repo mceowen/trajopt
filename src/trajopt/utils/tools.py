@@ -4,68 +4,10 @@ import sys
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import jax
 import numpy as np
-
-if TYPE_CHECKING:
-    from trajopt.nondim.nondim import Nondim
-
-
-class _FcnExpr:
-    """Lightweight wrapper enabling arithmetic on (t, x, u, params) callables."""
-
-    def __init__(self, fcn: Callable) -> None:
-        """Wrap fcn in a _FcnExpr to enable arithmetic composition."""
-        self._fcn = fcn
-
-    def __mul__(self, other: Any) -> "_FcnExpr":
-        """Return element-wise product of this callable with other."""
-        f = self._fcn
-        if isinstance(other, _FcnExpr):
-            g = other._fcn
-            return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) * g(t, x, u, params))
-        if isinstance(other, list):
-            other = np.array(other)
-        return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) * other)
-
-    def __rmul__(self, other: Any) -> "_FcnExpr":
-        """Return element-wise product of other with this callable."""
-        return self.__mul__(other)
-
-    def __truediv__(self, other: Any) -> "_FcnExpr":
-        """Return element-wise quotient of this callable divided by other."""
-        f = self._fcn
-        if isinstance(other, _FcnExpr):
-            g = other._fcn
-            return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) / g(t, x, u, params))
-        return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) / other)
-
-    def __add__(self, other: Any) -> "_FcnExpr":
-        """Return element-wise sum of this callable with other."""
-        f = self._fcn
-        if isinstance(other, _FcnExpr):
-            g = other._fcn
-            return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) + g(t, x, u, params))
-        return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) + other)
-
-    def __radd__(self, other: Any) -> "_FcnExpr":
-        """Return element-wise sum of other with this callable."""
-        return self.__add__(other)
-
-    def __sub__(self, other: Any) -> "_FcnExpr":
-        """Return element-wise difference of this callable minus other."""
-        f = self._fcn
-        if isinstance(other, _FcnExpr):
-            g = other._fcn
-            return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) - g(t, x, u, params))
-        return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) - other)
-
-    def __neg__(self) -> "_FcnExpr":
-        """Return element-wise negation of this callable."""
-        f = self._fcn
-        return _FcnExpr(lambda t, x, u, params: -f(t, x, u, params))
 
 class AttrDict(dict):
     """Dictionary that allows attribute access to keys.
@@ -127,26 +69,6 @@ def set_from_path(d: dict, path: str, value: Any) -> None:
 
     current_dict[keys[-1]] = value
 
-def set_attr_from_path(obj: Any, path: str, value: Any) -> None:
-    """Set an attribute on a nested object using a dot-separated path."""
-    parts = path.split(".")
-    current = obj
-
-    for part in parts[:-1]:
-        current = getattr(current, part)
-
-    setattr(current, parts[-1], value)
-
-def get_attr_from_path(obj: Any, path: str) -> Any:
-    """Get an attribute from a nested object using a dot-separated path."""
-    parts = path.split(".")
-    current = obj
-
-    for part in parts:
-        current = getattr(current, part)
-
-    return current
-
 def deep_merge(base: dict, override: dict) -> "AttrDict":
     """Recursively merge override into base, returning a new AttrDict."""
     current_dict = recursive_attrdict(base.copy())
@@ -202,19 +124,6 @@ def flatten_dict(d: dict, parent_key: str = "") -> "AttrDict":
             items[new_key] = value
 
     return items
-
-def trim_dict(d: dict, keys: list) -> dict:
-    """Return a new dict containing only the specified keys."""
-    return {k: d[k] for k in keys if k in d}
-
-def extract_attributes(obj: Any, keys: list) -> dict:
-    """Return a dict of attribute values from obj for the given keys."""
-    return {k: getattr(obj, k) for k in keys if hasattr(obj, k)}
-
-def extract_attributes_exclude(obj: Any, exclude: tuple = ()) -> dict:
-    """Return a dict of obj's attributes, excluding the specified keys."""
-    excl = set(exclude)
-    return {k: v for k, v in vars(obj).items() if k not in excl}
 
 def expand_to_array_if_scalar(x: Any, n: int) -> np.ndarray:
     """Broadcast a scalar or single-element array to length n."""
@@ -288,7 +197,7 @@ def resolve_function_from_string(fcn_string: str, fcns: "AttrDict | None" = None
         raise type(e)(f"could not load file '{file_path}' (from '{fcn_string}'): {e}") from None
 
     try:
-        return getattr(module, func_name)
+        fn = getattr(module, func_name)
     except AttributeError:
         available = [n for n, obj in inspect.getmembers(module, inspect.isfunction) if obj.__module__ == module.__name__]
         raise AttributeError(
@@ -297,52 +206,60 @@ def resolve_function_from_string(fcn_string: str, fcns: "AttrDict | None" = None
             f"  available: {available}",
         ) from None
 
-def update_problem_from_config(problem: Any, updated_config_vals_flat: dict[str, Any], nondim: "Nondim") -> None:
-    """Update problem constraints, costs, and params from a flat config dict."""
-    for path, value in updated_config_vals_flat.items():
+    if fcns is not None and "fcns" in inspect.signature(fn).parameters:
+        fn = partial(fn, fcns=fcns)
+    return fn
 
-        # update constraint value from config
-        if path.startswith("constraints."):
-            constraint_name = path.split(".")[1]
-            path_to_spec = ".".join(path.split(".")[2:])
+class _FcnExpr:
+    """Lightweight wrapper enabling arithmetic on (t, x, u, params) callables."""
 
-            constraint = problem.constraints.get(name=constraint_name)[0]
-            set_attr_from_path(constraint, path_to_spec, value)
+    def __init__(self, fcn: Callable) -> None:
+        """Wrap fcn in a _FcnExpr to enable arithmetic composition."""
+        self._fcn = fcn
 
-        # update cost value from config changes
-        if path.startswith("costs."):
-            cost_name = path.split(".")[1]
+    def __mul__(self, other: Any) -> "_FcnExpr":
+        """Return element-wise product of this callable with other."""
+        f = self._fcn
+        if isinstance(other, _FcnExpr):
+            g = other._fcn
+            return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) * g(t, x, u, params))
+        if isinstance(other, list):
+            other = np.array(other)
+        return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) * other)
 
-            if cost_name in problem.costs.names:
-                cost = problem.costs.get(name=cost_name)[0]
-                path_to_spec = ".".join(path.split(".")[2:])
-                set_attr_from_path(cost, path_to_spec, value)
+    def __rmul__(self, other: Any) -> "_FcnExpr":
+        """Return element-wise product of other with this callable."""
+        return self.__mul__(other)
 
-        if path.startswith("params."):
-            path_to_param = path.split("params.")[1]
-            set_attr_from_path(problem.params, path_to_param, value)
+    def __truediv__(self, other: Any) -> "_FcnExpr":
+        """Return element-wise quotient of this callable divided by other."""
+        f = self._fcn
+        if isinstance(other, _FcnExpr):
+            g = other._fcn
+            return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) / g(t, x, u, params))
+        return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) / other)
 
-    # Nondimensionalize constraints that were just updated
-    updated_constraint_names = set()
-    for path in updated_config_vals_flat:
-        if path.startswith("constraints."):
-            constraint_name = path.split(".")[1]
-            updated_constraint_names.add(constraint_name)
+    def __add__(self, other: Any) -> "_FcnExpr":
+        """Return element-wise sum of this callable with other."""
+        f = self._fcn
+        if isinstance(other, _FcnExpr):
+            g = other._fcn
+            return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) + g(t, x, u, params))
+        return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) + other)
 
-    for constraint in problem.constraints.get():
-        if constraint.name in updated_constraint_names:
-            constraint.nondim_constraint(nondim)
+    def __radd__(self, other: Any) -> "_FcnExpr":
+        """Return element-wise sum of other with this callable."""
+        return self.__add__(other)
 
-ITER_DATA_KEYS_TO_KEEP: set[str] = {
-    "iter_num", "converged", "cost", "solve_time", "prop_time", "parse_time", "t_full",
-    "t_opt", "z_opt", "nu_opt", "dt_opt", "T_opt",
-    "t_nl", "z_nl", "nu_nl", "t_init", "z_init", "nu_init", "t_init_nl", "z_init_nl", "nu_init_nl",
-    "constraint_data", "trajectory_data", "conv_data", "W", "dual", "penalty",
-}
+    def __sub__(self, other: Any) -> "_FcnExpr":
+        """Return element-wise difference of this callable minus other."""
+        f = self._fcn
+        if isinstance(other, _FcnExpr):
+            g = other._fcn
+            return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) - g(t, x, u, params))
+        return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) - other)
 
-METHOD_DATA_KEYS_TO_KEEP = {
-    'time_grid', 'N_dens', 'Npm', 't_start', 't_stop', 'Ts_init', 'conv', 'conv_data', 'cost_init',
-    'flags', 'u_start', 'u_stop',
-    'name', 'n_minus', 'n_plus', 'solver_opts',
-    'nondim', 'initial_guess', 'penalty', 'z_ind'
-}
+    def __neg__(self) -> "_FcnExpr":
+        """Return element-wise negation of this callable."""
+        f = self._fcn
+        return _FcnExpr(lambda t, x, u, params: -f(t, x, u, params))

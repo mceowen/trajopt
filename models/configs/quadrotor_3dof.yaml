@@ -55,7 +55,7 @@ time.scale: 1.0
 # TRAJECTORIES
 # ===============================
 
-trajectories:
+trajplots:
   pos_x:
     type: time_series
     fcn: fcns.pos_x

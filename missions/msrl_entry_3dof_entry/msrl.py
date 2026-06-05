@@ -10,15 +10,15 @@ def density_model(t, x, u, params, fcns):
 
     y = (r / (3.396 * 10**6)) - 1
 
-    a = -4.418967
-    b = -56.76770
-    c = 1.621266
-    d = 379.3357
-    e = 8564.256
-    f = 8414.405
-    g = -988.7042
-    h = 4461.988
-    i = 31.36062
+    a = params.a
+    b = params.b
+    c = params.c
+    d = params.d
+    e = params.e
+    f = params.f
+    g = params.g
+    h = params.h
+    i = params.i
 
     numerator   = a + c*y + e*y**2 + g*y**3 + i*y**4
     denominator = 1 + b*y + d*y**2 + f*y**3 + h*y**4
@@ -33,19 +33,7 @@ def nonlinear_aero(t, x, u, params, fcns):
 
     y = v / 3554.6731
 
-    a_l = 0.679945
-    b_l = - 9.522473
-    c_l = 59.179219
-    d_l = - 215.423516
-    e_l = 510.853276
-    f_l = -830.748818
-    g_l = 950.127376
-    h_l = -771.365024
-    i_l = 443.191605
-    j_l = -177.601759
-    k_l = 48.232018
-    l_l = -8.362472
-    m_l = 1.177526
+    
 
     Cl = (
         a_l*y**12 + b_l*y**11 + c_l*y**10 + d_l*y**9 + e_l*y**8 
@@ -53,19 +41,19 @@ def nonlinear_aero(t, x, u, params, fcns):
         + k_l*y**2 + l_l*y + m_l
     )
 
-    a_d = 1.458554
-    b_d = -20.501723
-    c_d = 128.239298
-    d_d = -470.835046
-    e_d = 1126.686522
-    f_d = -1844.173832
-    g_d = 2106.728736
-    h_d = -1681.164677
-    i_d = 921.349863
-    j_d = -333.513962
-    k_d = 74.164741
-    l_d = - 8.758177
-    m_d = 1.684456
+    a_d = 
+    b_d = 
+    c_d = 
+    d_d = -
+    e_d = 1
+    f_d = 
+    g_d = 
+    h_d = 
+    i_d = 
+    j_d = 
+    k_d = 
+    l_d =  
+    m_d = 
 
     Cd = (
         a_d*y**12 + b_d*y**11 + c_d*y**10 + d_d*y**9 + e_d*y**8

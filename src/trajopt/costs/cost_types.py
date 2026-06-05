@@ -4,169 +4,71 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from trajopt.methods.scp import convexify
 from trajopt.utils import tools
 
 
 class min_time:
-    def __init__(self, cost_config: dict, index_map: Any, **kwargs: Any) -> None:
-        """Minimum time cost: penalizes total flight time.
-
-        Args:
-            cost_config: Cost configuration dictionary.
-            index_map: Index map object.
-            **kwargs: Additional keyword arguments (unused).
-
-        """
+    def __init__(self, cost_config: dict, segment) -> None:
         self.type = "min_time"
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
-        self.nodes = cost_config.get("nodes", np.arange(0, index_map.N.time_grid))
-
-    def nondim_cost(self, nondim: Any) -> None:
-        """Non-dimensionalize the cost (no-op for min_time).
-
-        Args:
-            nondim: Non-dimensionalization object.
-
-        Returns:
-            None.
-
-        """
-        pass
+        self.nodes = cost_config.get("nodes", np.arange(0, segment.index_map.N.all))
 
 
 class terminal_state:
-    def __init__(self, cost_config: dict, index_map: Any, **kwargs: Any) -> None:
-        """Terminal state cost: penalizes selected state components at the final node.
-
-        Args:
-            cost_config: Cost configuration dictionary.
-            index_map: Index map object.
-            **kwargs: Additional keyword arguments (unused).
-
-        """
+    def __init__(self, cost_config: dict, segment) -> None:
         self.type = "terminal_state"
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
-        self.nodes = cost_config.get("nodes", np.array([index_map.N.time_grid - 1]))
+        self.nodes = cost_config.get("nodes", np.array([segment.index_map.N.all - 1]))
         self.idx = cost_config["idx"]
         self.sign = cost_config.get("sign", 1)
 
-    def nondim_cost(self, nondim: Any) -> None:
-        """Non-dimensionalize the cost (no-op for terminal_state).
-
-        Args:
-            nondim: Non-dimensionalization object.
-
-        Returns:
-            None.
-
-        """
-        pass
-
 
 class min_norm_terminal:
-    def __init__(self, cost_config: dict, index_map: Any, **kwargs: Any) -> None:
-        """Minimum norm terminal cost: penalizes the norm of selected terminal states.
-
-        Args:
-            cost_config: Cost configuration dictionary.
-            index_map: Index map object.
-            **kwargs: Additional keyword arguments (unused).
-
-        """
+    def __init__(self, cost_config: dict, segment) -> None:
         self.type = "min_norm_terminal"
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
-        self.nodes = cost_config.get("nodes", np.array([index_map.N.time_grid - 1]))
+        self.nodes = cost_config.get("nodes", np.array([segment.index_map.N.all - 1]))
         self.idx = cost_config["idx"]
         self.value = np.array(cost_config["value"]) if "value" in cost_config else None
 
-    def nondim_cost(self, nondim: Any) -> None:
-        """Non-dimensionalize the cost (no-op for min_norm_terminal).
-
-        Args:
-            nondim: Non-dimensionalization object.
-
-        Returns:
-            None.
-
-        """
-        pass
-
 
 class regularization:
-    def __init__(self, cost_config: dict, index_map: Any, **kwargs: Any) -> None:
-        """Regularization cost: penalizes the norm of selected state or control components.
-
-        Args:
-            cost_config: Cost configuration dictionary.
-            index_map: Index map object.
-            **kwargs: Additional keyword arguments (unused).
-
-        """
+    def __init__(self, cost_config: dict, segment) -> None:
         self.type = "regularization"
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
-        self.nodes = cost_config.get("nodes", np.arange(0, index_map.N.time_grid))
+        self.nodes = cost_config.get("nodes", np.arange(0, segment.index_map.N.all))
         self.set = cost_config["set"]
         self.norm_type = cost_config.get("norm_type", "l2")
         self.w = cost_config["w"]
-        self.idx = cost_config.get("idx", np.arange(0, index_map.n.control))
-
-    def nondim_cost(self, nondim: Any) -> None:
-        """Non-dimensionalize the cost (no-op for regularization).
-
-        Args:
-            nondim: Non-dimensionalization object.
-
-        Returns:
-            None.
-
-        """
-        pass
+        self.idx = cost_config.get("idx", np.arange(0, segment.index_map.n.control))
 
 
 class rate_regularization:
-    def __init__(self, cost_config: dict, index_map: Any, **kwargs: Any) -> None:
-        """Rate regularization cost: penalizes the norm of finite differences of state or control.
-
-        Args:
-            cost_config: Cost configuration dictionary.
-            index_map: Index map object.
-            **kwargs: Additional keyword arguments (unused).
-
-        """
+    def __init__(self, cost_config: dict, segment) -> None:
         self.type = "rate_regularization"
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
-        self.nodes = cost_config.get("nodes", np.arange(0, index_map.N.time_grid))
+        self.nodes = cost_config.get("nodes", np.arange(0, segment.index_map.N.all))
         self.set = cost_config["set"]
         self.norm_type = cost_config.get("norm_type", "l2")
         self.w = cost_config["w"]
-        self.idx = cost_config.get("idx", np.arange(0, index_map.n.control))
-
-    def nondim_cost(self, nondim: Any) -> None:
-        """Non-dimensionalize the cost (no-op for rate_regularization).
-
-        Args:
-            nondim: Non-dimensionalization object.
-
-        Returns:
-            None.
-
-        """
-        pass
+        self.idx = cost_config.get("idx", np.arange(0, segment.index_map.n.control))
 
 
 class terminal:
-    def __init__(self, cost_config: dict, index_map: Any, fcns: dict | None = None, **kwargs: Any) -> None:
-        """Terminal cost evaluated at the final node via a user-supplied function."""
+    def __init__(self, cost_config: dict, segment) -> None:
+        index_map = segment.index_map
+        nondim = segment.nondim
+        fcns = segment.fcns
+
         self.type = "terminal"
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
-        self.nodes = cost_config.get("nodes", np.array([index_map.N.time_grid - 1]))
+        self.nodes = cost_config.get("nodes", np.array([index_map.N.all - 1]))
         self.scale = cost_config.get("scale", None)
         self.backend = cost_config.get("backend", "jax")
         self.ct = cost_config.get("ct", 0)
@@ -174,35 +76,34 @@ class terminal:
 
         self.index_map = index_map
         self.fcn_string = cost_config["fcn"]
-        self.fcn_dim = tools.resolve_function_from_string(self.fcn_string, fcns)
+        self.fcn_txu_dim = tools.resolve_function_from_string(self.fcn_string, fcns)
 
-        self.fcn_nd = None
-        self.fcn = None
-        self.fcn_compiled = None
-        self.dfcn_dz_compiled = None
-        self.dfcn_du_compiled = None
+        self.M_out_d2nd   = jnp.atleast_1d(1 / self.scale) if self.scale is not None else jnp.atleast_1d(1.0)
+        self.M_state_nd2d = jnp.asarray(nondim.M.state.nd2d)
+        self.M_ctrl_nd2d  = jnp.asarray(nondim.M.control.nd2d)
 
-    def nondim_cost(self, nondim: Any) -> None:
         if self.backend == "jax":
-            if self.scale is not None:
-                M_out_d2nd = jnp.atleast_1d(1 / self.scale)
-            else:
-                M_out_d2nd = jnp.atleast_1d(1.0)
-            M_state_nd2d = nondim.M.state["nd2d"]
-            M_ctrl_nd2d = nondim.M.control["nd2d"]
-            self.fcn_txu = nondim.nondim_function(self.fcn_dim, M_state_nd2d, M_ctrl_nd2d, M_out_d2nd)
-
-    def convexify_cost(self) -> None:
-        if self.backend == "jax":
-            self.fcn = self.index_map.wrap_txu_fcn(self.fcn_txu)
-            self.fcn_compiled, self.dfcn_dz_compiled, self.dfcn_du_compiled = convexify.linearize_jax(self.fcn)
-            self.d2fcn_dz2_compiled, self.d2fcn_dnu2_compiled, self.d2fcn_dzdnu_compiled = convexify.hessian_jax(self.fcn)
+            self.fcn_compiled = jax.jit(self.fcn_znu)
+            self.dfcn_dz_compiled = jax.jit(jax.jacfwd(self.fcn_znu, argnums=0))
+            self.dfcn_du_compiled = jax.jit(jax.jacfwd(self.fcn_znu, argnums=1))
+            self.d2fcn_dz2_compiled = jax.jit(jax.hessian(self.fcn_znu, argnums=0))
+            self.d2fcn_dnu2_compiled = jax.jit(jax.hessian(self.fcn_znu, argnums=1))
+            self.d2fcn_dzdnu_compiled = jax.jit(jax.jacfwd(jax.jacrev(self.fcn_znu, argnums=1), argnums=0))
             self.fcn_batched = jax.jit(jax.vmap(self.fcn_compiled, in_axes=(0, 0, None)))
             self.dfcn_dz_batched = jax.jit(jax.vmap(self.dfcn_dz_compiled, in_axes=(0, 0, None)))
             self.dfcn_du_batched = jax.jit(jax.vmap(self.dfcn_du_compiled, in_axes=(0, 0, None)))
             self.d2fcn_dz2_batched = jax.jit(jax.vmap(self.d2fcn_dz2_compiled, in_axes=(0, 0, None)))
             self.d2fcn_dnu2_batched = jax.jit(jax.vmap(self.d2fcn_dnu2_compiled, in_axes=(0, 0, None)))
             self.d2fcn_dzdnu_batched = jax.jit(jax.vmap(self.d2fcn_dzdnu_compiled, in_axes=(0, 0, None)))
+
+    def fcn_txu_nd(self, t, x, u, params):
+        return self.M_out_d2nd @ jnp.atleast_1d(
+            self.fcn_txu_dim(t, self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, params)
+        )
+
+    def fcn_znu(self, z, nu, params):
+        x, t, _, u, _ = self.index_map.unpack_znu(z, nu)
+        return self.fcn_txu_nd(t, x, u, params)
 
     def g_aff(self, z: Any, nu: Any, params: Any) -> tuple:
         return (
@@ -220,80 +121,79 @@ class terminal:
 
 
 class convex_terminal:
-    def __init__(self, cost_config: dict, index_map: Any, fcns: dict | None = None, **kwargs: Any) -> None:
-        """Convex terminal cost added directly to the CVXPY subproblem (no linearization)."""
+    def __init__(self, cost_config: dict, segment) -> None:
+        fcns = segment.fcns
+
         self.type = "convex_terminal"
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
-        self.nodes = cost_config.get("nodes", np.array([index_map.N.time_grid - 1]))
+        self.nodes = cost_config.get("nodes", np.array([segment.index_map.N.all - 1]))
         self.w = cost_config.get("w", 1.0)
 
         self.fcn_string = cost_config["fcn"]
         self.fcn_dim = tools.resolve_function_from_string(self.fcn_string, fcns)
-
-    def nondim_cost(self, nondim: Any) -> None:
-        pass
 
 
 class convex_running:
-    def __init__(self, cost_config: dict, index_map: Any, fcns: dict | None = None, **kwargs: Any) -> None:
-        """Convex running cost added directly to the CVXPY subproblem (no linearization)."""
+    def __init__(self, cost_config: dict, segment) -> None:
+        fcns = segment.fcns
+
         self.type = "convex_running"
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
-        self.nodes = cost_config.get("nodes", np.arange(0, index_map.N.time_grid))
+        self.nodes = cost_config.get("nodes", np.arange(0, segment.index_map.N.all))
         self.w = cost_config.get("w", 1.0)
 
         self.fcn_string = cost_config["fcn"]
         self.fcn_dim = tools.resolve_function_from_string(self.fcn_string, fcns)
 
-    def nondim_cost(self, nondim: Any) -> None:
-        pass
-
 
 class running:
-    def __init__(self, cost_config: dict, index_map: Any, fcns: dict | None = None, **kwargs: Any) -> None:
-        """Running cost evaluated at all nodes via a user-supplied function."""
+    def __init__(self, cost_config: dict, segment) -> None:
+        index_map = segment.index_map
+        nondim = segment.nondim
+        fcns = segment.fcns
+
         self.type = "running"
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
-        self.nodes = cost_config.get("nodes", np.arange(0, index_map.N.time_grid))
+        self.nodes = cost_config.get("nodes", np.arange(0, index_map.N.all))
         self.scale = cost_config.get("scale", None)
         self.backend = cost_config.get("backend", "jax")
         self.ct = cost_config.get("ct", 0)
         self.minimax = cost_config.get("minimax", 0)
+        self.w = cost_config.get("w", 1.0)
 
         self.index_map = index_map
         self.fcn_string = cost_config["fcn"]
-        self.fcn_dim = tools.resolve_function_from_string(self.fcn_string, fcns)
+        self.fcn_txu_dim = tools.resolve_function_from_string(self.fcn_string, fcns)
 
-        self.fcn_nd = None
-        self.fcn = None
-        self.fcn_compiled = None
-        self.dfcn_dz_compiled = None
-        self.dfcn_du_compiled = None
+        self.M_out_d2nd   = jnp.atleast_1d(1 / self.scale) if self.scale is not None else jnp.atleast_1d(1.0)
+        self.M_state_nd2d = jnp.asarray(nondim.M.state.nd2d)
+        self.M_ctrl_nd2d  = jnp.asarray(nondim.M.control.nd2d)
 
-    def nondim_cost(self, nondim: Any) -> None:
         if self.backend == "jax":
-            if self.scale is not None:
-                M_out_d2nd = jnp.atleast_1d(1 / self.scale)
-            else:
-                M_out_d2nd = jnp.atleast_1d(1.0)
-            M_state_nd2d = nondim.M.state["nd2d"]
-            M_ctrl_nd2d = nondim.M.control["nd2d"]
-            self.fcn_txu = nondim.nondim_function(self.fcn_dim, M_state_nd2d, M_ctrl_nd2d, M_out_d2nd)
-
-    def convexify_cost(self) -> None:
-        if self.backend == "jax":
-            self.fcn = self.index_map.wrap_txu_fcn(self.fcn_txu)
-            self.fcn_compiled, self.dfcn_dz_compiled, self.dfcn_du_compiled = convexify.linearize_jax(self.fcn)
-            self.d2fcn_dz2_compiled, self.d2fcn_dnu2_compiled, self.d2fcn_dzdnu_compiled = convexify.hessian_jax(self.fcn)
+            self.fcn_compiled = jax.jit(self.fcn_znu)
+            self.dfcn_dz_compiled = jax.jit(jax.jacfwd(self.fcn_znu, argnums=0))
+            self.dfcn_du_compiled = jax.jit(jax.jacfwd(self.fcn_znu, argnums=1))
+            self.d2fcn_dz2_compiled = jax.jit(jax.hessian(self.fcn_znu, argnums=0))
+            self.d2fcn_dnu2_compiled = jax.jit(jax.hessian(self.fcn_znu, argnums=1))
+            self.d2fcn_dzdnu_compiled = jax.jit(jax.jacfwd(jax.jacrev(self.fcn_znu, argnums=1), argnums=0))
             self.fcn_batched = jax.jit(jax.vmap(self.fcn_compiled, in_axes=(0, 0, None)))
             self.dfcn_dz_batched = jax.jit(jax.vmap(self.dfcn_dz_compiled, in_axes=(0, 0, None)))
             self.dfcn_du_batched = jax.jit(jax.vmap(self.dfcn_du_compiled, in_axes=(0, 0, None)))
             self.d2fcn_dz2_batched = jax.jit(jax.vmap(self.d2fcn_dz2_compiled, in_axes=(0, 0, None)))
             self.d2fcn_dnu2_batched = jax.jit(jax.vmap(self.d2fcn_dnu2_compiled, in_axes=(0, 0, None)))
             self.d2fcn_dzdnu_batched = jax.jit(jax.vmap(self.d2fcn_dzdnu_compiled, in_axes=(0, 0, None)))
+
+    def fcn_txu_nd(self, t, x, u, params):
+        return self.M_out_d2nd @ jnp.atleast_1d(
+            self.fcn_txu_dim(t, self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, params)
+        )
+
+    def fcn_znu(self, z, nu, params):
+        x, t, _, u, _ = self.index_map.unpack_znu(z, nu)
+        return self.fcn_txu_nd(t, x, u, params)
 
     def g_aff(self, z: Any, nu: Any, params: Any) -> tuple:
         return (

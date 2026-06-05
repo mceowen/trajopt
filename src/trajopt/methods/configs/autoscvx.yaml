@@ -1,167 +1,31 @@
-inherit: default.yaml
-
-time_grid: 
-
 flags:
-  free_final_time:    1       # 0, 1
-  equal_dt:           0       # 0, 1
-  zoh_dilation:       0       # 0, 1
-  ode_fixed_dt:       0       # 0, 1
-  flag_conv:          0       # 0, 1, 2
+  free_final_time:    1
+  equal_dt:           1
+  zoh_dilation:       1
+  ode_fixed_dt:       0
+  flag_conv:          1
   ignore_dpp:         0
-  discretize: "ms"  # "ms", "ps"
-  eps_ctcs: 1e-5
+  discretize: ms
   eps_state: [0.001]
-  eps_cost: 1
-  eps_defect: [0.0001]
   iter_max: 300
 
 weights:
-  w_cost: 1.0
   alpha_z: 0.5
   alpha_nu: 0.5
 
 penalty:
-  nonconvex_inequality:
+  default:
     W:
       penalty: True
       autotune: True
       init: 1.0
-      eps_floor: 0.000001
-      fac_eps: 0.3
-      fac_target: 0.001
-      beta: 0.3
-
-
-    dual:
-      penalty: True
-      autotune: True
-      init: 0.0
-      beta: 1.0
-
-    vb: 'standard'
-    eps: [0.01]
-    ct: False
-
-  convex_inequality:
-    W:
-      penalty: False
-      autotune: False
-      init: 0.0
-      eps_floor: 0.000001
-      fac_eps: 0.3
-      fac_target: 0.001
-    dual:
-      penalty: False
-      autotune: False
-      init: 0.0
-      beta: 1.0
-
-    vb: 'standard'
-    eps: [0.01]
-    ct: False
-
-  dynamics:
-    W:
-      penalty: True
-      autotune: True
-      init: 1.0
-      eps_floor: 0.000001
-      fac_eps: 0.3
-      fac_target: 0.001
-      beta: 0.3
-
     dual:
       penalty: True
       autotune: True
       init: 0.0
       beta: 1.0
     vb: 'standard'
-    eps: [0.01]
-
-  initial_state:
-    W:
-      penalty: True
-      autotune: True
-      init: 1.0
-      eps_floor: 0.000001
-      fac_eps: 0.3
-      fac_target: 0.001
-      beta: 0.3
-
-    dual:
-      penalty: True
-      autotune: True
-      init: 0.0
-      beta: 1.0
-    vb: 'standard'
-    eps: [0.01]
-
-  final_state:
-    W:
-      penalty: True
-      autotune: True
-      init: 1.0
-      eps_floor: 0.000001
-      fac_eps: 0.3
-      fac_target: 0.001
-      beta: 0.3
-
-    dual:
-      penalty: True
-      autotune: True
-      init: 0.0
-      beta: 1.0
-    vb: 'standard'
-    eps: [0.01]
-
-  state_limits:
-    W:
-      penalty: False
-      autotune: False
-      init: 1.0
-      eps_floor: 0.000001
-      fac_eps: 0.3
-      fac_target: 0.001
-    dual:
-      penalty: False
-      autotune: False
-      init: 0.0
-      beta: 1.0
-    vb: 'standard'
-    eps: [0.01]
-
-  control_limits:
-    W:
-      penalty: False
-      autotune: False
-      init: 1.0
-      eps_floor: 0.000001
-      fac_eps: 0.3
-      fac_target: 0.001
-    dual:
-      penalty: False
-      autotune: False
-      init: 0.0
-      beta: 1.0
-    vb: 'standard'
-    eps: [0.01]
-
-  final_time:
-    W:
-      penalty: False
-      autotune: False
-      init: 0.0
-      eps_floor: 0.000001
-      fac_eps: 0.3
-      fac_target: 0.001
-    dual: 
-      penalty: False
-      autotune: False
-      init: 0.0
-      beta: 1.0
-    vb: 'none'
-    eps: [0.01]
+    eps: [0.0001]
 
 solver_opts:
-  solver: CLARABEL
+  solver: QOCO

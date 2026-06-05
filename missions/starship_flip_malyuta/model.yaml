@@ -48,7 +48,7 @@ control:
 time: 
   scale: 1
 
-trajectories:
+trajplots:
   spatial:
     type: spatial
     group: spatial

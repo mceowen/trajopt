@@ -1,11 +1,3 @@
-"""YAML config loader with inheritance, dot-notation, and expression evaluation.
-
-Path resolution:
-- inherit paths: resolved relative to the declaring file. Paths starting
-  with 'trajopt/' are resolved to the installed package (src/trajopt/).
-- .py:func paths: always resolved relative to the declaring YAML file.
-"""
-
 import importlib.resources
 import re
 from pathlib import Path
@@ -30,26 +22,10 @@ def load_trajopt_config(config_path: str) -> AttrDict:
     """Load a single config file, resolving all inheritance and expressions."""
     config = load_yaml(config_path)
     config = _resolve_inheritance(config, _source=config_path)
-
-    problem = config.get("problem", AttrDict({}))
-    method  = config.get("method", AttrDict({}))
-
-    ctx = {**flatten_dict(problem), **flatten_dict(method), "np": np}
     try:
-        problem = _eval_values(problem, ctx)
-        method  = _eval_values(method, ctx)
+        return _eval_values(config, {"np": np}, segment_params={})
     except Exception as e:
         raise type(e)(f"error evaluating expressions in '{config_path}': {e}") from None
-
-    problem.setdefault("trajectories", {})
-
-    for c in problem.constraints.values():
-        c.setdefault("ct", 0)
-
-    config.problem = problem
-    config.method  = method
-
-    return config
 
 # =============================================================================
 # YAML LOADING
@@ -74,10 +50,7 @@ def load_yaml(path_str: str) -> AttrDict:
 # =============================================================================
 
 def _resolve_inheritance(d: Any, _source: str = "unknown") -> Any:
-    """Recursively resolve 'inherit' keys, merging parent configs in.
-
-    Inherit paths are resolved relative to the file that declares them.
-    """
+    """Recursively resolve 'inherit' keys, merging parent configs in."""
     if not isinstance(d, dict):
         return d
 
@@ -105,11 +78,7 @@ def _resolve_inheritance(d: Any, _source: str = "unknown") -> Any:
 # =============================================================================
 
 def _resolve_fcn_paths(d: Any, base_dir: Path) -> Any:
-    """Resolve file.py:func references to absolute paths relative to base_dir.
-
-    Called at load time so that after inheritance merging, every function
-    reference carries its own absolute path regardless of which file declared it.
-    """
+    """Resolve file.py:func references to absolute paths relative to base_dir."""
     if isinstance(d, dict):
         return {k: _resolve_fcn_paths(v, base_dir) for k, v in d.items()}
     if isinstance(d, list):
@@ -126,56 +95,101 @@ def _resolve_fcn_paths(d: Any, base_dir: Path) -> Any:
 # EXPRESSION EVALUATION
 # =============================================================================
 
+def _bind_params(ctx: dict, params: Any) -> None:
+    """Add ``params.<path>`` lookups for every scalar in a params tree."""
+    for key, val in flatten_dict(params).items():
+        ctx[f"params.{key}"] = val
+
+
 def _eval_expr(expr: str, ctx: dict) -> Any:
     """Evaluate a Python expression, resolving dotted references from ctx."""
-    refs = re.findall(r"\b([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)+)\b", expr)
-    local = ctx
-    for ref in sorted(refs, key=len, reverse=True):
-        val = ctx.get(ref) or ctx.get(ref.replace(".", "_"))
-        if val is not None:
-            safe = ref.replace(".", "_")
-            local[safe] = val
-            expr = expr.replace(ref, safe)
+    local = dict(ctx)
+    for ref in sorted(set(re.findall(r"\b([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)+)\b", expr)), key=len, reverse=True):
+        val = ctx.get(ref)
+        if val is None:
+            continue
+        safe = ref.replace(".", "_")
+        local[safe] = val
+        expr = expr.replace(ref, safe)
     return eval(expr, local)
 
 
-def _eval_values(obj: Any, ctx: dict, key: str | None = None, _path: str = "") -> Any:
-    """Recursively evaluate ${} expressions in a config tree."""
+def _eval_string(expr_obj: str, ctx: dict) -> Any:
+    m = re.fullmatch(r"\$\{([^}]+)\}", expr_obj.strip())
+    if m:
+        return _eval_expr(m.group(1), ctx)
+    return re.sub(
+        r"\$\{([^}]+)\}",
+        lambda match: str(_eval_expr(match.group(1), ctx)),
+        expr_obj,
+    )
+
+
+def _eval_params(params: dict, ctx: dict) -> AttrDict:
+    """Evaluate a segment ``params`` block; sibling keys are visible in order."""
+    result = AttrDict({})
+    local  = dict(ctx)
+    for key, val in params.items():
+        result[key] = _eval_values(val, local, segment_params={})
+        if not isinstance(result[key], dict):
+            local[key] = result[key]
+    return result
+
+
+def _eval_segment(segment: dict, name: str, segment_params: dict) -> AttrDict:
+    """Evaluate one segment: ``params`` first, then all remaining keys."""
+    ctx = {"np": np}
+    out = AttrDict({})
+
+    if "params" in segment:
+        out.params = _eval_params(segment.params, ctx)
+        segment_params[name] = out.params
+        _bind_params(ctx, out.params)
+    elif name in segment_params:
+        _bind_params(ctx, segment_params[name])
+
+    for key, val in segment.items():
+        if key == "params":
+            continue
+        out[key] = _eval_values(val, ctx, segment_params)
+
+    return out
+
+
+def _eval_values(obj: Any, ctx: dict, segment_params: dict, key: str | None = None) -> Any:
+    """Recursively evaluate ``${...}`` expressions in a config tree."""
     if isinstance(obj, dict):
+        if "segments" in obj and isinstance(obj.segments, dict):
+            result = AttrDict(dict(obj))
+            result.segments = AttrDict({
+                name: _eval_segment(seg, name, segment_params)
+                for name, seg in obj.segments.items()
+            })
+            for key, val in obj.items():
+                if key == "segments":
+                    continue
+                result[key] = _eval_values(val, ctx, segment_params)
+            return result
+
         result = AttrDict({})
+        local  = dict(ctx)
         for k, v in obj.items():
-            local_ctx = dict(ctx)
-            for sk, sv in obj.items():
-                bare = result[sk] if sk in result else sv
-                if not isinstance(bare, dict):
-                    local_ctx[sk] = bare
-            evaluated = _eval_values(v, local_ctx, key=k, _path=f"{_path}.{k}")
-            result[k] = evaluated
-            ctx[f"{_path}.{k}".lstrip(".")] = evaluated
+            result[k] = _eval_values(v, local, segment_params, key=k)
+            bare = result[k]
+            if not isinstance(bare, dict):
+                local[k] = bare
         return result
 
     if isinstance(obj, list):
-        results = [_eval_values(item, ctx, _path=f"{_path}[{i}]") for i, item in enumerate(obj)]
+        results = [_eval_values(item, ctx, segment_params) for item in obj]
         if all(isinstance(x, (int, float, np.number, np.ndarray)) for x in results):
             arr = np.array(results)
             if key and "idx" in key and arr.dtype.kind == "f" and np.all(arr == np.round(arr)):
-                arr = np.round(arr).astype(np.intp)
+                return np.round(arr).astype(np.intp)
             return arr
         return results
 
     if isinstance(obj, str) and "${" in obj:
-        m = re.fullmatch(r"\$\{([^}]+)\}", obj.strip())
-        if m:
-            try:
-                return _eval_values(_eval_expr(m.group(1), ctx), ctx, _path=_path)
-            except Exception as e:
-                raise type(e)(f"error evaluating '${{{m.group(1)}}}' at '{_path}': {e}") from None
-
-        def _sub(match):
-            try:
-                return str(_eval_expr(match.group(1), ctx))
-            except Exception as e:
-                raise type(e)(f"error evaluating '${{{match.group(1)}}}' at '{_path}': {e}") from None
-        return re.sub(r"\$\{([^}]+)\}", _sub, obj)
+        return _eval_values(_eval_string(obj, ctx), ctx, segment_params)
 
     return obj

@@ -40,10 +40,10 @@ state.v:
     scale: 1000
 state.gamma:
     idx: [4]
-    scale: 1.0
+    scale: 1
 state.psi:
     idx: [5]
-    scale: 1.0
+    scale: 1
 
 control.bank:
     idx: [0]
@@ -58,7 +58,7 @@ time.scale: 100.0
 # TRAJECTORIES FOR PLOTTING
 # ===============================
 
-trajectories:
+trajplots:
   altitude:
     type: time_series
     fcn: "fcns.altitude * 0.001"

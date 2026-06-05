@@ -2,42 +2,45 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import jax.numpy as jnp
-from trajopt.methods.scp import discretize
 from trajopt.methods.scp import integrators
+from trajopt.methods.scp import pseudospectral
+from trajopt.methods.scp.scp_costs import scp_cost_types
 
 
-def set_initial_guess(problem, method):
-    guess_type = getattr(method.config.method.guess, "type", "propagation")
+def set_initial_guess(segment, scp_segment):
+    guess_type = getattr(segment.guess, "type", "propagation")
 
     if guess_type == "propagation":
-        nonlinear_initial_guess(problem, method)
+        nonlinear_initial_guess(segment, scp_segment)
     elif guess_type == "straight_line":
-        straight_line_initial_guess(problem, method)
+        straight_line_initial_guess(segment, scp_segment)
 
-    method.cost_init = discretize.compute_nonconvex_costs(
-        method.initial_guess.z, method.initial_guess.nu, problem, method
+    scp_segment.cost_init = scp_cost_types.compute_nonconvex_costs(
+        scp_segment.initial_guess.z, scp_segment.initial_guess.nu, segment, scp_segment
     )
 
 
-def straight_line_initial_guess(problem, method):
-    index_map = problem.index_map
-    init = method.initial_guess
-    N    = index_map.N.time_grid
-    cfg  = method.config.method.guess
+def straight_line_initial_guess(segment, scp_segment):
+    index_map = segment.index_map
+    init = scp_segment.initial_guess
+    N    = index_map.N.all
+    cfg  = segment.guess
 
-    x0 = problem.nondim.M.state.d2nd   @ np.atleast_1d(cfg.x_start)
-    xf = problem.nondim.M.state.d2nd   @ np.atleast_1d(cfg.x_stop)
-    u0 = problem.nondim.M.control.d2nd @ np.atleast_1d(cfg.u_start)
-    uf = problem.nondim.M.control.d2nd @ np.atleast_1d(cfg.u_stop)
+    x0 = segment.nondim.M.state.d2nd   @ np.atleast_1d(cfg.x_start)
+    xf = segment.nondim.M.state.d2nd   @ np.atleast_1d(cfg.x_stop)
+    u0 = segment.nondim.M.control.d2nd @ np.atleast_1d(cfg.u_start)
+    uf = segment.nondim.M.control.d2nd @ np.atleast_1d(cfg.u_stop)
 
     t = np.asarray(init.t).reshape(-1)
-    if getattr(method.flags, 'discretize', 'ms') == 'ps':
-        _, etau, _, _ = discretize.compute_ps_differentiation_matrix(N - 1)
+    if getattr(scp_segment.flags, 'discretize', 'ms') == 'ps':
+        _, etau, _, _ = pseudospectral.flipped_radau_differential_operator(N - 1)
         tau = (etau + 1.0) / 2.0
         t   = t[0] + tau * (t[-1] - t[0])
+    else:
+        tau = np.linspace(0.0, 1.0, N)
 
     Ts    = float(t[-1] - t[0])
-    alpha = np.linspace(0, 1, N).reshape(-1, 1)
+    alpha = tau.reshape(-1, 1)
 
     x = (1 - alpha) * x0 + alpha * xf
     u = (1 - alpha) * u0 + alpha * uf
@@ -54,22 +57,26 @@ def straight_line_initial_guess(problem, method):
     init.nu_dense = nu
 
 
-def nonlinear_initial_guess(problem, method):
-    init     = method.initial_guess
-    idx      = problem.index_map.indices
-    N        = problem.index_map.N.time_grid
-    n_z      = problem.index_map.n.z
-    n_nu     = problem.index_map.n.nu
-    dynamics = problem.constraints.get(type="dynamics")[0].fcn
-    params   = problem.params
+def nonlinear_initial_guess(segment, scp_segment):
+    init     = scp_segment.initial_guess
+    idx      = segment.index_map.indices
+    N        = segment.index_map.N.all
+    n_z      = segment.index_map.n.z
+    n_nu     = segment.index_map.n.nu
+    dynamics = segment.constraints.dynamics.fcn_znu
+    params   = segment.params
 
-    x0      = problem.constraints.get(type="initial_state")[0].value
-    u_start = problem.nondim.M.control.d2nd @ method.config.method.guess.u_start
-    u_stop  = problem.nondim.M.control.d2nd @ method.config.method.guess.u_stop
+    cfg     = segment.guess
+    if hasattr(cfg, 'x_start'):
+        x0 = segment.nondim.M.state.d2nd @ np.atleast_1d(cfg.x_start)
+    else:
+        x0 = segment.constraints.initial_state.value
+    u_start = segment.nondim.M.control.d2nd @ cfg.u_start
+    u_stop  = segment.nondim.M.control.d2nd @ cfg.u_stop
 
     t = np.asarray(init.t).reshape(-1)
-    if getattr(method.flags, 'discretize', 'ms') == 'ps':
-        _, etau, _, _ = discretize.compute_ps_differentiation_matrix(N - 1)
+    if getattr(scp_segment.flags, 'discretize', 'ms') == 'ps':
+        _, etau, _, _ = pseudospectral.flipped_radau_differential_operator(N - 1)
         tau = (etau + 1.0) / 2.0
         t   = t[0] + tau * (t[-1] - t[0])
     else:
