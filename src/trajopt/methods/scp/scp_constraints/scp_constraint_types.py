@@ -78,8 +78,6 @@ class scp_dynamics(SCPConstraint):
     def init_penalty(self, scp_segment):
         N   = scp_segment.index_map.N.all
         n_z = scp_segment.index_map.n.z
-        raw = getattr(self.constraint, 'eps', 1e-4)
-        self.eps = np.broadcast_to(np.atleast_1d(raw), (n_z,)).copy()
         self._alloc_penalty(scp_segment, (N - 1, n_z))
 
     def create_cvxpy_parameters(self, scp_segment):
@@ -265,10 +263,7 @@ class scp_dynamics(SCPConstraint):
 
 class scp_initial_state(SCPConstraint):
     def init_penalty(self, scp_segment):
-        dim = self.constraint.dimension
-        raw = getattr(self.constraint, 'eps', 1e-4)
-        self.eps = np.broadcast_to(np.atleast_1d(raw), (dim,)).copy()
-        self._alloc_penalty(scp_segment, (1, dim))
+        self._alloc_penalty(scp_segment, (1, self.constraint.dimension))
 
     def create_cvxpy_constraints(self, scp_segment):
         idx  = self.constraint.idx
@@ -283,10 +278,7 @@ class scp_initial_state(SCPConstraint):
 
 class scp_final_state(SCPConstraint):
     def init_penalty(self, scp_segment):
-        dim = self.constraint.dimension
-        raw = getattr(self.constraint, 'eps', 1e-4)
-        self.eps = np.broadcast_to(np.atleast_1d(raw), (dim,)).copy()
-        self._alloc_penalty(scp_segment, (1, dim))
+        self._alloc_penalty(scp_segment, (1, self.constraint.dimension))
 
     def create_cvxpy_constraints(self, scp_segment):
         idx  = self.constraint.idx
@@ -334,8 +326,6 @@ class scp_nonconvex_inequality(SCPConstraint):
     def init_penalty(self, scp_segment):
         self.nodes = np.arange(scp_segment.index_map.N.all)
         dim = self.constraint.dimension
-        raw = getattr(self.constraint, 'eps', 1e-4)
-        self.eps = np.broadcast_to(np.atleast_1d(raw), (dim,)).copy()
         self._alloc_penalty(scp_segment, (len(self.nodes), dim))
         self.lagrangian_dual = np.zeros((len(self.nodes), dim))
 
@@ -420,8 +410,6 @@ class scp_initial_nonconvex_inequality(scp_nonconvex_inequality):
     def init_penalty(self, scp_segment):
         self.nodes = np.array([0])
         dim = self.constraint.dimension
-        raw = getattr(self.constraint, 'eps', 1e-4)
-        self.eps = np.broadcast_to(np.atleast_1d(raw), (dim,)).copy()
         self._alloc_penalty(scp_segment, (len(self.nodes), dim))
         self.lagrangian_dual = np.zeros((len(self.nodes), dim))
 
@@ -430,14 +418,53 @@ class scp_final_nonconvex_inequality(scp_nonconvex_inequality):
     def init_penalty(self, scp_segment):
         self.nodes = np.array([scp_segment.index_map.N.all - 1])
         dim = self.constraint.dimension
-        raw = getattr(self.constraint, 'eps', 1e-4)
-        self.eps = np.broadcast_to(np.atleast_1d(raw), (dim,)).copy()
         self._alloc_penalty(scp_segment, (len(self.nodes), dim))
         self.lagrangian_dual = np.zeros((len(self.nodes), dim))
 
 
 class scp_ctcs_nonconvex_inequality(SCPConstraint):
-    pass
+    """Hard constraints beta(t_0) == 0 and beta(t_f) <= 0.
+
+    No penalty or virtual buffer — the dynamics defect matching
+    (which already covers the full augmented state including beta)
+    handles the relaxation during SCP iterations.
+    """
+
+    def create_cvxpy_constraints(self, scp_segment):
+        idx_beta = scp_segment.index_map.indices.z.ctcs
+        if len(idx_beta) == 0:
+            return
+        beta_0 = scp_segment.cp_params.z_ref[0, idx_beta] + scp_segment.dz[0, idx_beta]
+        scp_segment.cp_constraints.append(beta_0 == 0)
+
+        beta_f = scp_segment.cp_params.z_ref[-1, idx_beta] + scp_segment.dz[-1, idx_beta]
+        scp_segment.cp_constraints.append(beta_f <= 0)
+
+
+# ---------------------------------------------------------------------------
+# continuity (cross-segment)
+# ---------------------------------------------------------------------------
+
+class scp_continuity(SCPConstraint):
+
+    def init_penalty(self, scp_segment):
+        self._scp_segment = scp_segment
+
+    def build_cross_segment(self, scp_segments):
+        c = self.constraint
+        other = scp_segments[c.segment_name]
+        seg = self._scp_segment
+
+        residual = c.residual(other, seg)
+        self._alloc_penalty(seg, (1, residual.shape[0]))
+        self.create_penalty_parameters(seg)
+        self.create_penalty_variables(seg)
+
+        if self.vb_var is not None:
+            seg.cp_constraints.append(residual - self.vb_var[0, :] == 0)
+            self.add_penalty_cost(seg)
+        else:
+            seg.cp_constraints.append(residual == 0)
 
 
 # ---------------------------------------------------------------------------

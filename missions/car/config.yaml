@@ -47,7 +47,7 @@ segments:
         upper: [3.0, 3.0]
 
       obstacle:
-        type: nonconvex_inequality
+        type: ctcs_nonconvex_inequality
         fcn: fcns.obstacle
         lower: ["${params.obs1_r}", "${params.obs2_r}"]
 

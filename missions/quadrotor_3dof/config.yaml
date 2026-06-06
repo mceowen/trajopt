@@ -5,20 +5,14 @@ method:
     equal_dt: 1
     zoh_dilation: 1
     free_final_time: 1
-    discretize: ps
-
-  conv:
-    eps_state: 0.00001
-    eps_cost:  0.0001
-    eps_dyn:   0.001
-    iter_max:  100
+    discretize: ms
 
   solver_opts:
     solver: QOCO
 
 segments:
   flight:
-    num_nodes: 30
+    num_nodes: 10
     inherit: ../../models/configs/quadrotor_3dof.yaml
 
     fcns:
@@ -65,7 +59,7 @@ segments:
         scale: [1.0]
 
       obstacle:
-        type: nonconvex_inequality
+        type: ctcs_nonconvex_inequality
         fcn: fcns.obstacle
         lower: 4.0
         dimension: 1

@@ -26,6 +26,8 @@ class SCPConstraint():
 
     def compile(self, scp_segment): pass
 
+    def build_cross_segment(self, scp_segments): pass
+
     def create_cvxpy_parameters(self, scp_segment): pass
     def create_cvxpy_variables(self, scp_segment): pass
     def create_cvxpy_constraints(self, scp_segment): pass
@@ -39,6 +41,9 @@ class SCPConstraint():
     def compile_merit_penalty(self, scp_segment): pass
 
     def _alloc_penalty(self, scp_segment, shape):
+        raw = getattr(self.constraint, 'eps', 1e-4)
+        self.eps = np.broadcast_to(np.atleast_1d(raw), (shape[-1],)).copy()
+
         self.penalty = scp_segment.penalty_config.get(self.type, scp_segment.penalty_config.get('default'))
         self.shape   = shape
         self.vb      = np.zeros(shape)
@@ -75,10 +80,10 @@ class SCPConstraint():
             scp_segment.cp_cost += cp.sum(cp.multiply(self.vb_var, self.dual_param))
 
     def update_penalty_parameters(self, scp_segment):
-        if self.W_param is None:
-            return
-        self.W_param.value    = np.sqrt(self.W)
-        self.dual_param.value = self.dual
+        if self.W_param is not None:
+            self.W_param.value = np.sqrt(self.W)
+        if self.dual_param is not None:
+            self.dual_param.value = self.dual
 
     def read_vb(self, scp_segment):
         if self.vb_var is not None:
@@ -138,11 +143,13 @@ class SCPConstraint():
         
         return float(v), float(g)
 
+    @property
     def vb_ratio(self):
         if self.vb.size == 0:
             return 0.0
         return float(np.max(np.abs(self.vb) / self.eps))
 
+    @property
     def is_feasible(self):
         if self.vb.size == 0:
             return True

@@ -2,21 +2,12 @@ import numpy as np
 from trajopt.utils import tools
 
 
-def _is_nonconvex_ineq(h):
-    return "nonconvex_inequality" in h.type
-
 def check_convergence_tolerance(scp_segment) -> None:
     prev_iter_data    = scp_segment.iter_data_list[-1]
     current_iter_data = scp_segment.current_iter_data
 
     index_map = scp_segment.index_map
     constraints = list(scp_segment.constraints.values())
-
-    def _ratio(type_fn):
-        return max((h.vb_ratio() for h in constraints if type_fn(h)), default=0.0)
-
-    def _feasible(type_fn):
-        return all(h.is_feasible() for h in constraints if type_fn(h))
 
     dstate    = current_iter_data.dz[:, index_map.indices.z.state]
     dcost     = current_iter_data.cost - prev_iter_data.cost
@@ -28,23 +19,24 @@ def check_convergence_tolerance(scp_segment) -> None:
     bool_dz    = np.all(abs_dz <= eps_z)
     bool_dcost = np.all(abs_dcost <= eps_dcost)
 
-    bool_vb_dyn  = _feasible(lambda h: h.type == "dynamics")
-    bool_vb_ineq = _feasible(_is_nonconvex_ineq)
-    bool_term    = _feasible(lambda h: h.type == "final_state")
+    bool_vb_dyn  = all(cnstr.is_feasible for cnstr in constraints if cnstr.type == "dynamics")
+    bool_vb_ineq = all(cnstr.is_feasible for cnstr in constraints if "nonconvex_inequality" in cnstr.type)
+    bool_term    = all(cnstr.is_feasible for cnstr in constraints if cnstr.type == "final_state")
+    bool_cont    = all(cnstr.is_feasible for cnstr in constraints if cnstr.type == "continuity")
 
     defect              = current_iter_data.get("defect", 0)
     bool_ncvx_dyn_state = np.all(np.abs(defect) <= scp_segment.eps_dyn)
     bool_ncvx_ineq      = all(
         np.all(np.abs(h.g_nl) <= np.atleast_1d(h.eps))
         for h in constraints
-        if _is_nonconvex_ineq(h) and getattr(h, "g_nl", None) is not None
+        if "nonconvex_inequality" in h.type and getattr(h, "g_nl", None) is not None
     )
 
     bool_opt1  = bool_dz
-    bool_feas1 = bool_term and bool_vb_ineq and bool_vb_dyn
+    bool_feas1 = bool_term and bool_vb_ineq and bool_vb_dyn and bool_cont
 
     bool_opt2  = bool_dcost
-    bool_feas2 = bool_term and bool_ncvx_ineq and bool_ncvx_dyn_state
+    bool_feas2 = bool_term and bool_ncvx_ineq and bool_ncvx_dyn_state and bool_cont
 
     flag_conv = scp_segment.flags.flag_conv
     if flag_conv == 0:
@@ -60,9 +52,9 @@ def check_convergence_tolerance(scp_segment) -> None:
     current_iter_data.chk = tools.AttrDict(
         dz                   = np.max(abs_dz / eps_z),
         dcost                = np.max(abs_dcost / eps_dcost),
-        final_state          = _ratio(lambda h: h.type == "final_state"),
-        nonconvex_inequality = _ratio(_is_nonconvex_ineq),
-        dynamics             = _ratio(lambda h: h.type == "dynamics"),
+        final_state          = max((cnstr.vb_ratio for cnstr in constraints if cnstr.type == "final_state"), default=0.0),
+        nonconvex_inequality = max((cnstr.vb_ratio for cnstr in constraints if "nonconvex_inequality" in cnstr.type), default=0.0),
+        dynamics             = max((cnstr.vb_ratio for cnstr in constraints if cnstr.type == "dynamics"), default=0.0),
     )
     current_iter_data.status    = scp_segment.cp_subproblem_status
     current_iter_data.converged = bool_conv

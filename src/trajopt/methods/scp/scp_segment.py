@@ -3,6 +3,7 @@ import time
 
 import numpy as np
 import cvxpy as cp
+import jax.numpy as jnp
 
 from trajopt.segment import Segment
 from trajopt.methods.scp import initial_guess
@@ -24,12 +25,14 @@ class SCPSegment():
         self.flags     = method_config.flags
         self.penalty_config = method_config.penalty
 
+        # dictionary of scp-constraints for this scp-segment
         self.constraints = AttrDict()
         for cnstr_name, constraint in segment.constraints.items():
             scp_class_name = f"scp_{constraint.type}"
             constraintClass = getattr(scp_constraint_type_module, scp_class_name)
             self.constraints[cnstr_name] = constraintClass(constraint, self)
 
+        # dictionary of scp costs types for this scp-segment
         self.costs = AttrDict()
         for cost_name, cost in segment.costs.items():
             scp_class_name = f"scp_{cost.type}"
@@ -81,28 +84,19 @@ class SCPSegment():
 
         self.iter_data_list = []
 
-        self.current_iter_data = recursive_attrdict(
-                {
-                    "iter_num": 0,
-                    "z_opt": self.initial_guess.z,
-                    "nu_opt": self.initial_guess.nu,
-                    "cost": 0.0,
-                    "vb": self._penalty_snapshot("vb"),
-                    "W": self._penalty_snapshot("W"),
-                    "dual": self._penalty_snapshot("dual"),
-                },
-            )
+        self.current_iter_data = recursive_attrdict({
+            "iter_num": 0,
+            "z_opt": self.initial_guess.z,
+            "nu_opt": self.initial_guess.nu,
+            "cost": 0.0,
+            "vb":   AttrDict({c.name: c.vb   for c in self.constraints.values() if c.shape is not None}),
+            "W":    AttrDict({c.name: c.W    for c in self.constraints.values() if c.shape is not None}),
+            "dual": AttrDict({c.name: c.dual for c in self.constraints.values() if c.shape is not None}),
+        })
 
         self.iter_data_list.append(copy.deepcopy(self.current_iter_data))
 
         self.compile_merit()
-
-    def _penalty_snapshot(self, attr):
-        return AttrDict({
-            c.name: getattr(c, attr)
-            for c in self.constraints.values()
-            if c.shape is not None
-        })
 
     def create_cvxpy_parameters(self) -> None:
         N = self.index_map.N.all
@@ -221,7 +215,6 @@ class SCPSegment():
             constraint.compile_merit_penalty(self)
 
     def evaluate_merit_at_alpha(self, alpha):
-        import jax.numpy as jnp
         z  = jnp.asarray(self.current_iter_data.z_opt)  + alpha * jnp.asarray(self._dz_new)
         nu = jnp.asarray(self.current_iter_data.nu_opt) + alpha * jnp.asarray(self._dnu_new)
         phi = sum(c.evaluate_merit_cost(z, nu, self.params) for c in self.costs.values())
@@ -230,7 +223,6 @@ class SCPSegment():
         return phi
 
     def merit_grad_at_zero(self):
-        import jax.numpy as jnp
         z_ref  = jnp.asarray(self.current_iter_data.z_opt)
         nu_ref = jnp.asarray(self.current_iter_data.nu_opt)
         dz     = jnp.asarray(self._dz_new)
@@ -290,9 +282,7 @@ class SCPSegment():
         for cost in self.costs.values():
             cost.accumulate_hessian(self, H)
 
-        iter_num = self.current_iter_data.iter_num
-        delta = 1e-10 if iter_num < 10 else 1e-10
-        self.cp_params.L.value = _psd_sqrt(H, delta=delta)
+        self.cp_params.L.value = _psd_sqrt(H, delta=1e-10)
 
     def read_solution(self) -> None:
         self._dz_new  = self.dz.value
@@ -335,9 +325,9 @@ class SCPSegment():
 
         self.current_iter_data.iter_num += 1
 
-        self.current_iter_data.vb   = self._penalty_snapshot("vb")
-        self.current_iter_data.W    = self._penalty_snapshot("W")
-        self.current_iter_data.dual = self._penalty_snapshot("dual")
+        self.current_iter_data.vb   = AttrDict({c.name: c.vb   for c in self.constraints.values() if c.shape is not None})
+        self.current_iter_data.W    = AttrDict({c.name: c.W    for c in self.constraints.values() if c.shape is not None})
+        self.current_iter_data.dual = AttrDict({c.name: c.dual for c in self.constraints.values() if c.shape is not None})
 
         convergence.check_convergence_tolerance(self)
 

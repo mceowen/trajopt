@@ -33,6 +33,8 @@ class Segment:
             constraintClass = getattr(constraint_type_module, cnstr_type)
             self.constraints[cnstr_name] = constraintClass(cnstr_config, self)
 
+        self._wire_ctcs_constraints()
+
         self.costs = AttrDict()
         for cost_name, cost_config in segment_config.get("costs", AttrDict()).items():
             cost_config.name = cost_name
@@ -49,3 +51,16 @@ class Segment:
 
         print("------------------------------------------------------------")
         print("\n")
+
+    def _wire_ctcs_constraints(self):
+        """Attach any ctcs_nonconvex_inequality constraints to the dynamics and resize the augmented state."""
+        ctcs = [c for c in self.constraints.values() if c.type == "ctcs_nonconvex_inequality"]
+        if not ctcs:
+            return
+        dyn = next((c for c in self.constraints.values() if c.type == "dynamics"), None)
+        if dyn is None:
+            return
+        dyn.ctcs_constraints = tuple(ctcs)
+        n_ctcs = sum(c.dimension for c in ctcs)
+        self.index_map.set_augmented_dims(n_ctcs=n_ctcs)
+        dyn.dimension = self.index_map.n.z

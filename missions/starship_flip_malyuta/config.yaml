@@ -29,6 +29,10 @@ segments:
     inherit: common_segment.yaml
 
     constraints:
+      continuity:
+        type: continuity
+        segment: three_engine_segment
+
       final_state:
         type: final_state
         value: [0, 0, 0, -0.1, 0, 0]
@@ -41,13 +45,6 @@ segments:
       x_stop: [0, 0, 0, -0.1, 0, 0]
       u_start: [500000, 0]
       u_stop: [500000, 0]
-
-links:
-  constraints:
-    continuity:
-      type: continuity
-      segment1: three_engine_segment
-      segment2: single_engine_segment
 
 method:
   type: SCP

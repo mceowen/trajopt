@@ -7,11 +7,11 @@ method:
     free_final_time: 1
 
   solver_opts:
-    solver: QOCO
+    solver: CLARABEL
 
 segments:
   landing:
-    num_nodes: 100
+    num_nodes: 20
     inherit: ../../models/configs/lander_6dof.yaml
 
     params:
@@ -67,11 +67,11 @@ segments:
         lower: "${params.min_thrust}"
 
       altitude_triggered_tilt:
-        type: nonconvex_inequality
+        type: ctcs_nonconvex_inequality
         fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.tilt <= 0)"
 
       altitude_triggered_speed:
-        type: nonconvex_inequality
+        type: ctcs_nonconvex_inequality
         fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.speed <= ${params.speed_limit})"
 
       altitude_triggered_angular_speed:

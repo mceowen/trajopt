@@ -4,17 +4,15 @@ import numpy as np
 import cvxpy as cp
 
 from trajopt.methods.scp.scp_segment import SCPSegment
-import trajopt.methods.scp.scp_link_constraints.scp_link_constraint_types as scp_link_constraint_type_module
-import trajopt.methods.scp.scp_link_costs.scp_link_cost_types as scp_link_cost_type_module
 from trajopt.utils.tools import AttrDict
-
 
 class SCPMethod():
 
-    def __init__(self, method_config, segments, links) -> None:
+    def __init__(self, method_config, segments) -> None:
 
         self.method_config = method_config
 
+        # create dictionary of scp-specific segment types
         self.scp_segments = AttrDict()
         for name, segment in segments.items():
             print("=" * 60)
@@ -22,40 +20,17 @@ class SCPMethod():
             print("=" * 60)
             self.scp_segments[name] = SCPSegment(segment, method_config)
 
-        self.scp_links = AttrDict({"constraints": AttrDict(), "costs": AttrDict()})
+        # build inter-segment constraints
+        for seg in self.scp_segments.values():
+            for cnstr in seg.constraints.values():
+                cnstr.build_cross_segment(self.scp_segments)
 
-        for name, link_constraint in links.constraints.items():
-            print("=" * 60)
-            print(f"link constraint: {name}:")
-            print("=" * 60)
-            scp_class_name = f"scp_{link_constraint.type}"
-            scpLinkConstraintClass = getattr(scp_link_constraint_type_module, scp_class_name)
-            scp_link = scpLinkConstraintClass(link_constraint)
-            scp_link.build(self.scp_segments)
-            self.scp_links.constraints[name] = scp_link
-
-        for name, link_cost in links.costs.items():
-            print("=" * 60)
-            print(f"link cost: {name}:")
-            print("=" * 60)
-            scp_class_name = f"scp_{link_cost.type}"
-            scpLinkCostClass = getattr(scp_link_cost_type_module, scp_class_name)
-            scp_link = scpLinkCostClass(link_cost)
-            scp_link.build(self.scp_segments)
-            self.scp_links.costs[name] = scp_link
-
-        self.cp_cost  = sum(seg.cp_cost for seg in self.scp_segments.values())
-        self.cp_cost += sum(link_cost.cp_cost for link_cost in self.scp_links.costs.values())
-        self.cp_cost += sum(link_cnstr.cp_cost for link_cnstr in self.scp_links.constraints.values())
-
+        # define the total cost and constraints from all segments for this method
+        self.cp_cost = sum(seg.cp_cost for seg in self.scp_segments.values())
         self.cp_constraints = [c for s in self.scp_segments.values() for c in s.cp_constraints]
-
-        for link_constraint in self.scp_links.constraints.values():
-            self.cp_constraints += link_constraint.cp_constraints
-
         self.cp_subproblem = cp.Problem(cp.Minimize(self.cp_cost), self.cp_constraints)
+        
         total_param_scalars = sum(p.size for p in self.cp_subproblem.parameters())
-
         self._converged = False
 
         print("subproblem stats:")
@@ -63,15 +38,11 @@ class SCPMethod():
         print(f"total number of segments: {len(self.scp_segments)}")
         print(f"total number of cvxpy parameters: {total_param_scalars}")
         print(f"total number of cvxpy constraints: {len(self.cp_constraints)}")
-        print(f"total number of linking constraints: {len(self.scp_links.constraints)}")
         print(f"is DPP: {self.cp_subproblem.is_dcp(dpp=True)}")
 
     def update_cvxpy_parameters(self) -> None:
         for scp_segment in self.scp_segments.values():
             scp_segment.update_cvxpy_parameters()
-
-        for link in self.scp_links.constraints.values():
-            link.update_cvxpy_parameters()
 
     def update_current_iter_data(self) -> None:
         parse_time = self.cp_subproblem.compilation_time * 1000.0
@@ -82,40 +53,26 @@ class SCPMethod():
             scp_segment.current_iter_data.solve_time = solve_time
             scp_segment.read_solution()
 
-        alpha = self.joint_line_search()
+        alpha = self.line_search()
 
         for scp_segment in self.scp_segments.values():
             scp_segment.cp_subproblem_status = self.cp_subproblem.status
             scp_segment.apply_step(alpha)
 
-        for link_constraint in self.scp_links.constraints.values():
-            link_constraint.apply_step(alpha)
-
-        self._converged = (
-            all(s.current_iter_data.converged for s in self.scp_segments.values())
-            and all(link.converged for link in self.scp_links.constraints.values())
-        )
+        self._converged = all(s.current_iter_data.converged for s in self.scp_segments.values())
 
         for scp_segment in self.scp_segments.values():
             scp_segment.update_W_dual(alpha)
 
-        for link_constraint in self.scp_links.constraints.values():
-            link_constraint.update_W_dual(alpha)
-
         for scp_segment in self.scp_segments.values():
             scp_segment.record_iter_data()
 
-    def joint_line_search(self, c1=1e-6, beta=0.5, max_iter=20, alpha_min=0.1):
+    def line_search(self, c1=1e-6, beta=0.5, max_iter=20, alpha_min=0.1):
         segments = self.scp_segments
-        links    = self.scp_links.constraints
 
         phi_0, dphi = 0.0, 0.0
         for seg in segments.values():
             v, g = seg.merit_grad_at_zero()
-            phi_0 += v
-            dphi += g
-        for link in links.values():
-            v, g = link.merit_grad_at_zero(segments)
             phi_0 += v
             dphi += g
 
@@ -124,7 +81,6 @@ class SCPMethod():
         alpha = 1.0
         for _ in range(max_iter):
             phi = sum(seg.evaluate_merit_at_alpha(alpha) for seg in segments.values())
-            phi += sum(link.evaluate_merit_at_alpha(segments, alpha) for link in links.values())
             if np.isfinite(phi) and phi <= phi_0 + c1 * alpha * slope:
                 return alpha
             alpha *= beta
