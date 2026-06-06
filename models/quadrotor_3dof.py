@@ -6,25 +6,25 @@ from jax import Array
 from trajopt.utils.tools import AttrDict
 
 
-def dynamics_jax(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
+def dynamics_jax(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
     """3-DoF quadrotor dynamics (double integrator with gravity)."""
     g = params.planet.g
     mass = params.vehicle.mass
     g_vec = jnp.array([0, 0, -g])
-    v = z[3:6]
-    T = nu
+    v = x[3:6]
+    T = u
 
     return jnp.concatenate([v, T / mass + g_vec])
 
 
-def thrust_norm(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
+def thrust_norm(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
     """Thrust magnitude."""
-    return jnp.array([jnp.linalg.norm(nu)])
+    return jnp.array([jnp.linalg.norm(u)])
 
 
-def obstacle(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
+def obstacle(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
     """Distance from circular obstacle centered at (5,5) in xy-plane."""
-    r = z[0:2]
+    r = x[0:2]
     pos_obs = jnp.array([5, 5])
     return jnp.array([jnp.linalg.norm(r - pos_obs)])
 
@@ -35,58 +35,58 @@ def max_thrust_cone(x, u, params):
     return cp.norm(u[:, 0:3], axis=1) - T_max
 
 
-def pos_x(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
+def pos_x(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
     """x-position."""
-    return jnp.array([z[0]])
+    return jnp.array([x[0]])
 
 
-def pos_y(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
+def pos_y(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
     """y-position."""
-    return jnp.array([z[1]])
+    return jnp.array([x[1]])
 
 
-def height(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
+def height(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
     """Height (z-position)."""
-    return jnp.array([z[2]])
+    return jnp.array([x[2]])
 
 
-def xy(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
+def xy(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
     """xy-position."""
-    return z[0:2]
+    return x[0:2]
 
 
-def xz(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
+def xz(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
     """xz-position."""
-    return jnp.array([z[0], z[2]])
+    return jnp.array([x[0], x[2]])
 
 
-def yz(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
+def yz(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
     """yz-position."""
-    return jnp.array([z[1], z[2]])
+    return jnp.array([x[1], x[2]])
 
 
-def xyz(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
+def xyz(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
     """xyz-position."""
-    return z[0:3]
+    return x[0:3]
 
 
-def vel_x(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
-    return jnp.array([z[3]])
+def vel_x(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
+    return jnp.array([x[3]])
 
-def vel_y(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
-    return jnp.array([z[4]])
+def vel_y(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
+    return jnp.array([x[4]])
 
-def vel_z(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
-    return jnp.array([z[5]])
+def vel_z(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
+    return jnp.array([x[5]])
 
-def thrust_x(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
-    return jnp.array([nu[0]])
+def thrust_x(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
+    return jnp.array([u[0]])
 
-def thrust_y(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
-    return jnp.array([nu[1]])
+def thrust_y(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
+    return jnp.array([u[1]])
 
-def thrust_z(t: float, z: Array, nu: Array, params: AttrDict, fcns: AttrDict) -> Array:
-    return jnp.array([nu[2]])
+def thrust_z(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
+    return jnp.array([u[2]])
 
 
 def obstacle_xy(params, ax) -> np.ndarray:

@@ -4,14 +4,14 @@ import numpy as np
 import jax.numpy as jnp
 import cvxpy as cp
 
-def u_squared_cost(t, x, u, params):
+def u_squared_cost(x, u, t, params, fcns):
     return jnp.atleast_1d(jnp.sum(u**2))
 
-def dynamics(t, x, u, params, fcns):
+def dynamics(x, u, t, params, fcns):
 
     # extract state
-    x1    = x[0]
-    x2    = x[1]
+    pos1  = x[0]
+    pos2  = x[1]
     theta = x[2]
 
     # translational and angular speeds as direct control
@@ -19,31 +19,31 @@ def dynamics(t, x, u, params, fcns):
     w     = u[1]
 
     # dynamics
-    x1_dot    = v * jnp.cos(theta)
-    x2_dot    = v * jnp.sin(theta)
+    pos1_dot  = v * jnp.cos(theta)
+    pos2_dot  = v * jnp.sin(theta)
     theta_dot = w 
 
-    x_dot = jnp.array([x1_dot, x2_dot, theta_dot]) 
+    x_dot = jnp.array([pos1_dot, pos2_dot, theta_dot]) 
 
     return x_dot
 
-def obstacle(t, x, u, params, fcns):
-    x1    = x[0]
-    x2    = x[1]
+def obstacle(x, u, t, params, fcns):
+    pos1  = x[0]
+    pos2  = x[1]
 
     eps = 1e-6
-    d1 = jnp.sqrt((x1 - params.obs1_x)**2 + (x2 - params.obs1_y)**2 + eps)
-    d2 = jnp.sqrt((x1 - params.obs2_x)**2 + (x2 - params.obs2_y)**2 + eps)
+    d1 = jnp.sqrt((pos1 - params.obs1_x)**2 + (pos2 - params.obs1_y)**2 + eps)
+    d2 = jnp.sqrt((pos1 - params.obs2_x)**2 + (pos2 - params.obs2_y)**2 + eps)
 
     return jnp.array([d1, d2])
 
-def x1x2(t, x, u, params, fcns):
-    x1    = x[0]
-    x2    = x[1]
+def x1x2(x, u, t, params, fcns):
+    pos1  = x[0]
+    pos2  = x[1]
 
-    return jnp.array([x1, x2])
+    return jnp.array([pos1, pos2])
 
-def body_dir(t, x, u, params, fcns):
+def body_dir(x, u, t, params, fcns):
     theta = x[2]
     return jnp.array([jnp.cos(theta), jnp.sin(theta)])
 

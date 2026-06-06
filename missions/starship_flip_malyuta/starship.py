@@ -4,10 +4,10 @@ import numpy as np
 import jax.numpy as jnp
 import cvxpy as cp
 
-def u_squared_cost(t, x, u, params):
+def u_squared_cost(x, u, t, params, fcns):
     return jnp.atleast_1d(jnp.sum(u**2))
 
-def dynamics(t, x, u, params, fcns):
+def dynamics(x, u, t, params, fcns):
 
     v         = x[2:4]
     theta_dot = x[5]
@@ -22,8 +22,8 @@ def dynamics(t, x, u, params, fcns):
     g     = params.g
     g_vec = jnp.array([0, -g])
     
-    ei = fcns.ei(t, x, u, params, fcns)
-    ej = fcns.ej(t, x, u, params, fcns)
+    ei = fcns.ei(x, u, t, params, fcns)
+    ej = fcns.ej(x, u, t, params, fcns)
 
     eps = 1e-10
     norm_v = jnp.sqrt(v[0]**2 + v[1]**2 + eps)
@@ -38,37 +38,37 @@ def dynamics(t, x, u, params, fcns):
     
     return jnp.concatenate([v, v_dot, jnp.atleast_1d(theta_dot), jnp.atleast_1d(theta_ddot)])
 
-def position(t, x, u, params, fcns):
+def position(x, u, t, params, fcns):
     return jnp.array([x[0], x[1]])
 
-def body_dir(t, x, u, params, fcns):
+def body_dir(x, u, t, params, fcns):
     theta = x[4]
     return jnp.array([-jnp.sin(theta), jnp.cos(theta)])
 
-def velocity(t, x, u, params, fcns):
+def velocity(x, u, t, params, fcns):
     return jnp.array([x[2], x[3]])
 
-def angular(t, x, u, params, fcns):
+def angular(x, u, t, params, fcns):
     return jnp.array([x[4], x[5]])
 
-def control(t, x, u, params, fcns):
+def control(x, u, t, params, fcns):
     return jnp.array([u[0], u[1]])
 
-def thrust_magnitude(t, x, u, params, fcns):
+def thrust_magnitude(x, u, t, params, fcns):
     return jnp.array([u[0]])
 
-def gimbal_angle(t, x, u, params, fcns):
+def gimbal_angle(x, u, t, params, fcns):
     return jnp.array([u[1]])
 
-def thrust_dir(t, x, u, params, fcns):
+def thrust_dir(x, u, t, params, fcns):
     delta = u[1]
-    e_i = fcns.ei(t, x, u, params, fcns)
-    e_j = fcns.ej(t, x, u, params, fcns)
+    e_i = fcns.ei(x, u, t, params, fcns)
+    e_j = fcns.ej(x, u, t, params, fcns)
     return -jnp.sin(delta) * e_i + jnp.cos(delta) * e_j
 
-def engine_offset(t, x, u, params, fcns):
+def engine_offset(x, u, t, params, fcns):
     """Offset from CG to engine (bottom of rocket): -lcg * ej."""
-    e_j = fcns.ej(t, x, u, params, fcns)
+    e_j = fcns.ej(x, u, t, params, fcns)
     return -params.lcg * e_j
 
 def cvx_glide_slope(x, u, params):
@@ -84,7 +84,7 @@ def glideslope_overlay(params, ax):
                      [np.nan, np.nan],
                      [0, 0], [-x_bound[-1], y[-1]]])
 
-def ei(t, x, u, params, fcns):
+def ei(x, u, t, params, fcns):
     theta = x[4]
 
     e1 = jnp.array([1.0, 0.0])
@@ -92,7 +92,7 @@ def ei(t, x, u, params, fcns):
 
     return jnp.cos(theta) * e1 + jnp.sin(theta) * e2
 
-def ej(t, x, u, params, fcns):
+def ej(x, u, t, params, fcns):
     theta = x[4]
 
     e1 = jnp.array([1.0, 0.0])

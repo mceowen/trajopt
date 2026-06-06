@@ -75,7 +75,7 @@ segments:
 
 analysis:
   type: standalone
-  compute_iters: true
-  show_iters: true
+  compute_iters: false
+  show_iters: false
   show_convergence: false
   show_weights: false

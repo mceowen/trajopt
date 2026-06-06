@@ -62,7 +62,7 @@ class scp_convex_terminal(SCPCost):
         for k in np.atleast_1d(self.cost.nodes):
             x_k = scp_segment.cp_params.z_ref[k, idx_state] + scp_segment.dz[k, idx_state]
             u_k = scp_segment.cp_params.nu_ref[k, idx_ctrl] + scp_segment.dnu[k, idx_ctrl]
-            scp_segment.cp_cost += self.cost.w * self.cost.fcn_dim(0, x_k, u_k, scp_segment.params)
+            scp_segment.cp_cost += self.cost.w * self.cost.fcn_dim(x_k, u_k, 0, scp_segment.params)
 
 
 class scp_convex_running(SCPCost):
@@ -73,7 +73,7 @@ class scp_convex_running(SCPCost):
             if k in self.cost.nodes:
                 x_k = scp_segment.cp_params.z_ref[k, idx_state] + scp_segment.dz[k, idx_state]
                 u_k = scp_segment.cp_params.nu_ref[k, idx_ctrl] + scp_segment.dnu[k, idx_ctrl]
-                scp_segment.cp_cost += self.cost.w * self.cost.fcn_dim(0, x_k, u_k, scp_segment.params)
+                scp_segment.cp_cost += self.cost.w * self.cost.fcn_dim(x_k, u_k, 0, scp_segment.params)
 
 class scp_min_time(SCPCost):
     def create_cvxpy_cost(self, scp_segment):

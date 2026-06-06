@@ -211,7 +211,7 @@ def resolve_function_from_string(fcn_string: str, fcns: "AttrDict | None" = None
     return fn
 
 class _FcnExpr:
-    """Lightweight wrapper enabling arithmetic on (t, x, u, params) callables."""
+    """Lightweight wrapper enabling arithmetic on (x, u, t, params) callables."""
 
     def __init__(self, fcn: Callable) -> None:
         """Wrap fcn in a _FcnExpr to enable arithmetic composition."""
@@ -222,10 +222,10 @@ class _FcnExpr:
         f = self._fcn
         if isinstance(other, _FcnExpr):
             g = other._fcn
-            return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) * g(t, x, u, params))
+            return _FcnExpr(lambda x, u, t, params: f(x, u, t, params) * g(x, u, t, params))
         if isinstance(other, list):
             other = np.array(other)
-        return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) * other)
+        return _FcnExpr(lambda x, u, t, params: f(x, u, t, params) * other)
 
     def __rmul__(self, other: Any) -> "_FcnExpr":
         """Return element-wise product of other with this callable."""
@@ -236,16 +236,16 @@ class _FcnExpr:
         f = self._fcn
         if isinstance(other, _FcnExpr):
             g = other._fcn
-            return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) / g(t, x, u, params))
-        return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) / other)
+            return _FcnExpr(lambda x, u, t, params: f(x, u, t, params) / g(x, u, t, params))
+        return _FcnExpr(lambda x, u, t, params: f(x, u, t, params) / other)
 
     def __add__(self, other: Any) -> "_FcnExpr":
         """Return element-wise sum of this callable with other."""
         f = self._fcn
         if isinstance(other, _FcnExpr):
             g = other._fcn
-            return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) + g(t, x, u, params))
-        return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) + other)
+            return _FcnExpr(lambda x, u, t, params: f(x, u, t, params) + g(x, u, t, params))
+        return _FcnExpr(lambda x, u, t, params: f(x, u, t, params) + other)
 
     def __radd__(self, other: Any) -> "_FcnExpr":
         """Return element-wise sum of other with this callable."""
@@ -256,10 +256,10 @@ class _FcnExpr:
         f = self._fcn
         if isinstance(other, _FcnExpr):
             g = other._fcn
-            return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) - g(t, x, u, params))
-        return _FcnExpr(lambda t, x, u, params: f(t, x, u, params) - other)
+            return _FcnExpr(lambda x, u, t, params: f(x, u, t, params) - g(x, u, t, params))
+        return _FcnExpr(lambda x, u, t, params: f(x, u, t, params) - other)
 
     def __neg__(self) -> "_FcnExpr":
         """Return element-wise negation of this callable."""
         f = self._fcn
-        return _FcnExpr(lambda t, x, u, params: -f(t, x, u, params))
+        return _FcnExpr(lambda x, u, t, params: -f(x, u, t, params))

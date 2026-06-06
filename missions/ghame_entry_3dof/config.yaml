@@ -49,7 +49,7 @@ segments:
       max_heat_rate:
         type: nonconvex_inequality
         fcn: fcns.heat_rate
-        upper: [5.3]
+        upper: [5.5]
         scale: 1.0
 
     costs:

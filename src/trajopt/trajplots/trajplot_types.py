@@ -38,7 +38,7 @@ class spatial:
 
             def quiver_znu(z, nu, params, fcn=q_fcn):
                 x, t, _, u, _ = index_map.unpack_znu(z, nu)
-                return fcn(jnp.asarray(t) * self.time_scale, self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, params)
+                return fcn(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, jnp.asarray(t) * self.time_scale, params)
 
             q_batch = jax.jit(jax.vmap(quiver_znu, in_axes=(0, 0, None)))
 
@@ -48,23 +48,23 @@ class spatial:
 
                 def origin_znu(z, nu, params, fcn=o_fcn):
                     x, t, _, u, _ = index_map.unpack_znu(z, nu)
-                    return fcn(jnp.asarray(t) * self.time_scale, self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, params)
+                    return fcn(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, jnp.asarray(t) * self.time_scale, params)
 
                 o_batch = jax.jit(jax.vmap(origin_znu, in_axes=(0, 0, None)))
 
             self._quiver_batches.append((q_batch, o_batch, qcfg))
 
-    def fcn_txu_nd(self, t, x, u, params):
+    def fcn_txu_nd(self, x, u, t, params):
         return self.fcn_txu_dim(
-            jnp.asarray(t) * self.time_scale,
             self.M_state_nd2d @ x,
             self.M_ctrl_nd2d @ u,
+            jnp.asarray(t) * self.time_scale,
             params,
         )
 
     def fcn_znu(self, z, nu, params):
         x, t, _, u, _ = self.index_map.unpack_znu(z, nu)
-        return self.fcn_txu_nd(t, x, u, params)
+        return self.fcn_txu_nd(x, u, t, params)
 
     def compute_trajplot_values(self, z, nu, params):
         z_jax, nu_jax = jnp.asarray(z), jnp.asarray(nu)
@@ -115,7 +115,7 @@ class time_series:
 
             def upper_znu(z, nu, params):
                 x, t, _, u, _ = index_map.unpack_znu(z, nu)
-                return upper_fcn(jnp.asarray(t) * self.time_scale, self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, params)
+                return upper_fcn(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, jnp.asarray(t) * self.time_scale, params)
 
             self.upper_limit_batched = jax.jit(jax.vmap(upper_znu, in_axes=(0, 0, None)))
 
@@ -125,21 +125,21 @@ class time_series:
 
             def lower_znu(z, nu, params):
                 x, t, _, u, _ = index_map.unpack_znu(z, nu)
-                return lower_fcn(jnp.asarray(t) * self.time_scale, self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, params)
+                return lower_fcn(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, jnp.asarray(t) * self.time_scale, params)
 
             self.lower_limit_batched = jax.jit(jax.vmap(lower_znu, in_axes=(0, 0, None)))
 
-    def fcn_txu_nd(self, t, x, u, params):
+    def fcn_txu_nd(self, x, u, t, params):
         return self.fcn_txu_dim(
-            jnp.asarray(t) * self.time_scale,
             self.M_state_nd2d @ x,
             self.M_ctrl_nd2d @ u,
+            jnp.asarray(t) * self.time_scale,
             params,
         )
 
     def fcn_znu(self, z, nu, params):
         x, t, _, u, _ = self.index_map.unpack_znu(z, nu)
-        return self.fcn_txu_nd(t, x, u, params)
+        return self.fcn_txu_nd(x, u, t, params)
 
     def compute_trajplot_values(self, z, nu, params):
         z_jax, nu_jax = jnp.asarray(z), jnp.asarray(nu)

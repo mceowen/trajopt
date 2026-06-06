@@ -162,8 +162,8 @@ class stl_expr:
         f = self._fcn
         if isinstance(other, stl_expr):
             g = other._fcn
-            return stl_expr(lambda t, z, nu, params: f(t, z, nu, params) * g(t, z, nu, params))
-        return stl_expr(lambda t, z, nu, params: f(t, z, nu, params) * other)
+            return stl_expr(lambda x, u, t, params: f(x, u, t, params) * g(x, u, t, params))
+        return stl_expr(lambda x, u, t, params: f(x, u, t, params) * other)
 
     def __rmul__(self, other):
         return self.__mul__(other)
@@ -172,33 +172,33 @@ class stl_expr:
         f = self._fcn
         if isinstance(other, stl_expr):
             g = other._fcn
-            return stl_expr(lambda t, z, nu, params: f(t, z, nu, params)[0] - g(t, z, nu, params)[0])
-        return stl_expr(lambda t, z, nu, params: f(t, z, nu, params)[0] - other)
+            return stl_expr(lambda x, u, t, params: f(x, u, t, params)[0] - g(x, u, t, params)[0])
+        return stl_expr(lambda x, u, t, params: f(x, u, t, params)[0] - other)
 
     def __ge__(self, other):
         f = self._fcn
         if isinstance(other, stl_expr):
             g = other._fcn
-            return stl_expr(lambda t, z, nu, params: g(t, z, nu, params)[0] - f(t, z, nu, params)[0])
-        return stl_expr(lambda t, z, nu, params: other - f(t, z, nu, params)[0])
+            return stl_expr(lambda x, u, t, params: g(x, u, t, params)[0] - f(x, u, t, params)[0])
+        return stl_expr(lambda x, u, t, params: other - f(x, u, t, params)[0])
 
     def __and__(self, other):
         f1, f2 = self._fcn, other._fcn
-        return stl_expr(lambda t, z, nu, params: AND(jnp.array([f1(t, z, nu, params), f2(t, z, nu, params)])))
+        return stl_expr(lambda x, u, t, params: AND(jnp.array([f1(x, u, t, params), f2(x, u, t, params)])))
 
     def __or__(self, other):
         f1, f2 = self._fcn, other._fcn
-        return stl_expr(lambda t, z, nu, params: OR(jnp.array([f1(t, z, nu, params), f2(t, z, nu, params)])))
+        return stl_expr(lambda x, u, t, params: OR(jnp.array([f1(x, u, t, params), f2(x, u, t, params)])))
 
     def __rshift__(self, other):
         f1, f2 = self._fcn, other._fcn
-        return stl_expr(lambda t, z, nu, params: IfThen(jnp.array([f1(t, z, nu, params), f2(t, z, nu, params)])))
+        return stl_expr(lambda x, u, t, params: IfThen(jnp.array([f1(x, u, t, params), f2(x, u, t, params)])))
 
     def implies(self, other):
         return self.__rshift__(other)
 
     def build(self):
-        return lambda t, z, nu, params: jnp.atleast_1d(self._fcn(t, z, nu, params))
+        return lambda x, u, t, params: jnp.atleast_1d(self._fcn(x, u, t, params))
 
 def parse_stl_expression(expr_string, fcns):
     # create a namespace to store the stl expressions within the expression string
@@ -207,7 +207,7 @@ def parse_stl_expression(expr_string, fcns):
     for name, fn in fcns.items():
         sig = inspect.signature(fn)
         
-        # close over fcns argument to just pass (t, z, nu, params)
+        # close over fcns argument to just pass (x, u, t, params)
         if 'fcns' in sig.parameters:
             fn = partial(fn, fcns=fcns)
         

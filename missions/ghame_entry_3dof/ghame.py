@@ -6,11 +6,11 @@ from trajopt.utils.tools import AttrDict
 
 jax.config.update("jax_enable_x64", True)
 
-def nonlinear_aero(t, x, u, params, fcns):
+def nonlinear_aero(x, u, t, params, fcns):
     """Nonlinear aerodynamic force coefficients and state for GHAME, JAX version."""
 
     vehicle = params.vehicle
-    rho = fcns.density_model(t, x, u, params, fcns)
+    rho = fcns.density_model(x, u, t, params, fcns)
     mass = vehicle.mass
     v = x[3]
 

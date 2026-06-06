@@ -5,9 +5,9 @@ from trajopt.utils.tools import AttrDict
 
 jax.config.update("jax_enable_x64", True)
 
-def nonlinear_aero_jax(t: float, z: Array, nu: Array, params: dict, fcns: dict) -> dict:
+def nonlinear_aero_jax(x: Array, u: Array, t: float, params: dict, fcns: dict) -> dict:
     """Nonlinear aerodynamic force coefficients and state for VTOL."""
-    v = z[3]
+    v = x[3]
 
     # Setup coefficient values
     kl1 = -0.041065
@@ -21,7 +21,7 @@ def nonlinear_aero_jax(t: float, z: Array, nu: Array, params: dict, fcns: dict) 
     alphlim_deg = 40
 
     vehicle = params.vehicle
-    rho = fcns.density_model(t, z, nu, params, fcns)
+    rho = fcns.density_model(x, u, t, params, fcns)
 
     # Velocity-dependent polynomial coefficients
     Kd1 = kd1

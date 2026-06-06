@@ -258,7 +258,7 @@ class convex_inequality(Constraint):
     def lower(self):
         return self.M_out_d2nd @ np.atleast_1d(self._lower_dim) if self._lower_dim is not None else None
 
-    def fcn_txu_nd(self, t, x, u, params):
+    def fcn_txu_nd(self, x, u, t, params):
         M_out_diag = np.diag(self.M_out_d2nd)
         g = cp.multiply(M_out_diag, self.fcn_xu_dim(x @ self.M_state_nd2d.T, u @ self.M_ctrl_nd2d.T, params))
         pieces = []
@@ -272,7 +272,7 @@ class convex_inequality(Constraint):
 
     def fcn_znu(self, z, nu, params):
         x, t, _, u, _ = self.index_map.unpack_znu(z, nu)
-        return self.fcn_txu_nd(t, x, u, params)
+        return self.fcn_txu_nd(x, u, t, params)
 
 
 class initial_convex_inequality(convex_inequality):
@@ -303,7 +303,7 @@ class nonconvex_inequality(Constraint):
         self.fcn_string = cnstr_config.fcn
         self.fcn_txu_dim = tools.resolve_function_from_string(self.fcn_string, fcns)
 
-        out = self.fcn_txu_dim(0.0, np.ones(index_map.n.state), np.ones(index_map.n.control), params)
+        out = self.fcn_txu_dim(np.ones(index_map.n.state), np.ones(index_map.n.control), 0.0, params)
         self.dimension = jnp.atleast_1d(out).shape[0]
 
         self.scale = np.atleast_1d(cnstr_config.get("scale", np.ones(self.dimension)))
@@ -322,8 +322,8 @@ class nonconvex_inequality(Constraint):
     def lower(self):
         return self.M_out_d2nd @ jnp.atleast_1d(self._lower_dim) if self._lower_dim is not None else None
 
-    def fcn_txu_nd(self, t, x, u, params):
-        g = self.M_out_d2nd @ self.fcn_txu_dim(t, self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, params)
+    def fcn_txu_nd(self, x, u, t, params):
+        g = self.M_out_d2nd @ self.fcn_txu_dim(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, t, params)
         pieces = []
         if self.lower is not None:
             pieces.append(self.lower - g)
@@ -335,7 +335,7 @@ class nonconvex_inequality(Constraint):
 
     def fcn_znu(self, z, nu, params):
         x, t, _, u, _ = self.index_map.unpack_znu(z, nu)
-        return self.fcn_txu_nd(t, x, u, params)
+        return self.fcn_txu_nd(x, u, t, params)
 
 
 class initial_nonconvex_inequality(nonconvex_inequality):
@@ -376,13 +376,13 @@ class dynamics(Constraint):
 
         self.ctcs_constraints = ()
 
-    def fcn_txu_nd(self, t, x, u, params):
-        return self.M_out_d2nd @ self.fcn_txu_dim(t, self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, params)
+    def fcn_txu_nd(self, x, u, t, params):
+        return self.M_out_d2nd @ self.fcn_txu_dim(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, t, params)
 
     def fcn_znu(self, z, nu, params):
         x, t, beta, u, s = self.index_map.unpack_znu(z, nu)
 
-        dx_dt = self.fcn_txu_nd(t, x, u, params)
+        dx_dt = self.fcn_txu_nd(x, u, t, params)
         dt_dt = jnp.asarray([1.0], dtype=z.dtype)
 
         if self.ctcs_constraints:

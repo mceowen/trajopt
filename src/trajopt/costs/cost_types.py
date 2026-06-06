@@ -96,14 +96,14 @@ class terminal:
             self.d2fcn_dnu2_batched = jax.jit(jax.vmap(self.d2fcn_dnu2_compiled, in_axes=(0, 0, None)))
             self.d2fcn_dzdnu_batched = jax.jit(jax.vmap(self.d2fcn_dzdnu_compiled, in_axes=(0, 0, None)))
 
-    def fcn_txu_nd(self, t, x, u, params):
+    def fcn_txu_nd(self, x, u, t, params):
         return self.M_out_d2nd @ jnp.atleast_1d(
-            self.fcn_txu_dim(t, self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, params)
+            self.fcn_txu_dim(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, t, params)
         )
 
     def fcn_znu(self, z, nu, params):
         x, t, _, u, _ = self.index_map.unpack_znu(z, nu)
-        return self.fcn_txu_nd(t, x, u, params)
+        return self.fcn_txu_nd(x, u, t, params)
 
     def g_aff(self, z: Any, nu: Any, params: Any) -> tuple:
         return (
@@ -186,14 +186,14 @@ class running:
             self.d2fcn_dnu2_batched = jax.jit(jax.vmap(self.d2fcn_dnu2_compiled, in_axes=(0, 0, None)))
             self.d2fcn_dzdnu_batched = jax.jit(jax.vmap(self.d2fcn_dzdnu_compiled, in_axes=(0, 0, None)))
 
-    def fcn_txu_nd(self, t, x, u, params):
+    def fcn_txu_nd(self, x, u, t, params):
         return self.M_out_d2nd @ jnp.atleast_1d(
-            self.fcn_txu_dim(t, self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, params)
+            self.fcn_txu_dim(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, t, params)
         )
 
     def fcn_znu(self, z, nu, params):
         x, t, _, u, _ = self.index_map.unpack_znu(z, nu)
-        return self.fcn_txu_nd(t, x, u, params)
+        return self.fcn_txu_nd(x, u, t, params)
 
     def g_aff(self, z: Any, nu: Any, params: Any) -> tuple:
         return (

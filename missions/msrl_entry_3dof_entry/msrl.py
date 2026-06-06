@@ -4,7 +4,7 @@ from trajopt.utils.tools import AttrDict
 # x = [r, theta, phi, v, fpa, heading]
 # u = [bank, aoa]
 
-def density_model(t, x, u, params, fcns):
+def density_model(x, u, t, params, fcns):
 
     r = x[0]
 
@@ -27,7 +27,7 @@ def density_model(t, x, u, params, fcns):
 
     return rho
 
-def nonlinear_aero(t, x, u, params, fcns):
+def nonlinear_aero(x, u, t, params, fcns):
 
     v = x[3]
 
@@ -61,7 +61,7 @@ def nonlinear_aero(t, x, u, params, fcns):
         + k_d*y**2 + l_d*y + m_d
         )
 
-    rho = fcns.density_model(t, x, u, params, fcns)
+    rho = fcns.density_model(x, u, t, params, fcns)
 
     mass = params.vehicle.mass
     sref = params.vehicle.sref
