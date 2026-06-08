@@ -9,58 +9,59 @@ method:
   solver_opts:
     solver: QOCO
 
-segments:
-  perch:
-    num_nodes: 20
-    inherit: model.yaml
+trajectory:
+  segments:
+    perch:
+      num_nodes: 20
+      inherit: model.yaml
 
-    params:
-      Sw: 0.0885
-      Se: 0.0147
-      lw: 0
-      le: 0.022
-      lh: 0.27
-      inertia: 0.0015
-      m: 0.08
-      rho: 1.204
-      g: 9.81
+      params:
+        Sw: 0.0885
+        Se: 0.0147
+        lw: 0
+        le: 0.022
+        lh: 0.27
+        inertia: 0.0015
+        m: 0.08
+        rho: 1.204
+        g: 9.81
 
-    constraints:
-      dynamics:
-        type: dynamics
-        fcn: fcns.dynamics
+      constraints:
+        dynamics:
+          type: dynamics
+          fcn: fcns.dynamics
 
-      initial_state:
-        type: initial_state
-        value: [-3.5, 0.1, 0, 0, 7.0, 0, 0]
+        initial_state:
+          type: initial_state
+          value: [-3.5, 0.1, 0, 0, 7.0, 0, 0]
 
-      final_state:
-        type: final_state
-        value: [0, 0, null, null, null, null, null]
+        final_state:
+          type: final_state
+          value: [0, 0, null, null, null, null, null]
 
-      state_limits:
-        type: state_limits
-        lower: [null, null, -0.9473, null, null, null, null]
-        upper: [null, null, 0.4463, null, null, null, null]
+        state_limits:
+          type: state_limits
+          lower: [null, null, -0.9473, null, null, null, null]
+          upper: [null, null, 0.4463, null, null, null, null]
 
-      terminal_box:
-        type: final_nonconvex_inequality
-        fcn: fcns.terminal_box
-        lower: [-2.0, -2.0, -1.0]
-        upper: [2.0, 2.0, "${-np.pi / 6.0}"]
+        terminal_box:
+          type: final_nonconvex_inequality
+          fcn: fcns.terminal_box
+          lower: [-2.0, -2.0, -1.0]
+          upper: [2.0, 2.0, "${-np.pi / 6.0}"]
 
-    costs:
-      u_squared:
-        type: running
-        fcn: fcns.u_squared_cost
-        w: 1
+      costs:
+        u_squared:
+          type: running
+          fcn: fcns.u_squared_cost
+          w: 1
 
-    guess:
-      type: propagation
-      t_start: 0.0
-      t_stop: 0.8
-      u_start: [0]
-      u_stop: [0]
+      guess:
+        type: propagation
+        t_start: 0.0
+        t_stop: 0.8
+        u_start: [0]
+        u_stop: [0]
 
 analysis:
   type: standalone

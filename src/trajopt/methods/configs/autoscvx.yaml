@@ -2,16 +2,17 @@ flags:
   free_final_time:    1
   equal_dt:           1
   zoh_dilation:       1
-  ode_fixed_dt:       0
   flag_conv:          1
   ignore_dpp:         0
+  second_order:       1
+  line_search:        1
   discretize: ms
   eps_state: [0.001]
   iter_max: 300
 
 weights:
-  alpha_z: 0.5
-  alpha_nu: 0.5
+  alpha_z: 0.01
+  alpha_nu: 0.01
 
 penalty:
   default:
@@ -24,7 +25,7 @@ penalty:
       autotune: True
       init: 0.0
       beta: 1.0
-    vb: 'standard'
+    vb: split
     eps: [0.0001]
 
 solver_opts:

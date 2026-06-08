@@ -68,10 +68,10 @@ state:
     scale: 1
   quat:
     idx: [7, 8, 9, 10]
-    scale: 1
+    scale: 1.0
   angv:
     idx: [11, 12, 13]
-    scale: 1
+    scale: 1.0
 
 control:
   thrust:
@@ -79,7 +79,7 @@ control:
     scale: 1
 
 time:
-  scale: 1
+  scale: 0.1
 
 # ===============================
 # TRAJECTORIES

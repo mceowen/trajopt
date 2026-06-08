@@ -9,90 +9,91 @@ method:
   solver_opts:
     solver: PIQP
 
-segments:
-  entry:
-    num_nodes: 150
-    inherit: ../../models/configs/reentry_3dof.yaml
+trajectory:
+  segments:
+    entry:
+      num_nodes: 150
+      inherit: ../../models/configs/reentry_3dof.yaml
 
-    fcns:
-      nonlinear_aero: vtol.py:nonlinear_aero_jax
+      fcns:
+        nonlinear_aero: vtol.py:nonlinear_aero_jax
 
-    params:
-      planet:
-        inherit: ../configs/planets/earth.yaml
-      vehicle:
-        inherit: ../configs/vehicles/vtol.yaml
+      params:
+        planet:
+          inherit: ../configs/planets/earth.yaml
+        vehicle:
+          inherit: ../configs/vehicles/vtol.yaml
 
-    constraints:
-      dynamics:
-        type: dynamics
-        fcn: fcns.dynamics
+      constraints:
+        dynamics:
+          type: dynamics
+          fcn: fcns.dynamics
 
-      initial_state:
-        type: initial_state
-        value: ["${params.planet.r + 100e3}", 0.0, 0.0, 7450, -0.5, 0.0]
+        initial_state:
+          type: initial_state
+          value: ["${params.planet.r + 100e3}", 0.0, 0.0, 7450, -0.5, 0.0]
 
-      final_state:
-        type: final_state
-        value: ["${params.planet.r + 15e3}", 12, 70, null, -10, 90]
+        final_state:
+          type: final_state
+          value: ["${params.planet.r + 15e3}", 12, 70, null, -10, 90]
 
-      state_limits:
-        type: state_limits
-        lower: ["${params.planet.r}", null, null, 100.0, null, null]
+        state_limits:
+          type: state_limits
+          lower: ["${params.planet.r}", null, null, 100.0, null, null]
 
-      bank_angle_limit:
-        type: control_limits
-        lower: [-80.0, null]
-        upper: [80.0, null]
+        bank_angle_limit:
+          type: control_limits
+          lower: [-80.0, null]
+          upper: [80.0, null]
 
-      bank_angle_rate_limit:
-        type: control_rate_limit
-        value: [5]
-        idx: [0]
+        bank_angle_rate_limit:
+          type: control_rate_limit
+          value: [5]
+          idx: [0]
 
-      # max_Q:
-      #   type: nonconvex_inequality
-      #   fcn: "fcns.heat_rate"
-      #   upper: 3.3300
-      #   scale: [3.3300]
+        # max_Q:
+        #   type: nonconvex_inequality
+        #   fcn: "fcns.heat_rate"
+        #   upper: 3.3300
+        #   scale: [3.3300]
 
-      # max_q:
-      #   type: nonconvex_inequality
-      #   fcn: fcns.dynamic_pressure
-      #   upper: 18.000
-      #   scale: [18.000]
+        # max_q:
+        #   type: nonconvex_inequality
+        #   fcn: fcns.dynamic_pressure
+        #   upper: 18.000
+        #   scale: [18.000]
 
-      # max_load:
-      #   type: nonconvex_inequality
-      #   fcn: fcns.aero_load
-      #   upper: 2.5
-      #   scale: [2.5]
+        # max_load:
+        #   type: nonconvex_inequality
+        #   fcn: fcns.aero_load
+        #   upper: 2.5
+        #   scale: [2.5]
 
-      final_time:
-        type: final_time
-        lower: 550.0
-        upper: 3000.0
+        final_time:
+          type: final_time
+          lower: 550.0
+          upper: 3000.0
 
-    costs:
-      min_terminal_velocity:
-        type: terminal
-        fcn: fcns.velocity
+      costs:
+        min_terminal_velocity:
+          type: terminal
+          fcn: fcns.velocity
 
-    trajplots:
-      heat_rate:
-        upper_limit: 3.33
+      trajplots:
+        heat_rate:
+          upper_limit: 3.33
 
-      dynamic_pressure:
-        upper_limit: 18.0
+        dynamic_pressure:
+          upper_limit: 18.0
 
-      aero_load:
-        upper_limitt: 2.5
+        aero_load:
+          upper_limit: 2.5
 
-    guess:
-      t_start: 0.0
-      t_stop: 1000.0
-      u_start: [0.0, 0.0]
-      u_stop: [0.0, 0.0]
+      guess:
+        t_start: 0.0
+        t_stop: 1000.0
+        u_start: [0.0, 0.0]
+        u_stop: [0.0, 0.0]
 
 analysis:
   type: standalone

@@ -1,84 +1,83 @@
-segments:
-  entry:
-    num_nodes: 100
-    inherit: ../../models/configs/reentry_3dof.yaml
+trajectory:
+  segments:
+    entry:
+      num_nodes: 100
+      inherit: ../../models/configs/reentry_3dof.yaml
 
-    fcns:
-      density_model: msrl.py:density_model
-      nonlinear_aero: msrl.py:nonlinear_aero
+      fcns:
+        density_model: msrl.py:density_model
+        nonlinear_aero: msrl.py:nonlinear_aero
 
-    params:
-      planet:
-        inherit: ../configs/planets/mars.yaml
-      vehicle:
-        inherit: ../../local/vehicles/msrl.yaml
+      params:
+        planet:
+          inherit: ../configs/planets/mars.yaml
+        vehicle:
+          inherit: ../../local/vehicles/msrl.yaml
 
-        # density parameters
-        a: -4.418967
-        b: -56.76770
-        c: 1.621266
-        d: 379.3357
-        e: 8564.256
-        f: 8414.405
-        g: -988.7042
-        h: 4461.988
-        i: 31.36062
+          # density parameters
+          a: -4.418967
+          b: -56.76770
+          c: 1.621266
+          d: 379.3357
+          e: 8564.256
+          f: 8414.405
+          g: -988.7042
+          h: 4461.988
+          i: 31.36062
 
-        # nonlinear aero parameters
-        a_l: 0.679945
-        b_l: -9.522473
-        c_l: 59.179219
-        d_l: -215.423516
-        e_l: 510.853276
-        f_l: -830.748818
-        g_l: 950.127376
-        h_l: -771.365024
-        i_l: 443.191605
-        j_l: -177.601759
-        k_l: 48.232018
-        l_l: -8.362472
-        m_l: 1.177526
+          # nonlinear aero parameters
+          a_l: 0.679945
+          b_l: -9.522473
+          c_l: 59.179219
+          d_l: -215.423516
+          e_l: 510.853276
+          f_l: -830.748818
+          g_l: 950.127376
+          h_l: -771.365024
+          i_l: 443.191605
+          j_l: -177.601759
+          k_l: 48.232018
+          l_l: -8.362472
+          m_l: 1.177526
 
+      constraints:
+        dynamics:
+          type: dynamics
+          fcn: fcns.dynamics
 
+        initial_state:
+          type: initial_state
+          value: [3456160, 68.20, 14.12, 7935.15, -7.7075, 62.2803]
 
-    constraints:
-      dynamics:
-        type: dynamics
-        fcn: fcns.dynamics
+        final_state:
+          type: final_state
+          value: [3404010, 76.14, 17.91, null, null, 64.5]
 
-      initial_state:
-        type: initial_state
-        value: [3456160, 68.20, 14.12, 7935.15, -7.7075, 62.2803]
+        state_limits:
+          type: state_limits
+          lower: ["${params.planet.r}", null, null, 100.0, null, null]
+          # upper: [null , null, null, null, null, null]
 
-      final_state:
-        type: final_state
-        value: [3404010, 76.14, 17.91, null, null, 64.5]
+        bank_aoa_angle_limits:
+          type: control_limits
+          lower: [-170.0, null]
+          upper: [170.0, null]
 
-      state_limits:
-        type: state_limits
-        lower: ["${params.planet.r}", null, null, 100.0, null, null]
-        # upper: [null , null, null, null, null, null]
+        bank_angle_rate_limit:
+          type: control_rate_limit
+          value: [10]
+          idx: [0]
 
-      bank_aoa_angle_limits:
-        type: control_limits
-        lower: [-170.0, null]
-        upper: [170.0, null]
+      costs:
+        min_terminal_velocity:
+          type: terminal
+          fcn: fcns.velocity
 
-      bank_angle_rate_limit:
-        type: control_rate_limit
-        value: [10]
-        idx: [0]
-
-    costs:
-      min_terminal_velocity:
-        type: terminal
-        fcn: fcns.velocity
-
-    guess:
-      t_start: 0.0
-      t_stop: 150.0
-      u_start: [120.0, 0.0]
-      u_stop: [0, 0.0]
+      guess:
+        t_start: 0.0
+        t_stop: 150.0
+        u_start: [120.0, 0.0]
+        u_stop: [0, 0.0]
 
 method:
   inherit: trajopt/methods/configs/autoscvx.yaml

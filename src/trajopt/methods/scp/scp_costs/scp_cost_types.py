@@ -78,15 +78,14 @@ class scp_convex_running(SCPCost):
 class scp_min_time(SCPCost):
     def create_cvxpy_cost(self, scp_segment):
         if bool(scp_segment.flags.free_final_time):
-            t = scp_segment.t_ref[:, 0] + scp_segment.dt[:, 0]
-            scp_segment.cp_cost += cp.sum(t[1:] - t[:-1])
+            s = scp_segment.t_ref[:, 0] + scp_segment.dt[:, 0]
+            scp_segment.cp_cost += cp.sum(s)
 
     def merit_cost(self, scp_segment):
-        time_idx = jnp.array(scp_segment.index_map.indices.z.time)
+        dil_idx = jnp.array(scp_segment.index_map.indices.nu.dilation_factor)
 
         def eval_fn(z, nu, params):
-            t = z[:, time_idx].ravel()
-            return jnp.sum(t[1:] - t[:-1])
+            return jnp.sum(nu[:, dil_idx[0]])
         return eval_fn
 
 class scp_min_norm_terminal(SCPCost):

@@ -205,7 +205,7 @@ def compile_jax_discretization(segment: Segment, subprob: "Subproblem") -> None:
 
         return (A_jax_k, B_jax_k, Bp_jax_k, z_minus_k)
 
-    use_fixed_dt = int(getattr(subprob.flags, "ode_fixed_dt", 0))
+    use_fixed_dt = True
     N_grid = segment.index_map.N.all
 
     if use_fixed_dt:

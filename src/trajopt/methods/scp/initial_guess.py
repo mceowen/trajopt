@@ -99,7 +99,7 @@ def nonlinear_initial_guess(segment, scp_segment):
         u = (1 - a) * u_ref[k] + a * u_ref[k + 1]
         return jnp.zeros(n_nu).at[ctrl_sl].set(u).at[dil_sl].set(sigma)
 
-    n_sub   = 100
+    n_sub   = 10
     n_total = n_sub * (N - 1)
     _, z_dense, nu_dense = integrators.propagate_rk4(
         z0, 0.0, 1.0, nu_fn, dynamics, params, n_steps=n_total,

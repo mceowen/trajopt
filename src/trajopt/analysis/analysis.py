@@ -12,19 +12,15 @@ jax.config.update("jax_enable_x64", True)
 """
 outline of solution_data structure:
 results = {
-    "method1": {
-        "runs": [{"iter_data_list": [...]}, {"iter_data_list": [...]}, ...]
-    },
-
-    "method2": {
-        "runs": []
-    },
+    "trajectories": 
+        "segments":
+            [{"iter_data_list": [...]}, {"iter_data_list": [...]}, ...]
 }
 """
 
 def perform_analysis(traj):
     """Propagate every segment's iterates and merge them into one mission trajectory."""
-    segments = [analyze_segment(subprob, traj.config) for subprob in traj.method.scp_segments.values()]
+    segments = [analyze_segment(subprob, traj.config) for subprob in traj.method.scp_trajectory.scp_segments.values()]
 
     if len(segments) == 1:
         iter_data_list = segments[0]

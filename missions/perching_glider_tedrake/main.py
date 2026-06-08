@@ -1,9 +1,7 @@
-from trajopt.trajectory import Trajectory
+from trajopt.trajectory_analyzer import TrajectoryAnalyzer
 
-traj = Trajectory("config.yaml")
-
+traj = TrajectoryAnalyzer("config.yaml")
 traj.solve()
 
 data = traj.analyze()
-
 traj.plot(data)

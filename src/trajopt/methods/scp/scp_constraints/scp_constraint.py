@@ -98,7 +98,7 @@ class SCPConstraint():
 
         if self.penalty.W.autotune:
             Wh = self.W * np.abs(self.vb) / (0.9 * self.eps)
-            self.W = np.clip(Wh, 1.0, 1e10)
+            self.W = np.clip(Wh, 0.0001, 1e8)
 
         if self.penalty.dual.autotune:
             dual_new = self.dual + 0.1 * self.vb

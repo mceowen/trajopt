@@ -16,54 +16,55 @@ method:
   solver_opts:
     solver: CLARABEL
 
-segments:
-  swingup:
-    num_nodes: 40
-    inherit: model.yaml
+trajectory:
+  segments:
+    swingup:
+      num_nodes: 40
+      inherit: model.yaml
 
-    params:
-      g: 9.81
-      mp: 0.3
-      mc: 1
-      l: 0.5
+      params:
+        g: 9.81
+        mp: 0.3
+        mc: 1
+        l: 0.5
 
-    constraints:
-      dynamics:
-        type: dynamics
-        fcn: fcns.dynamics
+      constraints:
+        dynamics:
+          type: dynamics
+          fcn: fcns.dynamics
 
-      initial_state:
-        type: initial_state
-        value: [0, 0, 0, 0]
+        initial_state:
+          type: initial_state
+          value: [0, 0, 0, 0]
 
-      final_state:
-        type: final_state
-        value: [1, "${np.pi}", 0, 0]
+        final_state:
+          type: final_state
+          value: [1, "${np.pi}", 0, 0]
 
-      state_limits:
-        type: state_limits
-        lower: [-4, null, null, null]
-        upper: [ 4, null, null, null]
+        state_limits:
+          type: state_limits
+          lower: [-4, null, null, null]
+          upper: [ 4, null, null, null]
 
-      control_limits:
-        type: control_limits
-        lower: [-20]
-        upper: [20]
+        control_limits:
+          type: control_limits
+          lower: [-20]
+          upper: [20]
 
-    costs:
-      u_squared:
-        type: running
-        fcn: fcns.u_squared_cost
-        w: 1.0
+      costs:
+        u_squared:
+          type: running
+          fcn: fcns.u_squared_cost
+          w: 1.0
 
-    guess:
-      type: straight_line
-      t_start: 0.0
-      t_stop: 2.0
-      x_start: [0, 0, 0, 0]
-      x_stop: [1, "${np.pi}", 0, 0]
-      u_start: [0]
-      u_stop: [0]
+      guess:
+        type: straight_line
+        t_start: 0.0
+        t_stop: 2.0
+        x_start: [0, 0, 0, 0]
+        x_stop: [1, "${np.pi}", 0, 0]
+        u_start: [0]
+        u_stop: [0]
 
 analysis:
   type: standalone

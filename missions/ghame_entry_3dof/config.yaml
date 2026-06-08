@@ -2,68 +2,78 @@ method:
   inherit: trajopt/methods/configs/autoscvx.yaml
 
   flags:
-    ode_fixed_dt: 1
-    equal_dt: 1
     free_final_time: 1
+    equal_dt: 0
+    zoh_dilation: 0
     flag_conv: 1
-    discretize: ms
+    discretize: ps
+    second_order: 1
+
+  conv:
+    iter_max: 100
 
   solver_opts:
-    solver: QOCO
+    solver: CLARABEL
 
-segments:
-  entry:
-    num_nodes: 200
-    inherit: ../../models/configs/reentry_3dof.yaml
+trajectory:
+  segments:
+    entry:
+      num_nodes: 80
+      inherit: ../../models/configs/reentry_3dof.yaml
 
-    fcns:
-      nonlinear_aero: "./ghame.py:nonlinear_aero"
+      fcns:
+        nonlinear_aero: "./ghame.py:nonlinear_aero"
 
-    params:
-      planet.inherit: ../configs/planets/earth.yaml
-      vehicle.inherit: ../configs/vehicles/ghame.yaml
+      params:
+        planet.inherit: ../configs/planets/earth.yaml
+        planet.omega: 0.0
+        vehicle.inherit: ../configs/vehicles/ghame.yaml
 
-    constraints:
-      dynamics:
-        type: dynamics
-        fcn: fcns.dynamics
+      constraints:
+        dynamics:
+          type: dynamics
+          fcn: fcns.dynamics
 
-      initial_state:
-        type: initial_state
-        value: ["${params.planet.r + 80e3}",  0.0, 0.0, 5612, -0.5,  90.0]
+        initial_state:
+          type: initial_state
+          value: ["${params.planet.r + 80e3}",  0.0, 0.0, 5612, -0.5,  90.0]
 
-      final_state:
-        type: final_state
-        value: ["${params.planet.r + 15000.0}", null, null, null, -5.0, null]
+        final_state:
+          type: final_state
+          value: ["${params.planet.r + 15000.0}", null, null, null, -5.0, null]
 
-      state_limits:
-        type: state_limits
-        lower: ["${params.planet.r}", null, null, 50, null, null]
+        state_limits:
+          type: state_limits
+          lower: ["${params.planet.r}", null, null, 50, null, null]
 
-      control_limits:
-        type: control_limits
-        lower: [-80.0, 10]
-        upper: [80.0, 20]
+        control_limits:
+          type: control_limits
+          lower: [-80.0, 10]
+          upper: [80.0, 20]
 
-      # uncomment this to solve with max heat rate constraint!
-      max_heat_rate:
-        type: nonconvex_inequality
-        fcn: fcns.heat_rate
-        upper: [5.5]
-        scale: 1.0
+        control_rate_limit:
+          type: control_rate_limit
+          value: [1, 1]
 
-    costs:
-      max_crossrange:
-        type: terminal_state
-        idx: [2]
-        sign: -1
+        # uncomment this to solve with max heat rate constraint!
+        # max_heat_rate:
+        #   type: nonconvex_inequality
+        #   fcn: fcns.heat_rate
+        #   upper: [5.5]
+        #   scale: 1.0
 
-    guess:
-      type: propagation
-      t_start: 0.0
-      t_stop: 1800.0
-      u_start: [0.0, 15.0]
-      u_stop:  [0.0, 15.0]
+      costs:
+        max_crossrange:
+          type: terminal_state
+          idx: [2]
+          sign: -1
+
+      guess:
+        type: propagation
+        t_start: 0.0
+        t_stop: 2000.0
+        u_start: [0.0, 15.0]
+        u_stop:  [0.0, 15.0]
 
 analysis:
   type: standalone

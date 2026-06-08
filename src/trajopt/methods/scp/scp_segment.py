@@ -19,10 +19,10 @@ class SCPSegment():
         self.segment       = segment
         self.method_config = method_config
 
-        self.index_map = segment.index_map
-        self.nondim    = segment.nondim
-        self.params    = segment.params
-        self.flags     = method_config.flags
+        self.index_map      = segment.index_map
+        self.nondim         = segment.nondim
+        self.params         = segment.params
+        self.flags          = method_config.flags
         self.penalty_config = method_config.penalty
 
         # dictionary of scp-constraints for this scp-segment
@@ -115,6 +115,11 @@ class SCPSegment():
         self.cp_params.dcostdu = cp.Parameter((N, n_nu), name="dcostdu")
         self.cp_params.cost0   = cp.Parameter((N,),      name="cost0")
 
+        if self.flags.discretize == "ps":
+            self.cp_params.tau = cp.Parameter((N,), name="tau")
+            self.cp_params.tau.value = self.ps_tau_norm
+            self.cp_params.ps_t_offset = cp.Parameter((N,), name="ps_t_offset", value=np.zeros(N))
+
         for constraint in self.constraints.values():
             constraint.create_penalty_parameters(self)
             constraint.create_cvxpy_parameters(self)
@@ -170,9 +175,9 @@ class SCPSegment():
         self.cp_constraints.append(self.dt[0, 0] == 0)
 
         if self.flags.discretize == "ps":
-            tau_norm = self.ps_tau_norm
+            tau = self.cp_params.tau
             for k in range(1, N - 1):
-                self.cp_constraints.append(self.dt[k, 0] == tau_norm[k] * self.dt[N - 1, 0])
+                self.cp_constraints.append(self.dt[k, 0] == self.cp_params.ps_t_offset[k] + tau[k] * self.dt[N - 1, 0])
 
             for k in range(N - 1):
                 self.cp_constraints.append(0.0 <= self.s_ref[k, 0] + self.ds[k, 0])
@@ -185,28 +190,38 @@ class SCPSegment():
             return
 
         for k in range(N - 1):
+            t_0 = self.t_ref[0, 0] + self.dt[0, 0]
+            t_1 = self.t_ref[1, 0] + self.dt[1, 0]
+
             t_k = self.t_ref[k, 0] + self.dt[k, 0]
+            t_kp = self.t_ref[k+1, 0] + self.dt[k+1, 0]
+            
+            s_k = self.s_ref[k, 0] + self.ds[k, 0]
+            s_kp = self.s_ref[k+1, 0] + self.ds[k+1, 0]
+            
             self.cp_constraints.append(t_k >= 0)
-            self.cp_constraints.append(0.0 <= self.s_ref[k, 0] + self.ds[k, 0])
+            # self.cp_constraints.append(0.1 <= s_k)
+            # self.cp_constraints.append(cp.abs(s_kp - s_k) <= 0.5)
 
             if hasattr(self.flags, "equal_dt") and bool(self.flags.equal_dt):
-                interval_k = (self.t_ref[k + 1, 0] + self.dt[k + 1, 0]) - (self.t_ref[k, 0] + self.dt[k, 0])
-                interval_0 = (self.t_ref[1, 0] + self.dt[1, 0]) - (self.t_ref[0, 0] + self.dt[0, 0])
+                interval_k = t_kp - t_k
+                interval_0 = t_1 - t_0
                 self.cp_constraints.append(interval_k == interval_0)
 
             if hasattr(self.flags, "zoh_dilation") and bool(self.flags.zoh_dilation):
-                s_k  = self.s_ref[k, 0] + self.ds[k, 0]
-                s_kp = self.s_ref[k + 1, 0] + self.ds[k + 1, 0]
                 self.cp_constraints.append(s_k == s_kp)
-
-        self.cp_constraints.append(0 <= self.s_ref[N - 1, 0] + self.ds[N - 1, 0])
 
     def create_cost_trust_region(self) -> None:
         if self.flags.discretize not in ("ms", "ps"):
             return
-        for k in range(self.index_map.N.all):
-            w_k = cp.hstack([self.dz[k], self.dnu[k]])
-            self.cp_cost += 0.5 * cp.sum_squares(self.cp_params.L[k] @ w_k)
+        if getattr(self.flags, 'second_order', True):
+            for k in range(self.index_map.N.all):
+                w_k = cp.hstack([self.dz[k], self.dnu[k]])
+                self.cp_cost += 0.5 * cp.sum_squares(self.cp_params.L[k] @ w_k)
+        else:
+            for k in range(self.index_map.N.all):
+                self.cp_cost += 0.5 * self.cp_params.tr_z * cp.sum_squares(self.dz[k])
+                self.cp_cost += 0.5 * self.cp_params.tr_nu * cp.sum_squares(self.dnu[k])
 
     def compile_merit(self) -> None:
         for cost in self.costs.values():
@@ -247,6 +262,11 @@ class SCPSegment():
 
         self.x_ref, self.t_ref, self.beta_ref, self.u_ref, self.s_ref = self.index_map.unpack_znu(z_opt, nu_opt)
 
+        if self.flags.discretize == "ps":
+            t_ref_vals = z_opt[:, self.index_map.indices.z.time].flatten()
+            t0, tf = t_ref_vals[0], t_ref_vals[-1]
+            self.cp_params.ps_t_offset.value = t0 + self.ps_tau_norm * (tf - t0) - t_ref_vals
+
         disc_start_time = time.perf_counter()
 
         for constraint in self.constraints.values():
@@ -269,6 +289,8 @@ class SCPSegment():
     def update_lagrangian_hessian(self) -> None:
         if self.flags.discretize not in ("ms", "ps"):
             return
+        if not getattr(self.flags, 'second_order', True):
+            return
 
         N    = self.index_map.N.all
         n_z  = self.index_map.n.z
@@ -282,7 +304,7 @@ class SCPSegment():
         for cost in self.costs.values():
             cost.accumulate_hessian(self, H)
 
-        self.cp_params.L.value = _psd_sqrt(H, delta=1e-10)
+        self.cp_params.L.value = _psd_sqrt(H, delta=1e-6)
 
     def read_solution(self) -> None:
         self._dz_new  = self.dz.value

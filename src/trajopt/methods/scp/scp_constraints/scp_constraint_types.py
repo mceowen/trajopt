@@ -13,6 +13,7 @@ from trajopt.methods.scp.scp_constraints.scp_constraint import SCPConstraint
 class scp_dynamics(SCPConstraint):
     def compile(self, scp_segment):
         dyn_fcn = jax.jit(self.constraint.fcn_znu)
+        second_order = getattr(scp_segment.flags, 'second_order', True)
 
         df_dz  = jax.jit(jax.jacfwd(self.constraint.fcn_znu, argnums=0))
         df_dnu = jax.jit(jax.jacfwd(self.constraint.fcn_znu, argnums=1))
@@ -27,13 +28,14 @@ class scp_dynamics(SCPConstraint):
             scp_segment.ps_tau_norm = self.ps_tau_norm
             self.dyn_fcn_batched = jax.jit(jax.vmap(dyn_fcn, in_axes=(0, 0, None)))
 
-            def ps_lagrangian_k(lam_k, z_k, nu_k, params):
-                return -lam_k @ dyn_fcn(z_k, nu_k, params)
+            if second_order:
+                def ps_lagrangian_k(lam_k, z_k, nu_k, params):
+                    return -lam_k @ dyn_fcn(z_k, nu_k, params)
 
-            self.ps_cnstr_hessians = jax.jit(jax.vmap(
-                jax.hessian(ps_lagrangian_k, argnums=(1, 2)),
-                in_axes=(0, 0, 0, None),
-            ))
+                self.ps_cnstr_hessians = jax.jit(jax.vmap(
+                    jax.hessian(ps_lagrangian_k, argnums=(1, 2)),
+                    in_axes=(0, 0, 0, None),
+                ))
             return
 
         N_grid    = scp_segment.index_map.N.all
@@ -65,15 +67,17 @@ class scp_dynamics(SCPConstraint):
             (z_kp, _, _, _, _), _ = jax.lax.scan(rk4_step, carry_init, taus)
             return z_kp
 
-        def lagrangian_k(k, lam_k, z_k, nu_k, nu_kp, params):
-            return -lam_k @ propagate_k(k, z_k, nu_k, nu_kp, params)
-
         prop_jacobians_k = jax.jacfwd(propagate_k, argnums=(1, 2, 3))
-        cnstr_hessians_k = jax.hessian(lagrangian_k, argnums=(2, 3, 4))
 
         self.propagate           = jax.jit(jax.vmap(propagate_k,      in_axes=(0, 0, 0, 0, None)))
         self.propagate_jacobians = jax.jit(jax.vmap(prop_jacobians_k, in_axes=(0, 0, 0, 0, None)))
-        self.cnstr_hessians      = jax.jit(jax.vmap(cnstr_hessians_k, in_axes=(0, 0, 0, 0, 0, None)))
+
+        if second_order:
+            def lagrangian_k(k, lam_k, z_k, nu_k, nu_kp, params):
+                return -lam_k @ propagate_k(k, z_k, nu_k, nu_kp, params)
+
+            cnstr_hessians_k = jax.hessian(lagrangian_k, argnums=(2, 3, 4))
+            self.cnstr_hessians = jax.jit(jax.vmap(cnstr_hessians_k, in_axes=(0, 0, 0, 0, 0, None)))
 
     def init_penalty(self, scp_segment):
         N   = scp_segment.index_map.N.all
@@ -83,18 +87,22 @@ class scp_dynamics(SCPConstraint):
     def create_cvxpy_parameters(self, scp_segment):
         N, n_z, n_nu = scp_segment.index_map.N.all, scp_segment.index_map.n.z, scp_segment.index_map.n.nu
 
+        second_order = getattr(scp_segment.flags, 'second_order', True)
+
         if scp_segment.flags.discretize == "ms":
             scp_segment.cp_params.Ak  = cp.Parameter((N - 1, n_z, n_z),  name="Ak")
             scp_segment.cp_params.Bk  = cp.Parameter((N - 1, n_z, n_nu), name="Bk")
             scp_segment.cp_params.Bkp = cp.Parameter((N - 1, n_z, n_nu), name="Bkp")
             scp_segment.cp_params.z_m = cp.Parameter((N, n_z), name="z_minus")
-            n_w = n_z + n_nu
-            scp_segment.cp_params.L = cp.Parameter((N, n_w, n_w), name="L")
+            if second_order:
+                n_w = n_z + n_nu
+                scp_segment.cp_params.L = cp.Parameter((N, n_w, n_w), name="L")
 
         if scp_segment.flags.discretize == "ps":
             N_col = N - 1
-            n_w = n_z + n_nu
-            scp_segment.cp_params.L = cp.Parameter((N, n_w, n_w), name="L")
+            if second_order:
+                n_w = n_z + n_nu
+                scp_segment.cp_params.L = cp.Parameter((N, n_w, n_w), name="L")
 
             scp_segment.cp_params.ps_f_ref = cp.Parameter((N_col, n_z),       name="ps_f_ref")
             scp_segment.cp_params.ps_Ac    = cp.Parameter((N_col, n_z, n_z),  name="ps_Ac")
@@ -111,9 +119,6 @@ class scp_dynamics(SCPConstraint):
             scp_segment.cp_dyn_constraints = []
 
             for k in range(N - 1):
-                z_ref_prop_kp = scp_segment.cp_params.z_m[k + 1]
-
-                z_kp   = scp_segment.dz[k + 1] + scp_segment.cp_params.z_ref[k + 1]
                 dz_k   = scp_segment.dz[k]
                 dnu_k  = scp_segment.dnu[k]
                 dnu_kp = scp_segment.dnu[k + 1]
@@ -122,7 +127,13 @@ class scp_dynamics(SCPConstraint):
                 Bk  = scp_segment.cp_params.Bk[k]
                 Bkp = scp_segment.cp_params.Bkp[k]
 
-                cnst = (z_kp == (z_ref_prop_kp + Ak @ dz_k + Bk @ dnu_k + Bkp @ dnu_kp + (vb_dyn[k] if vb_dyn is not None else 0)))
+                rhs = Ak @ dz_k + Bk @ dnu_k + Bkp @ dnu_kp
+
+                z_ref_prop_kp = scp_segment.cp_params.z_m[k + 1]
+                lhs = scp_segment.dz[k + 1] + scp_segment.cp_params.z_ref[k + 1]
+                rhs_full = z_ref_prop_kp + rhs + (vb_dyn[k] if vb_dyn is not None else 0)
+
+                cnst = (lhs == rhs_full)
                 scp_segment.cp_dyn_constraints.append(cnst)
                 scp_segment.cp_constraints.append(cnst)
 
@@ -132,6 +143,7 @@ class scp_dynamics(SCPConstraint):
 
         if scp_segment.flags.discretize == "ms":
             Ak, Bk, Bkp, z_minus = self._compute_linsys_discrete(z_opt, nu_opt, scp_segment)
+
             scp_segment.cp_params.Ak.value  = Ak
             scp_segment.cp_params.Bk.value  = Bk
             scp_segment.cp_params.Bkp.value = Bkp
@@ -139,14 +151,16 @@ class scp_dynamics(SCPConstraint):
 
         if scp_segment.flags.discretize == "ps":
             f_ref_col, Ac_col, Bc_col = self._compute_ps_dynamics_and_jacobians(z_opt, nu_opt, scp_segment)
+
             scp_segment.cp_params.ps_f_ref.value = f_ref_col
             scp_segment.cp_params.ps_Ac.value    = Ac_col
             scp_segment.cp_params.ps_Bc.value    = Bc_col
 
-            lam_refs = jnp.asarray(scp_segment.lagrangian_duals.dynamics)
-            z_col    = jnp.asarray(z_opt[1:])
-            nu_col   = jnp.asarray(nu_opt[1:])
-            self.ps_H_z, self.ps_H_nu = self.ps_cnstr_hessians(lam_refs, z_col, nu_col, scp_segment.params)
+            if getattr(scp_segment.flags, 'second_order', True):
+                lam_refs = jnp.asarray(scp_segment.lagrangian_duals.dynamics)
+                z_col    = jnp.asarray(z_opt[1:])
+                nu_col   = jnp.asarray(nu_opt[1:])
+                self.ps_H_z, self.ps_H_nu = self.ps_cnstr_hessians(lam_refs, z_col, nu_col, scp_segment.params)
 
     def accumulate_hessian(self, scp_segment, H):
         n_z = scp_segment.index_map.n.z
@@ -214,7 +228,8 @@ class scp_dynamics(SCPConstraint):
         z_minus              = self.propagate(ks, z_ref_ks, nu_ref_ks, nu_ref_kps, params)
         A_jax, B_jax, Bp_jax = self.propagate_jacobians(ks, z_ref_ks, nu_ref_ks, nu_ref_kps, params)
 
-        self.H_z_k, self.H_nu_k, self.H_nu_kp = self.cnstr_hessians(ks, lam_refs, z_ref_ks, nu_ref_ks, nu_ref_kps, params)
+        if getattr(scp_segment.flags, 'second_order', True):
+            self.H_z_k, self.H_nu_k, self.H_nu_kp = self.cnstr_hessians(ks, lam_refs, z_ref_ks, nu_ref_ks, nu_ref_kps, params)
 
         z_ref_0 = z_ref_ks[[0], :]
         return np.asarray(A_jax), np.asarray(B_jax), np.asarray(Bp_jax), np.asarray(jnp.vstack([z_ref_0, z_minus]))
@@ -223,10 +238,10 @@ class scp_dynamics(SCPConstraint):
         N_col = scp_segment.index_map.N.all - 1
         vb_dyn = self.vb_var
 
+        scp_segment.cp_dyn_constraints = []
+
         Z   = scp_segment.cp_params.z_ref + scp_segment.dz
         lhs = 2.0 * (self.ps_D @ Z)
-
-        scp_segment.cp_dyn_constraints = []
         for k in range(N_col):
             rhs_k = (scp_segment.cp_params.ps_f_ref[k]
                      + scp_segment.cp_params.ps_Ac[k] @ scp_segment.dz[k + 1]
@@ -313,9 +328,10 @@ class scp_nonconvex_inequality(SCPConstraint):
         dg_dz_batched  = jax.jit(jax.vmap(dg_dz,  in_axes=(0, 0, None)))
         dg_dnu_batched = jax.jit(jax.vmap(dg_dnu, in_axes=(0, 0, None)))
 
-        def lagrangian_k(lam, z, nu, params, fcn=fcn):
-            return lam @ fcn(z, nu, params)
-        self.lagrangian_hessians = jax.jit(jax.vmap(jax.hessian(lagrangian_k, argnums=(1, 2)), in_axes=(0, 0, 0, None)))
+        if getattr(scp_segment.flags, 'second_order', True):
+            def lagrangian_k(lam, z, nu, params, fcn=fcn):
+                return lam @ fcn(z, nu, params)
+            self.lagrangian_hessians = jax.jit(jax.vmap(jax.hessian(lagrangian_k, argnums=(1, 2)), in_axes=(0, 0, 0, None)))
 
         self.fcn_batched = g_batched
 
@@ -363,9 +379,13 @@ class scp_nonconvex_inequality(SCPConstraint):
         nu     = jnp.asarray(scp_segment.current_iter_data.nu_opt)
         params = scp_segment.params
         g, dgdz, dgdnu = self.g_aff_batched(z[self.nodes], nu[self.nodes], params)
-        self.g0_param.value    = np.asarray(g)
-        self.dgdz_param.value  = np.asarray(dgdz)
-        self.dgdnu_param.value = np.asarray(dgdnu)
+        g    = np.asarray(g)
+        dgdz = np.asarray(dgdz)
+        dgdnu = np.asarray(dgdnu)
+
+        self.g0_param.value    = g
+        self.dgdz_param.value  = dgdz
+        self.dgdnu_param.value = dgdnu
 
     def update_current_iter_data(self, scp_segment):
         if not hasattr(self, 'cp_ineq_constraints'):
@@ -423,12 +443,6 @@ class scp_final_nonconvex_inequality(scp_nonconvex_inequality):
 
 
 class scp_ctcs_nonconvex_inequality(SCPConstraint):
-    """Hard constraints beta(t_0) == 0 and beta(t_f) <= 0.
-
-    No penalty or virtual buffer — the dynamics defect matching
-    (which already covers the full augmented state including beta)
-    handles the relaxation during SCP iterations.
-    """
 
     def create_cvxpy_constraints(self, scp_segment):
         idx_beta = scp_segment.index_map.indices.z.ctcs
@@ -601,7 +615,11 @@ class scp_final_time(SCPConstraint):
         N = scp_segment.index_map.N.all
         scp_segment.cp_constraints.append(scp_segment.dt[0, 0] == 0)
 
-        if scp_segment.flags.discretize != "ps":
+        if scp_segment.flags.discretize == "ps":
+            tau = scp_segment.cp_params.tau
+            for k in range(1, N - 1):
+                scp_segment.cp_constraints.append(scp_segment.dt[k, 0] == tau[k] * scp_segment.dt[N - 1, 0])
+        else:
             for k in range(N - 1):
                 t_k          = scp_segment.t_ref[k, 0] + scp_segment.dt[k, 0]
                 t_kp         = scp_segment.t_ref[k + 1, 0] + scp_segment.dt[k + 1, 0]

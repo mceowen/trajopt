@@ -2,98 +2,109 @@ method:
   inherit: trajopt/methods/configs/autoscvx.yaml
 
   flags:
-    equal_dt: 0
+    equal_dt: 1
     zoh_dilation: 1
     free_final_time: 1
+    second_order: 0
+    line_search: 0
 
   solver_opts:
     solver: CLARABEL
 
-segments:
-  landing:
-    num_nodes: 20
-    inherit: ../../models/configs/lander_6dof.yaml
+trajectory:
+  segments:
+    landing:
+      num_nodes: 20
+      inherit: ../../models/configs/lander_6dof.yaml
 
-    params:
-      planet:
-        inherit: ../configs/planets/nondim_planet.yaml
-      vehicle:
-        inherit: ../configs/vehicles/mikilander.yaml
+      params:
+        planet:
+          inherit: ../configs/planets/nondim_planet.yaml
+        vehicle:
+          inherit: ../configs/vehicles/mikilander.yaml
 
-      min_thrust:   0.3
-      max_thrust:   5
-      theta_gimbal: 20
-      theta_tilt:   20
+        min_thrust:   0.3
+        max_thrust:   5
+        theta_gimbal: 20
+        theta_tilt:   20
 
-      alt_trigger:         1.0
-      speed_limit:         1.3
-      angular_speed_limit: 0.5
-      theta_gs:            45.0
-      los_limit:           5.0
+        alt_trigger:         1.0
+        speed_limit:         1.3
+        angular_speed_limit: 0.5
+        theta_gs:            45.0
+        los_limit:           5.0
 
-    fcns:
-      altitude:      ../../models/lander_6dof.py:altitude
-      speed:         ../../models/lander_6dof.py:speed
-      tilt:          ../../models/lander_6dof.py:tilt
-      angular_speed: ../../models/lander_6dof.py:angular_speed
-      glide_slope:   ../../models/lander_6dof.py:glide_slope
-      los:           ../../models/lander_6dof.py:los
-      u_squared_cost: ../../models/lander_6dof.py:u_squared_cost
+      fcns:
+        altitude:      ../../models/lander_6dof.py:altitude
+        speed:         ../../models/lander_6dof.py:speed
+        tilt:          ../../models/lander_6dof.py:tilt
+        angular_speed: ../../models/lander_6dof.py:angular_speed
+        glide_slope:   ../../models/lander_6dof.py:glide_slope
+        los:           ../../models/lander_6dof.py:los
+        u_squared_cost: ../../models/lander_6dof.py:u_squared_cost
 
-    constraints:
-      dynamics:
-        type: dynamics
-        fcn: fcns.dynamics
+      constraints:
+        dynamics:
+          type: dynamics
+          fcn: fcns.dynamics
 
-      initial_state:
-        type: initial_state
-        value: [2.0, 4, 4, 0, 0, -3, 3, null, null, null, null, 0, 0, 0]
+        initial_state:
+          type: initial_state
+          value: [2.0, 4, 4, 0, 0, -3, 3, null, null, null, null, 0, 0, 0]
 
-      final_state:
-        type: final_state
-        value: [null, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
+        final_state:
+          type: final_state
+          value: [null, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
 
-      gimbal_limit:
-        type: convex_inequality
-        fcn: fcns.cvx_gimbal_limit
+        gimbal_limit:
+          type: convex_inequality
+          fcn: fcns.cvx_gimbal_limit
 
-      max_thrust:
-        type: convex_inequality
-        fcn: fcns.cvx_max_thrust
+        max_thrust:
+          type: convex_inequality
+          fcn: fcns.cvx_max_thrust
 
-      min_thrust:
-        type: nonconvex_inequality
-        fcn: fcns.thrust
-        lower: "${params.min_thrust}"
+        min_thrust:
+          type: nonconvex_inequality
+          fcn: fcns.thrust
+          lower: "${params.min_thrust}"
 
-      altitude_triggered_tilt:
-        type: ctcs_nonconvex_inequality
-        fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.tilt <= 0)"
+        altitude_triggered_tilt:
+          type: ctcs_nonconvex_inequality
+          fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.tilt <= 0)"
+          scale: 1.0
 
-      altitude_triggered_speed:
-        type: ctcs_nonconvex_inequality
-        fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.speed <= ${params.speed_limit})"
+        altitude_triggered_speed:
+          type: ctcs_nonconvex_inequality
+          fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.speed <= ${params.speed_limit})"
+          scale: 1.0
 
-      altitude_triggered_angular_speed:
-        type: nonconvex_inequality
-        fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.angular_speed <= ${params.angular_speed_limit})"
+        altitude_triggered_angular_speed:
+          type: ctcs_nonconvex_inequality
+          fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.angular_speed <= ${params.angular_speed_limit})"
+          scale: 1.0
 
-      altitude_triggered_glideslope:
-        type: nonconvex_inequality
-        fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.glide_slope <= 0)"
+        altitude_triggered_glideslope:
+          type: ctcs_nonconvex_inequality
+          fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.glide_slope <= 0)"
+          scale: 1.0
 
-    costs:
-      min_time:
-        type: min_time
+      costs:
+        min_time:
+          type: min_time
 
-    guess:
-      type: straight_line
-      t_start: 0.0
-      t_stop: 5.0
-      x_start: [2.0, 4, 4, 0, 0, -3, 3, 1.0, 0, 0, 0, 0, 0, 0]
-      x_stop: [1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
-      u_start: [2.0, 0, 0]
-      u_stop: [2.0, 0, 0]
+        # u_squared:
+        #   type: running
+        #   fcn: 
+
+      guess:
+        type: straight_line
+        t_start: 0.0
+        t_stop: 5.0
+        x_start: [2.0, 4, 4, 0, 0, -3, 3, 1.0, 0, 0, 0, 0, 0, 0]
+        x_stop: [1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
+        u_start: [2.0, 0, 0]
+        u_stop: [2.0, 0, 0]
 
 analysis:
   type: standalone

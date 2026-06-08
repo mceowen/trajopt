@@ -42,15 +42,15 @@ MARKER_DEFAULTS = {
 }
 
 
-def plot(trajectory, data):
-    analysis_cfg = trajectory.config.get("analysis", {})
+def plot(traj_analyzer, data):
+    analysis_cfg = traj_analyzer.config.get("analysis", {})
     show_iters = analysis_cfg.get("show_iters", False)
     method         = list(data.keys())[0]
     iters_all      = data[method]["runs"][0]["iter_data_list"]
     last_iter      = iters_all[-1]
     traj_data      = last_iter["trajplot_data"]
-    first_segment  = next(iter(trajectory.segments.values()))
-    traj_configs   = next(iter(trajectory.config.segments.values())).get('trajplots', {})
+    first_segment  = next(iter(traj_analyzer.trajectory.segments.values()))
+    traj_configs   = next(iter(traj_analyzer.config.trajectory.segments.values())).get('trajplots', {})
     fcns           = first_segment.fcns
 
     figs, axs = {}, {}
@@ -138,10 +138,10 @@ def plot(trajectory, data):
     print(f"Saved {len(figs)} figures to {save_dir}/")
 
     if analysis_cfg.get('show_convergence', False):
-        convergence_plots(trajectory)
+        convergence_plots(traj_analyzer)
 
     if analysis_cfg.get('show_weights', False):
-        convergence_weight_plots(trajectory)
+        convergence_weight_plots(traj_analyzer)
 
     plt.show()
 
@@ -385,8 +385,8 @@ def _include_quiver_extents(all_vals, traj):
     return all_vals
 
 
-def convergence_plots(trajectory, save=True):
-    scp_segments = trajectory.method.scp_segments
+def convergence_plots(traj_analyzer, save=True):
+    scp_segments = traj_analyzer.method.scp_trajectory.scp_segments
     multi        = len(scp_segments) > 1
     figs         = [_convergence_plot(seg, f"_{name}" if multi else "", save) for name, seg in scp_segments.items()]
     return figs[0] if figs else None
@@ -449,8 +449,8 @@ def _convergence_plot(subprob, suffix, save=True):
     return fig
 
 
-def convergence_weight_plots(trajectory, save=True):
-    scp_segments = trajectory.method.scp_segments
+def convergence_weight_plots(traj_analyzer, save=True):
+    scp_segments = traj_analyzer.method.scp_trajectory.scp_segments
     multi        = len(scp_segments) > 1
     figs         = [_convergence_weight_plot(seg, f"_{name}" if multi else "", save) for name, seg in scp_segments.items()]
     return figs[0] if figs else None

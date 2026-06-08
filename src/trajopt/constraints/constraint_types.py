@@ -174,9 +174,16 @@ class control_rate_limit(Constraint):
 
         self.type = "control_rate_limit"
         self.name = cnstr_config.name
-        self._value_dim = np.atleast_1d(cnstr_config["value"])
-        self.idx = cnstr_config.idx
-        self.dimension = len(cnstr_config.idx)
+
+        raw_value = cnstr_config["value"]
+        if "idx" in cnstr_config:
+            self.idx = cnstr_config.idx
+            self._value_dim = np.atleast_1d(raw_value)
+        else:
+            self.idx = [i for i, v in enumerate(raw_value) if v is not None]
+            self._value_dim = np.atleast_1d([v for v in raw_value if v is not None])
+
+        self.dimension = len(self.idx)
 
         n_elem = index_map.n.control
         M_min = -np.eye(n_elem)[self.idx, :]
@@ -356,6 +363,20 @@ class ctcs_nonconvex_inequality(nonconvex_inequality):
         self.type = "ctcs_nonconvex_inequality"
 
 
+class continuity(Constraint):
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        self.name = cnstr_config.name
+        self.type = "continuity"
+        self.segment_name = cnstr_config.segment
+        self.dimension = segment.index_map.n.state
+
+    def residual(self, other_scp_segment, this_scp_segment):
+        idx_state = this_scp_segment.index_map.indices.z.state
+        z_other_final = other_scp_segment.cp_params.z_ref[-1, idx_state] + other_scp_segment.dz[-1, idx_state]
+        z_this_initial = this_scp_segment.cp_params.z_ref[0, idx_state] + this_scp_segment.dz[0, idx_state]
+        return z_other_final - z_this_initial
+
+
 class dynamics(Constraint):
     def __init__(self, cnstr_config: dict, segment) -> None:
         index_map = segment.index_map
@@ -389,7 +410,7 @@ class dynamics(Constraint):
             ctcs_values = jnp.concatenate(
                 [jnp.atleast_1d(c.fcn_znu(z, nu, params)) for c in self.ctcs_constraints],
             )
-            dbeta_dt = jnp.maximum(ctcs_values, 0.0)
+            dbeta_dt = jnp.maximum(ctcs_values, 0.0)**2
         else:
             dbeta_dt = jnp.zeros_like(beta)
 
