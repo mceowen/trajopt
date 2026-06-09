@@ -81,7 +81,17 @@ class SCPMethod():
 
         return alpha_min
 
+    def warmup_jax(self):
+        """Run a dummy discretization pass to trigger all JAX JIT compilations."""
+        print("Compiling JAX kernels (warmup)...", end=" ", flush=True)
+        warmup_start = time.perf_counter()
+        self.update_cvxpy_parameters()
+        warmup_ms = (time.perf_counter() - warmup_start) * 1000.0
+        print(f"done ({warmup_ms:.0f} ms)")
+
     def solve(self):
+
+        self.warmup_jax()
 
         print("-" * 172)
         print("  Iteration |  Discretization |   Solve   |    Parse   |  log(dx/eps) | log(vb_ineq/eps) | log(vb_term/eps) | log(vb_dyn/eps) | Solve status | alpha |  Time of    |   Cost    ")
@@ -89,7 +99,9 @@ class SCPMethod():
         print("-" * 172)
 
         max_iter = int(self.method_config.flags.iter_max)
-        solve_start = None
+
+        total_discretization_ms = 0.0
+        total_solve_ms = 0.0
 
         for i in range(max_iter + 1):
             self.update_cvxpy_parameters()
@@ -102,8 +114,9 @@ class SCPMethod():
             self.update_current_iter_data()
             self.display_status()
 
-            if i == 0:
-                solve_start = time.perf_counter()
+            for seg in self.scp_trajectory.scp_segments.values():
+                total_discretization_ms += seg.current_iter_data.discretization_time
+            total_solve_ms += self.cp_subproblem.solver_stats.solve_time * 1000.0
 
             if self._converged:
                 print("Terminated from convergence criteria!")
@@ -113,9 +126,8 @@ class SCPMethod():
         if ran_iterations and not self._converged:
             print("Terminated from hitting maximum iterations!")
 
-        if solve_start is not None:
-            total_elapsed_ms = (time.perf_counter() - solve_start) * 1000.0
-            print(f"\nTotal elapsed time (from iteration 2 onward): {total_elapsed_ms:.1f} ms")
+        total_ms = total_discretization_ms + total_solve_ms
+        print(f"\nTotal SCP time: {total_ms:.1f} ms (discretize: {total_discretization_ms:.1f}, solve: {total_solve_ms:.1f})")
 
     def display_status(self) -> None:
         multi = len(self.scp_trajectory.scp_segments) > 1

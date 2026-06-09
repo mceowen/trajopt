@@ -76,10 +76,10 @@ state:
 control:
   thrust:
     idx: [0, 1, 2]
-    scale: 1
+    scale: 100
 
 time:
-  scale: 0.1
+  scale: 1.0
 
 # ===============================
 # TRAJECTORIES

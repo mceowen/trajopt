@@ -33,6 +33,19 @@ def nonlinear_aero(x, u, t, params, fcns):
 
     y = v / 3554.6731
 
+    a_l = params.a_l
+    b_l = params.b_l
+    c_l = params.c_l
+    d_l = params.d_l
+    e_l = params.e_l
+    f_l = params.f_l
+    g_l = params.g_l
+    h_l = params.h_l
+    i_l = params.i_l
+    j_l = params.j_l
+    k_l = params.k_l
+    l_l = params.l_l
+    m_l = params.m_l
     
 
     Cl = (
@@ -41,19 +54,19 @@ def nonlinear_aero(x, u, t, params, fcns):
         + k_l*y**2 + l_l*y + m_l
     )
 
-    a_d = 
-    b_d = 
-    c_d = 
-    d_d = -
-    e_d = 1
-    f_d = 
-    g_d = 
-    h_d = 
-    i_d = 
-    j_d = 
-    k_d = 
-    l_d =  
-    m_d = 
+    a_d = params.a_d
+    b_d = params.b_d
+    c_d = params.c_d
+    d_d = params.d_d
+    e_d = params.e_d
+    f_d = params.f_d
+    g_d = params.g_d
+    h_d = params.h_d
+    i_d = params.i_d
+    j_d = params.j_d
+    k_d = params.k_d
+    l_d = params.l_d
+    m_d = params.m_d
 
     Cd = (
         a_d*y**12 + b_d*y**11 + c_d*y**10 + d_d*y**9 + e_d*y**8

@@ -20,7 +20,8 @@ results = {
 
 def perform_analysis(traj):
     """Propagate every segment's iterates and merge them into one mission trajectory."""
-    segments = [analyze_segment(subprob, traj.config) for subprob in traj.method.scp_trajectory.scp_segments.values()]
+    scp_segments = traj.method.scp_trajectory.scp_segments
+    segments = [analyze_segment(subprob, traj.config) for subprob in scp_segments.values()]
 
     if len(segments) == 1:
         iter_data_list = segments[0]
@@ -28,7 +29,11 @@ def perform_analysis(traj):
         n_iters        = min(len(seg) for seg in segments)
         iter_data_list = [concat([seg[i] for seg in segments]) for i in range(n_iters)]
 
-    return AttrDict({"iter_data_list": iter_data_list})
+    scp_iters = []
+    for subprob in scp_segments.values():
+        scp_iters = subprob.iter_data_list
+
+    return AttrDict({"iter_data_list": iter_data_list, "scp_iters": scp_iters})
 
 
 def analyze_segment(subprob, config):
@@ -41,7 +46,18 @@ def analyze_segment(subprob, config):
 
     iters    = subprob.iter_data_list if config.analysis.compute_iters else [subprob.iter_data_list[-1]]
     dynamics = next(c for c in segment.constraints.values() if c.type == "dynamics").fcn_znu
-    solver   = integrators.make_node_propagation_solver(dynamics, params, n_steps=50)
+
+    discretize = subprob.flags.get("discretize", "ms")
+    propagate_from_nodes_flag = config.analysis.get("propagate_from_nodes", False)
+
+    H = int(getattr(subprob.flags, 'hp_segments', 1))
+
+    if propagate_from_nodes_flag:
+        node_solver = integrators.make_node_propagation_solver(dynamics, params, n_steps=50)
+    else:
+        traj_solver = integrators.make_trajectory_solver(
+            dynamics, params, n_steps=500, discretize=discretize, hp_segments=H,
+        )
 
     z_init = subprob.initial_guess.z_dense
     nu_init = subprob.initial_guess.nu_dense
@@ -52,15 +68,23 @@ def analyze_segment(subprob, config):
         nu_opt = np.asarray(iter_data.nu_opt)
 
         N = z_opt.shape[0]
-        if subprob.flags.get("discretize", "ms") == "ps":
-            _, etau, _, _ = pseudospectral.flipped_radau_differential_operator(N - 1)
+        if discretize == "ps":
+            if H > 1:
+                _, etau, _, _ = pseudospectral.flipped_radau_hp_operator(N - 1, H)
+            else:
+                _, etau, _, _ = pseudospectral.flipped_radau_differential_operator(N - 1)
             tau_nodes = (etau + 1.0) / 2.0
         else:
             tau_nodes = np.linspace(0.0, 1.0, N)
 
-        _, z_nl, nu_nl = integrators.propagate_from_nodes(
-            z_opt, tau_nodes, nu_opt, dynamics, params, _solver=solver,
-        )
+        if propagate_from_nodes_flag:
+            _, z_nl, nu_nl = integrators.propagate_from_nodes(
+                z_opt, tau_nodes, nu_opt, dynamics, params, _solver=node_solver,
+            )
+        else:
+            _, z_nl, nu_nl = integrators.propagate_trajectory(
+                z_opt, tau_nodes, nu_opt, dynamics, params, _solver=traj_solver,
+            )
 
         # general trajplot values (not necessarily constraints as specified in the problem)
         trajplot_data = AttrDict({})
@@ -131,7 +155,47 @@ def concat(items):
 def run_standalone_analysis(traj):
     """Analyze a single solve and wrap it in the {method: {runs: [...]}} schema."""
     method_name = traj.config.method.get("name", "method1")
+    if not getattr(traj, "_solved", False):
+        traj.solve()
     return recursive_attrdict({method_name: {"runs": [perform_analysis(traj)]}})
+
+
+def run_method_variation(traj):
+    """Compare different methods on the same mission.
+
+    Expected config schema::
+
+        analysis:
+          type: method_variation
+          methods:
+            autoscvx-ms: {}
+            autoscvx-ps-h10:
+              flags:
+                discretize: ps
+                equal_dt: 0
+                hp_segments: 10
+                line_search: 1
+              penalty:
+                initial_state:
+                  vb: 'none'
+    """
+    from trajopt.trajectory_analyzer import TrajectoryAnalyzer
+
+    methods_cfg = traj.config.analysis.methods
+    config_path = traj.config_path
+
+    results = {}
+    for method_name, overrides in methods_cfg.items():
+        print(f"\n{'='*60}")
+        print(f"  Solving: {method_name}")
+        print(f"{'='*60}\n")
+
+        method_traj = TrajectoryAnalyzer(config_path, method_overrides=dict(overrides) if overrides else None)
+        method_traj.solve()
+        result = perform_analysis(method_traj)
+        results[method_name] = {"runs": [result]}
+
+    return recursive_attrdict(results)
 
 
 def run_mc_analysis(traj):

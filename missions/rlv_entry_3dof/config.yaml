@@ -1,7 +1,16 @@
+method:
+  inherit: trajopt/methods/configs/autoscvx.yaml
+
+  conv:
+    iter_max: 100
+
+  solver_opts:
+    solver: QOCO
+
 trajectory:
   segments:
     entry:
-      num_nodes: 80
+      num_nodes: 150
       inherit: ../../models/configs/reentry_3dof.yaml
 
       fcns:
@@ -57,23 +66,6 @@ trajectory:
         x_stop:  ["${params.planet.r + 24384.0}" , 10,  10,   762.0, -5.0, -90.0]
         u_start: [0.0, 0.0]
         u_stop:  [0.0, 0.0]
-
-method:
-  inherit: trajopt/methods/configs/autoscvx.yaml
-
-  flags:
-    free_final_time: 1
-    equal_dt: 0
-    zoh_dilation: 0
-    flag_conv: 1
-    discretize: ps
-    second_order: 1
-
-  conv:
-    iter_max: 100
-
-  solver_opts:
-    solver: QOCO
 
 analysis:
   type: standalone

@@ -36,6 +36,22 @@ pens = recursive_attrdict({
     'itr_nl':  {'frgba': [0,0,0,.1], 'lrgba': [.7,0,.3,.4], 'lw': 1, 'ls': '-',  'msty': '',  'msz': 3},
 })
 
+METHOD_CMAP = plt.cm.rainbow
+
+def _method_colors(n):
+    """Sample *n* maximally-spaced vibrant colors from METHOD_CMAP."""
+    if n == 1:
+        positions = [0.5]
+    else:
+        positions = np.linspace(0.05, 0.95, n)
+    return [list(METHOD_CMAP(p)[:3]) for p in positions]
+
+def _method_pens(color):
+    return AttrDict({
+        'nl':  AttrDict({'lrgba': color + [1.0], 'lw': 1, 'ls': '-',  'msty': '',  'msz': 3}),
+        'opt': AttrDict({'lrgba': color + [1.0], 'lw': 1, 'ls': '',   'msty': 'o', 'msz': 3}),
+    })
+
 MARKER_DEFAULTS = {
     'marker': '*', 'color': [0.8, 0.0, 0.0], 'size': 80,
     'edgecolor': 'k', 'edgewidth': 0.4, 'zorder': 10, 'fontsize': 7, 'text_offset': [0.0, 0.0]
@@ -143,7 +159,138 @@ def plot(traj_analyzer, data):
     if analysis_cfg.get('show_weights', False):
         convergence_weight_plots(traj_analyzer)
 
-    plt.show()
+    if plt.isinteractive() or plt.get_backend().lower() not in ("agg", "pdf", "svg"):
+        plt.show()
+    else:
+        plt.close('all')
+
+
+def plot_method_variation(traj_analyzer, data):
+    """Overlay trajectories from multiple methods on shared axes."""
+    analysis_cfg = traj_analyzer.config.get("analysis", {})
+    methods = list(data.keys())
+
+    ref_last = data[methods[0]]["runs"][0]["iter_data_list"][-1]
+    ref_traj_data = ref_last["trajplot_data"]
+
+    first_segment = next(iter(traj_analyzer.trajectory.segments.values()))
+    traj_configs = next(iter(traj_analyzer.config.trajectory.segments.values())).get('trajplots', {})
+    fcns = first_segment.fcns
+
+    figs, axs = {}, {}
+    for group_name, group_data in ref_traj_data.items():
+        grid = _create_grid(len(group_data))
+        is_3d = {i: (d.type == "spatial" and d.opt_vals["values"].shape[1] == 3)
+                 for i, d in enumerate(group_data.values())}
+
+        fig = plt.figure(figsize=plot_options.figsize)
+        axs[group_name] = {}
+        pad_3d = 0.08
+        for idx, rect in grid.items():
+            if is_3d.get(idx):
+                x, y, w, h = rect
+                axs[group_name][idx] = fig.add_axes([x - pad_3d, y, w + pad_3d, h], projection='3d')
+            else:
+                axs[group_name][idx] = fig.add_axes(rect)
+        figs[group_name] = fig
+
+    for group_name, group_data in ref_traj_data.items():
+        for i, (traj_name, trajplot) in enumerate(group_data.items()):
+            _setup_ax(axs[group_name][i], trajplot)
+
+    all_spatial_vals = {}
+    all_ts_ranges = {}
+    colors = _method_colors(len(methods))
+    for m_idx, method_name in enumerate(methods):
+        color = colors[m_idx]
+        mp = _method_pens(color)
+        m_last = data[method_name]["runs"][0]["iter_data_list"][-1]
+        m_traj_data = m_last["trajplot_data"]
+
+        for group_name, group_data in m_traj_data.items():
+            for i, (traj_name, trajplot) in enumerate(group_data.items()):
+                ax = axs[group_name][i]
+                key = (group_name, i)
+
+                if trajplot.type == "spatial":
+                    dim = trajplot.opt_vals["values"].shape[1]
+                    _is_3d = dim == 3
+
+                    def _unpack(vals, d=_is_3d):
+                        v = vals["values"]
+                        return (v[:, 0], v[:, 1], v[:, 2]) if d else (v[:, 0], v[:, 1])
+
+                    coords_nl = _unpack(trajplot.nl_vals)
+                    _draw(ax, *coords_nl[:2], mp.nl, z=coords_nl[2] if _is_3d else None)
+                    coords_opt = _unpack(trajplot.opt_vals)
+                    _draw(ax, *coords_opt[:2], mp.opt, z=coords_opt[2] if _is_3d else None)
+
+                    combined = np.vstack([trajplot.opt_vals["values"], trajplot.nl_vals["values"]])
+                    prev = all_spatial_vals.get(key)
+                    all_spatial_vals[key] = np.vstack([prev, combined]) if prev is not None else combined
+                else:
+                    t_nl = m_last["t_nl"]
+                    t_opt = m_last["t_opt"]
+                    nl_v = trajplot.nl_vals["values"].squeeze()
+                    opt_v = trajplot.opt_vals["values"].squeeze()
+                    _draw(ax, t_nl,  nl_v,  mp.nl)
+                    _draw(ax, t_opt, opt_v, mp.opt)
+
+                    t_all = np.concatenate([t_nl, t_opt])
+                    v_all = np.concatenate([nl_v.ravel(), opt_v.ravel()])
+                    if key not in all_ts_ranges:
+                        all_ts_ranges[key] = {"t_min": t_all.min(), "t_max": t_all.max(),
+                                              "v_min": v_all.min(), "v_max": v_all.max()}
+                    else:
+                        r = all_ts_ranges[key]
+                        r["t_min"] = min(r["t_min"], t_all.min())
+                        r["t_max"] = max(r["t_max"], t_all.max())
+                        r["v_min"] = min(r["v_min"], v_all.min())
+                        r["v_max"] = max(r["v_max"], v_all.max())
+
+    for group_name, group_data in ref_traj_data.items():
+        for i, (traj_name, trajplot) in enumerate(group_data.items()):
+            ax = axs[group_name][i]
+            key = (group_name, i)
+            if trajplot.type == "spatial":
+                traj_cfg = traj_configs.get(traj_name, trajplot)
+                dim = trajplot.opt_vals["values"].shape[1]
+                _plot_overlays(ax, traj_cfg, dim, first_segment.params, fcns)
+
+                if key in all_spatial_vals:
+                    equal_aspect = bool(traj_cfg.get("equal_aspect", False))
+                    _set_limits_from_data(ax, all_spatial_vals[key], equal_aspect=equal_aspect)
+                    if traj_cfg.get("xlim") is not None:
+                        ax.set_xlim(traj_cfg["xlim"])
+                    if traj_cfg.get("ylim") is not None:
+                        ax.set_ylim(traj_cfg["ylim"])
+            elif key in all_ts_ranges:
+                r = all_ts_ranges[key]
+                t_arr = np.array([r["t_min"], r["t_max"]])
+                v_arr = np.array([r["v_min"], r["v_max"]])
+                _set_time_series_limits(ax, t_arr, v_arr)
+
+    handles = []
+    for m_idx, method_name in enumerate(methods):
+        color = colors[m_idx]
+        handles.append(Line2D([], [], color=color, lw=2, ls='-', label=f'{method_name} (nl)'))
+        handles.append(Line2D([], [], color=color, lw=0, marker='o', ms=3, label=f'{method_name} (opt)'))
+    for fig in figs.values():
+        fig.axes[0].legend(handles=handles, loc='best', fontsize=7, framealpha=0.8)
+
+    save_dir = os.path.join("plots", "method_variation")
+    os.makedirs(save_dir, exist_ok=True)
+    for name, fig in figs.items():
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            fig.tight_layout()
+        fig.savefig(os.path.join(save_dir, f"{name}.pdf"), dpi=plot_options.save_dpi, pad_inches=0.02)
+    print(f"Saved {len(figs)} figures to {save_dir}/")
+
+    if plt.isinteractive() or plt.get_backend().lower() not in ("agg", "pdf", "svg"):
+        plt.show()
+    else:
+        plt.close('all')
 
 
 def _setup_ax(ax, traj):
@@ -394,6 +541,8 @@ def convergence_plots(traj_analyzer, save=True):
 
 def _convergence_plot(subprob, suffix, save=True):
     iters   = subprob.iter_data_list[1:]
+    if not iters:
+        return None
     k       = np.arange(1, len(iters) + 1)
     dz      = [it.chk.dz for it in iters]
     dcost   = [it.chk.dcost for it in iters]
@@ -412,9 +561,9 @@ def _convergence_plot(subprob, suffix, save=True):
         eps_ct = eps_by_name.get(ct, np.atleast_1d(1.0))
         vb_series[ct] = [float(np.max(np.abs(it.vb[ct]) / eps_ct)) for it in iters]
 
-    grid  = _create_grid(3)
+    grid  = _create_grid(2)
     fig   = plt.figure(figsize=(14, 4.5))
-    axes  = [fig.add_axes(grid[i]) for i in range(3)]
+    axes  = [fig.add_axes(grid[i]) for i in range(2)]
 
     markers = ['o', 's', '^', 'v', 'D', 'P', 'X', 'h']
 
@@ -434,12 +583,6 @@ def _convergence_plot(subprob, suffix, save=True):
     ax.set_xlabel('Iteration'); ax.set_ylabel('Cost')
     ax.set_title('Objective', fontsize=plot_options.title_fontsize, pad=plot_options.title_pad)
     ax.grid(True, alpha=0.3)
-
-    ax = axes[2]
-    ax.plot(k, alphas, 'o-', ms=3, color=pens.nl.lrgba[:3])
-    ax.set_xlabel('Iteration'); ax.set_ylabel(r'$\alpha$')
-    ax.set_title('Line-Search Step Size', fontsize=plot_options.title_fontsize, pad=plot_options.title_pad)
-    ax.set_ylim([0, 1.1]); ax.grid(True, alpha=0.3)
 
     if save:
         save_dir = os.path.join("plots", "standalone")

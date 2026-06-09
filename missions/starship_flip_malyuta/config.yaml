@@ -53,8 +53,8 @@ method:
 
   flags:
     free_final_time: 0
-    second_order: 0
-    line_search: 0
+    second_order: 1
+    line_search: 1
 
   conv:
     eps_state:  0.001

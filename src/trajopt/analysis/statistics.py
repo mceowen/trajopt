@@ -71,13 +71,11 @@ def load_configuration() -> dict:
             "No. of Iteration": metrics[0:7],
             "Solve Time/Iteration (ms/iter)": metrics[0:7],
             "Parse Time/Iteration (ms/iter)": metrics[0:7],
-            "Propagation Time/Iteration (ms/iter)": metrics[0:7],
+            "Discretization Time/Iteration (ms/iter)": metrics[0:7],
             "Total Solve Time (ms)": metrics[0:7],
             "Total Parse Time (ms)": metrics[0:7],
-            "Total Propagation Time (ms)": metrics[0:7],
-            "Total Convergence Time (ms)": metrics[0:7],
+            "Total Discretization Time (ms)": metrics[0:7],
             "Dynamics Defect": metrics[8:10],
-            "Constraint Violation": metrics[0:7],
             "Cost": metrics[0:8],
             "Converged": metrics[0:8],
         },
@@ -88,63 +86,63 @@ def load_configuration() -> dict:
 
 
 def extract_data(config: dict, data: dict) -> dict:
-    """Extract key variables from each Monte Carlo run."""
+    """Extract key variables from each Monte Carlo run.
+
+    Supports the new TrajectoryAnalyzer format where each run contains
+    ``scp_iters`` (a list of raw SCP iteration AttrDicts) alongside the
+    propagated ``iter_data_list``.
+    """
     print("Extracting data from runs...")
     extracted: dict = {}
 
-    # Loop through each method and store extracted data
     for method, method_data in data.items():
         extracted[method] = {}
         all_vars: dict = {
             "No. of Iteration": [],
             "Solve Time/Iteration (ms/iter)": [],
             "Parse Time/Iteration (ms/iter)": [],
-            "Propagation Time/Iteration (ms/iter)": [],
+            "Discretization Time/Iteration (ms/iter)": [],
             "Total Solve Time (ms)": [],
             "Total Parse Time (ms)": [],
-            "Total Propagation Time (ms)": [],
-            "Total Convergence Time (ms)": [],
+            "Total Discretization Time (ms)": [],
             "Dynamics Defect": [],
-            "Constraint Violation": [],
             "Cost": [],
             "Converged": [],
         }
 
-        # Loop through all runs and store all variables as defined within config
         for run_data in method_data["runs"]:
-            num_iters = len(run_data["iters"]) - 1
-            # Summation of all time series data across the iterations
-            for iter_data in run_data["iters"]:
-                if iter_data["iter_num"] == 0:
-                    time_solve = 0
-                    time_prop = 0
-                    time_parse = 0
-                else:
-                    time_solve += iter_data["solve_time"]
-                    time_prop += iter_data["prop_time"]
-                    time_parse += iter_data["parse_time"]
+            iters = run_data.get("scp_iters", run_data.get("iters", []))
+            num_iters = max(len(iters) - 1, 1)
 
-            # Finding avg dynamic defect across time for each state
-            defects = np.array(run_data["iters"][-1]["conv_data"]["defect"])
-            avg_state_vec = np.mean(defects, axis=0)
+            time_solve = 0.0
+            time_disc = 0.0
+            time_parse = 0.0
+            for it in iters:
+                if int(it.get("iter_num", 0)) == 0:
+                    continue
+                time_solve += float(it.get("solve_time", 0))
+                time_disc += float(it.get("discretization_time", it.get("prop_time", 0)))
+                time_parse += float(it.get("parse_time", 0))
 
-            # Saving all variables data in a temporary dictionary
+            last = iters[-1] if iters else {}
+
+            chk = last.get("chk", last.get("conv_data", {}))
+            dyn_defect = float(chk.get("dynamics", 0))
+
             all_vars["Solve Time/Iteration (ms/iter)"].append(time_solve / num_iters)
             all_vars["Parse Time/Iteration (ms/iter)"].append(time_parse / num_iters)
-            all_vars["Propagation Time/Iteration (ms/iter)"].append(time_prop / num_iters)
+            all_vars["Discretization Time/Iteration (ms/iter)"].append(time_disc / num_iters)
             all_vars["Total Solve Time (ms)"].append(time_solve)
             all_vars["Total Parse Time (ms)"].append(time_parse)
-            all_vars["Total Propagation Time (ms)"].append(time_prop)
-            all_vars["Total Convergence Time (ms)"].append((run_data["t_full"] * 1000) - time_parse)
+            all_vars["Total Discretization Time (ms)"].append(time_disc)
             all_vars["No. of Iteration"].append(num_iters)
-            all_vars["Cost"].append(run_data["iters"][-1]["cost"])
-            all_vars["Dynamics Defect"].append(avg_state_vec)
-            all_vars["Constraint Violation"].append(run_data["iters"][-1]["conv_data"]["chk_feas"])
-            all_vars["Converged"].append(run_data["iters"][-1]["converged"])
+            all_vars["Cost"].append(float(last.get("cost", 0)))
+            all_vars["Dynamics Defect"].append(np.atleast_1d(dyn_defect))
+            all_vars["Converged"].append(bool(last.get("converged", False)))
 
-        # Only saving variables defined in the config
         for var in config["variable_name"]:
-            extracted[method][var] = all_vars[var]
+            if var in all_vars:
+                extracted[method][var] = all_vars[var]
 
     return extracted
 

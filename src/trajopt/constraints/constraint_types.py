@@ -54,6 +54,52 @@ class final_state(Constraint):
         return self._nondim.M.state.d2nd[np.ix_(self.idx, self.idx)] @ self._value_dim
 
 
+class initial_control(Constraint):
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        self.name = cnstr_config.name
+        self.type = "initial_control"
+
+        nondim = segment.nondim
+        raw_value = cnstr_config["value"]
+
+        if "idx" in cnstr_config:
+            self.idx = cnstr_config.idx
+            self._value_dim = np.atleast_1d(raw_value)
+        else:
+            self.idx = [i for i, v in enumerate(raw_value) if v is not None]
+            self._value_dim = np.atleast_1d([v for v in raw_value if v is not None])
+
+        self.dimension = len(self.idx)
+        self._nondim = nondim
+
+    @property
+    def value(self):
+        return self._nondim.M.control.d2nd[np.ix_(self.idx, self.idx)] @ self._value_dim
+
+
+class final_control(Constraint):
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        self.name = cnstr_config.name
+        self.type = "final_control"
+
+        nondim = segment.nondim
+        raw_value = cnstr_config.value
+
+        if "idx" in cnstr_config:
+            self.idx = cnstr_config["idx"]
+            self._value_dim = np.atleast_1d(raw_value)
+        else:
+            self.idx = [i for i, v in enumerate(raw_value) if v is not None]
+            self._value_dim = np.atleast_1d([v for v in raw_value if v is not None])
+
+        self.dimension = len(self.idx)
+        self._nondim = nondim
+
+    @property
+    def value(self):
+        return self._nondim.M.control.d2nd[np.ix_(self.idx, self.idx)] @ self._value_dim
+
+
 class state_limits(Constraint):
     def __init__(self, cnstr_config: dict, segment) -> None:
         index_map = segment.index_map

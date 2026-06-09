@@ -48,18 +48,22 @@ class SCPConstraint():
         self.shape   = shape
         self.vb      = np.zeros(shape)
         self.vb_type = getattr(self.penalty, 'vb', 'standard') if self.penalty else 'standard'
-        if self.penalty and self.penalty.W.penalty:
+        if self.penalty and hasattr(self.penalty, 'W') and self.penalty.W.penalty:
             self.W    = np.full(shape, float(self.penalty.W.init))
             self.dual = np.full(shape, float(self.penalty.dual.init))
 
     def create_penalty_parameters(self, scp_segment):
         if self.shape is None:
             return
+        if self.vb_type == "none":
+            return
         self.W_param    = cp.Parameter(self.shape, nonneg=True, name=f"W_{self.name}_sqrt", value=np.zeros(self.shape))
         self.dual_param = cp.Parameter(self.shape, name=f"dual_{self.name}", value=np.zeros(self.shape))
 
     def create_penalty_variables(self, scp_segment):
         if self.shape is None:
+            return
+        if self.vb_type == "none":
             return
         if self.vb_type == "split":
             self.vb_p_var = cp.Variable(self.shape, nonneg=True, name=f"vb_p_{self.name}_{scp_segment.name}")
@@ -95,9 +99,11 @@ class SCPConstraint():
     def update_W_dual(self, scp_segment, alpha=1.0):
         if self.penalty is None:
             return
+        if not hasattr(self.penalty, 'W'):
+            return
 
         if self.penalty.W.autotune:
-            Wh = self.W * np.abs(self.vb) / (0.9 * self.eps)
+            Wh = self.W * np.abs(self.vb) / (0.01 * self.eps)
             self.W = np.clip(Wh, 0.0001, 1e8)
 
         if self.penalty.dual.autotune:

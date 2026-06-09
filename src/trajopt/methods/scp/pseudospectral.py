@@ -286,6 +286,58 @@ def flipped_radau_differential_operator(N: int) -> tuple[np.ndarray, np.ndarray,
 
 
 # ---------------------------------------------------------------------
+# hp composite differential operator
+# ---------------------------------------------------------------------
+
+def flipped_radau_hp_operator(N_col: int, H: int):
+    """Compute the hp-composite fLGR nodes, weights, and per-interval D matrix.
+
+    Instead of assembling a sparse global D matrix, returns the single local D block
+    (scaled by H) along with the global node positions. The caller loops over intervals
+    using D_local on the appropriate slice of the state vector.
+
+    Inputs:
+        N_col : Total number of collocation nodes (must be divisible by H).
+        H     : Number of h-intervals.
+
+    Outputs:
+        tau_global  : Global collocation node positions in [-1, 1], shape (N_col,).
+        etau_global : Full global node set (N_col + 1) including initial node at -1.
+        w_global    : Quadrature weights mapped to global domain, shape (N_col,).
+        D_local     : Single interval differentiation matrix scaled by H, shape (p, p+1).
+
+    """
+    if N_col % H != 0:
+        raise ValueError(f"N_col={N_col} must be divisible by H={H}")
+
+    p = N_col // H
+    N_total = N_col + 1
+
+    tau_local, etau_local, w_local, D_local = flipped_radau_differential_operator(p)
+
+    etau_global = np.zeros(N_total)
+    tau_global  = np.zeros(N_col)
+    w_global    = np.zeros(N_col)
+
+    for h in range(H):
+        tau_start = -1.0 + 2.0 * h / H
+        delta = 2.0 / H
+
+        local_to_global = lambda tau_l, ts=tau_start, d=delta: ts + (tau_l + 1.0) * (d / 2.0)
+
+        row_start = h * p
+        col_start = h * p
+
+        etau_global[col_start] = local_to_global(-1.0)
+        for j in range(p):
+            etau_global[col_start + 1 + j] = local_to_global(tau_local[j])
+            tau_global[row_start + j] = local_to_global(tau_local[j])
+            w_global[row_start + j] = w_local[j] * (delta / 2.0)
+
+    return tau_global, etau_global, w_global, H * D_local
+
+
+# ---------------------------------------------------------------------
 # Lagrange interpolation (Eq. 9, CEAS2017)
 # ---------------------------------------------------------------------
 

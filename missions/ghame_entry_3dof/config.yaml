@@ -1,24 +1,16 @@
 method:
-  inherit: trajopt/methods/configs/autoscvx.yaml
-
-  flags:
-    free_final_time: 1
-    equal_dt: 0
-    zoh_dilation: 0
-    flag_conv: 1
-    discretize: ps
-    second_order: 1
+  inherit: trajopt/methods/configs/autoscvx-ps.yaml
 
   conv:
-    iter_max: 100
+    iter_max: 200
 
   solver_opts:
-    solver: CLARABEL
+    solver: QOCO
 
 trajectory:
   segments:
     entry:
-      num_nodes: 80
+      num_nodes: 101
       inherit: ../../models/configs/reentry_3dof.yaml
 
       fcns:
@@ -40,7 +32,7 @@ trajectory:
 
         final_state:
           type: final_state
-          value: ["${params.planet.r + 15000.0}", null, null, null, -5.0, null]
+          value: ["${params.planet.r + 15000.0}", null, null, null, -10.0, null]
 
         state_limits:
           type: state_limits
@@ -53,9 +45,9 @@ trajectory:
 
         control_rate_limit:
           type: control_rate_limit
-          value: [1, 1]
+          value: [2, 2]
 
-        # uncomment this to solve with max heat rate constraint!
+        # # uncomment this to solve with max heat rate constraint!
         # max_heat_rate:
         #   type: nonconvex_inequality
         #   fcn: fcns.heat_rate
@@ -74,6 +66,46 @@ trajectory:
         t_stop: 2000.0
         u_start: [0.0, 15.0]
         u_stop:  [0.0, 15.0]
+
+analysis:
+  type: method_variation
+  compute_iters: true
+  show_iters: true
+  show_convergence: true
+  show_weights: true
+
+  # methods:
+  #   autoscvx-ps-h10:
+  #     flags:
+  #       discretize: ps
+  #       equal_dt: 0
+  #       hp_segments: 10
+  #       line_search: 1
+  #     penalty:
+  #       initial_state:
+  #         vb: 'none'
+    
+  #   autoscvx-ps-h20:
+  #     flags:
+  #       discretize: ps
+  #       equal_dt: 0
+  #       hp_segments: 20
+  #       line_search: 1
+  #     penalty:
+  #       initial_state:
+  #         vb: 'none'
+
+  #   autoscvx-ps-h1:
+  #     flags:
+  #       discretize: ps
+  #       equal_dt: 0
+  #       hp_segments: 1
+  #       line_search: 1
+  #     penalty:
+  #       initial_state:
+  #         vb: 'none'
+    
+  #   autoscvx-ms: {}
 
 analysis:
   type: standalone

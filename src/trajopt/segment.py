@@ -13,19 +13,25 @@ class Segment:
         self.name = name
         self.num_nodes = segment_config.num_nodes
 
+        # set index map for augmentation and nondim object for ocp
         self.index_map = IndexMap(segment_config)
         self.nondim    = Nondim(segment_config, self.index_map)
 
+        # load functions
         self.fcns  = AttrDict()
         for fcn_name, path in segment_config.fcns.items():
             self.fcns[fcn_name] = resolve_function_from_string(path)
 
+        # load parameters
         self.params = segment_config.params
+        
+        # load guess config
         self.guess  = segment_config.get("guess", AttrDict())
 
         print(f"segment '{self.name}' configuration:")
         print("------------------------------------------------------------")
 
+        # create dictionary of constraints
         self.constraints = AttrDict()
         for cnstr_name, cnstr_config in segment_config.constraints.items():
             cnstr_config.name = cnstr_name
@@ -35,6 +41,7 @@ class Segment:
 
         self._wire_ctcs_constraints()
 
+        # create dictionarty of costs
         self.costs = AttrDict()
         for cost_name, cost_config in segment_config.get("costs", AttrDict()).items():
             cost_config.name = cost_name
@@ -42,6 +49,7 @@ class Segment:
             costClass = getattr(cost_type_module, cost_type)
             self.costs[cost_name] = costClass(cost_config, self)
 
+        # create dictionary of trajplots
         self.trajplots = AttrDict()
         for trajplot_name, trajplot_config in segment_config.get("trajplots", AttrDict()).items():
             trajplot_config.name = trajplot_name

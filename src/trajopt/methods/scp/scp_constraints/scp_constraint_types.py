@@ -21,8 +21,19 @@ class scp_dynamics(SCPConstraint):
 
         if scp_segment.flags.discretize == "ps":
             N_col = scp_segment.index_map.N.all - 1
-            _, etau, _, D_np = pseudospectral.flipped_radau_differential_operator(N_col)
-            self.ps_D = D_np
+            H = int(getattr(scp_segment.flags, 'hp_segments', 1))
+
+            if H > 1:
+                _, etau, _, D_local = pseudospectral.flipped_radau_hp_operator(N_col, H)
+                self.ps_D = D_local
+                self.ps_hp = H
+                self.ps_p = N_col // H
+            else:
+                _, etau, _, D_np = pseudospectral.flipped_radau_differential_operator(N_col)
+                self.ps_D = D_np
+                self.ps_hp = 1
+                self.ps_p = N_col
+
             self.ps_etau = etau
             self.ps_tau_norm = (etau + 1.0) / 2.0
             scp_segment.ps_tau_norm = self.ps_tau_norm
@@ -185,7 +196,17 @@ class scp_dynamics(SCPConstraint):
         if scp_segment.flags.discretize == "ps":
             z_jnp  = jnp.asarray(z_opt)
             nu_jnp = jnp.asarray(nu_opt)
-            lhs    = 2.0 * jnp.asarray(self.ps_D) @ z_jnp
+            D_jnp  = jnp.asarray(self.ps_D)
+            H = self.ps_hp
+            p = self.ps_p
+
+            lhs_parts = []
+            for h in range(H):
+                col_start = h * p
+                z_h = z_jnp[col_start:col_start + p + 1, :]
+                lhs_parts.append(2.0 * D_jnp @ z_h)
+            lhs = jnp.concatenate(lhs_parts, axis=0)
+
             f_vals = self.dyn_fcn_batched(z_jnp[1:], nu_jnp[1:], scp_segment.params)
             scp_segment.current_iter_data.defect = np.asarray(lhs - f_vals)
 
@@ -204,8 +225,18 @@ class scp_dynamics(SCPConstraint):
         if scp_segment.flags.discretize == "ps":
             D_jnp = jnp.asarray(self.ps_D)
             dyn_batched = self.dyn_fcn_batched
+            H = self.ps_hp
+            p = self.ps_p
+
             def violation(z, nu, params):
-                return 2.0 * D_jnp @ z - dyn_batched(z[1:], nu[1:], params)
+                f_col = dyn_batched(z[1:], nu[1:], params)
+                defects = []
+                for h in range(H):
+                    col_start = h * p
+                    z_h = jax.lax.dynamic_slice(z, (col_start, 0), (p + 1, z.shape[1]))
+                    defects.append(2.0 * D_jnp @ z_h)
+                return jnp.concatenate(defects, axis=0) - f_col
+
             self._compile_merit_penalty(violation)
             return
 
@@ -237,19 +268,28 @@ class scp_dynamics(SCPConstraint):
     def _build_ps_dyn_constraints(self, scp_segment):
         N_col = scp_segment.index_map.N.all - 1
         vb_dyn = self.vb_var
+        H = self.ps_hp
+        p = self.ps_p
+        D = self.ps_D
 
         scp_segment.cp_dyn_constraints = []
 
-        Z   = scp_segment.cp_params.z_ref + scp_segment.dz
-        lhs = 2.0 * (self.ps_D @ Z)
-        for k in range(N_col):
-            rhs_k = (scp_segment.cp_params.ps_f_ref[k]
-                     + scp_segment.cp_params.ps_Ac[k] @ scp_segment.dz[k + 1]
-                     + scp_segment.cp_params.ps_Bc[k] @ scp_segment.dnu[k + 1]
-                     + (vb_dyn[k] if vb_dyn is not None else 0))
-            cnst = (lhs[k] == rhs_k)
-            scp_segment.cp_dyn_constraints.append(cnst)
-            scp_segment.cp_constraints.append(cnst)
+        Z = scp_segment.cp_params.z_ref + scp_segment.dz
+
+        for h in range(H):
+            col_start = h * p
+            Z_h = Z[col_start:col_start + p + 1, :]
+            lhs_h = 2.0 * (D @ Z_h)
+
+            for j in range(p):
+                k = h * p + j
+                rhs_k = (scp_segment.cp_params.ps_f_ref[k]
+                         + scp_segment.cp_params.ps_Ac[k] @ scp_segment.dz[k + 1]
+                         + scp_segment.cp_params.ps_Bc[k] @ scp_segment.dnu[k + 1]
+                         + (vb_dyn[k] if vb_dyn is not None else 0))
+                cnst = (lhs_h[j] == rhs_k)
+                scp_segment.cp_dyn_constraints.append(cnst)
+                scp_segment.cp_constraints.append(cnst)
 
     def _compute_ps_dynamics_and_jacobians(self, z_ref, nu_ref, scp_segment):
         segment = scp_segment
@@ -309,6 +349,46 @@ class scp_final_state(SCPConstraint):
         val = jnp.asarray(self.constraint.value)
         def violation(z, nu, params):
             return (z[-1, idx] - val).reshape(1, -1)
+        self._compile_merit_penalty(violation)
+
+
+# ---------------------------------------------------------------------------
+# initial control
+# ---------------------------------------------------------------------------
+
+class scp_initial_control(SCPConstraint):
+    def init_penalty(self, scp_segment):
+        self._alloc_penalty(scp_segment, (1, self.constraint.dimension))
+
+    def create_cvxpy_constraints(self, scp_segment):
+        idx  = self.constraint.idx
+        expr = scp_segment.dnu[0, idx] + scp_segment.cp_params.nu_ref[0, idx]
+        if self.vb_var is not None:
+            expr = expr - self.vb_var[0, :]
+        scp_segment.cp_constraints.append(expr == self.constraint.value)
+
+# ---------------------------------------------------------------------------
+# final control
+# ---------------------------------------------------------------------------
+
+class scp_final_control(SCPConstraint):
+    def init_penalty(self, scp_segment):
+        self._alloc_penalty(scp_segment, (1, self.constraint.dimension))
+
+    def create_cvxpy_constraints(self, scp_segment):
+        idx  = self.constraint.idx
+        expr = scp_segment.dnu[-1, idx] + scp_segment.cp_params.nu_ref[-1, idx]
+        if self.vb_var is not None:
+            expr = expr - self.vb_var[0, :]
+        scp_segment.cp_constraints.append(expr == self.constraint.value)
+
+    def compile_merit_penalty(self, scp_segment):
+        if self.W.size == 0:
+            return
+        idx = jnp.asarray(self.constraint.idx)
+        val = jnp.asarray(self.constraint.value)
+        def violation(z, nu, params):
+            return (nu[-1, idx] - val).reshape(1, -1)
         self._compile_merit_penalty(violation)
 
 
