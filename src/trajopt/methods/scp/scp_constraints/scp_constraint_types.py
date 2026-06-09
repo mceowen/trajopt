@@ -50,7 +50,7 @@ class scp_dynamics(SCPConstraint):
             return
 
         N_grid    = scp_segment.index_map.N.all
-        nsub      = 2
+        nsub      = 5
         delta_tau = 1.0 / (N_grid - 1)
         dt_rk4    = delta_tau / nsub
 
@@ -84,10 +84,36 @@ class scp_dynamics(SCPConstraint):
         self.propagate_jacobians = jax.jit(jax.vmap(prop_jacobians_k, in_axes=(0, 0, 0, 0, None)))
 
         if second_order:
-            def lagrangian_k(k, lam_k, z_k, nu_k, nu_kp, params):
-                return -lam_k @ propagate_k(k, z_k, nu_k, nu_kp, params)
+            def scalar_f_dot(lam_k, k, tau, z, nu_k, nu_kp, params):
+                tau_k  = k / (N_grid - 1)
+                tau_kp = (k + 1) / (N_grid - 1)
+                a      = (tau_kp - tau) / (tau_kp - tau_k)
+                b      = (tau - tau_k)  / (tau_kp - tau_k)
+                nu     = a * nu_k + b * nu_kp
+                return -lam_k @ dyn_fcn(z, nu, params)
 
-            cnstr_hessians_k = jax.hessian(lagrangian_k, argnums=(2, 3, 4))
+            def lagrangian_rk4_step(carry, tau):
+                z, L_val, lam_k, k, nu_k, nu_kp, params = carry
+                k1_z = f_dot(k, tau,            z,                      nu_k, nu_kp, params)
+                k2_z = f_dot(k, tau + dt_rk4/2, z + (dt_rk4/2) * k1_z, nu_k, nu_kp, params)
+                k3_z = f_dot(k, tau + dt_rk4/2, z + (dt_rk4/2) * k2_z, nu_k, nu_kp, params)
+                k4_z = f_dot(k, tau + dt_rk4,   z +     dt_rk4  * k3_z, nu_k, nu_kp, params)
+                z_next = z + (dt_rk4 / 6) * (k1_z + 2*k2_z + 2*k3_z + k4_z)
+                k1_L = scalar_f_dot(lam_k, k, tau,            z,                      nu_k, nu_kp, params)
+                k2_L = scalar_f_dot(lam_k, k, tau + dt_rk4/2, z + (dt_rk4/2) * k1_z, nu_k, nu_kp, params)
+                k3_L = scalar_f_dot(lam_k, k, tau + dt_rk4/2, z + (dt_rk4/2) * k2_z, nu_k, nu_kp, params)
+                k4_L = scalar_f_dot(lam_k, k, tau + dt_rk4,   z +     dt_rk4  * k3_z, nu_k, nu_kp, params)
+                L_next = L_val + (dt_rk4 / 6) * (k1_L + 2*k2_L + 2*k3_L + k4_L)
+                return (z_next, L_next, lam_k, k, nu_k, nu_kp, params), None
+
+            def lagrangian_propagate_k(k, lam_k, z_k, nu_k, nu_kp, params):
+                tau_k = k / (N_grid - 1)
+                taus  = tau_k + jnp.arange(nsub) * dt_rk4
+                carry_init = (z_k, 0.0, lam_k, k, nu_k, nu_kp, params)
+                (_, L_final, _, _, _, _, _), _ = jax.lax.scan(lagrangian_rk4_step, carry_init, taus)
+                return L_final
+
+            cnstr_hessians_k = jax.hessian(lagrangian_propagate_k, argnums=(2, 3, 4))
             self.cnstr_hessians = jax.jit(jax.vmap(cnstr_hessians_k, in_axes=(0, 0, 0, 0, 0, None)))
 
     def init_penalty(self, scp_segment):

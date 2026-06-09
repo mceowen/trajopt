@@ -116,5 +116,5 @@ analysis:
   type: standalone
   compute_iters: false
   show_iters: false
-  show_convergence: false
-  show_weights: false
+  show_convergence: true
+  show_weights: true

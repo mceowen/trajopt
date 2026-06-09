@@ -68,11 +68,11 @@ trajectory:
         u_stop:  [0.0, 15.0]
 
 analysis:
-  type: method_variation
-  compute_iters: true
-  show_iters: true
-  show_convergence: true
-  show_weights: true
+  # type: method_variation
+  # compute_iters: true
+  # show_iters: true
+  # show_convergence: true
+  # show_weights: true
 
   # methods:
   #   autoscvx-ps-h10:

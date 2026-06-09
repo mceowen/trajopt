@@ -11,8 +11,8 @@ flags:
   iter_max: 300
 
 weights:
-  alpha_z: 0.01
-  alpha_nu: 0.01
+  alpha_z: 1.0
+  alpha_nu: 1.0
 
 penalty:
   default:
