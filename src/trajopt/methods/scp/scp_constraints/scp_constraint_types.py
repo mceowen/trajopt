@@ -50,7 +50,7 @@ class scp_dynamics(SCPConstraint):
             return
 
         N_grid    = scp_segment.index_map.N.all
-        nsub      = 5
+        nsub      = 10
         delta_tau = 1.0 / (N_grid - 1)
         dt_rk4    = delta_tau / nsub
 

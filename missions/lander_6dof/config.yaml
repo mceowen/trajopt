@@ -94,7 +94,7 @@ trajectory:
           type: min_time
 
         # u_squared:
-        #   type: running
+        #   type: nonconvex_running
         #   fcn: 
 
       guess:

@@ -54,7 +54,7 @@ trajectory:
 
       costs:
         u_squared:
-          type: running
+          type: nonconvex_running
           fcn: fcns.u_squared_cost
           w: 10
 

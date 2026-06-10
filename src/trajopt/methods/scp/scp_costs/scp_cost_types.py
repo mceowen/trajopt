@@ -3,7 +3,8 @@ import jax.numpy as jnp
 import numpy as np
 from trajopt.methods.scp.scp_costs.scp_cost import SCPCost
 
-class _scp_jax_cost(SCPCost):
+
+class scp_nonconvex_running(SCPCost):
     def create_cvxpy_cost(self, scp_segment):
         if _first_nonconvex_cost(scp_segment) is not self.cost:
             return
@@ -36,7 +37,6 @@ class _scp_jax_cost(SCPCost):
         H[:, :n_z, n_z:] += H_cost_znu
         H[:, n_z:, :n_z] += np.transpose(H_cost_znu, (0, 2, 1))
 
-class scp_running(_scp_jax_cost):
     def merit_cost(self, scp_segment):
         fcn_b = self.cost.fcn_batched
 
@@ -45,7 +45,39 @@ class scp_running(_scp_jax_cost):
         return eval_fn
 
 
-class scp_terminal(_scp_jax_cost):
+class scp_nonconvex_terminal(SCPCost):
+    def create_cvxpy_cost(self, scp_segment):
+        if _first_nonconvex_cost(scp_segment) is not self.cost:
+            return
+        scp_segment.cp_cost += (
+            cp.sum(scp_segment.cp_params.cost0)
+            + cp.sum(cp.multiply(scp_segment.cp_params.dcostdx, scp_segment.dz))
+            + cp.sum(cp.multiply(scp_segment.cp_params.dcostdu, scp_segment.dnu))
+        )
+
+    def update_cvxpy_parameters(self, scp_segment):
+        if _first_nonconvex_cost(scp_segment) is not self.cost:
+            return
+        z_opt  = scp_segment.current_iter_data.z_opt
+        nu_opt = scp_segment.current_iter_data.nu_opt
+        cost, dcostdx, dcostdu = compute_nonconvex_costs(z_opt, nu_opt, scp_segment.segment, scp_segment)
+        scp_segment.cp_params.dcostdx.value = dcostdx.squeeze(axis=1)
+        scp_segment.cp_params.dcostdu.value = dcostdu.squeeze(axis=1)
+        scp_segment.cp_params.cost0.value   = cost.squeeze(axis=1)
+
+    def accumulate_hessian(self, scp_segment, H):
+        if _first_nonconvex_cost(scp_segment) is not self.cost:
+            return
+        z_opt  = scp_segment.current_iter_data.z_opt
+        nu_opt = scp_segment.current_iter_data.nu_opt
+        n_z    = scp_segment.index_map.n.z
+
+        H_cost_z, H_cost_nu, H_cost_znu = compute_nonconvex_cost_hessians(z_opt, nu_opt, scp_segment.segment, scp_segment)
+        H[:, :n_z, :n_z] += H_cost_z
+        H[:, n_z:, n_z:] += H_cost_nu
+        H[:, :n_z, n_z:] += H_cost_znu
+        H[:, n_z:, :n_z] += np.transpose(H_cost_znu, (0, 2, 1))
+
     def merit_cost(self, scp_segment):
         fcn_b = self.cost.fcn_batched
         nodes = jnp.asarray(self.cost.nodes)
@@ -164,7 +196,7 @@ class scp_rate_regularization(SCPCost):
 
 def _first_nonconvex_cost(scp_segment):
     for scp_cost in scp_segment.costs.values():
-        if isinstance(scp_cost, _scp_jax_cost):
+        if isinstance(scp_cost, (scp_nonconvex_running, scp_nonconvex_terminal)):
             return scp_cost.cost
     return None
 
@@ -180,8 +212,8 @@ def compute_nonconvex_costs(z, nu, segment, scp_segment):
 
     params = segment.params
     nonconvex_costs = [c for c in segment.costs.values() if c.type == "nonconvex"]
-    terminal_costs  = [c for c in segment.costs.values() if c.type == "terminal"]
-    running_costs   = [c for c in segment.costs.values() if c.type == "running"]
+    terminal_costs  = [c for c in segment.costs.values() if c.type == "nonconvex_terminal"]
+    running_costs   = [c for c in segment.costs.values() if c.type == "nonconvex_running"]
 
     if len(nonconvex_costs) + len(terminal_costs) + len(running_costs) == 0:
         return cost, dcostdz, dcostdnu
@@ -229,8 +261,8 @@ def compute_nonconvex_cost_hessians(z, nu, segment, scp_segment):
 
     params = segment.params
     nonconvex_costs = [c for c in segment.costs.values() if c.type == "nonconvex"]
-    terminal_costs = [c for c in segment.costs.values() if c.type == "terminal"]
-    running_costs = [c for c in segment.costs.values() if c.type == "running"]
+    terminal_costs = [c for c in segment.costs.values() if c.type == "nonconvex_terminal"]
+    running_costs = [c for c in segment.costs.values() if c.type == "nonconvex_running"]
 
     if len(nonconvex_costs) + len(terminal_costs) + len(running_costs) == 0:
         return H_cost_z, H_cost_nu, H_cost_znu

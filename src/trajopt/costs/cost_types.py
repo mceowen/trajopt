@@ -59,13 +59,13 @@ class rate_regularization:
         self.idx = cost_config.get("idx", np.arange(0, segment.index_map.n.control))
 
 
-class terminal:
+class nonconvex_terminal:
     def __init__(self, cost_config: dict, segment) -> None:
         index_map = segment.index_map
         nondim = segment.nondim
         fcns = segment.fcns
 
-        self.type = "terminal"
+        self.type = "nonconvex_terminal"
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
         self.nodes = cost_config.get("nodes", np.array([index_map.N.all - 1]))
@@ -148,13 +148,13 @@ class convex_running:
         self.fcn_dim = tools.resolve_function_from_string(self.fcn_string, fcns)
 
 
-class running:
+class nonconvex_running:
     def __init__(self, cost_config: dict, segment) -> None:
         index_map = segment.index_map
         nondim = segment.nondim
         fcns = segment.fcns
 
-        self.type = "running"
+        self.type = "nonconvex_running"
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
         self.nodes = cost_config.get("nodes", np.arange(0, index_map.N.all))

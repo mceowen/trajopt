@@ -70,7 +70,7 @@ trajectory:
 
       costs:
         min_terminal_velocity:
-          type: terminal
+          type: nonconvex_terminal
           fcn: fcns.velocity
 
       guess:
