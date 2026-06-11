@@ -15,7 +15,7 @@ def set_initial_guess(segment, scp_segment):
     elif guess_type == "straight_line":
         straight_line_initial_guess(segment, scp_segment)
 
-    scp_segment.cost_init = scp_cost_types.compute_nonconvex_costs(
+    scp_segment.cost_init = scp_cost_types.compute_nonconvex_terminal_costs(
         scp_segment.initial_guess.z, scp_segment.initial_guess.nu, segment, scp_segment
     )
 
@@ -45,7 +45,7 @@ def straight_line_initial_guess(segment, scp_segment):
     x = (1 - alpha) * x0 + alpha * xf
     u = (1 - alpha) * u0 + alpha * uf
 
-    beta = np.zeros((N, index_map.n.ctcs))
+    beta = np.zeros((N, len(index_map.indices.z.augmented)))
     s    = np.full((N, 1), Ts)
     z, nu = index_map.pack_znu(x, t.reshape(-1, 1), beta, u, s)
 

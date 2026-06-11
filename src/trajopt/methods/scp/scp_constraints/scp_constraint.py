@@ -105,9 +105,10 @@ class SCPConstraint():
         if self.penalty.W.autotune:
             Wh = self.W * np.abs(self.vb) / (0.01 * self.eps)
             self.W = np.clip(Wh, 0.0001, 1e8)
+            # self.W = 1e8 * np.ones_like(self.W)
 
         if self.penalty.dual.autotune:
-            dual_new = self.dual + 0.1 * self.vb
+            dual_new = self.dual + 1.0 * self.vb
 
             if self.nonnegative_dual:
                 self.dual = np.maximum(0.0, dual_new)

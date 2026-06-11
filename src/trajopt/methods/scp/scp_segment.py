@@ -73,7 +73,8 @@ class SCPSegment():
             constraint.init_penalty(self)
 
         dyn = next((c for c in self.constraints.values() if c.type == "dynamics"), None)
-        self.eps_dyn   = dyn.eps if dyn is not None else np.full(self.index_map.n.z, 1e-4)
+        self.eps_dyn   = dyn.eps.copy() if dyn is not None else np.full(self.index_map.n.z, 1e-4)
+        self.eps_dyn[self.index_map.indices.z.running_cost] = np.inf
         self.eps_state = self.eps_dyn[self.index_map.indices.z.state]
         self.eps_cost  = np.atleast_1d(1e-4)
 
@@ -127,10 +128,12 @@ class SCPSegment():
     def create_cvxpy_variables(self) -> None:
         N, n_x, n_t, n_u = self.index_map.N.all, self.index_map.n.state, self.index_map.n.time, self.index_map.n.control
         n_ctcs = self.index_map.n.ctcs
+        n_rc   = self.index_map.n.running_cost
 
-        self.cp_vars.dx    = cp.Variable((N, n_x),    name="dx")
-        self.cp_vars.dbeta = cp.Variable((N, n_ctcs), name="dbeta") if n_ctcs > 0 else None
-        self.cp_vars.du    = cp.Variable((N, n_u),    name="du")
+        self.cp_vars.dx     = cp.Variable((N, n_x),    name="dx")
+        self.cp_vars.dbeta  = cp.Variable((N, n_ctcs), name="dbeta")  if n_ctcs > 0 else None
+        self.cp_vars.dgamma = cp.Variable((N, n_rc),   name="dgamma") if n_rc   > 0 else None
+        self.cp_vars.du     = cp.Variable((N, n_u),    name="du")
 
         if bool(self.flags.free_final_time):
             self.cp_vars.dt = cp.Variable((N, n_t), name="dt")
@@ -143,6 +146,8 @@ class SCPSegment():
 
         if n_ctcs > 0:
             dz_components.append(self.cp_vars.dbeta)
+        if n_rc > 0:
+            dz_components.append(self.cp_vars.dgamma)
 
         self.dz  = cp.hstack(dz_components)
         self.dnu = cp.hstack([self.cp_vars.du, self.cp_vars.ds])
@@ -304,7 +309,7 @@ class SCPSegment():
         for cost in self.costs.values():
             cost.accumulate_hessian(self, H)
 
-        self.cp_params.L.value = _psd_sqrt(H, delta=1e-6)
+        self.cp_params.L.value = _psd_sqrt(H, delta=1e-10)
 
     def read_solution(self) -> None:
         self._dz_new  = self.dz.value

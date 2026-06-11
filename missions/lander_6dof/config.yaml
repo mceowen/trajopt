@@ -5,8 +5,8 @@ method:
     equal_dt: 1
     zoh_dilation: 1
     free_final_time: 1
-    second_order: 0
-    line_search: 0
+    second_order: 1
+    line_search: 1
 
   solver_opts:
     solver: CLARABEL

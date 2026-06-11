@@ -252,8 +252,9 @@ class final_time(Constraint):
         self.name = cnstr_config.name
         self.dimension = 1
 
-        self._lower_dim = cnstr_config.get("lower", None)
-        self._upper_dim = cnstr_config.get("upper", None)
+        fixed = cnstr_config.get("value", None)
+        self._lower_dim = cnstr_config.get("lower", fixed)
+        self._upper_dim = cnstr_config.get("upper", fixed)
 
         self._N_all = index_map.N.all
         self._nondim = nondim
@@ -442,22 +443,32 @@ class dynamics(Constraint):
         self.M_ctrl_nd2d  = jnp.asarray(nondim.M.control.nd2d)
 
         self.ctcs_constraints = ()
+        self.running_costs = ()
 
     def fcn_txu_nd(self, x, u, t, params):
         return self.M_out_d2nd @ self.fcn_txu_dim(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, t, params)
 
     def fcn_znu(self, z, nu, params):
-        x, t, beta, u, s = self.index_map.unpack_znu(z, nu)
+        x, t, _, u, s = self.index_map.unpack_znu(z, nu)
 
         dx_dt = self.fcn_txu_nd(x, u, t, params)
         dt_dt = jnp.asarray([1.0], dtype=z.dtype)
 
+        n_ctcs = len(self.index_map.indices.z.ctcs)
         if self.ctcs_constraints:
             ctcs_values = jnp.concatenate(
                 [jnp.atleast_1d(c.fcn_znu(z, nu, params)) for c in self.ctcs_constraints],
             )
             dbeta_dt = jnp.maximum(ctcs_values, 0.0)**2
         else:
-            dbeta_dt = jnp.zeros_like(beta)
+            dbeta_dt = jnp.zeros(n_ctcs, dtype=z.dtype)
 
-        return s * jnp.concatenate([dx_dt, dt_dt, dbeta_dt])
+        n_rc = len(self.index_map.indices.z.running_cost)
+        if self.running_costs:
+            dgamma_dt = jnp.concatenate(
+                [jnp.atleast_1d(c.fcn_znu(z, nu, params)) for c in self.running_costs],
+            )
+        else:
+            dgamma_dt = jnp.zeros(n_rc, dtype=z.dtype)
+
+        return s * jnp.concatenate([dx_dt, dt_dt, dbeta_dt, dgamma_dt])

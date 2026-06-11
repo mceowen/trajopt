@@ -7,7 +7,7 @@ from trajopt.utils.tools import AttrDict
 
 
 class IndexMap:
-    """Owns the augmented-vector layout z = [x, t, beta], nu = [u, s] and packs/unpacks it."""
+    """Owns the augmented-vector layout z = [x, t, beta_ctcs, gamma], nu = [u, s] and packs/unpacks it."""
 
     def __init__(self, segment_config: AttrDict) -> None:
         """Read the core state/control dimensions and the time grid from the config."""
@@ -18,20 +18,25 @@ class IndexMap:
         self.n = AttrDict({"state": n_state, "control": n_control})
         self.N = AttrDict({"all": segment_config.num_nodes})
 
-        self.set_augmented_dims(n_ctcs=0)
+        self.set_augmented_dims(n_ctcs=0, n_running_cost=0)
 
-    def set_augmented_dims(self, n_ctcs: int) -> None:
-        """Build the augmented z = [x, t, beta] and nu = [u, s] layout for a given CTCS size."""
+    def set_augmented_dims(self, n_ctcs: int = 0, n_running_cost: int = 0) -> None:
+        """Build the augmented z = [x, t, beta_ctcs, gamma] and nu = [u, s] layout."""
         n_state, n_control = self.n.state, self.n.control
         n_time = 1
-        n_z    = n_state + n_time + n_ctcs
+        n_z    = n_state + n_time + n_ctcs + n_running_cost
         n_nu   = n_control + 1
+
+        ctcs_start = n_state + n_time
+        rc_start   = ctcs_start + n_ctcs
 
         self.indices = AttrDict({
             "z": AttrDict({
-                "state": np.arange(0, n_state),
-                "time":  np.arange(n_state, n_state + n_time),
-                "ctcs":  np.arange(n_state + n_time, n_z),
+                "state":        np.arange(0, n_state),
+                "time":         np.arange(n_state, n_state + n_time),
+                "ctcs":         np.arange(ctcs_start, ctcs_start + n_ctcs),
+                "running_cost": np.arange(rc_start, n_z),
+                "augmented":    np.arange(ctcs_start, n_z),
             }),
             "nu": AttrDict({
                 "control":         np.arange(0, n_control),
@@ -39,26 +44,27 @@ class IndexMap:
             }),
         })
 
-        self.n.time = n_time
-        self.n.ctcs = n_ctcs
-        self.n.z    = n_z
-        self.n.nu   = n_nu
+        self.n.time         = n_time
+        self.n.ctcs         = n_ctcs
+        self.n.running_cost = n_running_cost
+        self.n.z            = n_z
+        self.n.nu           = n_nu
 
 ############################################################
 # INDEX PACKING / UNPACKING UTILITIES
 ############################################################
 
     def unpack_z(self, z: np.ndarray | Array) -> tuple[np.ndarray | Array, np.ndarray | Array, np.ndarray | Array]:
-        """Unpack augmented state z = [x, t, beta]. Supports z shaped (n_z,) or (N, n_z)."""
+        """Unpack augmented state z = [x, t, augmented]. Supports z shaped (n_z,) or (N, n_z)."""
         z_ndim = getattr(z, "ndim", np.ndim(z))
         if z_ndim == 2:
-            x = z[:, self.indices.z.state]
-            t = z[:, self.indices.z.time]
-            beta = z[:, self.indices.z.ctcs]
+            x    = z[:, self.indices.z.state]
+            t    = z[:, self.indices.z.time]
+            beta = z[:, self.indices.z.augmented]
         else:
-            x = z[self.indices.z.state]
-            t = z[self.indices.z.time]
-            beta = z[self.indices.z.ctcs]
+            x    = z[self.indices.z.state]
+            t    = z[self.indices.z.time]
+            beta = z[self.indices.z.augmented]
         return x, t, beta
 
     def unpack_nu(self, nu: np.ndarray | Array) -> tuple[np.ndarray | Array, np.ndarray | Array]:
@@ -79,7 +85,7 @@ class IndexMap:
         return x, t, beta, u, s
 
     def pack_z(self, x: np.ndarray | Array, t: np.ndarray | Array, beta: np.ndarray | Array) -> np.ndarray:
-        """Pack physical variables into augmented state z = [x, t, beta]."""
+        """Pack physical variables into augmented state z = [x, t, augmented]."""
         x_ndim = getattr(x, "ndim", np.ndim(x))
         t_ndim = getattr(t, "ndim", np.ndim(t))
         beta_ndim = getattr(beta, "ndim", np.ndim(beta))
@@ -95,12 +101,12 @@ class IndexMap:
             z = np.zeros((n_time, self.n.z))
             z[:, self.indices.z.state] = x
             z[:, self.indices.z.time] = t
-            z[:, self.indices.z.ctcs] = beta
+            z[:, self.indices.z.augmented] = beta
         else:
             z = np.zeros(self.n.z)
             z[self.indices.z.state] = x
             z[self.indices.z.time] = t
-            z[self.indices.z.ctcs] = beta
+            z[self.indices.z.augmented] = beta
         return z
 
     def pack_nu(self, u: np.ndarray | Array, s: float | np.ndarray | Array) -> np.ndarray:

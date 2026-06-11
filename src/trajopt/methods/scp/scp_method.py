@@ -107,7 +107,7 @@ class SCPMethod():
             self.update_cvxpy_parameters()
             self.cp_subproblem.solve(warm_start=False, **self.method_config.solver_opts)
 
-            if self.cp_subproblem.status not in {"optimal", "optimal_inaccurate"}:
+            if self.cp_subproblem.status not in {"optimal", "optimal_inaccurate", "user_limit"}:
                 print(f"Terminated from non-optimal convex subproblem! Status: {self.cp_subproblem.status}")
                 break
 

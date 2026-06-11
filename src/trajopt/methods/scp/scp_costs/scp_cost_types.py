@@ -1,4 +1,5 @@
 import cvxpy as cp
+import jax
 import jax.numpy as jnp
 import numpy as np
 from trajopt.methods.scp.scp_costs.scp_cost import SCPCost
@@ -6,48 +7,29 @@ from trajopt.methods.scp.scp_costs.scp_cost import SCPCost
 
 class scp_nonconvex_running(SCPCost):
     def create_cvxpy_cost(self, scp_segment):
-        if _first_nonconvex_cost(scp_segment) is not self.cost:
+        idx_rc = scp_segment.index_map.indices.z.running_cost
+        if len(idx_rc) == 0 or self.cost.gamma_idx is None:
             return
-        scp_segment.cp_cost += (
-            cp.sum(scp_segment.cp_params.cost0)
-            + cp.sum(cp.multiply(scp_segment.cp_params.dcostdx, scp_segment.dz))
-            + cp.sum(cp.multiply(scp_segment.cp_params.dcostdu, scp_segment.dnu))
-        )
+        gamma_z_idx = idx_rc[self.cost.gamma_idx]
 
-    def update_cvxpy_parameters(self, scp_segment):
-        if _first_nonconvex_cost(scp_segment) is not self.cost:
-            return
-        z_opt  = scp_segment.current_iter_data.z_opt
-        nu_opt = scp_segment.current_iter_data.nu_opt
-        cost, dcostdx, dcostdu = compute_nonconvex_costs(z_opt, nu_opt, scp_segment.segment, scp_segment)
-        scp_segment.cp_params.dcostdx.value = dcostdx.squeeze(axis=1)
-        scp_segment.cp_params.dcostdu.value = dcostdu.squeeze(axis=1)
-        scp_segment.cp_params.cost0.value   = cost.squeeze(axis=1)
+        gamma_0 = scp_segment.cp_params.z_ref[0, gamma_z_idx] + scp_segment.dz[0, gamma_z_idx]
+        scp_segment.cp_constraints.append(gamma_0 == 0)
 
-    def accumulate_hessian(self, scp_segment, H):
-        if _first_nonconvex_cost(scp_segment) is not self.cost:
-            return
-        z_opt  = scp_segment.current_iter_data.z_opt
-        nu_opt = scp_segment.current_iter_data.nu_opt
-        n_z    = scp_segment.index_map.n.z
-
-        H_cost_z, H_cost_nu, H_cost_znu = compute_nonconvex_cost_hessians(z_opt, nu_opt, scp_segment.segment, scp_segment)
-        H[:, :n_z, :n_z] += H_cost_z
-        H[:, n_z:, n_z:] += H_cost_nu
-        H[:, :n_z, n_z:] += H_cost_znu
-        H[:, n_z:, :n_z] += np.transpose(H_cost_znu, (0, 2, 1))
+        gamma_f = scp_segment.cp_params.z_ref[-1, gamma_z_idx] + scp_segment.dz[-1, gamma_z_idx]
+        scp_segment.cp_cost += self.cost.w * gamma_f
 
     def merit_cost(self, scp_segment):
-        fcn_b = self.cost.fcn_batched
+        w = self.cost.w
+        fcn_batched = jax.jit(jax.vmap(jax.jit(self.cost.fcn_znu), in_axes=(0, 0, None)))
 
         def eval_fn(z, nu, params):
-            return jnp.sum(fcn_b(z, nu, params))
+            return w * jnp.sum(fcn_batched(z, nu, params))
         return eval_fn
 
 
 class scp_nonconvex_terminal(SCPCost):
     def create_cvxpy_cost(self, scp_segment):
-        if _first_nonconvex_cost(scp_segment) is not self.cost:
+        if _first_nonconvex_terminal_cost(scp_segment) is not self.cost:
             return
         scp_segment.cp_cost += (
             cp.sum(scp_segment.cp_params.cost0)
@@ -56,23 +38,23 @@ class scp_nonconvex_terminal(SCPCost):
         )
 
     def update_cvxpy_parameters(self, scp_segment):
-        if _first_nonconvex_cost(scp_segment) is not self.cost:
+        if _first_nonconvex_terminal_cost(scp_segment) is not self.cost:
             return
         z_opt  = scp_segment.current_iter_data.z_opt
         nu_opt = scp_segment.current_iter_data.nu_opt
-        cost, dcostdx, dcostdu = compute_nonconvex_costs(z_opt, nu_opt, scp_segment.segment, scp_segment)
+        cost, dcostdx, dcostdu = compute_nonconvex_terminal_costs(z_opt, nu_opt, scp_segment.segment, scp_segment)
         scp_segment.cp_params.dcostdx.value = dcostdx.squeeze(axis=1)
         scp_segment.cp_params.dcostdu.value = dcostdu.squeeze(axis=1)
         scp_segment.cp_params.cost0.value   = cost.squeeze(axis=1)
 
     def accumulate_hessian(self, scp_segment, H):
-        if _first_nonconvex_cost(scp_segment) is not self.cost:
+        if _first_nonconvex_terminal_cost(scp_segment) is not self.cost:
             return
         z_opt  = scp_segment.current_iter_data.z_opt
         nu_opt = scp_segment.current_iter_data.nu_opt
         n_z    = scp_segment.index_map.n.z
 
-        H_cost_z, H_cost_nu, H_cost_znu = compute_nonconvex_cost_hessians(z_opt, nu_opt, scp_segment.segment, scp_segment)
+        H_cost_z, H_cost_nu, H_cost_znu = compute_nonconvex_terminal_cost_hessians(z_opt, nu_opt, scp_segment.segment, scp_segment)
         H[:, :n_z, :n_z] += H_cost_z
         H[:, n_z:, n_z:] += H_cost_nu
         H[:, :n_z, n_z:] += H_cost_znu
@@ -84,6 +66,75 @@ class scp_nonconvex_terminal(SCPCost):
 
         def eval_fn(z, nu, params):
             return jnp.sum(fcn_b(z[nodes], nu[nodes], params))
+        return eval_fn
+
+
+class scp_nonconvex_minimax(SCPCost):
+    def __init__(self, cost, scp_segment):
+        super().__init__(cost, scp_segment)
+
+        fcn = self.cost.fcn_znu
+        g      = jax.jit(fcn)
+        dg_dz  = jax.jit(jax.jacfwd(fcn, argnums=0))
+        dg_dnu = jax.jit(jax.jacfwd(fcn, argnums=1))
+        self.g_batched      = jax.jit(jax.vmap(g,      in_axes=(0, 0, None)))
+        self.dg_dz_batched  = jax.jit(jax.vmap(dg_dz,  in_axes=(0, 0, None)))
+        self.dg_dnu_batched = jax.jit(jax.vmap(dg_dnu, in_axes=(0, 0, None)))
+
+        self.nodes = np.atleast_1d(cost.nodes)
+
+    def create_cvxpy_cost(self, scp_segment):
+        n_z  = scp_segment.index_map.n.z
+        n_nu = scp_segment.index_map.n.nu
+        nn   = len(self.nodes)
+
+        out = self.cost.fcn_znu(
+            jnp.ones(n_z), jnp.ones(n_nu), scp_segment.params
+        )
+        dim = jnp.atleast_1d(out).shape[0]
+
+        self.ub_var     = cp.Variable(dim, name=f"ub_{self.name}")
+        self.g0_param   = cp.Parameter((nn, dim),       name=f"mm_g0_{self.name}")
+        self.dgdz_param = cp.Parameter((nn, dim, n_z),  name=f"mm_dgdz_{self.name}")
+        self.dgdnu_param = cp.Parameter((nn, dim, n_nu), name=f"mm_dgdnu_{self.name}")
+
+        self.cp_ineq_constraints = []
+        for i, k in enumerate(self.nodes):
+            g_lin = (
+                self.g0_param[i]
+                + self.dgdz_param[i] @ scp_segment.dz[k, :]
+                + self.dgdnu_param[i] @ scp_segment.dnu[k, :]
+            )
+            cnst = (g_lin <= self.ub_var)
+            self.cp_ineq_constraints.append(cnst)
+            scp_segment.cp_constraints.append(cnst)
+
+        scp_segment.cp_cost += self.cost.w * cp.sum(self.ub_var)
+
+    def update_cvxpy_parameters(self, scp_segment):
+        z      = jnp.asarray(scp_segment.current_iter_data.z_opt)
+        nu     = jnp.asarray(scp_segment.current_iter_data.nu_opt)
+        params = scp_segment.params
+        nn     = len(self.nodes)
+        n_z    = scp_segment.index_map.n.z
+        n_nu   = scp_segment.index_map.n.nu
+        dim    = self.g0_param.shape[1]
+
+        g     = np.asarray(self.g_batched(z[self.nodes], nu[self.nodes], params)).reshape(nn, dim)
+        dgdz  = np.asarray(self.dg_dz_batched(z[self.nodes], nu[self.nodes], params)).reshape(nn, dim, n_z)
+        dgdnu = np.asarray(self.dg_dnu_batched(z[self.nodes], nu[self.nodes], params)).reshape(nn, dim, n_nu)
+
+        self.g0_param.value    = g
+        self.dgdz_param.value  = dgdz
+        self.dgdnu_param.value = dgdnu
+
+    def merit_cost(self, scp_segment):
+        w     = self.cost.w
+        g_b   = self.g_batched
+        nodes = jnp.asarray(self.nodes)
+
+        def eval_fn(z, nu, params):
+            return w * jnp.sum(jnp.max(g_b(z[nodes], nu[nodes], params), axis=0))
         return eval_fn
 
 
@@ -194,17 +245,17 @@ class scp_rate_regularization(SCPCost):
             return w * jnp.sum(jnp.abs(delta))
         return eval_fn
 
-def _first_nonconvex_cost(scp_segment):
+def _first_nonconvex_terminal_cost(scp_segment):
     for scp_cost in scp_segment.costs.values():
-        if isinstance(scp_cost, (scp_nonconvex_running, scp_nonconvex_terminal)):
+        if isinstance(scp_cost, scp_nonconvex_terminal):
             return scp_cost.cost
     return None
 
 
-def compute_nonconvex_costs(z, nu, segment, scp_segment):
-    N         = segment.index_map.N.all
-    n_z       = segment.index_map.n.z
-    n_nu       = segment.index_map.n.nu
+def compute_nonconvex_terminal_costs(z, nu, segment, scp_segment):
+    N    = segment.index_map.N.all
+    n_z  = segment.index_map.n.z
+    n_nu = segment.index_map.n.nu
 
     cost     = np.zeros((N, 1))
     dcostdz  = np.zeros((N, 1, n_z))
@@ -213,15 +264,14 @@ def compute_nonconvex_costs(z, nu, segment, scp_segment):
     params = segment.params
     nonconvex_costs = [c for c in segment.costs.values() if c.type == "nonconvex"]
     terminal_costs  = [c for c in segment.costs.values() if c.type == "nonconvex_terminal"]
-    running_costs   = [c for c in segment.costs.values() if c.type == "nonconvex_running"]
 
-    if len(nonconvex_costs) + len(terminal_costs) + len(running_costs) == 0:
+    if len(nonconvex_costs) + len(terminal_costs) == 0:
         return cost, dcostdz, dcostdnu
 
     z_jax  = jnp.asarray(z)
     nu_jax = jnp.asarray(nu)
 
-    for cost_fn in nonconvex_costs + running_costs:
+    for cost_fn in nonconvex_costs:
         w = getattr(cost_fn, 'w', 1.0)
         f_batch, dfdx_batch, dfdu_batch = cost_fn.g_aff_batched(z_jax, nu_jax, params)
 
@@ -250,45 +300,44 @@ def compute_nonconvex_costs(z, nu, segment, scp_segment):
 
     return cost, dcostdz, dcostdnu
 
-def compute_nonconvex_cost_hessians(z, nu, segment, scp_segment):
-    N = segment.index_map.N.all
-    n_z = segment.index_map.n.z
+def compute_nonconvex_terminal_cost_hessians(z, nu, segment, scp_segment):
+    N    = segment.index_map.N.all
+    n_z  = segment.index_map.n.z
     n_nu = segment.index_map.n.nu
 
-    H_cost_z = np.zeros((N, n_z, n_z))
-    H_cost_nu = np.zeros((N, n_nu, n_nu))
+    H_cost_z   = np.zeros((N, n_z, n_z))
+    H_cost_nu  = np.zeros((N, n_nu, n_nu))
     H_cost_znu = np.zeros((N, n_z, n_nu))
 
     params = segment.params
     nonconvex_costs = [c for c in segment.costs.values() if c.type == "nonconvex"]
-    terminal_costs = [c for c in segment.costs.values() if c.type == "nonconvex_terminal"]
-    running_costs = [c for c in segment.costs.values() if c.type == "nonconvex_running"]
+    terminal_costs  = [c for c in segment.costs.values() if c.type == "nonconvex_terminal"]
 
-    if len(nonconvex_costs) + len(terminal_costs) + len(running_costs) == 0:
+    if len(nonconvex_costs) + len(terminal_costs) == 0:
         return H_cost_z, H_cost_nu, H_cost_znu
 
-    z_jax = jnp.asarray(z)
+    z_jax  = jnp.asarray(z)
     nu_jax = jnp.asarray(nu)
 
-    for cost_fn in nonconvex_costs + running_costs:
+    for cost_fn in nonconvex_costs:
         w = getattr(cost_fn, 'w', 1.0)
-        d2z = cost_fn.d2fcn_dz2_batched(z_jax, nu_jax, params)
-        d2nu = cost_fn.d2fcn_dnu2_batched(z_jax, nu_jax, params)
+        d2z   = cost_fn.d2fcn_dz2_batched(z_jax, nu_jax, params)
+        d2nu  = cost_fn.d2fcn_dnu2_batched(z_jax, nu_jax, params)
         d2znu = cost_fn.d2fcn_dzdnu_batched(z_jax, nu_jax, params)
-        H_cost_z += w * np.asarray(d2z).reshape(N, n_z, n_z)
-        H_cost_nu += w * np.asarray(d2nu).reshape(N, n_nu, n_nu)
+        H_cost_z   += w * np.asarray(d2z).reshape(N, n_z, n_z)
+        H_cost_nu  += w * np.asarray(d2nu).reshape(N, n_nu, n_nu)
         H_cost_znu += w * np.asarray(d2znu).reshape(N, n_z, n_nu)
 
     for cost_fn in terminal_costs:
-        nodes = np.atleast_1d(cost_fn.nodes)
-        z_nodes = z_jax[nodes]
+        nodes    = np.atleast_1d(cost_fn.nodes)
+        z_nodes  = z_jax[nodes]
         nu_nodes = nu_jax[nodes]
-        d2z = cost_fn.d2fcn_dz2_batched(z_nodes, nu_nodes, params)
-        d2nu = cost_fn.d2fcn_dnu2_batched(z_nodes, nu_nodes, params)
+        d2z   = cost_fn.d2fcn_dz2_batched(z_nodes, nu_nodes, params)
+        d2nu  = cost_fn.d2fcn_dnu2_batched(z_nodes, nu_nodes, params)
         d2znu = cost_fn.d2fcn_dzdnu_batched(z_nodes, nu_nodes, params)
         for i, k in enumerate(nodes):
-            H_cost_z[k] += np.asarray(d2z[i]).reshape(n_z, n_z)
-            H_cost_nu[k] += np.asarray(d2nu[i]).reshape(n_nu, n_nu)
+            H_cost_z[k]   += np.asarray(d2z[i]).reshape(n_z, n_z)
+            H_cost_nu[k]  += np.asarray(d2nu[i]).reshape(n_nu, n_nu)
             H_cost_znu[k] += np.asarray(d2znu[i]).reshape(n_z, n_nu)
 
     return H_cost_z, H_cost_nu, H_cost_znu

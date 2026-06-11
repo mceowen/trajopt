@@ -49,6 +49,8 @@ class Segment:
             costClass = getattr(cost_type_module, cost_type)
             self.costs[cost_name] = costClass(cost_config, self)
 
+        self._wire_running_costs()
+
         # create dictionary of trajplots
         self.trajplots = AttrDict()
         for trajplot_name, trajplot_config in segment_config.get("trajplots", AttrDict()).items():
@@ -71,4 +73,19 @@ class Segment:
         dyn.ctcs_constraints = tuple(ctcs)
         n_ctcs = sum(c.dimension for c in ctcs)
         self.index_map.set_augmented_dims(n_ctcs=n_ctcs)
+        dyn.dimension = self.index_map.n.z
+
+    def _wire_running_costs(self):
+        """Attach any nonconvex_running costs to the dynamics and resize the augmented state."""
+        rc = [c for c in self.costs.values() if c.type == "nonconvex_running"]
+        if not rc:
+            return
+        dyn = next((c for c in self.constraints.values() if c.type == "dynamics"), None)
+        if dyn is None:
+            return
+        dyn.running_costs = tuple(rc)
+        for i, cost in enumerate(rc):
+            cost.gamma_idx = i
+        n_ctcs = self.index_map.n.ctcs
+        self.index_map.set_augmented_dims(n_ctcs=n_ctcs, n_running_cost=len(rc))
         dyn.dimension = self.index_map.n.z

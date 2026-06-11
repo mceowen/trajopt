@@ -53,4 +53,4 @@ costs:
     type: nonconvex_running
     fcn: fcns.u_squared_cost
     scale: 1000000000000
-    w: 10
+    w: 1

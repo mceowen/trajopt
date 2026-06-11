@@ -21,12 +21,10 @@ def dynamics(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> 
 
     sigma_rad = jnp.deg2rad(u[0])
 
-    # Determine lift and drag coefficients from velocity
     aero = fcns.nonlinear_aero(x, u, t, params, fcns)
     L = aero.L
     D = aero.D
 
-    # Extract sines and cosines of various values
     cp = jnp.cos(phi_rad)
     sp = jnp.sin(phi_rad)
     tp = jnp.tan(phi_rad)
@@ -38,14 +36,16 @@ def dynamics(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> 
     cs = jnp.cos(sigma_rad)
     ss = jnp.sin(sigma_rad)
 
+    g = mu / r**2
+
     return jnp.array(
         [
             v * sg,
             jnp.rad2deg(v * cg * sps / (r * cp)),
             jnp.rad2deg(v * cg * cps / r),
-            -D - mu * sg / r**2 + Om**2 * r * cp * (sg * cp - cg * sp * cps),
+            -D - g * sg + Om**2 * r * cp * (sg * cp - cg * sp * cps),
             jnp.rad2deg(
-                (1 / v) * (L * cs + (v**2 - mu / r) * cg / r)
+                (1 / v) * (L * cs + v**2 * cg / r - g * cg)
                 + 2 * Om * cp * sps
                 + Om**2 * r * (1 / v) * cp * (cg * cp + sg * cps * sp),
             ),

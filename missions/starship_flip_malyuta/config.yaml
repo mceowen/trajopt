@@ -3,7 +3,7 @@
 trajectory:
   segments:
     three_engine_segment:
-      num_nodes: 40
+      num_nodes: 10
       inherit: common_segment.yaml
 
       constraints:
@@ -15,6 +15,10 @@ trajectory:
           type: control_limits
           lower: ["${3 * 880000}", "${np.deg2rad(-10)}"]
           upper: [6000000, "${np.deg2rad(10)}"]
+        
+        final_time:
+          type: final_time
+          value: 5.0
 
       guess:
         type: straight_line
@@ -26,7 +30,7 @@ trajectory:
         u_stop: [500000, 0]
 
     single_engine_segment:
-      num_nodes: 40
+      num_nodes: 20
       inherit: common_segment.yaml
 
       constraints:
@@ -52,20 +56,19 @@ method:
   inherit: trajopt/methods/configs/autoscvx.yaml
 
   flags:
-    free_final_time: 0
-    second_order: 1
-    line_search: 1
+    free_final_time: 1
+    iter_max: 100
 
   conv:
     eps_state:  0.001
     eps_dyn:    0.001
-    eps_defect: 1.0
-    eps_cost:   1
-    iter_max: 100
+  
+  solver_opts:
+    solver: PIQP
 
 analysis:
   type: standalone
-  compute_iters: true
-  show_iters: true
-  show_convergence: true
-  show_weights: true
+  compute_iters: false
+  show_iters: false
+  show_convergence: false
+  show_weights: false
