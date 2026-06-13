@@ -48,6 +48,9 @@ def dynamics(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> 
 def u_squared_cost(x, u, t, params, fcns):
     return jnp.atleast_1d(jnp.sum(u**2))
 
+def one(x, u, t, params, fcns):
+    return jnp.atleast_1d(1.0)
+
 # =============================================================================
 # nonconvex inequality constraint functions
 # =============================================================================

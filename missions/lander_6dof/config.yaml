@@ -9,7 +9,7 @@ method:
     line_search: 1
 
   solver_opts:
-    solver: CLARABEL
+    solver: QOCO
 
 trajectory:
   segments:
@@ -42,6 +42,7 @@ trajectory:
         glide_slope:   ../../models/lander_6dof.py:glide_slope
         los:           ../../models/lander_6dof.py:los
         u_squared_cost: ../../models/lander_6dof.py:u_squared_cost
+        one:            ../../models/lander_6dof.py:one
 
       constraints:
         dynamics:
@@ -69,33 +70,30 @@ trajectory:
           fcn: fcns.thrust
           lower: "${params.min_thrust}"
 
-        altitude_triggered_tilt:
-          type: ctcs_nonconvex_inequality
-          fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.tilt <= 0)"
-          scale: 1.0
+        # altitude_triggered_tilt:
+        #   type: nonconvex_inequality
+        #   fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.tilt <= 0)"
 
-        altitude_triggered_speed:
-          type: ctcs_nonconvex_inequality
-          fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.speed <= ${params.speed_limit})"
-          scale: 1.0
+        # altitude_triggered_speed:
+        #   type: nonconvex_inequality
+        #   fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.speed <= ${params.speed_limit})"
 
-        altitude_triggered_angular_speed:
-          type: ctcs_nonconvex_inequality
-          fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.angular_speed <= ${params.angular_speed_limit})"
-          scale: 1.0
+        # altitude_triggered_angular_speed:
+        #   type: nonconvex_inequality
+        #   fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.angular_speed <= ${params.angular_speed_limit})"
 
-        altitude_triggered_glideslope:
-          type: ctcs_nonconvex_inequality
-          fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.glide_slope <= 0)"
-          scale: 1.0
+        # altitude_triggered_glideslope:
+        #   type: nonconvex_inequality
+        #   fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.glide_slope <= 0)"
 
       costs:
-        min_time:
-          type: min_time
-
-        # u_squared:
+        # min_time:
         #   type: nonconvex_running
-        #   fcn: 
+        #   fcn: fcns.one
+
+        u_squared:
+          type: nonconvex_running
+          fcn: 
 
       guess:
         type: straight_line
