@@ -2,9 +2,9 @@
 <!-- Created with Inkscape (http://www.inkscape.org/) -->
 
 <svg
-   width="210mm"
-   height="297mm"
-   viewBox="0 0 210 297"
+   width="118.96493mm"
+   height="65.331001mm"
+   viewBox="0 0 118.96492 65.331001"
    version="1.1"
    id="svg1"
    inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
@@ -23,12 +23,12 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
-     inkscape:zoom="1.0611559"
-     inkscape:cx="317.10703"
-     inkscape:cy="364.69665"
+     inkscape:zoom="0.91783982"
+     inkscape:cx="238.05897"
+     inkscape:cy="177.5909"
      inkscape:window-width="1234"
      inkscape:window-height="863"
-     inkscape:window-x="211"
+     inkscape:window-x="50"
      inkscape:window-y="33"
      inkscape:window-maximized="0"
      inkscape:current-layer="layer1" />
@@ -36,37 +36,37 @@
      id="defs1">
     <rect
        x="108.36341"
-       y="233.725"
+       y="233.72501"
        width="133.15242"
        height="14.873409"
        id="rect11" />
     <rect
-       x="144.1789"
+       x="144.17889"
        y="232.06877"
-       width="91.839982"
-       height="21.725587"
+       width="91.839981"
+       height="21.725588"
        id="rect6" />
     <rect
-       x="144.1789"
+       x="144.17889"
        y="232.06877"
-       width="91.839982"
-       height="21.725587"
+       width="91.839981"
+       height="21.725588"
        id="rect7" />
     <rect
-       x="144.1789"
+       x="144.17889"
        y="232.06877"
-       width="91.839982"
-       height="21.725587"
+       width="91.839981"
+       height="21.725588"
        id="rect8" />
     <rect
        x="108.36341"
-       y="233.725"
-       width="145.1928"
+       y="233.72501"
+       width="145.19279"
        height="15.581667"
        id="rect12" />
     <rect
        x="108.36341"
-       y="233.725"
+       y="233.72501"
        width="133.15242"
        height="14.873409"
        id="rect13" />
@@ -74,7 +74,15 @@
   <g
      inkscape:label="Layer 1"
      inkscape:groupmode="layer"
-     id="layer1">
+     id="layer1"
+     transform="translate(-22.712299,-56.610844)">
+    <rect
+       style="fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.440265;stroke-dasharray:none;stroke-opacity:1"
+       id="rect2"
+       width="118.96493"
+       height="65.331001"
+       x="22.712299"
+       y="56.610844" />
     <rect
        style="fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:0.412769;stroke-dasharray:none;stroke-opacity:1"
        id="rect1"
@@ -160,7 +168,7 @@
        style="writing-mode:lr-tb;direction:ltr;white-space:pre;shape-inside:url(#rect11);display:inline;fill:none;stroke:#000000;stroke-width:1.00157"><tspan
          x="108.36328"
          y="244.67257"
-         id="tspan1">cvx</tspan></text>
+         id="tspan3">cvx</tspan></text>
     <text
        xml:space="preserve"
        transform="matrix(0.26458333,0,0,0.26458333,85.199965,22.175951)"
@@ -168,7 +176,7 @@
        style="writing-mode:lr-tb;direction:ltr;white-space:pre;shape-inside:url(#rect13);display:inline;fill:none;stroke:#000000;stroke-width:1.00157"><tspan
          x="108.36328"
          y="244.67257"
-         id="tspan2">noncvx</tspan></text>
+         id="tspan4">noncvx</tspan></text>
     <ellipse
        style="fill:none;stroke:#000000;stroke-width:0.20969"
        id="path13"
