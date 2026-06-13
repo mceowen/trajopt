@@ -1,12 +1,16 @@
 # TrajOpt
-TrajOpt is a self-contained Python library for multi-segment trajectory optimization using Sequential Convex Programming (SCP). The software is built to facilitate the design of __models__ that can effectively be reused across different __mission__ scenarios.
+TrajOpt is a self-contained Python library for multi-segment trajectory optimization using Sequential Convex Programming (SCP). The software is built to facilitate the design of __models__ that can be effectively reused across different __mission__ scenarios.
 
 ## Features
-* __Configurable Missions__: Once a model is built, configuring new missions is fast and efficient due to the config.yaml structure
-* __Simple Model Design Framework__: Building new models is easy since you simply need to provide the continuous-time functions f_k(x, u, t, params, fcns).
+* __Configurable Missions__: Once a model is built, configuring new missions using those models is fast and efficient due to the config.yaml structure
+* __Simple Model Design Framework__: Building new models is easy since you only need to provide the continuous-time functions f_k(x, u, t, params, fcns).
 * __Robust Base Algorithm__: The base AutoSCvx algorithm includes autotuning of penalty weights and second-order information for robust convergence on most problems with minimal hyper-parameter tuning.
-* __Self Contained__: The base algorithm for solving the nonconvex problems is fully written in this package. The only black-boxes we accept are calls to the convex solvers due to their (mostly) gauranteed reliability and provable convergence.
+* __Self Contained__: The base algorithm for solving the nonconvex problems is fully written in this package. The only black-boxes we accept are calls to the convex solvers due to their gauranteed reliability and provable convergence.
 * __Easy Algorithm Design__: Researchers can quickly design their own algorithms using the powerful modeling languages CVXPY and JAX, both of which closely resemble numpy.
+
+<p align="center">
+  <img src="docs/segment_diagram.svg" alt="diagram" width="500"/>
+</p>
 
 ## Segments
 A trajectory __segment__ is defined by a set of (Costs, Constraints, Params, Fcns):
@@ -62,3 +66,8 @@ The __trajectory__ OCP is defined by summing the cost contributions and enforcin
 ## Method
 
 ## Sequential Convex Programming
+
+## Contributors
+
+* Skye Mceowen
+* Carlos Morales
