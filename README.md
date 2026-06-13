@@ -1,5 +1,5 @@
 # TrajOpt
-TrajOpt is a self-contained Python library for multi-segment trajectory optimization using Sequential Convex Programming (SCP). The software is built to facilitate the design of __models__ that can effectively be re-used across different __mission__ scenarios.
+TrajOpt is a self-contained Python library for multi-segment trajectory optimization using Sequential Convex Programming (SCP). The software is built to facilitate the design of __models__ that can effectively be reused across different __mission__ scenarios.
 
 ## Features
 * __Configurable Missions__: Once a model is built, configuring new missions is fast and efficient due to the config.yaml structure
