@@ -36,7 +36,7 @@ f_k(x_i,u_i,t_i,\mathrm{params}_i,\mathrm{fcns}_i)
 ## Trajectory
 The __trajectory__ OCP is defined by summing the cost contributions and enforcing the constraints from each __segment__:
 
-\begin{align*}
+\begin{aligned}
 \underset{\{x_i,u_i,t_{I,i},t_{F,i}\}_{i=1}^{N}}{\mathrm{minimize}} 
 \quad & \sum_{i=1}^{N} J_i \\
 \mathrm{subject\;to} 
@@ -44,7 +44,7 @@ The __trajectory__ OCP is defined by summing the cost contributions and enforcin
 \mathrm{where} 
 \quad \mathbb{C} 
 &= \mathbb{C}_1 \times \mathbb{C}_2 \times \cdots \times \mathbb{C}_N
-\end{align*}
+\end{aligned}
 
 ## Augmented Optimal Control Problem
 
