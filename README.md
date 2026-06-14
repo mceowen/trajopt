@@ -68,7 +68,7 @@ The __trajectory__ OCP is defined by summing the cost contributions and enforcin
 
 ## Sequential Convex Programming
 
-## Contributors
+## Core Developers
 
 * Skye Mceowen
 * Carlos Morales
