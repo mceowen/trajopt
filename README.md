@@ -70,5 +70,4 @@ The __trajectory__ OCP is defined by summing the cost contributions and enforcin
 
 ## Core Developers
 
-* Skye Mceowen
-* Carlos Morales
+Skye Mceowen and Carlos Morales
