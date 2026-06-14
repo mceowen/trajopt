@@ -80,9 +80,6 @@ class SCPSegment():
 
         initial_guess.set_initial_guess(segment, self)
 
-        self.lagrangian_duals = AttrDict()
-        self.lagrangian_duals.dynamics = np.zeros((segment.index_map.N.all - 1, segment.index_map.n.z))
-
         self.iter_data_list = []
 
         self.current_iter_data = recursive_attrdict({
@@ -343,9 +340,6 @@ class SCPSegment():
 
         for constraint in self.constraints.values():
             constraint.read_vb(self)
-
-        lam_sp_dyn = np.array([c.dual_value for c in self.cp_dyn_constraints])
-        self.lagrangian_duals.dynamics = (1.0 - alpha) * self.lagrangian_duals.dynamics + alpha * lam_sp_dyn
 
         for constraint in self.constraints.values():
             constraint.update_current_iter_data(self)

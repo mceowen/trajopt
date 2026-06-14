@@ -9,12 +9,12 @@ method:
     line_search: 1
 
   solver_opts:
-    solver: QOCO
+    solver: CLARABEL
 
 trajectory:
   segments:
     landing:
-      num_nodes: 20
+      num_nodes: 5
       inherit: ../../models/configs/lander_6dof.yaml
 
       params:
@@ -71,29 +71,25 @@ trajectory:
           lower: "${params.min_thrust}"
 
         # altitude_triggered_tilt:
-        #   type: nonconvex_inequality
+        #   type: ctcs_nonconvex_inequality
         #   fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.tilt <= 0)"
 
         # altitude_triggered_speed:
-        #   type: nonconvex_inequality
+        #   type: ctcs_nonconvex_inequality
         #   fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.speed <= ${params.speed_limit})"
 
         # altitude_triggered_angular_speed:
-        #   type: nonconvex_inequality
+        #   type: ctcs_nonconvex_inequality
         #   fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.angular_speed <= ${params.angular_speed_limit})"
 
         # altitude_triggered_glideslope:
-        #   type: nonconvex_inequality
+        #   type: ctcs_nonconvex_inequality
         #   fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.glide_slope <= 0)"
 
       costs:
-        # min_time:
-        #   type: nonconvex_running
-        #   fcn: fcns.one
-
-        u_squared:
+        min_time:
           type: nonconvex_running
-          fcn: 
+          fcn: fcns.one
 
       guess:
         type: straight_line
@@ -106,7 +102,7 @@ trajectory:
 
 analysis:
   type: standalone
-  compute_iters: true
-  show_iters: true
+  compute_iters: false
+  show_iters: false
   show_convergence: true
   show_weights: true

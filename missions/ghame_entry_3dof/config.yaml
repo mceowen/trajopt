@@ -5,7 +5,7 @@ method:
     iter_max: 200
 
   solver_opts:
-    solver: QOCO
+    solver: PIQP
 
 trajectory:
   segments:

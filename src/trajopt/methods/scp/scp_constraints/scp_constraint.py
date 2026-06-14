@@ -18,7 +18,7 @@ class SCPConstraint():
         self.vb_type    = "standard"
         self.W          = np.zeros(0)
         self.dual       = np.zeros(0)
-        self.W_param    = None
+        self.W_sqrt_param    = None
         self.dual_param = None
         self.vb_var     = None
         self.vb_p_var   = None
@@ -57,7 +57,7 @@ class SCPConstraint():
             return
         if self.vb_type == "none":
             return
-        self.W_param    = cp.Parameter(self.shape, nonneg=True, name=f"W_{self.name}_sqrt", value=np.zeros(self.shape))
+        self.W_sqrt_param    = cp.Parameter(self.shape, nonneg=True, name=f"W_{self.name}_sqrt", value=np.zeros(self.shape))
         self.dual_param = cp.Parameter(self.shape, name=f"dual_{self.name}", value=np.zeros(self.shape))
 
     def create_penalty_variables(self, scp_segment):
@@ -73,19 +73,19 @@ class SCPConstraint():
             self.vb_var = cp.Variable(self.shape, name=f"vb_{self.name}_{scp_segment.name}")
 
     def add_penalty_cost(self, scp_segment):
-        if self.W_param is None:
+        if self.W_sqrt_param is None:
             return
         if self.vb_type == "split":
-            scp_segment.cp_cost += 0.5 * cp.sum_squares(cp.multiply(self.W_param, self.vb_p_var))
-            scp_segment.cp_cost += 0.5 * cp.sum_squares(cp.multiply(self.W_param, self.vb_m_var))
-            scp_segment.cp_cost += cp.sum(cp.multiply(self.vb_p_var - self.vb_m_var, self.dual_param))
+            scp_segment.cp_cost += 0.5 * cp.sum_squares(cp.multiply(self.W_sqrt_param, self.vb_p_var))
+            scp_segment.cp_cost += 0.5 * cp.sum_squares(cp.multiply(self.W_sqrt_param, self.vb_m_var))
+            scp_segment.cp_cost += cp.sum(cp.multiply(self.dual_param, self.vb_p_var - self.vb_m_var))
         else:
-            scp_segment.cp_cost += 0.5 * cp.sum_squares(cp.multiply(self.W_param, self.vb_var))
-            scp_segment.cp_cost += cp.sum(cp.multiply(self.vb_var, self.dual_param))
+            scp_segment.cp_cost += 0.5 * cp.sum_squares(cp.multiply(self.W_sqrt_param, self.vb_var))
+            scp_segment.cp_cost += cp.sum(cp.multiply(self.dual_param, self.vb_var))
 
     def update_penalty_parameters(self, scp_segment):
-        if self.W_param is not None:
-            self.W_param.value = np.sqrt(self.W)
+        if self.W_sqrt_param is not None:
+            self.W_sqrt_param.value = np.sqrt(self.W)
         if self.dual_param is not None:
             self.dual_param.value = self.dual
 

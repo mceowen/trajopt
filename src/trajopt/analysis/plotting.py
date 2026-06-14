@@ -119,6 +119,7 @@ def plot(traj_analyzer, data):
                         ax.set_zlim(zlim)
 
     for group_name, group_data in traj_data.items():
+        trigger_time = _find_trigger_time(group_data, last_iter)
         for i, (traj_name, trajplot) in enumerate(group_data.items()):
             ax   = axs[group_name][i]
             vals = trajplot.opt_vals["values"]
@@ -136,6 +137,8 @@ def plot(traj_analyzer, data):
             else:
                 t = last_iter["t_opt"]
                 _set_time_series_limits(ax, t[:vals.shape[0]], vals)
+                if trigger_time is not None:
+                    ax.axvline(trigger_time, color='gray', ls='--', lw=0.8, alpha=0.7, zorder=1)
 
     legend_entries = [('init', 'Initial Guess'), ('opt', 'Optimal'), ('nl', 'Nonlinear')]
     if show_iters:
@@ -249,6 +252,7 @@ def plot_method_variation(traj_analyzer, data):
                         r["v_max"] = max(r["v_max"], v_all.max())
 
     for group_name, group_data in ref_traj_data.items():
+        trigger_time = _find_trigger_time(group_data, ref_last)
         for i, (traj_name, trajplot) in enumerate(group_data.items()):
             ax = axs[group_name][i]
             key = (group_name, i)
@@ -269,6 +273,8 @@ def plot_method_variation(traj_analyzer, data):
                 t_arr = np.array([r["t_min"], r["t_max"]])
                 v_arr = np.array([r["v_min"], r["v_max"]])
                 _set_time_series_limits(ax, t_arr, v_arr)
+                if trigger_time is not None:
+                    ax.axvline(trigger_time, color='gray', ls='--', lw=0.8, alpha=0.7, zorder=1)
 
     handles = []
     for m_idx, method_name in enumerate(methods):
@@ -642,6 +648,32 @@ def _convergence_weight_plot(subprob, suffix, save=True):
         fig.savefig(os.path.join(save_dir, f"convergence_weights{suffix}.pdf"), dpi=plot_options.save_dpi, pad_inches=0.02)
 
     return fig
+
+
+def _find_trigger_time(group_data, last_iter):
+    """Find the trigger time from any trajplot in the group that has trigger_line config."""
+    for trajplot in group_data.values():
+        tl = trajplot.get("trigger_line")
+        if tl is None:
+            continue
+        threshold = float(tl["threshold"])
+        direction = tl.get("direction", "below")
+        vals = trajplot.opt_vals["values"].squeeze()
+        t = last_iter["t_opt"][:len(vals)]
+        if direction == "below":
+            crossed = np.where(vals[:-1] >= threshold, vals[1:] < threshold, False)
+        else:
+            crossed = np.where(vals[:-1] <= threshold, vals[1:] > threshold, False)
+        idx = np.argmax(crossed)
+        if not crossed[idx]:
+            continue
+        v0, v1 = vals[idx], vals[idx + 1]
+        dv = v1 - v0
+        if abs(dv) < 1e-12:
+            return float(t[idx])
+        frac = (threshold - v0) / dv
+        return float(t[idx] + frac * (t[idx + 1] - t[idx]))
+    return None
 
 
 _NOT_FOUND = object()

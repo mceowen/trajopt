@@ -106,6 +106,7 @@ class time_series:
 
         self.upper_limit = trajplot_config.get("upper_limit")
         self.lower_limit = trajplot_config.get("lower_limit")
+        self.trigger_line = trajplot_config.get("trigger_line")
         self.upper_limit_batched = None
         self.lower_limit_batched = None
 

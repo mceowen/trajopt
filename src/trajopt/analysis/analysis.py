@@ -106,6 +106,7 @@ def analyze_segment(subprob, config):
                 "markers":      getattr(trajplot, "markers", None),
                 "invert_x":     getattr(trajplot, "invert_x", False),
                 "show_iters":   getattr(trajplot, "show_iters", None),
+                "trigger_line": getattr(trajplot, "trigger_line", None),
             })
 
             trajplot_data.setdefault(trajplot.group, AttrDict({}))[trajplot.name] = output
