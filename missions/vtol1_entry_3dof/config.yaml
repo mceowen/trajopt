@@ -48,26 +48,26 @@ trajectory:
 
         bank_angle_rate_limit:
           type: control_rate_limit
-          value: [5]
+          value: [10]
           idx: [0]
 
-        # max_Q:
-        #   type: nonconvex_inequality
-        #   fcn: "fcns.heat_rate"
-        #   upper: 3.3300
-        #   scale: [3.3300]
+        max_Q:
+          type: nonconvex_inequality
+          fcn: "fcns.heat_rate"
+          upper: 3.3300
+          scale: [3.3300]
 
-        # max_q:
-        #   type: nonconvex_inequality
-        #   fcn: fcns.dynamic_pressure
-        #   upper: 18.000
-        #   scale: [18.000]
+        max_q:
+          type: nonconvex_inequality
+          fcn: fcns.dynamic_pressure
+          upper: 18.000
+          scale: [18.000]
 
-        # max_load:
-        #   type: nonconvex_inequality
-        #   fcn: fcns.aero_load
-        #   upper: 2.5
-        #   scale: [2.5]
+        max_load:
+          type: nonconvex_inequality
+          fcn: fcns.aero_load
+          upper: 2.5
+          scale: [2.5]
 
         final_time:
           type: final_time

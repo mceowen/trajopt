@@ -1,7 +1,7 @@
 method:
-  inherit: trajopt/methods/configs/autoscvx-ps.yaml
+  inherit: trajopt/methods/configs/autoscvx.yaml
 
-  conv:
+  flags:
     iter_max: 200
 
   solver_opts:
@@ -10,7 +10,7 @@ method:
 trajectory:
   segments:
     entry:
-      num_nodes: 101
+      num_nodes: 50
       inherit: ../../models/configs/reentry_3dof.yaml
 
       fcns:
@@ -36,7 +36,8 @@ trajectory:
 
         state_limits:
           type: state_limits
-          lower: ["${params.planet.r}", null, null, 50, null, null]
+          lower: ["${params.planet.r}",         -90, -90,    50,  -10, -90]
+          upper: ["${params.planet.r + 100e3}",  90,  90,  6000,   10, 90]
 
         control_limits:
           type: control_limits
@@ -63,7 +64,7 @@ trajectory:
       guess:
         type: propagation
         t_start: 0.0
-        t_stop: 2000.0
+        t_stop: 1000.0
         u_start: [0.0, 15.0]
         u_stop:  [0.0, 15.0]
 

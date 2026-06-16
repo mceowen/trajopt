@@ -48,7 +48,7 @@ trajectory:
           upper: [3.0, 3.0]
 
         obstacle:
-          type: ctcs_nonconvex_inequality
+          type: nonconvex_inequality
           fcn: fcns.obstacle
           lower: ["${params.obs1_r}", "${params.obs2_r}"]
 
@@ -56,7 +56,7 @@ trajectory:
         u_squared:
           type: nonconvex_running
           fcn: fcns.u_squared_cost
-          w: 10
+          w: 1
 
       guess:
         type: straight_line

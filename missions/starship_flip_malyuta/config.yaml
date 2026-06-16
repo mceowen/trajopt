@@ -11,7 +11,7 @@ trajectory:
           type: initial_state
           value: [100.0, 600.0, 0, "${-params.vterm}", "${np.deg2rad(90.0)}", 0.0]
 
-        three_engine_control_limits:
+        control_limits:
           type: control_limits
           lower: ["${3 * 880000}", "${np.deg2rad(-10)}"]
           upper: [6000000, "${np.deg2rad(10)}"]

@@ -12,7 +12,7 @@ trajectory:
         planet:
           inherit: ../configs/planets/mars.yaml
         vehicle:
-          inherit: ../../local/vehicles/msrl.yaml
+          inherit: ../configs/vehicles/msrl.yaml
 
         # density polynomial coefficients
         a: -4.418967

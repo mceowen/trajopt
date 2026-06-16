@@ -1,16 +1,13 @@
 method:
   inherit: trajopt/methods/configs/autoscvx.yaml
 
-  flags:
-    discretize: ps
-
   solver_opts:
-    solver: QOCO
+    solver: CLARABEL
 
 trajectory:
   segments:
     flight:
-      num_nodes: 40
+      num_nodes: 20
       inherit: ../../models/configs/quadrotor_3dof.yaml
 
       fcns:
@@ -22,6 +19,8 @@ trajectory:
         pos_y:       ../../models/quadrotor_3dof.py:pos_y
         xz:          ../../models/quadrotor_3dof.py:xz
         yz:          ../../models/quadrotor_3dof.py:yz
+        one:         ../../models/quadrotor_3dof.py:one
+        u_squared:   ../../models/quadrotor_3dof.py:u_squared
 
       params:
         planet:
@@ -41,24 +40,20 @@ trajectory:
         final_state:
           type: final_state
           value: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
-          eps: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
 
         max_thrust:
           type: convex_inequality
           fcn: fcns.max_thrust_cone
-          scale: [1.0]
 
         min_thrust:
           type: nonconvex_inequality
           fcn: fcns.thrust_norm
           lower: "${params.vehicle.T_min}"
-          scale: [1.0]
 
         obstacle:
-          type: nonconvex_inequality
+          type: ctcs_nonconvex_inequality
           fcn: fcns.obstacle
           lower: 4.0
-          scale: [4.0]
 
         final_time:
           type: final_time
@@ -66,24 +61,18 @@ trajectory:
           upper: 10.0
 
       costs:
-        min_time:
-          type: min_time
-
-      trajplots:
-        xz:
-          type: spatial
-          fcn: fcns.xz
-          group: stc_check
-
-        yz:
-          type: spatial
-          fcn: fcns.yz
-          group: stc_check
+        # min_time:
+        #   type: nonconvex_running
+        #   fcn: fcns.one
+        
+        min_control_effort:
+          type: nonconvex_running
+          fcn: fcns.u_squared
 
       guess:
         type: straight_line
         t_start: 0.0
-        t_stop: 3.0
+        t_stop: 10.0
         x_start: [0.0, 0.0, 5.0, 0.0, 0.5, 0.0]
         x_stop: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
         u_start: [0, 0, 1]
