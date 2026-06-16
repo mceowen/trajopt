@@ -120,6 +120,7 @@ class scp_dynamics(SCPConstraint):
         N   = scp_segment.index_map.N.all
         n_z = scp_segment.index_map.n.z
         self._alloc_penalty(scp_segment, (N - 1, n_z))
+        self.lagrangian_dual = np.zeros((N - 1, n_z))
 
     def create_cvxpy_parameters(self, scp_segment):
         N, n_z, n_nu = scp_segment.index_map.N.all, scp_segment.index_map.n.z, scp_segment.index_map.n.nu
@@ -194,7 +195,7 @@ class scp_dynamics(SCPConstraint):
             scp_segment.cp_params.ps_Bc.value    = Bc_col
 
             if getattr(scp_segment.flags, 'second_order', True):
-                lam_refs = jnp.asarray(scp_segment.lagrangian_duals.dynamics)
+                lam_refs = jnp.asarray(self.lagrangian_dual)
                 z_col    = jnp.asarray(z_opt[1:])
                 nu_col   = jnp.asarray(nu_opt[1:])
                 self.ps_H_z, self.ps_H_nu = self.ps_cnstr_hessians(lam_refs, z_col, nu_col, scp_segment.params)
@@ -244,6 +245,11 @@ class scp_dynamics(SCPConstraint):
             z_minus    = np.asarray(self.propagate(ks, z_ref_ks, nu_ref_ks, nu_ref_kps, scp_segment.params))
             scp_segment.current_iter_data.defect = z_opt[1:] - z_minus
 
+        if hasattr(scp_segment, 'cp_dyn_constraints') and scp_segment.cp_dyn_constraints:
+            alpha = scp_segment.current_iter_data.get("alpha", 1.0)
+            lam = np.array([c.dual_value for c in scp_segment.cp_dyn_constraints])
+            self.lagrangian_dual = (1.0 - alpha) * self.lagrangian_dual + alpha * lam
+
     def compile_merit_penalty(self, scp_segment):
         if self.W.size == 0:
             return
@@ -277,7 +283,6 @@ class scp_dynamics(SCPConstraint):
         z_ref_ks   = jnp.asarray(z_ref_np[:-1])
         nu_ref_ks  = jnp.asarray(nu_ref_np[:-1])
         nu_ref_kps = jnp.asarray(nu_ref_np[1:])
-        lam_refs   = jnp.asarray(scp_segment.lagrangian_duals.dynamics)
         params     = segment.params
 
         ks = jnp.arange(segment.index_map.N.all - 1)
@@ -286,6 +291,7 @@ class scp_dynamics(SCPConstraint):
         A_jax, B_jax, Bp_jax = self.propagate_jacobians(ks, z_ref_ks, nu_ref_ks, nu_ref_kps, params)
 
         if getattr(scp_segment.flags, 'second_order', True):
+            lam_refs = jnp.asarray(self.lagrangian_dual)
             self.H_z_k, self.H_nu_k, self.H_nu_kp = self.cnstr_hessians(ks, lam_refs, z_ref_ks, nu_ref_ks, nu_ref_kps, params)
 
         z_ref_0 = z_ref_ks[[0], :]

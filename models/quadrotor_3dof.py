@@ -88,6 +88,11 @@ def thrust_y(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> 
 def thrust_z(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
     return jnp.array([u[2]])
 
+def one(x, u, t, params, fcns):
+    return jnp.array([1.0])
+
+def u_squared(x, u, t, params, fcns):
+    return jnp.array([jnp.sum(jnp.square(u))])
 
 def obstacle_xy(params, ax) -> np.ndarray:
     """Circle boundary of the obstacle in the xy-plane (center (5,5), radius 4)."""

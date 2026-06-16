@@ -18,8 +18,18 @@ class SCPConstraint():
         self.vb_type    = "standard"
         self.W          = np.zeros(0)
         self.dual       = np.zeros(0)
-        self.W_sqrt_param    = None
-        self.dual_param = None
+        self.W_p        = np.zeros(0)
+        self.W_m        = np.zeros(0)
+        self.dual_p     = np.zeros(0)
+        self.dual_m     = np.zeros(0)
+        self.vb_p       = np.zeros(0)
+        self.vb_m       = np.zeros(0)
+        self.W_sqrt_param = None
+        self.dual_param   = None
+        self.W_p_sqrt_param = None
+        self.W_m_sqrt_param = None
+        self.dual_p_param   = None
+        self.dual_m_param   = None
         self.vb_var     = None
         self.vb_p_var   = None
         self.vb_m_var   = None
@@ -51,14 +61,27 @@ class SCPConstraint():
         if self.penalty and hasattr(self.penalty, 'W') and self.penalty.W.penalty:
             self.W    = np.full(shape, float(self.penalty.W.init))
             self.dual = np.full(shape, float(self.penalty.dual.init))
+            if self.vb_type == "split":
+                self.W_p    = np.full(shape, float(self.penalty.W.init))
+                self.W_m    = np.full(shape, float(self.penalty.W.init))
+                self.dual_p = np.full(shape, float(self.penalty.dual.init))
+                self.dual_m = np.full(shape, float(self.penalty.dual.init))
+                self.vb_p   = np.zeros(shape)
+                self.vb_m   = np.zeros(shape)
 
     def create_penalty_parameters(self, scp_segment):
         if self.shape is None:
             return
         if self.vb_type == "none":
             return
-        self.W_sqrt_param    = cp.Parameter(self.shape, nonneg=True, name=f"W_{self.name}_sqrt", value=np.zeros(self.shape))
-        self.dual_param = cp.Parameter(self.shape, name=f"dual_{self.name}", value=np.zeros(self.shape))
+        if self.vb_type == "split":
+            self.W_p_sqrt_param = cp.Parameter(self.shape, nonneg=True, name=f"W_p_{self.name}_sqrt", value=np.zeros(self.shape))
+            self.W_m_sqrt_param = cp.Parameter(self.shape, nonneg=True, name=f"W_m_{self.name}_sqrt", value=np.zeros(self.shape))
+            self.dual_p_param   = cp.Parameter(self.shape, name=f"dual_p_{self.name}", value=np.zeros(self.shape))
+            self.dual_m_param   = cp.Parameter(self.shape, name=f"dual_m_{self.name}", value=np.zeros(self.shape))
+        else:
+            self.W_sqrt_param = cp.Parameter(self.shape, nonneg=True, name=f"W_{self.name}_sqrt", value=np.zeros(self.shape))
+            self.dual_param   = cp.Parameter(self.shape, name=f"dual_{self.name}", value=np.zeros(self.shape))
 
     def create_penalty_variables(self, scp_segment):
         if self.shape is None:
@@ -73,26 +96,39 @@ class SCPConstraint():
             self.vb_var = cp.Variable(self.shape, name=f"vb_{self.name}_{scp_segment.name}")
 
     def add_penalty_cost(self, scp_segment):
-        if self.W_sqrt_param is None:
-            return
         if self.vb_type == "split":
-            scp_segment.cp_cost += 0.5 * cp.sum_squares(cp.multiply(self.W_sqrt_param, self.vb_p_var))
-            scp_segment.cp_cost += 0.5 * cp.sum_squares(cp.multiply(self.W_sqrt_param, self.vb_m_var))
-            scp_segment.cp_cost += cp.sum(cp.multiply(self.dual_param, self.vb_p_var - self.vb_m_var))
+            if self.W_p_sqrt_param is None:
+                return
+            scp_segment.cp_cost += 0.5 * cp.sum_squares(cp.multiply(self.W_p_sqrt_param, self.vb_p_var))
+            scp_segment.cp_cost += 0.5 * cp.sum_squares(cp.multiply(self.W_m_sqrt_param, self.vb_m_var))
+            scp_segment.cp_cost += cp.sum(cp.multiply(self.dual_p_param, self.vb_p_var))
+            scp_segment.cp_cost += cp.sum(cp.multiply(self.dual_m_param, self.vb_m_var))
         else:
+            if self.W_sqrt_param is None:
+                return
             scp_segment.cp_cost += 0.5 * cp.sum_squares(cp.multiply(self.W_sqrt_param, self.vb_var))
             scp_segment.cp_cost += cp.sum(cp.multiply(self.dual_param, self.vb_var))
 
     def update_penalty_parameters(self, scp_segment):
-        if self.W_sqrt_param is not None:
-            self.W_sqrt_param.value = np.sqrt(self.W)
-        if self.dual_param is not None:
-            self.dual_param.value = self.dual
+        if self.vb_type == "split":
+            if self.W_p_sqrt_param is not None:
+                self.W_p_sqrt_param.value = np.sqrt(self.W_p)
+                self.W_m_sqrt_param.value = np.sqrt(self.W_m)
+            if self.dual_p_param is not None:
+                self.dual_p_param.value = self.dual_p
+                self.dual_m_param.value = self.dual_m
+        else:
+            if self.W_sqrt_param is not None:
+                self.W_sqrt_param.value = np.sqrt(self.W)
+            if self.dual_param is not None:
+                self.dual_param.value = self.dual
 
     def read_vb(self, scp_segment):
         if self.vb_var is not None:
             if self.vb_type == "split":
-                self.vb = np.array(self.vb_p_var.value) - np.array(self.vb_m_var.value)
+                self.vb_p = np.array(self.vb_p_var.value)
+                self.vb_m = np.array(self.vb_m_var.value)
+                self.vb   = self.vb_p - self.vb_m
             else:
                 self.vb = np.array(self.vb_var.value)
 
@@ -102,52 +138,81 @@ class SCPConstraint():
         if not hasattr(self.penalty, 'W'):
             return
 
-        if self.penalty.W.autotune:
-            Wh = self.W * np.abs(self.vb) / (0.01 * self.eps)
-            self.W = np.clip(Wh, 0.0001, 1e8)
-            # self.W = 1e8 * np.ones_like(self.W)
+        if self.vb_type == "split":
+            if self.penalty.W.autotune:
+                Wh_p = self.W_p * self.vb_p / (0.9 * self.eps)
+                Wh_m = self.W_m * self.vb_m / (0.9 * self.eps)
+                self.W_p = np.clip(Wh_p, 0.0001, 1e8)
+                self.W_m = np.clip(Wh_m, 0.0001, 1e8)
+            if self.penalty.dual.autotune:
+                self.dual_p = self.dual_p + 0.1 * self.vb_p
+                self.dual_m = self.dual_m + 0.1 * self.vb_m
+        else:
 
-        if self.penalty.dual.autotune:
-            dual_new = self.dual + 1.0 * self.vb
+            if self.penalty.dual.autotune:
+                dual_new = self.dual + 0.1 * self.vb
+                if self.nonnegative_dual:
+                    self.dual = np.maximum(0.0, dual_new)
+                else:
+                    self.dual = dual_new
 
-            if self.nonnegative_dual:
-                self.dual = np.maximum(0.0, dual_new)
-            else:
-                self.dual = dual_new
+            
+            if self.penalty.W.autotune:
+                Wh = self.W * np.abs(self.vb) / (1.0 * self.eps)
+                self.W = np.clip(Wh, 0.00001, 1e10)
 
     def _compile_merit_penalty(self, violation):
-        if self.W.size == 0:
-            return
-
         if self.vb_type == "split":
-            def merit_eval(z, nu, W, dual, params):
+            if self.W_p.size == 0:
+                return
+            def merit_eval(z, nu, W_p, W_m, dual_p, dual_m, params):
                 viol = violation(z, nu, params)
                 viol_p = jnp.maximum(viol, 0.0)
                 viol_m = jnp.maximum(-viol, 0.0)
-                return (jnp.sum(dual * (viol_p - viol_m))
-                        + 0.5 * jnp.sum(W * viol_p ** 2)
-                        + 0.5 * jnp.sum(W * viol_m ** 2))
+                return (jnp.sum(dual_p * viol_p) + jnp.sum(dual_m * viol_m)
+                        + 0.5 * jnp.sum(W_p * viol_p ** 2)
+                        + 0.5 * jnp.sum(W_m * viol_m ** 2))
+
+            def merit_line(alpha, z_ref, dz, nu_ref, dnu, W_p, W_m, dual_p, dual_m, params):
+                return merit_eval(z_ref + alpha * dz, nu_ref + alpha * dnu, W_p, W_m, dual_p, dual_m, params)
+
+            self._merit_eval = jax.jit(merit_eval)
+            self._merit_vg   = jax.jit(jax.value_and_grad(merit_line, argnums=0))
         else:
+            if self.W.size == 0:
+                return
             def merit_eval(z, nu, W, dual, params):
                 viol = violation(z, nu, params)
                 return jnp.sum(dual * viol) + 0.5 * jnp.sum(W * viol ** 2)
 
-        def merit_line(alpha, z_ref, dz, nu_ref, dnu, W, dual, params):
-            return merit_eval(z_ref + alpha * dz, nu_ref + alpha * dnu, W, dual, params)
+            def merit_line(alpha, z_ref, dz, nu_ref, dnu, W, dual, params):
+                return merit_eval(z_ref + alpha * dz, nu_ref + alpha * dnu, W, dual, params)
 
-        self._merit_eval = jax.jit(merit_eval)
-        self._merit_vg   = jax.jit(jax.value_and_grad(merit_line, argnums=0))
+            self._merit_eval = jax.jit(merit_eval)
+            self._merit_vg   = jax.jit(jax.value_and_grad(merit_line, argnums=0))
 
     def evaluate_merit(self, z, nu, params):
         if not hasattr(self, '_merit_eval'):
             return 0.0
+        if self.vb_type == "split":
+            return float(self._merit_eval(
+                z, nu,
+                jnp.asarray(self.W_p), jnp.asarray(self.W_m),
+                jnp.asarray(self.dual_p), jnp.asarray(self.dual_m),
+                params))
         return float(self._merit_eval(z, nu, jnp.asarray(self.W), jnp.asarray(self.dual), params))
 
     def merit_value_and_grad_alpha(self, alpha, z_ref, dz, nu_ref, dnu, params):
         if not hasattr(self, '_merit_vg'):
             return 0.0, 0.0
-        v, g = self._merit_vg(alpha, z_ref, dz, nu_ref, dnu, jnp.asarray(self.W), jnp.asarray(self.dual), params)
-        
+        if self.vb_type == "split":
+            v, g = self._merit_vg(
+                alpha, z_ref, dz, nu_ref, dnu,
+                jnp.asarray(self.W_p), jnp.asarray(self.W_m),
+                jnp.asarray(self.dual_p), jnp.asarray(self.dual_m),
+                params)
+        else:
+            v, g = self._merit_vg(alpha, z_ref, dz, nu_ref, dnu, jnp.asarray(self.W), jnp.asarray(self.dual), params)
         return float(v), float(g)
 
     @property

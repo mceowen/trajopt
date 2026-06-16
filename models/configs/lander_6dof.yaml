@@ -76,7 +76,7 @@ state:
 control:
   thrust:
     idx: [0, 1, 2]
-    scale: 100
+    scale: 1
 
 time:
   scale: 1.0
@@ -106,9 +106,9 @@ trajplots:
     type: time_series
     fcn: fcns.quat_vec
     group: state
-    title: "Quaternion vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Quaternion"
+    title: Quaternion vs Time
+    xlabel: Time (s)
+    ylabel: Quaternion
 
   angular_velocity:
     type: time_series
@@ -122,25 +122,25 @@ trajplots:
     type: time_series
     fcn: fcns.thrust_x
     group: control
-    title: "Tx vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Tx (N)"
+    title: Tx vs Time
+    xlabel: Time (s)
+    ylabel: Tx (N)
 
   thrust_y:
     type: time_series
     fcn: fcns.thrust_y
     group: control
-    title: "Ty vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Ty (N)"
+    title: Ty vs Time
+    xlabel: Time (s)
+    ylabel: Ty (N)
 
   thrust_z:
     type: time_series
     fcn: fcns.thrust_z
     group: control
-    title: "Tz vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Tz (N)"
+    title: Tz vs Time
+    xlabel: Time (s)
+    ylabel: Tz (N)
 
   thrust_mag:
     type: time_series
@@ -243,8 +243,9 @@ trajplots:
     group: stl_constraints
     title: "Altitude vs Time"
     xlabel: "Time (s)"
-    ylabel: "Altitude"
+    ylabel: "Altitude (m)"
     upper_limit: ${params.alt_trigger}
+    lower_limit: 0
     trigger_line:
       threshold: ${params.alt_trigger}
       direction: below
@@ -284,13 +285,4 @@ trajplots:
     xlabel: "Time (s)"
     ylabel: "Angle (deg)"
     upper_limit: ${params.theta_tilt}
-
-  stl_los:
-    type: time_series
-    fcn: fcns.los_traj
-    group: stl_constraints
-    title: "LOS Angle vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Angle (deg)"
-    upper_limit: ${params.los_limit}
 

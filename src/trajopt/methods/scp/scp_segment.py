@@ -87,9 +87,13 @@ class SCPSegment():
             "z_opt": self.initial_guess.z,
             "nu_opt": self.initial_guess.nu,
             "cost": 0.0,
-            "vb":   AttrDict({c.name: c.vb   for c in self.constraints.values() if c.shape is not None}),
-            "W":    AttrDict({c.name: c.W    for c in self.constraints.values() if c.shape is not None}),
-            "dual": AttrDict({c.name: c.dual for c in self.constraints.values() if c.shape is not None}),
+            "vb":     AttrDict({c.name: c.vb     for c in self.constraints.values() if c.shape is not None}),
+            "W":      AttrDict({c.name: c.W      for c in self.constraints.values() if c.shape is not None}),
+            "dual":   AttrDict({c.name: c.dual   for c in self.constraints.values() if c.shape is not None}),
+            "W_p":    AttrDict({c.name: c.W_p    for c in self.constraints.values() if c.vb_type == "split"}),
+            "W_m":    AttrDict({c.name: c.W_m    for c in self.constraints.values() if c.vb_type == "split"}),
+            "dual_p": AttrDict({c.name: c.dual_p for c in self.constraints.values() if c.vb_type == "split"}),
+            "dual_m": AttrDict({c.name: c.dual_m for c in self.constraints.values() if c.vb_type == "split"}),
         })
 
         self.iter_data_list.append(copy.deepcopy(self.current_iter_data))
@@ -306,7 +310,7 @@ class SCPSegment():
         for cost in self.costs.values():
             cost.accumulate_hessian(self, H)
 
-        self.cp_params.L.value = _psd_sqrt(H, delta=1e-10)
+        self.cp_params.L.value = _psd_sqrt(H)
 
     def read_solution(self) -> None:
         self._dz_new  = self.dz.value
@@ -346,9 +350,13 @@ class SCPSegment():
 
         self.current_iter_data.iter_num += 1
 
-        self.current_iter_data.vb   = AttrDict({c.name: c.vb   for c in self.constraints.values() if c.shape is not None})
-        self.current_iter_data.W    = AttrDict({c.name: c.W    for c in self.constraints.values() if c.shape is not None})
-        self.current_iter_data.dual = AttrDict({c.name: c.dual for c in self.constraints.values() if c.shape is not None})
+        self.current_iter_data.vb     = AttrDict({c.name: c.vb     for c in self.constraints.values() if c.shape is not None})
+        self.current_iter_data.W      = AttrDict({c.name: c.W      for c in self.constraints.values() if c.shape is not None})
+        self.current_iter_data.dual   = AttrDict({c.name: c.dual   for c in self.constraints.values() if c.shape is not None})
+        self.current_iter_data.W_p    = AttrDict({c.name: c.W_p    for c in self.constraints.values() if c.vb_type == "split"})
+        self.current_iter_data.W_m    = AttrDict({c.name: c.W_m    for c in self.constraints.values() if c.vb_type == "split"})
+        self.current_iter_data.dual_p = AttrDict({c.name: c.dual_p for c in self.constraints.values() if c.vb_type == "split"})
+        self.current_iter_data.dual_m = AttrDict({c.name: c.dual_m for c in self.constraints.values() if c.vb_type == "split"})
 
         convergence.check_convergence_tolerance(self)
 
@@ -359,7 +367,7 @@ class SCPSegment():
         for constraint in self.constraints.values():
             constraint.update_W_dual(self, alpha)
 
-def _psd_sqrt(H_batch, delta=1e-6):
+def _psd_sqrt(H_batch, delta=1e-10):
     eigvals, eigvecs = np.linalg.eigh(H_batch)
     eigvals_reg = np.maximum(eigvals, delta)
     sqrt_eigvals = np.sqrt(eigvals_reg)

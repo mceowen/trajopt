@@ -1,5 +1,3 @@
-from typing import Any
-
 import cvxpy as cp
 import jax.numpy as jnp
 import numpy as np

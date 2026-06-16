@@ -34,7 +34,7 @@ def _root_sum_of_product_terms(terms: ArrayLike, c: float) -> Array:
     return jnp.exp(jnp.logaddexp(log_prod, log_c_term) / k)
 
 
-def smooth_inequality(y: ArrayLike, c: float = 1e-6) -> Array:
+def smooth_inequality(y: ArrayLike, c: float = 1e-4) -> Array:
     """
     Smooth penalty for inequality constraints.
 
@@ -44,7 +44,7 @@ def smooth_inequality(y: ArrayLike, c: float = 1e-6) -> Array:
     return jnp.sqrt(jnp.maximum(y, 0.0) ** 2 + c**2) - c
 
 
-def smooth_equality(y: ArrayLike, c: float = 1e-6) -> Array:
+def smooth_equality(y: ArrayLike, c: float = 1e-4) -> Array:
     """
     Smooth penalty for equality constraints.
 
@@ -54,7 +54,7 @@ def smooth_equality(y: ArrayLike, c: float = 1e-6) -> Array:
     return jnp.sqrt(y**2 + c**2) - c
 
 
-def AND(y: ArrayLike, c: float = 1e-6) -> Array:
+def AND(y: ArrayLike, c: float = 1e-4) -> Array:
     """
     Smooth parameterization for conjunction.
 
@@ -71,7 +71,7 @@ def AND(y: ArrayLike, c: float = 1e-6) -> Array:
     return jnp.sqrt(mp) - jnp.sqrt(m0)
 
 
-def OR(y: ArrayLike, c: float = 1e-6) -> Array:
+def OR(y: ArrayLike, c: float = 1e-4) -> Array:
     """
     Smooth parameterization for disjunction.
 
@@ -81,7 +81,7 @@ def OR(y: ArrayLike, c: float = 1e-6) -> Array:
     return -AND(-y, c=c)
 
 
-def IfThen(y: ArrayLike, c: float = 1e-6) -> Array:
+def IfThen(y: ArrayLike, c: float = 1e-4) -> Array:
     """
     Smooth parameterization of implication.
 
@@ -92,7 +92,7 @@ def IfThen(y: ArrayLike, c: float = 1e-6) -> Array:
     return OR(jnp.array([-y[0], y[1]]), c=c)
 
 
-def integer_variable(y: ArrayLike, values: ArrayLike, c: float = 1e-6) -> Array:
+def integer_variable(y: ArrayLike, values: ArrayLike, c: float = 1e-4) -> Array:
     """
     Smooth parameterization for discrete/integer-valued variables.
 
@@ -103,7 +103,7 @@ def integer_variable(y: ArrayLike, values: ArrayLike, c: float = 1e-6) -> Array:
     return OR(smooth_equality(y - values, c=c), c=c)
 
 
-def AND_lite(y: ArrayLike, c: float = 1e-6) -> Array:
+def AND_lite(y: ArrayLike, c: float = 1e-4) -> Array:
     """
     Lite version of the conjunction (AND) operator.
     Considers only the positive part of the AND function.
@@ -116,7 +116,7 @@ def AND_lite(y: ArrayLike, c: float = 1e-6) -> Array:
     return jnp.sqrt(mp) - jnp.sqrt(c)
 
 
-def OR_lite(y: ArrayLike, c: float = 1e-6) -> Array:
+def OR_lite(y: ArrayLike, c: float = 1e-4) -> Array:
     """
     Lite version of the disjunction (OR) operator.
     Considers only the positive part of the OR function.
@@ -129,7 +129,7 @@ def OR_lite(y: ArrayLike, c: float = 1e-6) -> Array:
     return jnp.sqrt(m0) - jnp.sqrt(c)
 
 
-def IfThen_lite(y: ArrayLike, c: float = 1e-6) -> Array:
+def IfThen_lite(y: ArrayLike, c: float = 1e-4) -> Array:
     """
     Lite version of implication (IfThen) operator.
     Considers only the positive part of the IfThen function.
@@ -184,15 +184,15 @@ class stl_expr:
 
     def __and__(self, other):
         f1, f2 = self._fcn, other._fcn
-        return stl_expr(lambda x, u, t, params: AND(jnp.array([f1(x, u, t, params), f2(x, u, t, params)])))
+        return stl_expr(lambda x, u, t, params: AND_lite(jnp.array([f1(x, u, t, params), f2(x, u, t, params)])))
 
     def __or__(self, other):
         f1, f2 = self._fcn, other._fcn
-        return stl_expr(lambda x, u, t, params: OR(jnp.array([f1(x, u, t, params), f2(x, u, t, params)])))
+        return stl_expr(lambda x, u, t, params: OR_lite(jnp.array([f1(x, u, t, params), f2(x, u, t, params)])))
 
     def __rshift__(self, other):
         f1, f2 = self._fcn, other._fcn
-        return stl_expr(lambda x, u, t, params: IfThen(jnp.array([f1(x, u, t, params), f2(x, u, t, params)])))
+        return stl_expr(lambda x, u, t, params: IfThen_lite(jnp.array([f1(x, u, t, params), f2(x, u, t, params)])))
 
     def implies(self, other):
         return self.__rshift__(other)

@@ -93,6 +93,14 @@ def tilt(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Arra
     cos_theta_limit = jnp.cos(jnp.deg2rad(params.theta_tilt))
     return jnp.array([cos_theta_limit - cos_tilt])
 
+def tilt2(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
+    """Tilt angle from vertical (degrees) via quaternion."""
+    q2 = x[9]
+    q3 = x[10]
+    cos_tilt = 1.0 - 2 * (q2**2 + q3**2)
+    cos_theta_limit = jnp.cos(jnp.deg2rad(params.theta_tilt2))
+    return jnp.array([cos_theta_limit - cos_tilt])
+
 
 def los(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
     """Line-of-sight angle: angle between body x-axis and vertical (degrees)."""

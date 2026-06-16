@@ -136,7 +136,8 @@ def plot(traj_analyzer, data):
                     ax.set_ylim(traj_cfg["ylim"])
             else:
                 t = last_iter["t_opt"]
-                _set_time_series_limits(ax, t[:vals.shape[0]], vals)
+                _set_time_series_limits(ax, t[:vals.shape[0]], vals,
+                                        limits=trajplot.nl_vals.get("limits", {}))
                 if trigger_time is not None:
                     ax.axvline(trigger_time, color='gray', ls='--', lw=0.8, alpha=0.7, zorder=1)
 
@@ -272,7 +273,8 @@ def plot_method_variation(traj_analyzer, data):
                 r = all_ts_ranges[key]
                 t_arr = np.array([r["t_min"], r["t_max"]])
                 v_arr = np.array([r["v_min"], r["v_max"]])
-                _set_time_series_limits(ax, t_arr, v_arr)
+                _set_time_series_limits(ax, t_arr, v_arr,
+                                        limits=trajplot.nl_vals.get("limits", {}))
                 if trigger_time is not None:
                     ax.axvline(trigger_time, color='gray', ls='--', lw=0.8, alpha=0.7, zorder=1)
 
@@ -514,9 +516,18 @@ def _set_equal_aspect_3d(ax):
     ax.set_zlim(zlim.mean() - max_span / 2, zlim.mean() + max_span / 2)
 
 
-def _set_time_series_limits(ax, t, vals, margin=0.08):
+def _set_time_series_limits(ax, t, vals, margin=0.08, limits=None):
     ax.set_xlim(*_padded_lim(t.min(), t.max(), margin))
-    ax.set_ylim(*_padded_lim(vals.min(), vals.max(), margin))
+    vmin, vmax = vals.min(), vals.max()
+    if limits:
+        for lim in (limits.get("upper"), limits.get("lower")):
+            if lim is None:
+                continue
+            if isinstance(lim, np.ndarray):
+                vmin, vmax = min(vmin, lim.min()), max(vmax, lim.max())
+            elif isinstance(lim, (int, float)):
+                vmin, vmax = min(vmin, lim), max(vmax, lim)
+    ax.set_ylim(*_padded_lim(vmin, vmax, margin))
 
 
 def _include_quiver_extents(all_vals, traj):
@@ -612,17 +623,22 @@ def _convergence_weight_plot(subprob, suffix, save=True):
 
     has_W    = hasattr(iters[0], 'W')    and iters[0].W
     has_dual = hasattr(iters[0], 'dual') and iters[0].dual
+    has_split = hasattr(iters[0], 'W_p') and iters[0].W_p
 
-    if not has_W and not has_dual:
+    if not has_W and not has_dual and not has_split:
         return
 
     k = np.arange(1, len(iters) + 1)
     fig, axes = plt.subplots(1, 2, figsize=(14, 4.5))
 
-    if has_W:
+    if has_split:
         ax = axes[0]
+        for ct in iters[0].W_p.keys():
+            ax.semilogy(k, [np.mean(it.W_p[ct]) for it in iters], 'o-', ms=3, label=f'{ct} (+)')
+            ax.semilogy(k, [np.mean(it.W_m[ct]) for it in iters], 's--', ms=3, label=f'{ct} (-)')
         for ct in iters[0].W.keys():
-            ax.semilogy(k, [np.mean(it.W[ct]) for it in iters], 'o-', ms=3, label=ct)
+            if ct not in iters[0].W_p:
+                ax.semilogy(k, [np.mean(it.W[ct]) for it in iters], 'o-', ms=3, label=ct)
         ax.set_xlabel('Iteration')
         ax.set_ylabel('Mean W')
         ax.set_title('Quadratic Penalty Weights', fontsize=plot_options.title_fontsize, pad=plot_options.title_pad)
@@ -630,16 +646,41 @@ def _convergence_weight_plot(subprob, suffix, save=True):
         ax.grid(True, alpha=0.3)
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
 
-    if has_dual:
         ax = axes[1]
+        for ct in iters[0].dual_p.keys():
+            ax.semilogy(k, [np.mean(np.abs(it.dual_p[ct])) for it in iters], 'o-', ms=3, label=f'{ct} (+)')
+            ax.semilogy(k, [np.mean(np.abs(it.dual_m[ct])) for it in iters], 's--', ms=3, label=f'{ct} (-)')
         for ct in iters[0].dual.keys():
-            ax.semilogy(k, [np.mean(np.abs(it.dual[ct])) for it in iters], 'o-', ms=3, label=ct)
+            if ct not in iters[0].dual_p:
+                ax.semilogy(k, [np.mean(np.abs(it.dual[ct])) for it in iters], 'o-', ms=3, label=ct)
         ax.set_xlabel('Iteration')
         ax.set_ylabel(r'Mean $|\lambda|$')
         ax.set_title('Linear (Dual) Weights', fontsize=plot_options.title_fontsize, pad=plot_options.title_pad)
         ax.legend(fontsize=7, loc='best')
         ax.grid(True, alpha=0.3)
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    else:
+        if has_W:
+            ax = axes[0]
+            for ct in iters[0].W.keys():
+                ax.semilogy(k, [np.mean(it.W[ct]) for it in iters], 'o-', ms=3, label=ct)
+            ax.set_xlabel('Iteration')
+            ax.set_ylabel('Mean W')
+            ax.set_title('Quadratic Penalty Weights', fontsize=plot_options.title_fontsize, pad=plot_options.title_pad)
+            ax.legend(fontsize=7, loc='best')
+            ax.grid(True, alpha=0.3)
+            ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+
+        if has_dual:
+            ax = axes[1]
+            for ct in iters[0].dual.keys():
+                ax.semilogy(k, [np.mean(np.abs(it.dual[ct])) for it in iters], 'o-', ms=3, label=ct)
+            ax.set_xlabel('Iteration')
+            ax.set_ylabel(r'Mean $|\lambda|$')
+            ax.set_title('Linear (Dual) Weights', fontsize=plot_options.title_fontsize, pad=plot_options.title_pad)
+            ax.legend(fontsize=7, loc='best')
+            ax.grid(True, alpha=0.3)
+            ax.xaxis.set_major_locator(MaxNLocator(integer=True))
 
     plt.tight_layout()
     if save:

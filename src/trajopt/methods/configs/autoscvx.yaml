@@ -25,7 +25,7 @@ penalty:
       autotune: True
       init: 0.0
       beta: 1.0
-    vb: split
+    vb: standard
     eps: [0.0001]
 
 solver_opts:
