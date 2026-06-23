@@ -10,7 +10,7 @@ method:
 trajectory:
   segments:
     entry:
-      num_nodes: 150
+      num_nodes: 50
       inherit: ../../models/configs/reentry_3dof.yaml
 
       fcns:

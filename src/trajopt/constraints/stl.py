@@ -184,15 +184,15 @@ class stl_expr:
 
     def __and__(self, other):
         f1, f2 = self._fcn, other._fcn
-        return stl_expr(lambda x, u, t, params: AND_lite(jnp.array([f1(x, u, t, params), f2(x, u, t, params)])))
+        return stl_expr(lambda x, u, t, params: AND(jnp.array([f1(x, u, t, params), f2(x, u, t, params)])))
 
     def __or__(self, other):
         f1, f2 = self._fcn, other._fcn
-        return stl_expr(lambda x, u, t, params: OR_lite(jnp.array([f1(x, u, t, params), f2(x, u, t, params)])))
+        return stl_expr(lambda x, u, t, params: OR(jnp.array([f1(x, u, t, params), f2(x, u, t, params)])))
 
     def __rshift__(self, other):
         f1, f2 = self._fcn, other._fcn
-        return stl_expr(lambda x, u, t, params: IfThen_lite(jnp.array([f1(x, u, t, params), f2(x, u, t, params)])))
+        return stl_expr(lambda x, u, t, params: IfThen(jnp.array([f1(x, u, t, params), f2(x, u, t, params)])))
 
     def implies(self, other):
         return self.__rshift__(other)

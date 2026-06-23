@@ -8,7 +8,7 @@ from trajopt.utils.tools import AttrDict, resolve_function_from_string
 
 class Segment:
 
-    def __init__(self, name: str, segment_config: AttrDict) -> None:
+    def __init__(self, name: str, segment_config: AttrDict, method_config) -> None:
 
         self.name = name
         self.num_nodes = segment_config.num_nodes
@@ -36,6 +36,9 @@ class Segment:
         for cnstr_name, cnstr_config in segment_config.constraints.items():
             cnstr_config.name = cnstr_name
             cnstr_type = cnstr_config.type
+
+            if method_config.flags.ctcs == 1 and cnstr_type == "nonconvex_inequality":
+                cnstr_type = f"ctcs_{cnstr_config.type}"
             constraintClass = getattr(constraint_type_module, cnstr_type)
             self.constraints[cnstr_name] = constraintClass(cnstr_config, self)
 

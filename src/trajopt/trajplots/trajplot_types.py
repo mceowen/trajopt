@@ -109,6 +109,18 @@ class time_series:
         self.trigger_line = trajplot_config.get("trigger_line")
         self.upper_limit_batched = None
         self.lower_limit_batched = None
+        self.trigger_fcn_batched = None
+        self.trigger_value = trajplot_config.get("trigger_value")
+
+        trigger_fcn_str = trajplot_config.get("trigger_fcn")
+        if trigger_fcn_str is not None:
+            trig_fcn = tools.resolve_function_from_string(trigger_fcn_str, fcns)
+
+            def trigger_znu(z, nu, params, fcn=trig_fcn):
+                x, t, _, u, _ = index_map.unpack_znu(z, nu)
+                return fcn(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, jnp.asarray(t) * self.time_scale, params)
+
+            self.trigger_fcn_batched = jax.jit(jax.vmap(trigger_znu, in_axes=(0, 0, None)))
 
         if isinstance(self.upper_limit, str):
             upper_fcn = tools.resolve_function_from_string(self.upper_limit, fcns)
@@ -151,4 +163,7 @@ class time_series:
             upper = np.asarray(self.upper_limit_batched(z_jax, nu_jax, params)).flatten()
         if self.lower_limit_batched is not None:
             lower = np.asarray(self.lower_limit_batched(z_jax, nu_jax, params)).flatten()
-        return {"values": values, "limits": {"upper": upper, "lower": lower}, "quivers": []}
+        trigger_vals = None
+        if self.trigger_fcn_batched is not None:
+            trigger_vals = np.asarray(self.trigger_fcn_batched(z_jax, nu_jax, params)).flatten()
+        return {"values": values, "limits": {"upper": upper, "lower": lower}, "quivers": [], "trigger_vals": trigger_vals}

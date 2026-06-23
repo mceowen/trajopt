@@ -3,7 +3,7 @@
 trajectory:
   segments:
     three_engine_segment:
-      num_nodes: 10
+      num_nodes: 40
       inherit: common_segment.yaml
 
       constraints:
@@ -30,7 +30,7 @@ trajectory:
         u_stop: [500000, 0]
 
     single_engine_segment:
-      num_nodes: 20
+      num_nodes: 40
       inherit: common_segment.yaml
 
       constraints:

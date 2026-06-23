@@ -53,7 +53,6 @@ trajectory:
         #   type: nonconvex_inequality
         #   fcn: fcns.heat_rate
         #   upper: [5.5]
-        #   scale: 1.0
 
       costs:
         max_crossrange:
@@ -110,7 +109,7 @@ analysis:
 
 analysis:
   type: standalone
-  compute_iters: true
-  show_iters: true
-  show_convergence: true
-  show_weights: true
+  compute_iters: false
+  show_iters: false
+  show_convergence: false
+  show_weights: false

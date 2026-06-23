@@ -93,20 +93,21 @@ def analyze_segment(subprob, config):
                 continue
 
             output = AttrDict({
-                "name":         trajplot.name,
-                "type":         trajplot.type,
-                "opt_vals":     trajplot.compute_trajplot_values(z_opt,  nu_opt,  params),
-                "nl_vals":      trajplot.compute_trajplot_values(z_nl,   nu_nl,   params),
-                "init_nl_vals": trajplot.compute_trajplot_values(z_init, nu_init, params),
-                "title":        getattr(trajplot, "title", None),
-                "xlabel":       getattr(trajplot, "xlabel", None),
-                "ylabel":       getattr(trajplot, "ylabel", None),
-                "zlabel":       getattr(trajplot, "zlabel", None),
-                "tick_nbins":   getattr(trajplot, "tick_nbins", None),
-                "markers":      getattr(trajplot, "markers", None),
-                "invert_x":     getattr(trajplot, "invert_x", False),
-                "show_iters":   getattr(trajplot, "show_iters", None),
-                "trigger_line": getattr(trajplot, "trigger_line", None),
+                "name":          trajplot.name,
+                "type":          trajplot.type,
+                "opt_vals":      trajplot.compute_trajplot_values(z_opt,  nu_opt,  params),
+                "nl_vals":       trajplot.compute_trajplot_values(z_nl,   nu_nl,   params),
+                "init_nl_vals":  trajplot.compute_trajplot_values(z_init, nu_init, params),
+                "title":         getattr(trajplot, "title", None),
+                "xlabel":        getattr(trajplot, "xlabel", None),
+                "ylabel":        getattr(trajplot, "ylabel", None),
+                "zlabel":        getattr(trajplot, "zlabel", None),
+                "tick_nbins":    getattr(trajplot, "tick_nbins", None),
+                "markers":       getattr(trajplot, "markers", None),
+                "invert_x":      getattr(trajplot, "invert_x", False),
+                "show_iters":    getattr(trajplot, "show_iters", None),
+                "trigger_line":  getattr(trajplot, "trigger_line", None),
+                "trigger_value": getattr(trajplot, "trigger_value", None),
             })
 
             trajplot_data.setdefault(trajplot.group, AttrDict({}))[trajplot.name] = output

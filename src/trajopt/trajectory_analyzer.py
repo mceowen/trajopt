@@ -16,7 +16,7 @@ class TrajectoryAnalyzer():
         if method_overrides:
             self.config.method = deep_merge(self.config.method, recursive_attrdict(method_overrides))
 
-        self.trajectory = Trajectory(self.config.trajectory)
+        self.trajectory = Trajectory(self.config.trajectory, self.config.method)
         self.method = SCPMethod(self.config.method, self.trajectory)
         self._solved = False
 

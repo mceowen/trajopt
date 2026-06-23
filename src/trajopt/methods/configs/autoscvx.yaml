@@ -9,6 +9,7 @@ flags:
   discretize: ms
   eps_state: [0.001]
   iter_max: 300
+  ctcs:               0
 
 weights:
   alpha_z: 1.0
@@ -27,6 +28,8 @@ penalty:
       beta: 1.0
     vb: standard
     eps: [0.0001]
+
+  
 
 solver_opts:
   solver: QOCO

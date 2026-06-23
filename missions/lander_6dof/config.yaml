@@ -1,13 +1,20 @@
 method:
   inherit: trajopt/methods/configs/autoscvx.yaml
 
+  flags:
+    ctcs: 1
+
+  # penalty:
+  #   default:
+  #     vb: split
+
   solver_opts:
     solver: CLARABEL
 
 trajectory:
   segments:
     landing:
-      num_nodes: 15
+      num_nodes: 10
       inherit: ../../models/configs/lander_6dof.yaml
 
       params:
@@ -21,12 +28,12 @@ trajectory:
         theta_gimbal: 20
         theta_tilt2:   90
 
-        alt_trigger:         2.0
+        alt_trigger:         1.0
         
         speed_limit:         1.3
-        angular_speed_limit: 0.3
+        angular_speed_limit: 0.5
         theta_gs:            45
-        theta_tilt:          45
+        theta_tilt:          20
 
       fcns:
         altitude:      ../../models/lander_6dof.py:altitude
@@ -65,25 +72,17 @@ trajectory:
           fcn: fcns.thrust
           lower: "${params.min_thrust}"
 
-        # altitude_triggered_speed:
-        #   type: nonconvex_inequality
-        #   fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.speed <= ${params.speed_limit})"
+        altitude_triggered_speed:
+          type: nonconvex_inequality
+          fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.speed <= ${params.speed_limit})"
 
-        # altitude_triggered_angular_speed:
-        #   type: nonconvex_inequality
-        #   fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.angular_speed <= ${params.angular_speed_limit})"
+        altitude_triggered_angular_speed:
+          type: nonconvex_inequality
+          fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.angular_speed <= ${params.angular_speed_limit})"
 
-        # altitude_triggered_glideslope:
-        #   type: nonconvex_inequality
-        #   fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.glide_slope <= 0)"
-
-        # altitude_triggered_tilt:
-        #   type: nonconvex_inequality
-        #   fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.tilt <= 0)"
-
-        # tilt:
-        #   type: ctcs_nonconvex_inequality
-        #   fcn: fcns.tilt2
+        tilt:
+          type: nonconvex_inequality
+          fcn: fcns.tilt2
 
         final_time:
           type: final_time
@@ -108,9 +107,44 @@ trajectory:
         u_start: [2.0, 0, 0]
         u_stop: [2.0, 0, 0]
 
+# dt iters
 analysis:
   type: standalone
-  compute_iters: true
-  show_iters: true
+  compute_iters: false
+  show_iters: false
   show_convergence: true
   show_weights: true
+
+
+# # dt vs ct
+# analysis:
+#   type: method_variation
+#   compute_iters: false
+#   show_iters: false
+#   show_convergence: true
+#   show_weights: true
+
+#   methods:
+#     AutoSCvx:
+#       flags:
+#         ctcs: 0
+    
+#     CT-AutoSCvx:
+#       flags:
+#           ctcs: 1
+
+# # dt standard vs. sparse
+# analysis:
+#   type: method_variation
+#   compute_iters: false
+#   show_iters: false
+#   show_convergence: true
+#   show_weights: true
+
+#   methods:
+#     AutoSCvx: {}
+
+#     Sparse-AutoSCvx:
+#       penalty:
+#         default:
+#           vb: split

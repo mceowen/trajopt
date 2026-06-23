@@ -237,19 +237,6 @@ trajplots:
         linewidth: 0.8
         negate: true
 
-  stl_altitude:
-    type: time_series
-    fcn: fcns.altitude_traj
-    group: stl_constraints
-    title: "Altitude vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Altitude (m)"
-    upper_limit: ${params.alt_trigger}
-    lower_limit: 0
-    trigger_line:
-      threshold: ${params.alt_trigger}
-      direction: below
-
   stl_speed:
     type: time_series
     fcn: fcns.speed_traj
@@ -258,6 +245,8 @@ trajplots:
     xlabel: "Time (s)"
     ylabel: "Speed"
     upper_limit: ${params.speed_limit}
+    trigger_fcn: fcns.altitude_traj
+    trigger_value: ${params.alt_trigger}
 
   stl_angular_speed:
     type: time_series
@@ -267,22 +256,5 @@ trajplots:
     xlabel: "Time (s)"
     ylabel: "$\\|\\omega\\|$ (rad/s)"
     upper_limit: ${params.angular_speed_limit}
-
-  stl_glide_slope:
-    type: time_series
-    fcn: fcns.glide_slope_traj
-    group: stl_constraints
-    title: "Glide Slope Angle vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Angle (deg)"
-    upper_limit: ${params.theta_gs}
-
-  stl_tilt:
-    type: time_series
-    fcn: fcns.tilt_traj
-    group: stl_constraints
-    title: "Tilt Angle vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Angle (deg)"
-    upper_limit: ${params.theta_tilt}
-
+    trigger_fcn: fcns.altitude_traj
+    trigger_value: ${params.alt_trigger}

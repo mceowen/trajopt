@@ -140,14 +140,18 @@ class SCPConstraint():
 
         if self.vb_type == "split":
             if self.penalty.W.autotune:
-                Wh_p = self.W_p * self.vb_p / (0.9 * self.eps)
-                Wh_m = self.W_m * self.vb_m / (0.9 * self.eps)
-                self.W_p = np.clip(Wh_p, 0.0001, 1e8)
-                self.W_m = np.clip(Wh_m, 0.0001, 1e8)
+                Wh_p = self.W_p * self.vb_p / (1.0 * self.eps)
+                Wh_m = self.W_m * self.vb_m / (1.0 * self.eps)
+                self.W_p = np.clip(Wh_p, 0.0001, 1e10)
+                self.W_m = np.clip(Wh_m, 0.0001, 1e10)
             if self.penalty.dual.autotune:
                 self.dual_p = self.dual_p + 0.1 * self.vb_p
                 self.dual_m = self.dual_m + 0.1 * self.vb_m
         else:
+
+            if self.penalty.W.autotune:
+                Wh = self.W * np.abs(self.vb) / (1.0 * self.eps)
+                self.W = np.clip(Wh, 0.0001, 1e10)
 
             if self.penalty.dual.autotune:
                 dual_new = self.dual + 0.1 * self.vb
@@ -155,11 +159,6 @@ class SCPConstraint():
                     self.dual = np.maximum(0.0, dual_new)
                 else:
                     self.dual = dual_new
-
-            
-            if self.penalty.W.autotune:
-                Wh = self.W * np.abs(self.vb) / (1.0 * self.eps)
-                self.W = np.clip(Wh, 0.00001, 1e10)
 
     def _compile_merit_penalty(self, violation):
         if self.vb_type == "split":

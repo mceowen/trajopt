@@ -457,7 +457,7 @@ class dynamics(Constraint):
             ctcs_values = jnp.concatenate(
                 [jnp.atleast_1d(c.fcn_znu(z, nu, params)) for c in self.ctcs_constraints],
             )
-            dbeta_dt = jnp.maximum(ctcs_values, 0.0)**2
+            dbeta_dt =10000*jnp.maximum(ctcs_values, 0.0)**2
         else:
             dbeta_dt = jnp.zeros(n_ctcs, dtype=z.dtype)
 

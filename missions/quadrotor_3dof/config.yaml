@@ -51,7 +51,7 @@ trajectory:
           lower: "${params.vehicle.T_min}"
 
         obstacle:
-          type: ctcs_nonconvex_inequality
+          type: nonconvex_inequality
           fcn: fcns.obstacle
           lower: 4.0
 

@@ -31,7 +31,7 @@ plot_options = AttrDict({
 pens = recursive_attrdict({
     'init':    {'frgba': [0,0,0,.1], 'lrgba': [0,0,0,1.],   'lw': 1, 'ls': '--', 'msty': '',  'msz': 3},
     'nl':      {'frgba': [0,0,0,.1], 'lrgba': [1,0,0,1.],   'lw': 2, 'ls': '-',  'msty': '',  'msz': 3},
-    'opt':     {'frgba': [0,0,0,.1], 'lrgba': [0,0,1,1.],   'lw': 1, 'ls': '',   'msty': 'o', 'msz': 1},
+    'opt':     {'frgba': [0,0,0,.1], 'lrgba': [0,0,1,1.],   'lw': 1, 'ls': '',   'msty': 'o', 'msz': 2},
     'itr_opt': {'frgba': [0,0,0,.1], 'lrgba': [.7,0,.3,.2], 'lw': 1, 'ls': '',   'msty': 'o', 'msz': 3},
     'itr_nl':  {'frgba': [0,0,0,.1], 'lrgba': [.7,0,.3,.4], 'lw': 1, 'ls': '-',  'msty': '',  'msz': 3},
 })
@@ -71,11 +71,12 @@ def plot(traj_analyzer, data):
 
     figs, axs = {}, {}
     for group_name, group_data in traj_data.items():
-        figsize = plot_options.figsize
         pad_3d  = 0.08
         grid    = _create_grid(len(group_data))
+        is_spatial = {i: d.type == "spatial" for i, d in enumerate(group_data.values())}
         is_3d   = {i: (d.type == "spatial" and d.opt_vals["values"].shape[1] == 3)
                    for i, d in enumerate(group_data.values())}
+        figsize = _figure_size(len(group_data), any(is_spatial.values()), any(is_3d.values()))
 
         fig = plt.figure(figsize=figsize)
         axs[group_name] = {}
@@ -119,7 +120,7 @@ def plot(traj_analyzer, data):
                         ax.set_zlim(zlim)
 
     for group_name, group_data in traj_data.items():
-        trigger_time = _find_trigger_time(group_data, last_iter)
+        group_trigger_time = _find_trigger_time(group_data, last_iter)
         for i, (traj_name, trajplot) in enumerate(group_data.items()):
             ax   = axs[group_name][i]
             vals = trajplot.opt_vals["values"]
@@ -138,8 +139,9 @@ def plot(traj_analyzer, data):
                 t = last_iter["t_opt"]
                 _set_time_series_limits(ax, t[:vals.shape[0]], vals,
                                         limits=trajplot.nl_vals.get("limits", {}))
-                if trigger_time is not None:
-                    ax.axvline(trigger_time, color='gray', ls='--', lw=0.8, alpha=0.7, zorder=1)
+                tt = _trajplot_trigger_time(trajplot, last_iter) or group_trigger_time
+                if tt is not None:
+                    ax.axvline(tt, color='gray', ls='--', lw=0.8, alpha=0.7, zorder=1)
 
     legend_entries = [('init', 'Initial Guess'), ('opt', 'Optimal'), ('nl', 'Nonlinear')]
     if show_iters:
@@ -151,10 +153,13 @@ def plot(traj_analyzer, data):
     save_dir = os.path.join("plots", "standalone")
     os.makedirs(save_dir, exist_ok=True)
     for name, fig in figs.items():
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", UserWarning)
-            fig.tight_layout()
-        fig.savefig(os.path.join(save_dir, f"{name}.pdf"), dpi=plot_options.save_dpi, pad_inches=0.02)
+        has_3d_axes = any(hasattr(a, 'get_zlim') for a in fig.axes)
+        if not has_3d_axes:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                fig.tight_layout()
+        save_kw = dict(dpi=plot_options.save_dpi, pad_inches=0.02, bbox_inches='tight')
+        fig.savefig(os.path.join(save_dir, f"{name}.pdf"), **save_kw)
     print(f"Saved {len(figs)} figures to {save_dir}/")
 
     if analysis_cfg.get('show_convergence', False):
@@ -184,10 +189,12 @@ def plot_method_variation(traj_analyzer, data):
     figs, axs = {}, {}
     for group_name, group_data in ref_traj_data.items():
         grid = _create_grid(len(group_data))
+        is_spatial = {i: d.type == "spatial" for i, d in enumerate(group_data.values())}
         is_3d = {i: (d.type == "spatial" and d.opt_vals["values"].shape[1] == 3)
                  for i, d in enumerate(group_data.values())}
+        figsize = _figure_size(len(group_data), any(is_spatial.values()), any(is_3d.values()))
 
-        fig = plt.figure(figsize=plot_options.figsize)
+        fig = plt.figure(figsize=figsize)
         axs[group_name] = {}
         pad_3d = 0.08
         for idx, rect in grid.items():
@@ -253,7 +260,6 @@ def plot_method_variation(traj_analyzer, data):
                         r["v_max"] = max(r["v_max"], v_all.max())
 
     for group_name, group_data in ref_traj_data.items():
-        trigger_time = _find_trigger_time(group_data, ref_last)
         for i, (traj_name, trajplot) in enumerate(group_data.items()):
             ax = axs[group_name][i]
             key = (group_name, i)
@@ -275,8 +281,25 @@ def plot_method_variation(traj_analyzer, data):
                 v_arr = np.array([r["v_min"], r["v_max"]])
                 _set_time_series_limits(ax, t_arr, v_arr,
                                         limits=trajplot.nl_vals.get("limits", {}))
-                if trigger_time is not None:
-                    ax.axvline(trigger_time, color='gray', ls='--', lw=0.8, alpha=0.7, zorder=1)
+
+                upper = trajplot.nl_vals.get("limits", {}).get("upper")
+                lower = trajplot.nl_vals.get("limits", {}).get("lower")
+                for val in filter(None, [upper, lower]):
+                    if isinstance(val, np.ndarray):
+                        t_ref = ref_last["t_nl"]
+                        ax.plot(t_ref[:len(val)], val, color='k', ls='--', lw=1, alpha=0.5)
+                    else:
+                        ax.axhline(val, color='k', ls='--', lw=1, alpha=0.5)
+
+                for m_idx, method_name in enumerate(methods):
+                    m_last = data[method_name]["runs"][0]["iter_data_list"][-1]
+                    m_traj_data = m_last["trajplot_data"]
+                    m_group = m_traj_data.get(group_name, {})
+                    m_group_trigger = _find_trigger_time(m_group, m_last)
+                    m_tp = m_group.get(traj_name)
+                    tt = (_trajplot_trigger_time(m_tp, m_last) if m_tp is not None else None) or m_group_trigger
+                    if tt is not None:
+                        ax.axvline(tt, color=colors[m_idx], ls='--', lw=0.8, alpha=0.7, zorder=1)
 
     handles = []
     for m_idx, method_name in enumerate(methods):
@@ -289,16 +312,92 @@ def plot_method_variation(traj_analyzer, data):
     save_dir = os.path.join("plots", "method_variation")
     os.makedirs(save_dir, exist_ok=True)
     for name, fig in figs.items():
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", UserWarning)
-            fig.tight_layout()
-        fig.savefig(os.path.join(save_dir, f"{name}.pdf"), dpi=plot_options.save_dpi, pad_inches=0.02)
+        has_3d_axes = any(hasattr(a, 'get_zlim') for a in fig.axes)
+        if not has_3d_axes:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                fig.tight_layout()
+        save_kw = dict(dpi=plot_options.save_dpi, pad_inches=0.02, bbox_inches='tight')
+        fig.savefig(os.path.join(save_dir, f"{name}.pdf"), **save_kw)
     print(f"Saved {len(figs)} figures to {save_dir}/")
+
+    if analysis_cfg.get('show_weights', False):
+        _convergence_weight_plot_method_variation(data, methods, colors, save_dir)
 
     if plt.isinteractive() or plt.get_backend().lower() not in ("agg", "pdf", "svg"):
         plt.show()
     else:
         plt.close('all')
+
+
+def _convergence_weight_plot_method_variation(data, methods, colors, save_dir, max_iters=80):
+    markers_w = ['o', 's', '^', 'v', 'D', 'P', 'X', 'h']
+
+    ref_iters = data[methods[0]]["runs"][0]["scp_iters"][1:]
+    if not ref_iters:
+        return
+
+    has_split = hasattr(ref_iters[0], 'W_p') and ref_iters[0].W_p
+    ct_names = list(ref_iters[0].W.keys()) if ref_iters[0].W else []
+    if not ct_names:
+        return
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 4.5))
+
+    for m_idx, method_name in enumerate(methods):
+        color = colors[m_idx]
+        iters = data[method_name]["runs"][0]["scp_iters"][1:]
+        n = min(len(iters), max_iters)
+        iters = iters[:n]
+        k = np.arange(1, n + 1)
+
+        m_has_split = hasattr(iters[0], 'W_p') and iters[0].W_p
+
+        ax = axes[0]
+        for ci, ct in enumerate(ct_names):
+            m = markers_w[ci % len(markers_w)]
+            if m_has_split and ct in iters[0].W_p:
+                ax.semilogy(k, [np.mean(it.W_p[ct]) for it in iters],
+                            marker=m, ms=3, ls='-', color=color, alpha=0.8,
+                            label=f'{method_name} {ct} (+)' if m_idx < 2 else None)
+                ax.semilogy(k, [np.mean(it.W_m[ct]) for it in iters],
+                            marker=m, ms=3, ls='--', color=color, alpha=0.5,
+                            label=f'{method_name} {ct} (-)' if m_idx < 2 else None)
+            else:
+                ax.semilogy(k, [np.mean(it.W[ct]) for it in iters],
+                            marker=m, ms=3, ls='-', color=color, alpha=0.8,
+                            label=f'{method_name} {ct}' if m_idx < 2 else None)
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('Mean W')
+        ax.set_title('Quadratic Penalty Weights', fontsize=plot_options.title_fontsize, pad=plot_options.title_pad)
+        ax.legend(fontsize=6, loc='best')
+        ax.grid(True, alpha=0.3)
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+
+        ax = axes[1]
+        for ci, ct in enumerate(ct_names):
+            m = markers_w[ci % len(markers_w)]
+            if m_has_split and ct in iters[0].dual_p:
+                ax.semilogy(k, [np.mean(np.abs(it.dual_p[ct])) for it in iters],
+                            marker=m, ms=3, ls='-', color=color, alpha=0.8,
+                            label=f'{method_name} {ct} (+)' if m_idx < 2 else None)
+                ax.semilogy(k, [np.mean(np.abs(it.dual_m[ct])) for it in iters],
+                            marker=m, ms=3, ls='--', color=color, alpha=0.5,
+                            label=f'{method_name} {ct} (-)' if m_idx < 2 else None)
+            else:
+                ax.semilogy(k, [np.mean(np.abs(it.dual[ct])) for it in iters],
+                            marker=m, ms=3, ls='-', color=color, alpha=0.8,
+                            label=f'{method_name} {ct}' if m_idx < 2 else None)
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel(r'Mean $|\lambda|$')
+        ax.set_title('Linear (Dual) Weights', fontsize=plot_options.title_fontsize, pad=plot_options.title_pad)
+        ax.legend(fontsize=6, loc='best')
+        ax.grid(True, alpha=0.3)
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+
+    plt.tight_layout()
+    os.makedirs(save_dir, exist_ok=True)
+    fig.savefig(os.path.join(save_dir, "convergence_weights.pdf"), dpi=plot_options.save_dpi, pad_inches=0.02)
 
 
 def _setup_ax(ax, traj):
@@ -452,6 +551,17 @@ def _legend_handle(pen_name, label):
     p = pens[pen_name]
     return Line2D([], [], color=p.lrgba[:3], alpha=p.lrgba[3], lw=p.lw,
                   ls=p.ls or 'None', marker=p.msty or None, markersize=p.msz, label=label)
+
+
+def _figure_size(n_plots, has_spatial, has_3d=False):
+    """Compute figure size adapted to the number of subplots and their type."""
+    base_w, base_h = plot_options.figsize
+    if has_spatial:
+        num_cols = 3 if n_plots == 3 else int(np.ceil(np.sqrt(n_plots)))
+        per_col_w = 5.0
+        h = max(base_h, 4.5) if has_3d else 4.0
+        return (per_col_w * num_cols, h)
+    return (base_w, base_h)
 
 
 def _create_grid(n, cfg=None):
@@ -691,6 +801,23 @@ def _convergence_weight_plot(subprob, suffix, save=True):
     return fig
 
 
+def _crossing_time(vals, threshold, t, direction="below"):
+    """Interpolate the time at which *vals* first crosses *threshold*."""
+    if direction == "below":
+        crossed = np.where(vals[:-1] >= threshold, vals[1:] < threshold, False)
+    else:
+        crossed = np.where(vals[:-1] <= threshold, vals[1:] > threshold, False)
+    idx = np.argmax(crossed)
+    if not crossed[idx]:
+        return None
+    v0, v1 = vals[idx], vals[idx + 1]
+    dv = v1 - v0
+    if abs(dv) < 1e-12:
+        return float(t[idx])
+    frac = (threshold - v0) / dv
+    return float(t[idx] + frac * (t[idx + 1] - t[idx]))
+
+
 def _find_trigger_time(group_data, last_iter):
     """Find the trigger time from any trajplot in the group that has trigger_line config."""
     for trajplot in group_data.values():
@@ -701,20 +828,21 @@ def _find_trigger_time(group_data, last_iter):
         direction = tl.get("direction", "below")
         vals = trajplot.opt_vals["values"].squeeze()
         t = last_iter["t_opt"][:len(vals)]
-        if direction == "below":
-            crossed = np.where(vals[:-1] >= threshold, vals[1:] < threshold, False)
-        else:
-            crossed = np.where(vals[:-1] <= threshold, vals[1:] > threshold, False)
-        idx = np.argmax(crossed)
-        if not crossed[idx]:
-            continue
-        v0, v1 = vals[idx], vals[idx + 1]
-        dv = v1 - v0
-        if abs(dv) < 1e-12:
-            return float(t[idx])
-        frac = (threshold - v0) / dv
-        return float(t[idx] + frac * (t[idx + 1] - t[idx]))
+        result = _crossing_time(vals, threshold, t, direction)
+        if result is not None:
+            return result
     return None
+
+
+def _trajplot_trigger_time(trajplot, last_iter):
+    """Compute trigger time for a single trajplot from its trigger_fcn data."""
+    trigger_vals = trajplot.opt_vals.get("trigger_vals")
+    trigger_value = trajplot.get("trigger_value")
+    if trigger_vals is None or trigger_value is None:
+        return None
+    threshold = float(trigger_value)
+    t = last_iter["t_opt"][:len(trigger_vals)]
+    return _crossing_time(trigger_vals, threshold, t, direction="below")
 
 
 _NOT_FOUND = object()
