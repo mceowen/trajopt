@@ -68,7 +68,7 @@ trajectory:
         u_start: [0.0, 15.0]
         u_stop:  [0.0, 15.0]
 
-analysis:
+# analysis:
   # type: method_variation
   # compute_iters: true
   # show_iters: true

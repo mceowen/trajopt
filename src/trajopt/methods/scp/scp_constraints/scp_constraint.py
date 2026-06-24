@@ -149,17 +149,17 @@ class SCPConstraint():
                 self.dual_m = self.dual_m + 0.1 * self.vb_m
         else:
 
-            if self.penalty.dual.autotune:
-                dual_new = self.dual + 0.1 * self.vb
-                if self.nonnegative_dual:
-                    self.dual = np.maximum(0.0, dual_new)
-                else:
-                    self.dual = dual_new
-
-            
             if self.penalty.W.autotune:
-                Wh = self.W * np.abs(self.vb) / (1.0 * self.eps)
-                self.W = np.clip(Wh, 0.00001, 1e10)
+                damp = 0.3
+                ratio = np.abs(self.vb) / (0.01 * self.eps)
+                Wh = self.W * np.power(ratio, damp)
+                self.W = np.clip(Wh, 0.00001, 1e5)
+
+            if self.penalty.dual.autotune and hasattr(self, 'lagrangian_dual'):
+                if self.nonnegative_dual:
+                    self.dual = np.maximum(0.0, self.lagrangian_dual)
+                else:
+                    self.dual = self.lagrangian_dual.copy()
 
     def _compile_merit_penalty(self, violation):
         if self.vb_type == "split":
