@@ -8,13 +8,13 @@ TrajOpt is a self-contained Python library for multi-segment trajectory optimiza
 
 ## Features
 * __Configurable Missions__: Configuring missions using existing models is fast and efficient due to the config.yaml structure.
-* __Simple Model Design Framework__: Building new models only requires providing their continus-time functions f_k(x, u, t, params, fcns).
-* __Robust Base Algorithm__: The base AutoSCvx algorithm includes autotuning of penalty weights and second-order information for robust convergence on most problems with minimal hyper-parameter tuning.
-* __Self Contained__: The base algorithm for solving the nonconvex problems is fully written in this package. The only black-boxes we accept are calls to the convex solvers due to their gauranteed reliability and provable convergence.
+* __Simple Model Design Framework__: Building new models only requires providing their continuous-time functions f_k(x, u, t, params, fcns).
+* __Robust Base Algorithm__: The base AutoSCvx algorithm includes autotuning of penalty weights and second-order information for robust convergence on most problems with minimal hyperparameter tuning.
+* __Self Contained__: The base algorithm for solving the nonconvex problems is fully written in this package. The only black-boxes we accept are calls to the convex solvers due to their guaranteed reliability and provable convergence.
 * __Easy Algorithm Design__: Researchers can quickly design their own algorithms using the powerful modeling languages [CVXPY](https://www.cvxpy.org) and [JAX](https://github.com/jax-ml/jax).
 
 ## Segments
-A trajectory __segment__ is defined by a set of (Costs, Constraints, Params, Fcns):
+A trajectory __segment__ is defined by a set of (Costs, Constraints, Parameters, Functions):
 
 ```math
 \begin{aligned}
@@ -46,7 +46,7 @@ f_k(x_i,u_i,t_i,\mathrm{params}_i,\mathrm{fcns}_i)
 ```
 
 ## Trajectory
-The __trajectory__ OCP is defined by summing the cost contributions and enforcing the constraints from each __segment__:
+The __trajectory__ optimal control problem (OCP) is defined by summing the cost contributions and enforcing the constraints from each __segment__:
 
 ```math
 \begin{aligned}
@@ -62,11 +62,101 @@ The __trajectory__ OCP is defined by summing the cost contributions and enforcin
 
 ## Augmented Optimal Control Problem
 
+The OCP above is posed in continuous time with a free final time, which is not directly solvable. We transcribe it to a finite-dimensional problem using a __global normalized time__, a __time-dilation control__, and a __multiple-shooting__ discretization.
+
+Time is normalized to $\tau \in [0,1]$ on a fixed mesh,
+
+```math
+0 = \tau_1 < \tau_2 < \cdots < \tau_N = 1,
+```
+
+and physical time is carried as a state through the time-dilation control $s(\tau) \triangleq \mathrm{d}t/\mathrm{d}\tau$. This lets us optimize the duration of each interval while keeping the mesh fixed. We collect the physical state and time into an __augmented state__, and the physical control and dilation into an __augmented control__:
+
+```math
+y \triangleq \begin{bmatrix} x \\ t \end{bmatrix}, 
+\qquad 
+\nu \triangleq \begin{bmatrix} u \\ s \end{bmatrix}.
+```
+
+The dynamics in normalized time follow from the chain rule:
+
+```math
+\frac{\mathrm{d}y}{\mathrm{d}\tau} = F(y,\nu) \triangleq 
+\begin{bmatrix} s\, f(x,u,t,\mathrm{params},\mathrm{fcns}) \\ s \end{bmatrix}.
+```
+
+The augmented control is parameterized with a __first-order hold (FOH)__ between nodes, and continuity is enforced through __multiple-shooting defect constraints__,
+
+```math
+y_{k+1} - y_k - \int_{\tau_k}^{\tau_{k+1}} F\big(y(\tau),\nu(\tau)\big)\,\mathrm{d}\tau = 0, 
+\qquad k = 1,\ldots,N-1,
+```
+
+while the nonconvex path constraints and boundary conditions are enforced at the nodes $\{y_k,\nu_k\}$. A free-final-time objective such as minimum time reduces to integrating the dilation, $\int_0^1 s(\tau)\,\mathrm{d}\tau$.
+
+Stacking the nodal variables into a single decision vector $z = \{y_k,\nu_k\}_{k=1}^N$ yields the generic finite-dimensional __nonconvex__ program solved by the algorithm:
+
+```math
+\begin{aligned}
+\underset{z \in \mathcal{Z}}{\mathrm{minimize}} \quad & J(z) \\
+\mathrm{subject\;to} \quad & h(z) = 0, \\
+                          & g(z) \le 0,
+\end{aligned}
+```
+
+where $h(z)$ collects the dynamics defects, boundary conditions, and nonconvex equality path constraints; $g(z)$ collects the nonconvex inequality path constraints; and the convex state, control, and time-dilation sets are absorbed into $\mathcal{Z}$.
+
 ## Trajectory Analyzer
+
+The `TrajectoryAnalyzer` is the top-level entry point. It reads a mission `config.yaml`, builds the `Trajectory` (its segments, costs, and constraints) and the `Method` that solves it, and exposes a simple `solve → analyze → plot` workflow:
+
+```python
+from trajopt.trajectory_analyzer import TrajectoryAnalyzer
+
+traj = TrajectoryAnalyzer("config.yaml")
+traj.solve()                 # run the SCP method
+data = traj.analyze()        # propagate iterates through the nonlinear dynamics
+traj.plot(data)              # re-dimensionalized plots
+```
+
+`analyze()` propagates each SCP iterate through the true nonlinear dynamics, re-dimensionalizes the result, and packages the data the plots consume. The analysis `type` set in the config selects what is run:
+
+* __standalone__: solve and analyze a single mission.
+* __mc__: Monte Carlo dispersion, re-solving while perturbing config values sampled per run.
+* __method_variation__: solve the same mission with different method overrides and compare them.
 
 ## Method
 
+A __method__ maps the nonconvex augmented OCP into a sequence of convex subproblems. The base algorithm is __AutoSCvx__: it relaxes the nonconvex constraints with __virtual buffers__ $(p,q)$ and penalizes them, so every subproblem stays feasible while violations are driven to zero:
+
+```math
+\begin{aligned}
+\underset{z \in \mathcal{Z},\, p,\, q}{\mathrm{minimize}} \quad & 
+J(z) + \tfrac{1}{2}p^\top W_h\, p + \tfrac{1}{2}q^\top W_g\, q + \lambda^\top p + \mu^\top q \\
+\mathrm{subject\;to} \quad & h(z) = p, \\
+                          & g(z) \le q, \quad q \ge 0.
+\end{aligned}
+```
+
+The quadratic weights $(W_h, W_g)$ and the dual (linear) weights $(\lambda,\mu)$ are __auto-tuned__ through primal–dual updates, which removes most of the manual penalty-weight tuning that SCP methods typically require. The `Method` assembles a single CVXPY subproblem from all segments and solves it repeatedly through the SCP loop.
+
 ## Sequential Convex Programming
+
+SCP solves the nonconvex problem by iterating on convex approximations built around the current reference trajectory $\bar z$. Each nonlinear mapping $c$ is replaced by its first-order linearization,
+
+```math
+\ell_c(z,\bar z) \triangleq c(\bar z) + \left.\frac{\partial c}{\partial z}\right|_{\bar z}(z - \bar z).
+```
+
+Starting from an initial guess, each iteration:
+
+1. __Discretize & linearize__ the dynamics and constraints about $\bar z$.
+2. __Solve__ the resulting convex subproblem for a candidate step.
+3. __Line search__ on a merit function to accept a step length $\alpha$.
+4. __Update__ the reference, the virtual buffers, and the penalty weights $(W_h, W_g, \lambda, \mu)$.
+5. __Test convergence__ on the state change and constraint/defect residuals; otherwise repeat.
+
+On convergence the buffers vanish, so the converged solution satisfies the original nonconvex problem to tolerance.
 
 ## Core Developers
 
