@@ -367,7 +367,7 @@ class SCPSegment():
         for constraint in self.constraints.values():
             constraint.update_W_dual(self, alpha)
 
-def _psd_sqrt(H_batch, delta=1e-7):
+def _psd_sqrt(H_batch, delta=1e-10):
     eigvals, eigvecs = np.linalg.eigh(H_batch)
     eigvals_reg = np.maximum(eigvals, delta)
     sqrt_eigvals = np.sqrt(eigvals_reg)
