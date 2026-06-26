@@ -138,22 +138,26 @@ class SCPConstraint():
         if not hasattr(self.penalty, 'W'):
             return
 
+        freeze_iters = 40.0
+        iter_num = scp_segment.current_iter_data.iter_num
+        rho = max(0.0, 1.0 - iter_num / freeze_iters)
+
         if self.vb_type == "split":
             if self.penalty.W.autotune:
                 Wh_p = self.W_p * self.vb_p / (0.9 * self.eps)
                 Wh_m = self.W_m * self.vb_m / (0.9 * self.eps)
-                self.W_p = np.clip(Wh_p, 0.0001, 1e8)
-                self.W_m = np.clip(Wh_m, 0.0001, 1e8)
+                self.W_p = np.clip(self.W_p + rho * (Wh_p - self.W_p), 0.0001, 1e8)
+                self.W_m = np.clip(self.W_m + rho * (Wh_m - self.W_m), 0.0001, 1e8)
             if self.penalty.dual.autotune:
                 self.dual_p = self.dual_p + 0.1 * self.vb_p
                 self.dual_m = self.dual_m + 0.1 * self.vb_m
         else:
 
             if self.penalty.W.autotune:
-                damp = 0.3
+                damp = 0.3 * rho
                 ratio = np.abs(self.vb) / (0.01 * self.eps)
                 Wh = self.W * np.power(ratio, damp)
-                self.W = np.clip(Wh, 0.00001, 1e5)
+                self.W = np.clip(Wh, 0.00001, 1e7)
 
             if self.penalty.dual.autotune and hasattr(self, 'lagrangian_dual'):
                 if self.nonnegative_dual:
