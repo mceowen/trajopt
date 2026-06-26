@@ -206,12 +206,10 @@ The methods in TrajOpt build on the AutoSCvx thesis work and incorporate ideas f
   Elango et al., [“Continuous-time Successive Convexification for Constrained Trajectory Optimization”](https://doi.org/10.1016/j.automatica.2025.112464), Automatica, 2025.
 
 * __SCvx + STCs (successive convexification with state-triggered constraints)__:  
-  Szmuk et al. introduced successive convexification with state-triggered constraints for real-time 6-DoF powered descent guidance:  
-  [“Successive Convexification for Real-Time Six-Degree-of-Freedom Powered Descent Guidance with State-Triggered Constraints”](https://doi.org/10.2514/1.G004549), Journal of Guidance, Control, and Dynamics, 2020.
+  Szmuk et al., [“Successive Convexification for Real-Time Six-Degree-of-Freedom Powered Descent Guidance with State-Triggered Constraints”](https://doi.org/10.2514/1.G004549), Journal of Guidance, Control, and Dynamics, 2020.
 
 * __PS-SCP (pseudospectral sequential convex programming)__:  
-  Sagliano et al. developed pseudospectral SCP methods for 6-DoF aero-propulsive entry trajectory optimization:  
-  [“Six-Degrees-of-Freedom Aero-Propulsive Entry Trajectory Optimization”](https://doi.org/10.2514/6.2024-1171), AIAA SCITECH 2024 Forum.
+  Sagliano et al., [“Six-Degrees-of-Freedom Aero-Propulsive Entry Trajectory Optimization”](https://doi.org/10.2514/6.2024-1171), AIAA SCITECH 2024 Forum.
 
 * __STL + GMSR (signal temporal logic with generalized-mean smooth robustness)__:  
   Uzun et al., [“Optimization with Temporal and Logical Specifications via Generalized Mean-based Smooth Robustness Measures”](https://arxiv.org/abs/2405.10996), arXiv, 2024.
