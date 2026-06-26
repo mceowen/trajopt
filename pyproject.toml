@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "trajopt"
-version = "0.0.1"
+version = "0.0.2"
 description = "Trajectory optimization research and development framework"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -47,8 +47,8 @@ docs = [
 ]
 
 [project.urls]
-Homepage =      "https://github.com/skye/trajopt"
-Repository =    "https://github.com/skye/trajopt"
+Homepage =      "https://github.com/mceowen/trajopt"
+Repository =    "https://github.com/mceowen/trajopt"
 
 # -------------------------------------------------------------------------
 # scikit-build optional (if you use it for compiled C/C++ extensions)
