@@ -1,0 +1,74 @@
+method:
+  inherit: trajopt/methods/configs/autoscvx.yaml
+
+  flags:
+    equal_dt: 1
+    zoh_dilation: 1
+    free_final_time: 0
+    flag_conv: 1
+
+  conv:
+    eps_state:  0.001
+    eps_dyn:    0.00001
+    eps_defect: 1.0
+    eps_cost:   1
+
+  solver_opts:
+    solver: CLARABEL
+
+trajectory:
+  segments:
+    swingup:
+      num_nodes: 40
+      inherit: model.yaml
+
+      params:
+        g: 9.81
+        mp: 0.3
+        mc: 1
+        l: 0.5
+
+      constraints:
+        dynamics:
+          type: dynamics
+          fcn: fcns.dynamics
+
+        initial_state:
+          type: initial_state
+          value: [0, 0, 0, 0]
+
+        final_state:
+          type: final_state
+          value: [1, "${np.pi}", 0, 0]
+
+        state_limits:
+          type: state_limits
+          lower: [-4, null, null, null]
+          upper: [ 4, null, null, null]
+
+        control_limits:
+          type: control_limits
+          lower: [-20]
+          upper: [20]
+
+      costs:
+        u_squared:
+          type: nonconvex_running
+          fcn: fcns.u_squared_cost
+          w: 1.0
+
+      guess:
+        type: straight_line
+        t_start: 0.0
+        t_stop: 2.0
+        x_start: [0, 0, 0, 0]
+        x_stop: [1, "${np.pi}", 0, 0]
+        u_start: [0]
+        u_stop: [0]
+
+analysis:
+  type: standalone
+  compute_iters: false
+  show_iters: false
+  show_convergence: false
+  show_weights: false

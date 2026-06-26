@@ -1,0 +1,59 @@
+method:
+  inherit: trajopt/methods/configs/autoscvx.yaml
+
+  solver_opts:
+    solver: QOCO
+
+trajectory:
+  segments:
+    entry:
+      num_nodes: 20
+      inherit: trajopt/models/configs/reentry_3dof.yaml
+
+      fcns:
+        coeffs: msl.py:coeffs_entry
+
+      params:
+        planet.inherit: trajopt/missions/configs/planets/mars.yaml
+        vehicle.inherit: trajopt/missions/configs/vehicles/msl.yaml
+
+      constraints:
+        dynamics:
+          type: dynamics
+          fcn: fcns.dynamics
+
+        initial_state:
+          type: initial_state
+          value: ["${params.planet.r + 126e3}", 0.0, 0.0, 5845, -15.47, 0.0]
+
+        final_state:
+          type: final_state
+          value: ["${params.planet.r + 10e3}", 0.0, 10.5768, null, null, null]
+
+        state_limits:
+          type: state_limits
+          lower: ["${params.planet.r + 5e3}", -10.0, -5.0, 10.0, -90.0, -180.0]
+          upper: ["${params.planet.r + 140e3}", 10.0, 20.0, 6500.0, 5.0, 180.0]
+
+        bank_aoa_angle_limits:
+          type: control_limits
+          lower: [-178.0, -10.0]
+          upper: [178.0, 10.0]
+
+      costs:
+        min_terminal_velocity:
+          type: nonconvex_terminal
+          fcn: fcns.velocity
+
+      guess:
+        t_start: 0.0
+        t_stop: 100.0
+        u_start: [0.0, 0.0]
+        u_stop: [0.0, 0.0]
+
+analysis:
+  type: standalone
+  compute_iters: false
+  show_iters: false
+  show_convergence: false
+  show_weights: false
