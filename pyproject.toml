@@ -28,7 +28,8 @@ dependencies = [
     "sympy>=1.10, <= 2.0",
     "diffrax>=0.7.2",
     "qoco >=0.1.4,<0.2",
-    "ecos >=2.0.12,<3.0"
+    "ecos >=2.0.12,<3.0",
+    "piqp>=0.6.3,<0.7",
 ]
 
 # Optional dependency groups (install via pip install .[dev])
