@@ -1,0 +1,74 @@
+# source: https://github.com/UW-ACL/SCPToolbox.jl/tree/master/test/examples/starship_flip
+
+trajectory:
+  segments:
+    three_engine_segment:
+      num_nodes: 10
+      inherit: common_segment.yaml
+
+      constraints:
+        initial_state:
+          type: initial_state
+          value: [100.0, 600.0, 0, "${-params.vterm}", "${np.deg2rad(90.0)}", 0.0]
+
+        control_limits:
+          type: control_limits
+          lower: ["${3 * 880000}", "${np.deg2rad(-10)}"]
+          upper: [6000000, "${np.deg2rad(10)}"]
+        
+        final_time:
+          type: final_time
+          value: 5.0
+
+      guess:
+        type: straight_line
+        t_start: 0.0
+        t_stop: 5.0
+        x_start: [100.0, 600.0, 0, "${-params.vterm}", "${np.deg2rad(90.0)}", 0.0]
+        x_stop: [0, 0, 0, -0.1, 0, 0]
+        u_start: [500000, 0]
+        u_stop: [500000, 0]
+
+    single_engine_segment:
+      num_nodes: 20
+      inherit: common_segment.yaml
+
+      constraints:
+        continuity:
+          type: continuity
+          segment: three_engine_segment
+
+        final_state:
+          type: final_state
+          value: [0, 0, 0, -0.1, 0, 0]
+
+      guess:
+        type: straight_line
+        t_start: 5.0
+        t_stop: 20.0
+        x_start: [0, 0, 0, -0.1, 0, 0]
+        x_stop: [0, 0, 0, -0.1, 0, 0]
+        u_start: [500000, 0]
+        u_stop: [500000, 0]
+
+method:
+  type: SCP
+  inherit: trajopt/methods/configs/autoscvx.yaml
+
+  flags:
+    free_final_time: 1
+    iter_max: 100
+
+  conv:
+    eps_state:  0.001
+    eps_dyn:    0.001
+  
+  solver_opts:
+    solver: PIQP
+
+analysis:
+  type: standalone
+  compute_iters: false
+  show_iters: false
+  show_convergence: false
+  show_weights: false

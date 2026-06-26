@@ -1,4 +1,5 @@
 import importlib.resources
+import importlib.util
 import re
 from pathlib import Path
 from typing import Any
@@ -86,8 +87,19 @@ def _resolve_fcn_paths(d: Any, base_dir: Path) -> Any:
     if isinstance(d, str) and ".py:" in d:
         file_part, func = d.rsplit(":", 1)
         fp = Path(file_part)
-        if not fp.is_absolute():
+
+        # Support package-rooted references like "trajopt/.../file.py:func".
+        # These should resolve from the installed/importable trajopt package root,
+        # not relative to the local config directory.
+        if file_part.startswith("trajopt/"):
+            spec = importlib.util.find_spec("trajopt")
+            if spec is None or spec.origin is None:
+                raise ModuleNotFoundError("could not resolve package root for 'trajopt'")
+            pkg_root = Path(spec.origin).resolve().parent
+            fp = (pkg_root / file_part[len("trajopt/"):]).resolve()
+        elif not fp.is_absolute():
             fp = (base_dir / fp).resolve()
+
         return f"{fp}:{func}"
     return d
 

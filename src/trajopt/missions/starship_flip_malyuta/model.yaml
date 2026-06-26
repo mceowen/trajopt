@@ -1,0 +1,111 @@
+# source: https://github.com/UW-ACL/SCPToolbox.jl/tree/master/test/examples/starship_flip
+
+fcns:
+  dynamics: starship.py:dynamics
+  u_squared_cost: starship.py:u_squared_cost
+  ei: starship.py:ei
+  ej: starship.py:ej
+  position: starship.py:position
+  body_dir: starship.py:body_dir
+  velocity: starship.py:velocity
+  angular: starship.py:angular
+  control: starship.py:control
+  thrust_magnitude: starship.py:thrust_magnitude
+  gimbal_angle: starship.py:gimbal_angle
+  thrust_dir: starship.py:thrust_dir
+  engine_offset: starship.py:engine_offset
+  cvx_glide_slope: starship.py:cvx_glide_slope
+  glideslope_overlay: starship.py:glideslope_overlay
+
+state:
+  x1:
+    idx: [0]
+    scale: 100
+  x2:
+    idx: [1]
+    scale: 100
+  v1:
+    idx: [2]
+    scale: 100
+  v2:
+    idx: [3]
+    scale: 100
+  theta:
+    idx: [4]
+    scale: 1
+  thetadot:
+    idx: [5]
+    scale: 1
+
+control:
+  thrust:
+    idx: [0]
+    scale: 1000000
+  gimbal:
+    idx: [1]
+    scale: 1
+
+time: 
+  scale: 1
+
+trajplots:
+  spatial:
+    type: spatial
+    group: spatial
+    fcn: fcns.position
+    equal_aspect: true
+    xlim: [-200, 300]
+    title: "Spatial Trajectory"
+    xlabel: "Horizontal Position (m)"
+    ylabel: "Altitude (m)"
+    quivers:
+      body:
+        fcn: fcns.body_dir
+        origin_fcn: fcns.engine_offset
+        scale: 50
+        color: [0, 0, 0]
+        alpha: 0.8
+        linewidth: 2.0
+      thrust:
+        fcn: fcns.thrust_dir
+        origin_fcn: fcns.engine_offset
+        negate: true
+        scale: 30
+        color: [0.95, 0.45, 0.0]
+        alpha: 0.9
+        linewidth: 1.5
+    overlays:
+      glideslope:
+        fcn: fcns.glideslope_overlay
+
+  velocity:
+    type: time_series
+    fcn: fcns.velocity
+    group: state
+    title: "Velocity vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Velocity (m/s)"
+
+  angular:
+    type: time_series
+    fcn: fcns.angular
+    group: state
+    title: "Angle & Rate vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Angle (rad) / Rate (rad/s)"
+
+  thrust:
+    type: time_series
+    fcn: fcns.thrust_magnitude
+    group: control
+    title: "Thrust vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Thrust (N)"
+
+  gimbal:
+    type: time_series
+    fcn: fcns.gimbal_angle
+    group: control
+    title: "Gimbal Angle vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Gimbal (rad)"
