@@ -10,3 +10,8 @@ local/
 .mpypy_cache/
 docs/_build/
 docs/examples/notebooks/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
