@@ -13,6 +13,29 @@ TrajOpt is a self-contained Python library for multi-segment trajectory optimiza
 * __Self Contained__: The base algorithm for solving the nonconvex problems is fully written in this package. The only black-boxes we accept are calls to the convex solvers due to their guaranteed reliability and provable convergence.
 * __Easy Algorithm Design__: Researchers can quickly design their own algorithms using the powerful modeling languages [CVXPY](https://www.cvxpy.org) and [JAX](https://github.com/jax-ml/jax).
 
+
+## Installation
+
+Install the latest release from PyPI:
+
+```bash
+python -m pip install trajopt
+```
+
+For development, install from a local clone:
+
+```bash
+git clone https://github.com/mceowen/trajopt.git
+cd trajopt
+python -m pip install -e ".[dev]"
+```
+
+To include documentation dependencies:
+
+```bash
+python -m pip install -e ".[dev,docs]"
+```
+
 ## Segments
 A trajectory __segment__ is defined by a set of (Costs, Constraints, Parameters, Functions):
 
