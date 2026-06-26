@@ -1,5 +1,6 @@
 venv/
 .venv
+.venv-test
 .vscode
 .DS_Store
 local
