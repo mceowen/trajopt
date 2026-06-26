@@ -16,6 +16,8 @@ TrajOpt is a self-contained Python library for multi-segment trajectory optimiza
 
 ## Installation
 
+TrajOpt requires Python 3.11 or later.
+
 Install the latest release from PyPI:
 
 ```bash
