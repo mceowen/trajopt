@@ -4,7 +4,7 @@
   <img src="docs/segment_diagram.svg" alt="diagram" width="500"/>
 </p>
 
-TrajOpt is a self-contained Python library for multi-segment trajectory optimization using Sequential Convex Programming (SCP). The software is built to facilitate the design of __models__ that can be effectively reused across different __mission__ scenarios.
+TrajOpt is a self-contained Python library for multi-segment trajectory optimization using Sequential Convex Programming (SCP). It is designed around reusable __models__, configurable __missions__, and modular __methods__, with built-in support for entry, descent, and landing (EDL) and other aerospace applications. This structure makes it straightforward to define new problems, implement new algorithms, and compare solution methods within a common software pipeline.
 
 ## Features
 * __Configurable Missions__: Configuring missions using existing models is fast and efficient due to the config.yaml structure.
@@ -12,6 +12,29 @@ TrajOpt is a self-contained Python library for multi-segment trajectory optimiza
 * __Robust Base Algorithm__: The base AutoSCvx algorithm includes autotuning of penalty weights and second-order information for robust convergence on most problems with minimal hyperparameter tuning.
 * __Self Contained__: The base algorithm for solving the nonconvex problems is fully written in this package. The only black-boxes we accept are calls to the convex solvers due to their guaranteed reliability and provable convergence.
 * __Easy Algorithm Design__: Researchers can quickly design their own algorithms using the powerful modeling languages [CVXPY](https://www.cvxpy.org) and [JAX](https://github.com/jax-ml/jax).
+
+
+## Installation
+
+Install the latest release from PyPI:
+
+```bash
+python -m pip install trajopt
+```
+
+For development, install from a local clone:
+
+```bash
+git clone https://github.com/mceowen/trajopt.git
+cd trajopt
+python -m pip install -e ".[dev]"
+```
+
+To include documentation dependencies:
+
+```bash
+python -m pip install -e ".[dev,docs]"
+```
 
 ## Segments
 A trajectory __segment__ is defined by a set of (Costs, Constraints, Parameters, Functions):
