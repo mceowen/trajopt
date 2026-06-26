@@ -188,9 +188,11 @@ Skye Mceowen and Carlos Morales
 
 ## Research Origins and Acknowledgements
 
-TrajOpt development began as part of Skye Mceowen's PhD thesis research on sequential convex trajectory optimization, with early MATLAB prototypes developed in [`entry_opt`](https://github.com/mceowen/entry_opt), [`scp_sandbox`](https://github.com/mceowen/scp_sandbox), and [`trajopt_toolkit`](https://github.com/mceowen/trajopt_toolkit). The current Python package was then developed collaboratively by Skye Mceowen, Carlos Morales and others into a reusable framework for multi-segment trajectory optimization and algorithm design. The package and earlier prototypes form part of the software contributions of the PhD work.
+TrajOpt development began as part of Skye Mceowen's PhD thesis research on sequential convex trajectory optimization, with early MATLAB prototypes developed in [`entry_opt`](https://github.com/mceowen/entry_opt), [`scp_sandbox`](https://github.com/mceowen/scp_sandbox), and [`trajopt_toolkit`](https://github.com/mceowen/trajopt_toolkit). The current Python package was then developed collaboratively by Skye Mceowen and Carlos Morales into a reusable framework for multi-segment trajectory optimization and algorithm design. The package and earlier prototypes form part of the software contributions of the PhD work.
 
-The methods in TrajOpt build on the AutoSCvx thesis work, together with related advances in second-order trust-region modeling, continuous-time successive convexification, successive convexification more broadly, state-triggered constraints, and temporal/logical specification handling.
+Additional contributors to the current Python package include Pranav Ramasahayam, Daniel J. Calderone, and Samet Uzun. Earlier development and MATLAB prototypes also benefited from contributions by Chris Sota, Jimmy Fowler, Edgerton Cook, Fabio Spada, Jason Zhou, and Aman Tiwary.
+
+The methods in TrajOpt build on the AutoSCvx thesis work and incorporate ideas from related advances in second-order trust-region modeling, continuous-time successive convexification, broader successive-convexification methods, state-triggered constraints, and temporal/logical specification handling.
 
 ### Method References
 
