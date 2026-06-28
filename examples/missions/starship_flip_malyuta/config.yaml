@@ -58,10 +58,6 @@ method:
   flags:
     free_final_time: 1
     iter_max: 100
-
-  conv:
-    eps_state:  0.001
-    eps_dyn:    0.001
   
   solver_opts:
     solver: PIQP

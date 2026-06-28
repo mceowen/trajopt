@@ -408,6 +408,49 @@ class ctcs_nonconvex_inequality(nonconvex_inequality):
         self.type = "ctcs_nonconvex_inequality"
 
 
+class nonconvex_equality(Constraint):
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        index_map = segment.index_map
+        nondim = segment.nondim
+        fcns = segment.fcns
+        params = segment.params
+
+        self.type      = "nonconvex_equality"
+        self.name      = cnstr_config.name
+        self.index_map = index_map
+
+        self.fcn_string  = cnstr_config.fcn
+        self.fcn_txu_dim = tools.resolve_function_from_string(self.fcn_string, fcns)
+
+        out = self.fcn_txu_dim(np.ones(index_map.n.state), np.ones(index_map.n.control), 0.0, params)
+        self.dimension = jnp.atleast_1d(out).shape[0]
+
+        self.scale = np.atleast_1d(cnstr_config.get("scale", np.ones(self.dimension)))
+
+        self.M_out_d2nd   = jnp.diag(1.0 / jnp.abs(jnp.asarray(self.scale)))
+        self.M_state_nd2d = jnp.asarray(nondim.M.state.nd2d)
+        self.M_ctrl_nd2d  = jnp.asarray(nondim.M.control.nd2d)
+
+    def fcn_txu_nd(self, x, u, t, params):
+        return self.M_out_d2nd @ self.fcn_txu_dim(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, t, params)
+
+    def fcn_znu(self, z, nu, params):
+        x, t, _, u, _ = self.index_map.unpack_znu(z, nu)
+        return self.fcn_txu_nd(x, u, t, params)
+
+
+class initial_nonconvex_equality(nonconvex_equality):
+    def __init__(self, cnstr_config, segment):
+        super().__init__(cnstr_config, segment)
+        self.type = "initial_nonconvex_equality"
+
+
+class final_nonconvex_equality(nonconvex_equality):
+    def __init__(self, cnstr_config, segment):
+        super().__init__(cnstr_config, segment)
+        self.type = "final_nonconvex_equality"
+
+
 class continuity(Constraint):
     def __init__(self, cnstr_config: dict, segment) -> None:
         self.name = cnstr_config.name

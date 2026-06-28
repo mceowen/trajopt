@@ -554,6 +554,130 @@ class scp_final_nonconvex_inequality(scp_nonconvex_inequality):
         self.lagrangian_dual = np.zeros((len(self.nodes), dim))
 
 
+# ---------------------------------------------------------------------------
+# nonconvex equality
+# ---------------------------------------------------------------------------
+
+class scp_nonconvex_equality(SCPConstraint):
+
+    def compile(self, scp_segment):
+        fcn = self.constraint.fcn_znu
+        g      = jax.jit(fcn)
+        dg_dz  = jax.jit(jax.jacfwd(fcn, argnums=0))
+        dg_dnu = jax.jit(jax.jacfwd(fcn, argnums=1))
+        g_batched      = jax.jit(jax.vmap(g,      in_axes=(0, 0, None)))
+        dg_dz_batched  = jax.jit(jax.vmap(dg_dz,  in_axes=(0, 0, None)))
+        dg_dnu_batched = jax.jit(jax.vmap(dg_dnu, in_axes=(0, 0, None)))
+
+        if getattr(scp_segment.flags, 'second_order', True):
+            def lagrangian_k(lam, z, nu, params, fcn=fcn):
+                return lam @ fcn(z, nu, params)
+            self.lagrangian_hessians = jax.jit(jax.vmap(jax.hessian(lagrangian_k, argnums=(1, 2)), in_axes=(0, 0, 0, None)))
+
+        self.fcn_batched = g_batched
+
+        def g_aff_batched(z, nu, params, g=g_batched, dz=dg_dz_batched, dnu=dg_dnu_batched):
+            return g(z, nu, params), dz(z, nu, params), dnu(z, nu, params)
+        self.g_aff_batched = g_aff_batched
+
+    def init_penalty(self, scp_segment):
+        self.nodes = np.arange(scp_segment.index_map.N.all)
+        dim = self.constraint.dimension
+        self._alloc_penalty(scp_segment, (len(self.nodes), dim))
+        self.lagrangian_dual = np.zeros((len(self.nodes), dim))
+
+    def create_cvxpy_parameters(self, scp_segment):
+        if self.shape is None:
+            return
+        n_z  = scp_segment.index_map.n.z
+        n_nu = scp_segment.index_map.n.nu
+        dim  = self.constraint.dimension
+        nn   = len(self.nodes)
+        self.dgdz_param  = cp.Parameter((nn, dim, n_z),  name=f"dgdz_{self.name}")
+        self.dgdnu_param = cp.Parameter((nn, dim, n_nu), name=f"dgdnu_{self.name}")
+        self.g0_param    = cp.Parameter((nn, dim),       name=f"g0_{self.name}")
+
+    def create_cvxpy_constraints(self, scp_segment):
+        if self.vb_var is None:
+            return
+        self.cp_eq_constraints = []
+        for i, k in enumerate(self.nodes):
+            cnst = (
+                self.dgdz_param[i] @ scp_segment.dz[k, :]
+                + self.dgdnu_param[i] @ scp_segment.dnu[k, :]
+                + self.g0_param[i]
+                - self.vb_var[i]
+                == 0
+            )
+            self.cp_eq_constraints.append(cnst)
+            scp_segment.cp_constraints.append(cnst)
+
+    def update_cvxpy_parameters(self, scp_segment):
+        if not hasattr(self, 'g0_param'):
+            return
+        z      = jnp.asarray(scp_segment.current_iter_data.z_opt)
+        nu     = jnp.asarray(scp_segment.current_iter_data.nu_opt)
+        params = scp_segment.params
+        g, dgdz, dgdnu = self.g_aff_batched(z[self.nodes], nu[self.nodes], params)
+        self.g0_param.value    = np.asarray(g)
+        self.dgdz_param.value  = np.asarray(dgdz)
+        self.dgdnu_param.value = np.asarray(dgdnu)
+
+    def update_current_iter_data(self, scp_segment):
+        if not hasattr(self, 'cp_eq_constraints'):
+            return
+        z      = jnp.asarray(scp_segment.current_iter_data.z_opt)
+        nu     = jnp.asarray(scp_segment.current_iter_data.nu_opt)
+        params = scp_segment.params
+        self.g_nl = np.asarray(self.fcn_batched(z[self.nodes], nu[self.nodes], params))
+
+        alpha = scp_segment.current_iter_data.get("alpha", 1.0)
+        lam   = np.array([c.dual_value for c in self.cp_eq_constraints])
+        self.lagrangian_dual = (1.0 - alpha) * self.lagrangian_dual + alpha * lam
+
+    def accumulate_hessian(self, scp_segment, H):
+        if not hasattr(self, 'cp_eq_constraints'):
+            return
+        n_z    = scp_segment.index_map.n.z
+        z      = jnp.asarray(scp_segment.current_iter_data.z_opt)
+        nu     = jnp.asarray(scp_segment.current_iter_data.nu_opt)
+        params = scp_segment.params
+        lam    = jnp.asarray(self.lagrangian_dual)
+
+        H_z, H_nu = self.lagrangian_hessians(lam, z[self.nodes], nu[self.nodes], params)
+        for i, k in enumerate(self.nodes):
+            H[k, :n_z, :n_z] += np.asarray(H_z[0][i])
+            H[k, :n_z, n_z:] += np.asarray(H_z[1][i])
+            H[k, n_z:, :n_z] += np.asarray(H_nu[0][i])
+            H[k, n_z:, n_z:] += np.asarray(H_nu[1][i])
+
+    def compile_merit_penalty(self, scp_segment):
+        if self.W.size == 0:
+            return
+        fcn_b = self.fcn_batched
+        nodes = jnp.asarray(self.nodes)
+        dim   = self.constraint.dimension
+        def violation(z, nu, params):
+            return fcn_b(z[nodes], nu[nodes], params).reshape(-1, dim)
+        self._compile_merit_penalty(violation)
+
+
+class scp_initial_nonconvex_equality(scp_nonconvex_equality):
+    def init_penalty(self, scp_segment):
+        self.nodes = np.array([0])
+        dim = self.constraint.dimension
+        self._alloc_penalty(scp_segment, (len(self.nodes), dim))
+        self.lagrangian_dual = np.zeros((len(self.nodes), dim))
+
+
+class scp_final_nonconvex_equality(scp_nonconvex_equality):
+    def init_penalty(self, scp_segment):
+        self.nodes = np.array([scp_segment.index_map.N.all - 1])
+        dim = self.constraint.dimension
+        self._alloc_penalty(scp_segment, (len(self.nodes), dim))
+        self.lagrangian_dual = np.zeros((len(self.nodes), dim))
+
+
 class scp_ctcs_nonconvex_inequality(SCPConstraint):
 
     def create_cvxpy_constraints(self, scp_segment):

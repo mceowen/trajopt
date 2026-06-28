@@ -138,7 +138,7 @@ class SCPConstraint():
         if not hasattr(self.penalty, 'W'):
             return
 
-        freeze_iters = 40.0
+        freeze_iters = 100.0
         iter_num = scp_segment.current_iter_data.iter_num
         rho = max(0.0, 1.0 - iter_num / freeze_iters)
 
@@ -154,7 +154,7 @@ class SCPConstraint():
         else:
 
             if self.penalty.W.autotune:
-                damp = 0.3 * rho
+                damp = 0.9 * rho
                 ratio = np.abs(self.vb) / (0.01 * self.eps)
                 Wh = self.W * np.power(ratio, damp)
                 self.W = np.clip(Wh, 0.00001, 1e7)

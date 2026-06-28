@@ -81,12 +81,14 @@ class SCPSegment():
         initial_guess.set_initial_guess(segment, self)
 
         self.iter_data_list = []
+        self.lm_mu = 1e-8
 
         self.current_iter_data = recursive_attrdict({
             "iter_num": 0,
             "z_opt": self.initial_guess.z,
             "nu_opt": self.initial_guess.nu,
             "cost": 0.0,
+            "penalty_cost": 0.0,
             "vb":     AttrDict({c.name: c.vb     for c in self.constraints.values() if c.shape is not None}),
             "W":      AttrDict({c.name: c.W      for c in self.constraints.values() if c.shape is not None}),
             "dual":   AttrDict({c.name: c.dual   for c in self.constraints.values() if c.shape is not None}),
@@ -302,7 +304,14 @@ class SCPSegment():
         n_z  = self.index_map.n.z
         n_nu = self.index_map.n.nu
 
-        H = np.zeros((N, n_z + n_nu, n_z + n_nu))
+        iteration = len(self.iter_data_list)
+
+        if iteration == 0:
+            H = np.tile(np.eye(n_z + n_nu), (N, 1, 1))
+        else:
+            H = np.zeros((N, n_z + n_nu, n_z + n_nu))
+            self._adapt_levenberg(iteration)
+            H += self.lm_mu * np.eye(n_z + n_nu)[np.newaxis, :, :]
 
         for constraint in self.constraints.values():
             constraint.accumulate_hessian(self, H)
@@ -311,6 +320,21 @@ class SCPSegment():
             cost.accumulate_hessian(self, H)
 
         self.cp_params.L.value = _psd_sqrt(H)
+
+    def _adapt_levenberg(self, iteration: int) -> None:
+        if iteration < 2:
+            return
+        prev = self.iter_data_list[-1]
+        prev_prev = self.iter_data_list[-2]
+        merit_curr = prev.cost + prev.penalty_cost
+        merit_prev = prev_prev.cost + prev_prev.penalty_cost
+        ratio = merit_curr / merit_prev if merit_prev != 0 else 1.0
+        if ratio > 1.0:
+            self.lm_mu = min(self.lm_mu * 3.0, 1e4)
+        elif ratio > 0.99:
+            self.lm_mu = min(self.lm_mu * 1.5, 1e4)
+        else:
+            self.lm_mu = max(self.lm_mu * 0.7, 1e-6)
 
     def read_solution(self) -> None:
         self._dz_new  = self.dz.value
@@ -340,7 +364,10 @@ class SCPSegment():
         self.current_iter_data.beta_opt = beta_opt_new
         self.current_iter_data.u_opt    = u_opt_new
         self.current_iter_data.s_opt    = s_opt_new
-        self.current_iter_data.cost     = float(np.sum(self.cp_cost.value))
+        z_jnp  = jnp.asarray(z_new)
+        nu_jnp = jnp.asarray(nu_new)
+        self.current_iter_data.cost         = sum(c.evaluate_merit_cost(z_jnp, nu_jnp, self.params) for c in self.costs.values())
+        self.current_iter_data.penalty_cost = sum(c.evaluate_merit(z_jnp, nu_jnp, self.params) for c in self.constraints.values())
 
         for constraint in self.constraints.values():
             constraint.read_vb(self)
@@ -367,8 +394,8 @@ class SCPSegment():
         for constraint in self.constraints.values():
             constraint.update_W_dual(self, alpha)
 
-def _psd_sqrt(H_batch, delta=1e-10):
+def _psd_sqrt(H_batch):
     eigvals, eigvecs = np.linalg.eigh(H_batch)
-    eigvals_reg = np.maximum(eigvals, delta)
+    eigvals_reg = np.maximum(eigvals, 0.0)
     sqrt_eigvals = np.sqrt(eigvals_reg)
     return sqrt_eigvals[..., :, np.newaxis] * np.transpose(eigvecs, (0, 2, 1))

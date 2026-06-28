@@ -21,6 +21,7 @@ def check_convergence_tolerance(scp_segment) -> None:
 
     bool_vb_dyn  = all(cnstr.is_feasible for cnstr in constraints if cnstr.type == "dynamics")
     bool_vb_ineq = all(cnstr.is_feasible for cnstr in constraints if "nonconvex_inequality" in cnstr.type)
+    bool_vb_eq   = all(cnstr.is_feasible for cnstr in constraints if "nonconvex_equality" in cnstr.type)
     bool_term    = all(cnstr.is_feasible for cnstr in constraints if cnstr.type == "final_state")
     bool_cont    = all(cnstr.is_feasible for cnstr in constraints if cnstr.type == "continuity")
 
@@ -31,12 +32,17 @@ def check_convergence_tolerance(scp_segment) -> None:
         for h in constraints
         if "nonconvex_inequality" in h.type and getattr(h, "g_nl", None) is not None
     )
+    bool_ncvx_eq        = all(
+        np.all(np.abs(h.g_nl) <= np.atleast_1d(h.eps))
+        for h in constraints
+        if "nonconvex_equality" in h.type and getattr(h, "g_nl", None) is not None
+    )
 
     bool_opt1  = bool_dz
-    bool_feas1 = bool_term and bool_vb_ineq and bool_vb_dyn and bool_cont
+    bool_feas1 = bool_term and bool_vb_ineq and bool_vb_eq and bool_vb_dyn and bool_cont
 
     bool_opt2  = bool_dcost
-    bool_feas2 = bool_term and bool_ncvx_ineq and bool_ncvx_dyn_state and bool_cont
+    bool_feas2 = bool_term and bool_ncvx_ineq and bool_ncvx_eq and bool_ncvx_dyn_state and bool_cont
 
     flag_conv = scp_segment.flags.flag_conv
     if flag_conv == 0:
@@ -54,6 +60,7 @@ def check_convergence_tolerance(scp_segment) -> None:
         dcost                = np.max(abs_dcost / eps_dcost),
         final_state          = max((cnstr.vb_ratio for cnstr in constraints if cnstr.type == "final_state"), default=0.0),
         nonconvex_inequality = max((cnstr.vb_ratio for cnstr in constraints if "nonconvex_inequality" in cnstr.type), default=0.0),
+        nonconvex_equality   = max((cnstr.vb_ratio for cnstr in constraints if "nonconvex_equality" in cnstr.type), default=0.0),
         dynamics             = max((cnstr.vb_ratio for cnstr in constraints if cnstr.type == "dynamics"), default=0.0),
     )
     current_iter_data.status    = scp_segment.cp_subproblem_status

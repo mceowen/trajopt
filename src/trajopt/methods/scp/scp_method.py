@@ -59,7 +59,7 @@ class SCPMethod():
         for scp_segment in self.scp_trajectory.scp_segments.values():
             scp_segment.record_iter_data()
 
-    def line_search(self, c1=1e-6, beta=0.5, max_iter=20, alpha_min=0.1):
+    def line_search(self, c1=1e-4, beta=0.5, max_iter=20, alpha_min=1e-7):
         segments = self.scp_trajectory.scp_segments
 
         phi_0, dphi = 0.0, 0.0
@@ -68,7 +68,7 @@ class SCPMethod():
             phi_0 += v
             dphi += g
 
-        slope = min(dphi, -abs(dphi) * 1e-6)
+        slope = min(dphi, -abs(dphi) * 1e-10)
 
         alpha = 1.0
         for _ in range(max_iter):
@@ -93,10 +93,10 @@ class SCPMethod():
 
         self.warmup_jax()
 
-        print("-" * 172)
-        print("  Iteration |  Discretization |   Solve   |    Parse   |  log(dx/eps) | log(vb_ineq/eps) | log(vb_term/eps) | log(vb_dyn/eps) | Solve status | alpha |  Time of    |   Cost    ")
-        print("            |    time [ms]    | time [ms] |  time [ms] |     (state)  |    (ncvx_ineq)   |      (terminal)  |    (dynamics)   |              |       |  Flight [s] |           ")
-        print("-" * 172)
+        print("-" * 204)
+        print("  Iteration |  Discretization |   Solve   |    Parse   |  log(dx/eps) | log(vb_ineq/eps) | log(vb_eq/eps) | log(vb_term/eps) | log(vb_dyn/eps) | Solve status | alpha |  Time of    |   Cost    |  Penalty  ")
+        print("            |    time [ms]    | time [ms] |  time [ms] |     (state)  |    (ncvx_ineq)   |   (ncvx_eq)    |      (terminal)  |    (dynamics)   |              |       |  Flight [s] |           |   Cost    ")
+        print("-" * 204)
 
         max_iter = int(self.method_config.flags.iter_max)
 
@@ -137,23 +137,26 @@ class SCPMethod():
             with np.errstate(divide="ignore"):
                 log_dz_ratio      = float(np.log10(current_iter_data.chk.dz))
                 log_vb_ineq_ratio = float(np.log10(current_iter_data.chk.nonconvex_inequality))
+                log_vb_eq_ratio   = float(np.log10(current_iter_data.chk.nonconvex_equality))
                 log_vb_term_ratio = float(np.log10(current_iter_data.chk.final_state))
                 log_vb_dyn_ratio  = float(np.log10(current_iter_data.chk.dynamics))
 
             prefix = f"[{scp_segment.name}] " if multi else ""
             print(
-                prefix + "{:^12d}|{:^17.1f}|{:^11.1f}|{:^12.1f}|{:^+14.1f}|{:^+18.1f}|{:^+18.1f}|{:^+17.1f}|{:^14s}|{:^7.3f}|{:^13.2f}|{:^11.1f}".format(
+                prefix + "{:^12d}|{:^17.1f}|{:^11.1f}|{:^12.1f}|{:^+14.1f}|{:^+18.1f}|{:^+16.1f}|{:^+18.1f}|{:^+17.1f}|{:^14s}|{:^7.3f}|{:^13.2f}|{:^11.1f}|{:^11.1f}".format(
                     int(current_iter_data.iter_num),
                     float(current_iter_data.discretization_time),
                     float(current_iter_data.solve_time),
                     float(current_iter_data.parse_time),
                     log_dz_ratio,
                     log_vb_ineq_ratio,
+                    log_vb_eq_ratio,
                     log_vb_term_ratio,
                     log_vb_dyn_ratio,
                     str(current_iter_data.status),
                     float(current_iter_data.get("alpha", 1.0)),
                     float(current_iter_data.T_opt),
                     float(current_iter_data.cost),
+                    float(current_iter_data.get("penalty_cost", 0.0)),
                 )
             )

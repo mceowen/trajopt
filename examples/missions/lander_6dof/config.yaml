@@ -7,7 +7,7 @@ method:
 trajectory:
   segments:
     landing:
-      num_nodes: 15
+      num_nodes: 40
       inherit: ../../models/configs/lander_6dof.yaml
 
       params:
