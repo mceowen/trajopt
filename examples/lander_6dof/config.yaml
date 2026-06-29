@@ -1,0 +1,1 @@
+inherit: trajopt/problems/lander_6dof.yaml

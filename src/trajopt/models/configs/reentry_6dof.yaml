@@ -7,23 +7,23 @@ params:
 
 fcns:
   # aero angles
-  aoa: ../reentry_6dof.py:aoa
-  sideslip: ../reentry_6dof.py:sideslip
+  aoa: trajopt/models/reentry_6dof.py:aoa
+  sideslip: trajopt/models/reentry_6dof.py:sideslip
 
   # path constraints
-  heat_rate: ../reentry_6dof.py:heat_rate
-  dynamic_pressure: ../reentry_6dof.py:dynamic_pressure
-  aero_load: ../reentry_6dof.py:aero_load
-  altitude: ../reentry_6dof.py:altitude
-  long_lat_alt: ../reentry_6dof.py:long_lat_alt
+  heat_rate: trajopt/models/reentry_6dof.py:heat_rate
+  dynamic_pressure: trajopt/models/reentry_6dof.py:dynamic_pressure
+  aero_load: trajopt/models/reentry_6dof.py:aero_load
+  altitude: trajopt/models/reentry_6dof.py:altitude
+  long_lat_alt: trajopt/models/reentry_6dof.py:long_lat_alt
 
   # polar coordinate trajectories
-  polar_radius: ../reentry_6dof.py:polar_radius
-  polar_longitude: ../reentry_6dof.py:polar_longitude
-  polar_latitude: ../reentry_6dof.py:polar_latitude
-  polar_velocity: ../reentry_6dof.py:polar_velocity
-  polar_fpa: ../reentry_6dof.py:polar_fpa
-  polar_heading: ../reentry_6dof.py:polar_heading
+  polar_radius: trajopt/models/reentry_6dof.py:polar_radius
+  polar_longitude: trajopt/models/reentry_6dof.py:polar_longitude
+  polar_latitude: trajopt/models/reentry_6dof.py:polar_latitude
+  polar_velocity: trajopt/models/reentry_6dof.py:polar_velocity
+  polar_fpa: trajopt/models/reentry_6dof.py:polar_fpa
+  polar_heading: trajopt/models/reentry_6dof.py:polar_heading
 
 # ===============================
 # STATE AND CONTROL DEFINITIONS
@@ -75,7 +75,7 @@ control.torque:
 trajplots:
   long_lat_trajectory_plot:
     type: spatial
-    fcn: ../reentry_6dof.py:long_lat
+    fcn: trajopt/models/reentry_6dof.py:long_lat
     group: state_trajplots
     title: "Longitude vs Latitude"
     xlabel: "Longitude (deg)"

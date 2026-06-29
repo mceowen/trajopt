@@ -1,0 +1,11 @@
+
+# problem statement (mission and model)
+inherit: trajopt/formulations/msl_entry_3dof.yaml
+
+
+# solution method
+method:
+  inherit: trajopt/methods/configs/autoscvx.yaml
+
+  solver_opts:
+    solver: QOCO

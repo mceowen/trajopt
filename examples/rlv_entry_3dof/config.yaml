@@ -1,0 +1,1 @@
+inherit: trajopt/problems/rlv_entry_3dof.yaml

@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from trajopt.methods.scp import pseudospectral
+from trajopt.methods.common import pseudospectral
 from trajopt.methods.scp.scp_constraints.scp_constraint import SCPConstraint
 
 # ---------------------------------------------------------------------------

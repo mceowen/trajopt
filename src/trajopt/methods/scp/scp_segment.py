@@ -6,8 +6,8 @@ import cvxpy as cp
 import jax.numpy as jnp
 
 from trajopt.segment import Segment
-from trajopt.methods.scp import initial_guess
-from trajopt.methods.scp import convergence
+from trajopt.methods.common import initial_guess
+from trajopt.methods.common import convergence
 import trajopt.methods.scp.scp_constraints.scp_constraint_types as scp_constraint_type_module
 import trajopt.methods.scp.scp_costs.scp_cost_types as scp_cost_type_module
 from trajopt.utils.tools import AttrDict, recursive_attrdict

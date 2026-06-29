@@ -1,0 +1,62 @@
+# source: https://underactuated.mit.edu/trajopt.html#perching
+method:
+  inherit: trajopt/methods/configs/autoscvx.yaml
+
+  flags:
+    equal_dt: 1
+    free_final_time: 1
+
+  solver_opts:
+    solver: PIQP
+
+trajectory:
+  segments:
+    perch:
+      num_nodes: 20
+      inherit: trajopt/models/configs/perching_glider_tedrake.yaml
+
+      inherit: trajopt/missions/configs/perching_glider.yaml
+
+      constraints:
+        dynamics:
+          type: dynamics
+          fcn: fcns.dynamics
+
+        initial_state:
+          type: initial_state
+          value: [-3.5, 0.1, 0, 0, 7.0, 0, 0]
+
+        final_state:
+          type: final_state
+          value: [0, 0, null, null, null, null, null]
+
+        state_limits:
+          type: state_limits
+          lower: [null, null, -0.9473, null, null, null, null]
+          upper: [null, null, 0.4463, null, null, null, null]
+
+        terminal_box:
+          type: final_nonconvex_inequality
+          fcn: fcns.terminal_box
+          lower: [-2.0, -2.0, -1.0]
+          upper: [2.0, 2.0, "${-np.pi / 6.0}"]
+
+      costs:
+        u_squared:
+          type: nonconvex_running
+          fcn: fcns.u_squared_cost
+          w: 1
+
+      guess:
+        type: propagation
+        t_start: 0.0
+        t_stop: 0.8
+        u_start: [0]
+        u_stop: [0]
+
+analysis:
+  type: standalone
+  compute_iters: true
+  show_iters: true
+  show_convergence: true
+  show_weights: true

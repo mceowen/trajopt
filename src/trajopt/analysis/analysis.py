@@ -3,7 +3,7 @@ import copy
 import jax
 import numpy as np
 
-from trajopt.methods.scp import integrators, pseudospectral
+from trajopt.methods.common import integrators, pseudospectral
 from trajopt.utils import tools
 from trajopt.utils.tools import AttrDict, recursive_attrdict
 
