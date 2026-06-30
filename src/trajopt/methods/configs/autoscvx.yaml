@@ -16,10 +16,11 @@ weights:
 
 penalty:
   default:
+    norm: l1
     W:
       penalty: True
-      autotune: True
-      init: 1.0
+      autotune: False
+      init: 1.0e3
     dual:
       penalty: True
       autotune: True

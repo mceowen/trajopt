@@ -23,7 +23,7 @@ def check_convergence_tolerance(method_segment) -> None:
     bool_vb_ineq = all(cnstr.is_feasible for cnstr in constraints if "nonconvex_inequality" in cnstr.type)
     bool_vb_eq   = all(cnstr.is_feasible for cnstr in constraints if "nonconvex_equality" in cnstr.type)
     bool_term    = all(cnstr.is_feasible for cnstr in constraints if cnstr.type == "final_state")
-    bool_cont    = all(cnstr.is_feasible for cnstr in constraints if cnstr.type == "continuity")
+    bool_cont    = all(cnstr.is_feasible for cnstr in constraints if "continuity" in cnstr.type)
 
     defect              = current_iter_data.get("defect", 0)
     bool_ncvx_dyn_state = np.all(np.abs(defect) <= method_segment.eps_dyn)

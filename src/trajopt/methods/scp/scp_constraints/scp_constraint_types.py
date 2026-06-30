@@ -50,7 +50,7 @@ class scp_dynamics(SCPConstraint):
             return
 
         N_grid    = scp_segment.index_map.N.all
-        nsub      = 10
+        nsub      = 3
         delta_tau = 1.0 / (N_grid - 1)
         dt_rk4    = delta_tau / nsub
 
@@ -715,6 +715,18 @@ class scp_continuity(SCPConstraint):
             self.add_penalty_cost(seg)
         else:
             seg.cp_constraints.append(residual == 0)
+
+
+class scp_state_continuity(scp_continuity):
+    pass
+
+
+class scp_control_continuity(scp_continuity):
+    pass
+
+
+class scp_time_continuity(scp_continuity):
+    pass
 
 
 # ---------------------------------------------------------------------------
