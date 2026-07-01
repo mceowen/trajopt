@@ -72,13 +72,3 @@ class Nondim:
         self.M.state        = ScalingMatrix(self, "state_scales")
         self.M.control      = ScalingMatrix(self, "control_scales")
         self.M.time         = ScalingMatrix(self, "time_scale")
-
-        print("\n")
-        print("nondim scales: ")
-        print("------------------------------------------------------------")
-
-        print(f"state scales: {self.state_scales}")
-        print(f"control scales: {self.control_scales}")
-        print(f"time scale: {self.time_scale}")
-        print("------------------------------------------------------------")
-        print("\n")

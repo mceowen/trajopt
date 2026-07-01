@@ -28,9 +28,6 @@ class Segment:
         # load guess config
         self.guess  = segment_config.get("guess", AttrDict())
 
-        print(f"segment '{self.name}' configuration:")
-        print("------------------------------------------------------------")
-
         # create dictionary of constraints
         self.constraints = AttrDict()
         for cnstr_name, cnstr_config in segment_config.constraints.items():
@@ -58,9 +55,6 @@ class Segment:
             trajplot_type = trajplot_config.type
             trajplotClass = getattr(trajplot_type_module, trajplot_type)
             self.trajplots[trajplot_name] = trajplotClass(trajplot_config, self)
-
-        print("------------------------------------------------------------")
-        print("\n")
 
     def _wire_ctcs_constraints(self):
         """Attach any ctcs_nonconvex_inequality constraints to the dynamics and resize the augmented state."""

@@ -1,6 +1,7 @@
 import time
 
 import numpy as np
+import jax.numpy as jnp
 import cvxpy as cp
 
 from trajopt.methods.scp.scp_trajectory import SCPTrajectory
@@ -129,34 +130,94 @@ class SCPMethod():
         total_ms = total_discretization_ms + total_solve_ms
         print(f"\nTotal SCP time: {total_ms:.1f} ms (discretize: {total_discretization_ms:.1f}, solve: {total_solve_ms:.1f})")
 
+        self.display_cost_summary()
+
     def display_status(self) -> None:
-        multi = len(self.scp_trajectory.scp_segments) > 1
-        for scp_segment in self.scp_trajectory.scp_segments.values():
-            current_iter_data = scp_segment.current_iter_data
+        segments = list(self.scp_trajectory.scp_segments.values())
+        first = segments[0].current_iter_data
 
-            with np.errstate(divide="ignore"):
-                log_dz_ratio      = float(np.log10(current_iter_data.chk.dz))
-                log_vb_ineq_ratio = float(np.log10(current_iter_data.chk.nonconvex_inequality))
-                log_vb_eq_ratio   = float(np.log10(current_iter_data.chk.nonconvex_equality))
-                log_vb_term_ratio = float(np.log10(current_iter_data.chk.final_state))
-                log_vb_dyn_ratio  = float(np.log10(current_iter_data.chk.dynamics))
+        total_disc_time = sum(float(s.current_iter_data.discretization_time) for s in segments)
+        total_cost      = sum(float(s.current_iter_data.cost) for s in segments)
+        total_penalty   = sum(float(s.current_iter_data.get("penalty_cost", 0.0)) for s in segments)
+        total_T_opt     = sum(float(s.current_iter_data.T_opt) for s in segments)
 
-            prefix = f"[{scp_segment.name}] " if multi else ""
-            print(
-                prefix + "{:^12d}|{:^17.1f}|{:^11.1f}|{:^12.1f}|{:^+14.1f}|{:^+18.1f}|{:^+16.1f}|{:^+18.1f}|{:^+17.1f}|{:^14s}|{:^7.3f}|{:^13.2f}|{:^11.1f}|{:^11.1f}".format(
-                    int(current_iter_data.iter_num),
-                    float(current_iter_data.discretization_time),
-                    float(current_iter_data.solve_time),
-                    float(current_iter_data.parse_time),
-                    log_dz_ratio,
-                    log_vb_ineq_ratio,
-                    log_vb_eq_ratio,
-                    log_vb_term_ratio,
-                    log_vb_dyn_ratio,
-                    str(current_iter_data.status),
-                    float(current_iter_data.get("alpha", 1.0)),
-                    float(current_iter_data.T_opt),
-                    float(current_iter_data.cost),
-                    float(current_iter_data.get("penalty_cost", 0.0)),
-                )
+        with np.errstate(divide="ignore"):
+            log_dz_ratio      = float(np.log10(max(s.current_iter_data.chk.dz for s in segments)))
+            log_vb_ineq_ratio = float(np.log10(max(s.current_iter_data.chk.nonconvex_inequality for s in segments)))
+            log_vb_eq_ratio   = float(np.log10(max(s.current_iter_data.chk.nonconvex_equality for s in segments)))
+            log_vb_term_ratio = float(np.log10(max(s.current_iter_data.chk.final_state for s in segments)))
+            log_vb_dyn_ratio  = float(np.log10(max(s.current_iter_data.chk.dynamics for s in segments)))
+
+        print(
+            "{:^12d}|{:^17.1f}|{:^11.1f}|{:^12.1f}|{:^+14.1f}|{:^+18.1f}|{:^+16.1f}|{:^+18.1f}|{:^+17.1f}|{:^14s}|{:^7.3f}|{:^13.2f}|{:^11.1f}|{:^11.1f}".format(
+                int(first.iter_num),
+                total_disc_time,
+                float(first.solve_time),
+                float(first.parse_time),
+                log_dz_ratio,
+                log_vb_ineq_ratio,
+                log_vb_eq_ratio,
+                log_vb_term_ratio,
+                log_vb_dyn_ratio,
+                str(first.status),
+                float(first.get("alpha", 1.0)),
+                total_T_opt,
+                total_cost,
+                total_penalty,
             )
+        )
+
+    def display_cost_summary(self) -> None:
+        segments = list(self.scp_trajectory.scp_segments.values())
+        multi = len(segments) > 1
+
+        # evaluate each cost term for each segment
+        cost_names = list(dict.fromkeys(name for seg in segments for name in seg.costs))
+        cost_values = {}  # cost_values[seg_name][cost_name] = float
+        for seg in segments:
+            z = jnp.asarray(seg.current_iter_data.z_opt)
+            nu = jnp.asarray(seg.current_iter_data.nu_opt)
+            cost_values[seg.name] = {}
+            for name, cost in seg.costs.items():
+                cost_values[seg.name][name] = float(cost.evaluate_merit_cost(z, nu, seg.params))
+
+        # compute column widths
+        column_names = [seg.name for seg in segments]
+        if multi:
+            column_names.append("Combined")
+        col_width = max(14, max(len(c) for c in column_names))
+        label_width = max(len(n) for n in cost_names + ["Total"])
+
+        # print header
+        print("\nCost Summary:")
+        header = " " * (label_width + 2)
+        for col_name in column_names:
+            header += f"  {col_name:>{col_width}}"
+        print(header)
+        separator = "  " + "-" * (label_width + (col_width + 2) * len(column_names))
+        print(separator)
+
+        # print each cost row
+        seg_totals = {seg.name: 0.0 for seg in segments}
+        for cost_name in cost_names:
+            line = f"  {cost_name:>{label_width}}"
+            combined = 0.0
+            for seg in segments:
+                val = cost_values[seg.name].get(cost_name, 0.0)
+                line += f"  {val:>{col_width}.6f}"
+                seg_totals[seg.name] += val
+                combined += val
+            if multi:
+                line += f"  {combined:>{col_width}.6f}"
+            print(line)
+
+        # print total row
+        print(separator)
+        line = f"  {'Total':>{label_width}}"
+        grand_total = 0.0
+        for seg in segments:
+            line += f"  {seg_totals[seg.name]:>{col_width}.6f}"
+            grand_total += seg_totals[seg.name]
+        if multi:
+            line += f"  {grand_total:>{col_width}.6f}"
+        print(line)
