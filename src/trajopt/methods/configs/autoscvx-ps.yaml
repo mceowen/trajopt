@@ -4,7 +4,6 @@ flags:
   free_final_time: 1
   equal_dt: 0
   discretize: ps
-  line_search: 1
   hp_segments: 10
 
 # penalty:
