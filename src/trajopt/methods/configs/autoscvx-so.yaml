@@ -1,0 +1,5 @@
+inherit: autoscvx.yaml
+
+flags:
+  second_order:       1
+  line_search:        1

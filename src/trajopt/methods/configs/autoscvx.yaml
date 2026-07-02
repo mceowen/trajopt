@@ -4,8 +4,8 @@ flags:
   zoh_dilation:       1
   flag_conv:          1
   ignore_dpp:         0
-  second_order:       1
-  line_search:        1
+  second_order:       0
+  line_search:        0
   discretize: ms
   eps_state: [0.001]
   iter_max: 300
