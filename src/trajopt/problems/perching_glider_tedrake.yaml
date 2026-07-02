@@ -1,6 +1,6 @@
 # source: https://underactuated.mit.edu/trajopt.html#perching
 method:
-  inherit: trajopt/methods/configs/autoscvx.yaml
+  inherit: trajopt/methods/configs/autoscvx-so.yaml
 
   flags:
     equal_dt: 1
