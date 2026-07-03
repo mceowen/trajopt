@@ -35,7 +35,7 @@ trajectory:
 
       constraints:
         continuity:
-          type: continuity
+          type: full_continuity
           segment: three_engine_segment
 
         final_state:
@@ -52,15 +52,10 @@ trajectory:
         u_stop: [500000, 0]
 
 method:
-  type: SCP
-  inherit: trajopt/methods/configs/autoscvx.yaml
+  inherit: trajopt/methods/configs/so-scvx.yaml
 
   flags:
     free_final_time: 1
-    iter_max: 100
-  
-  solver_opts:
-    solver: PIQP
 
 analysis:
   type: standalone

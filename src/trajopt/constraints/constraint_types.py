@@ -451,11 +451,11 @@ class final_nonconvex_equality(nonconvex_equality):
         self.type = "final_nonconvex_equality"
 
 
-class continuity(Constraint):
+class full_continuity(Constraint):
     """Full continuity: state, control, and time must match at the segment boundary."""
     def __init__(self, cnstr_config: dict, segment) -> None:
         self.name = cnstr_config.name
-        self.type = "continuity"
+        self.type = "full_continuity"
         self.segment_name = cnstr_config.segment
         n = segment.index_map.n
         self.dimension = n.state + n.control + n.time
@@ -483,10 +483,16 @@ class state_continuity(Constraint):
         self.name = cnstr_config.name
         self.type = "state_continuity"
         self.segment_name = cnstr_config.segment
-        self.dimension = segment.index_map.n.state
+        self.idx = cnstr_config.get("idx", None)
+        if self.idx is not None:
+            self.dimension = len(self.idx)
+        else:
+            self.dimension = segment.index_map.n.state
 
     def residual(self, other_scp_segment, this_scp_segment):
         idx_state = this_scp_segment.index_map.indices.z.state
+        if self.idx is not None:
+            idx_state = [idx_state[i] for i in self.idx]
         x_other = other_scp_segment.cp_params.z_ref[-1, idx_state] + other_scp_segment.dz[-1, idx_state]
         x_this  = this_scp_segment.cp_params.z_ref[0, idx_state]  + this_scp_segment.dz[0, idx_state]
         return x_other - x_this
@@ -498,10 +504,16 @@ class control_continuity(Constraint):
         self.name = cnstr_config.name
         self.type = "control_continuity"
         self.segment_name = cnstr_config.segment
-        self.dimension = segment.index_map.n.control
+        self.idx = cnstr_config.get("idx", None)
+        if self.idx is not None:
+            self.dimension = len(self.idx)
+        else:
+            self.dimension = segment.index_map.n.control
 
     def residual(self, other_scp_segment, this_scp_segment):
         idx_ctrl = this_scp_segment.index_map.indices.nu.control
+        if self.idx is not None:
+            idx_ctrl = [idx_ctrl[i] for i in self.idx]
         u_other = other_scp_segment.cp_params.nu_ref[-1, idx_ctrl] + other_scp_segment.dnu[-1, idx_ctrl]
         u_this  = this_scp_segment.cp_params.nu_ref[0, idx_ctrl]  + this_scp_segment.dnu[0, idx_ctrl]
         return u_other - u_this
