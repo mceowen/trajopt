@@ -35,7 +35,7 @@ trajectory:
 
       constraints:
         continuity:
-          type: full_continuity
+          type: continuity
           segment: three_engine_segment
 
         final_state:

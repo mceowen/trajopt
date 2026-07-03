@@ -1,5 +1,0 @@
-inherit: autoscvx-ps.yaml
-
-flags:
-  second_order:       1
-  line_search:        1

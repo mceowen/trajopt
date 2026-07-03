@@ -1,5 +1,8 @@
 method:
-  inherit: trajopt/methods/configs/so-scvx.yaml
+  inherit: trajopt/methods/configs/autoscvx.yaml
+
+  solver_opts:
+    solver: CLARABEL
 
 trajectory:
   segments:

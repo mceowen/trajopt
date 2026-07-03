@@ -1,6 +1,13 @@
 # source: https://underactuated.mit.edu/trajopt.html#perching
 method:
-  inherit: trajopt/methods/configs/so-scvx.yaml
+  inherit: trajopt/methods/configs/autoscvx.yaml
+
+  flags:
+    equal_dt: 1
+    free_final_time: 1
+
+  solver_opts:
+    solver: PIQP
 
 trajectory:
   segments:
