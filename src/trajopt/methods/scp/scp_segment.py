@@ -46,6 +46,7 @@ class SCPSegment():
         self.cp_constraints       = []
         self.cp_cost              = 0
         self.cp_subproblem_status = None
+        self._active_set_layout_cache = None
 
         self.create_cvxpy_parameters()
         self.create_cvxpy_variables()
@@ -326,12 +327,51 @@ class SCPSegment():
 
         self.cp_params.L.value = _psd_sqrt(H)
 
+    def _active_set_layout(self):
+        """(constraint, is_eq, dim) for every nonconvex ineq/eq constraint
+        (including initial_/final_ variants) eligible for the active-set
+        Hessian projection. The set of eligible constraint objects and their
+        dims/node-subsets are fixed for the life of an SCP solve, so this is
+        computed once and cached rather than re-derived every iteration.
+        """
+        if self._active_set_layout_cache is None:
+            layout = []
+            for constraint in self.constraints.values():
+                is_ineq = isinstance(constraint, scp_constraint_type_module.scp_nonconvex_inequality)
+                is_eq   = isinstance(constraint, scp_constraint_type_module.scp_nonconvex_equality)
+                if not (is_ineq or is_eq):
+                    continue
+                if getattr(constraint, 'g0_param', None) is None:
+                    continue
+                layout.append((constraint, is_eq, int(constraint.eps.shape[0])))
+            self._active_set_layout_cache = layout
+        return self._active_set_layout_cache
+
     def _project_active_set_hessian(self, H: np.ndarray, H_base: np.ndarray) -> np.ndarray:
         """SQP-style reduced Hessian: project each node's H_k onto the null
         space of the nonlinear path constraints (`nonconvex_inequality` /
         `nonconvex_equality`, including initial_/final_ variants) that are
         active at that node, so the trust-region metric only carries
         curvature in directions those constraints don't already pin down.
+
+        Vectorized over all N nodes at once (a single batched linalg call)
+        rather than looping in Python and calling `pinv` per node. The key
+        enabler: which constraint *types* apply at which nodes is static
+        (fixed by `_active_set_layout`), so a fixed-shape
+        `(N, dim_total, d)` Jacobian array can be built with zero rows for
+        whatever doesn't apply at a given node this iteration — inactive
+        rows, or rows from a constraint that isn't even defined at that
+        node (e.g. `initial_`/`final_` variants elsewhere). Zero rows don't
+        perturb the projector: for any J' formed by appending zero rows to
+        J, null(J') == null(J), so this is exact, not an approximation.
+
+        The projector itself, `P_k = I - J_k^T (J_k J_k^T)^+ J_k`, uses the
+        Penrose identity `pinv(J) = J^T pinv(J J^T)` (holds for any J,
+        any rank) to pinv the `(dim_total, dim_total)` Gram matrix instead
+        of the `(dim_total, d)` Jacobian directly — cheaper whenever
+        dim_total < d, which is the usual case here (a handful of active
+        path-constraint rows against a state+control dimension of order
+        10-30).
 
         Two variants, chosen by `flags.active_set_preserve_lm`:
 
@@ -357,46 +397,81 @@ class SCPSegment():
         the same nondimensional tolerance already used for feasibility.
         Everything else (box limits, dynamics, boundary conditions) is out
         of scope for this first experiment.
+
+        Optional smoothing (`flags.active_set_smooth_width_factor > 0`):
+        since a hard activeness mask is discontinuous exactly where it
+        matters (constraints hovering at the boundary flip in/out between
+        iterations — see the `preserve_lm` note above), rows within
+        `smooth_width_factor * eps` *below* the hard threshold are still
+        included, but Tikhonov-regularized in the Gram matrix by a weight
+        `lambda_i` ramping from 0 at the threshold to
+        `active_set_smooth_lambda` at the outer edge of the band, instead
+        of being sharply excluded. `lambda_i = 0` recovers exact hard
+        projection for that row; larger `lambda_i` progressively damps its
+        contribution to the null-space removal. Default width is 0, which
+        reduces this exactly to the hard-mask formula above (lambda == 0
+        for every included row).
         """
         N = self.index_map.N.all
+        d = H.shape[-1]
         tol_factor = float(getattr(self.flags, 'active_set_tol_factor', 1.0))
+        smooth_width_factor = float(getattr(self.flags, 'active_set_smooth_width_factor', 0.0))
+        smooth_lambda = float(getattr(self.flags, 'active_set_smooth_lambda', 0.0))
 
-        rows_per_node = [[] for _ in range(N)]
+        layout = self._active_set_layout()
+        dim_total = sum(dim for _, _, dim in layout)
+        if dim_total == 0:
+            return H
 
-        for constraint in self.constraints.values():
-            is_ineq = isinstance(constraint, scp_constraint_type_module.scp_nonconvex_inequality)
-            is_eq   = isinstance(constraint, scp_constraint_type_module.scp_nonconvex_equality)
-            if not (is_ineq or is_eq):
-                continue
-            if getattr(constraint, 'g0_param', None) is None or constraint.g0_param.value is None:
+        J    = np.zeros((N, dim_total, d))
+        mask = np.zeros((N, dim_total), dtype=bool)
+        lam  = np.zeros((N, dim_total))
+
+        row = 0
+        for constraint, is_eq, dim in layout:
+            if constraint.g0_param.value is None:
+                row += dim
                 continue
 
             g0    = constraint.g0_param.value    # (nn, dim)
             dgdz  = constraint.dgdz_param.value  # (nn, dim, n_z)
             dgdnu = constraint.dgdnu_param.value # (nn, dim, n_nu)
             tol   = tol_factor * constraint.eps  # (dim,)
+            nodes = constraint.nodes
 
-            for i, k in enumerate(constraint.nodes):
-                active = np.ones(g0.shape[1], dtype=bool) if is_eq else (g0[i] >= -tol)
-                if not np.any(active):
-                    continue
-                rows_per_node[k].append(np.concatenate([dgdz[i, active], dgdnu[i, active]], axis=1))
+            if is_eq:
+                include = np.ones_like(g0, dtype=bool)
+                lam_g   = np.zeros_like(g0)
+            elif smooth_width_factor > 0:
+                width   = smooth_width_factor * constraint.eps  # (dim,)
+                d0      = g0 - (-tol)                            # >= 0 means hard-active
+                include = d0 >= -width
+                lam_g   = smooth_lambda * np.clip(-d0 / width, 0.0, 1.0)
+            else:
+                include = g0 >= -tol
+                lam_g   = np.zeros_like(g0)
+
+            J[nodes, row:row + dim, :] = np.concatenate([dgdz, dgdnu], axis=-1)
+            mask[nodes, row:row + dim] = include
+            lam[nodes, row:row + dim]  = lam_g
+            row += dim
+
+        J *= mask[:, :, np.newaxis]
+
+        idx = np.arange(dim_total)
+        Lambda = np.zeros((N, dim_total, dim_total))
+        Lambda[:, idx, idx] = lam
+
+        Jt   = np.swapaxes(J, -1, -2)                 # (N, d, dim_total)
+        gram = J @ Jt + Lambda                        # (N, dim_total, dim_total)
+        P    = np.eye(d)[np.newaxis, :, :] - Jt @ np.linalg.pinv(gram) @ J
 
         preserve_lm = bool(getattr(self.flags, 'active_set_preserve_lm', False))
-        H_proj  = H.copy()
-        H_extra = H - H_base
-
-        for k in range(N):
-            if not rows_per_node[k]:
-                continue
-            J_k = np.concatenate(rows_per_node[k], axis=0)
-            P_k = np.eye(J_k.shape[1]) - np.linalg.pinv(J_k) @ J_k
-            if preserve_lm:
-                H_proj[k] = H_base[k] + P_k @ H_extra[k] @ P_k.T
-            else:
-                H_proj[k] = P_k @ H[k] @ P_k.T
-
-        return H_proj
+        Pt = np.swapaxes(P, -1, -2)
+        if preserve_lm:
+            H_extra = H - H_base
+            return H_base + P @ H_extra @ Pt
+        return P @ H @ Pt
 
     def _adapt_levenberg(self, iteration: int) -> None:
         if iteration < 2:
