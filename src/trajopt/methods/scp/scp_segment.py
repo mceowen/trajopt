@@ -307,11 +307,13 @@ class SCPSegment():
         iteration = len(self.iter_data_list)
 
         if iteration == 0:
-            H = np.tile(np.eye(n_z + n_nu), (N, 1, 1))
+            H_base = np.tile(np.eye(n_z + n_nu), (N, 1, 1))
         else:
-            H = np.zeros((N, n_z + n_nu, n_z + n_nu))
+            H_base = np.zeros((N, n_z + n_nu, n_z + n_nu))
             self._adapt_levenberg(iteration)
-            H += self.lm_mu * np.eye(n_z + n_nu)[np.newaxis, :, :]
+            H_base += self.lm_mu * np.eye(n_z + n_nu)[np.newaxis, :, :]
+
+        H = H_base.copy()
 
         for constraint in self.constraints.values():
             constraint.accumulate_hessian(self, H)
@@ -319,7 +321,82 @@ class SCPSegment():
         for cost in self.costs.values():
             cost.accumulate_hessian(self, H)
 
+        if getattr(self.flags, 'active_set_hessian', False):
+            H = self._project_active_set_hessian(H, H_base)
+
         self.cp_params.L.value = _psd_sqrt(H)
+
+    def _project_active_set_hessian(self, H: np.ndarray, H_base: np.ndarray) -> np.ndarray:
+        """SQP-style reduced Hessian: project each node's H_k onto the null
+        space of the nonlinear path constraints (`nonconvex_inequality` /
+        `nonconvex_equality`, including initial_/final_ variants) that are
+        active at that node, so the trust-region metric only carries
+        curvature in directions those constraints don't already pin down.
+
+        Two variants, chosen by `flags.active_set_preserve_lm`:
+
+        - False (default): project all of H_k, including the LM-damped
+          `lm_mu` floor (`H_base_k`). Theoretically this leaves active
+          directions with no step-size control besides the linearized
+          constraint's own (often still-weak) penalty and the line search
+          — but empirically this is the version that actually produced the
+          wins on `car` (47 vs 63 iters at tol_factor=1000) and
+          `lander_6dof` (converges vs. never converges at tol_factor=10000).
+        - True: leave H_base_k (the trust-region-radius control) un-projected
+          and only project the constraint/cost curvature on top of it. This
+          fixes a narrow-tolerance regression seen on `car` (flickering
+          active-set membership destabilizing the step with no floor left),
+          but also erases the wide-tolerance win there — the floor turns out
+          to be redundant drag, not protection, once the active set is large
+          and stable. Kept available for further active-set-criterion work
+          (e.g. dual-based or persistence-based activeness) rather than as
+          the recommended default.
+
+        Activeness: equality rows are always active; inequality row i is
+        active when g0[i] >= -tol_factor * constraint.eps[i], i.e. within
+        the same nondimensional tolerance already used for feasibility.
+        Everything else (box limits, dynamics, boundary conditions) is out
+        of scope for this first experiment.
+        """
+        N = self.index_map.N.all
+        tol_factor = float(getattr(self.flags, 'active_set_tol_factor', 1.0))
+
+        rows_per_node = [[] for _ in range(N)]
+
+        for constraint in self.constraints.values():
+            is_ineq = isinstance(constraint, scp_constraint_type_module.scp_nonconvex_inequality)
+            is_eq   = isinstance(constraint, scp_constraint_type_module.scp_nonconvex_equality)
+            if not (is_ineq or is_eq):
+                continue
+            if getattr(constraint, 'g0_param', None) is None or constraint.g0_param.value is None:
+                continue
+
+            g0    = constraint.g0_param.value    # (nn, dim)
+            dgdz  = constraint.dgdz_param.value  # (nn, dim, n_z)
+            dgdnu = constraint.dgdnu_param.value # (nn, dim, n_nu)
+            tol   = tol_factor * constraint.eps  # (dim,)
+
+            for i, k in enumerate(constraint.nodes):
+                active = np.ones(g0.shape[1], dtype=bool) if is_eq else (g0[i] >= -tol)
+                if not np.any(active):
+                    continue
+                rows_per_node[k].append(np.concatenate([dgdz[i, active], dgdnu[i, active]], axis=1))
+
+        preserve_lm = bool(getattr(self.flags, 'active_set_preserve_lm', False))
+        H_proj  = H.copy()
+        H_extra = H - H_base
+
+        for k in range(N):
+            if not rows_per_node[k]:
+                continue
+            J_k = np.concatenate(rows_per_node[k], axis=0)
+            P_k = np.eye(J_k.shape[1]) - np.linalg.pinv(J_k) @ J_k
+            if preserve_lm:
+                H_proj[k] = H_base[k] + P_k @ H_extra[k] @ P_k.T
+            else:
+                H_proj[k] = P_k @ H[k] @ P_k.T
+
+        return H_proj
 
     def _adapt_levenberg(self, iteration: int) -> None:
         if iteration < 2:

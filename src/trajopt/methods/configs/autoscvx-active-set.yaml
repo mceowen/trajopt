@@ -1,0 +1,9 @@
+inherit: autoscvx.yaml
+
+# Experiment: project the second-order trust-region Hessian onto the null
+# space of active nonlinear path constraints at each node (SQP-style
+# reduced Hessian), instead of using the raw dual-weighted Lagrangian
+# Hessian everywhere. See SCPSegment._project_active_set_hessian.
+flags:
+  active_set_hessian:    1
+  active_set_tol_factor: 1.0
