@@ -4,6 +4,13 @@ inherit: autoscvx.yaml
 # space of active nonlinear path constraints at each node (SQP-style
 # reduced Hessian), instead of using the raw dual-weighted Lagrangian
 # Hessian everywhere. See SCPSegment._project_active_set_hessian.
+#
+# tol_factor and lm_floor_fraction (kappa) both need a per-problem sweep --
+# neither has a portable default. box_tol (off by default) additionally
+# folds in active state/control bound rows; see _active_set_box_layout for
+# why it wants its own kappa regime, not the nonconvex layout's.
 flags:
-  active_set_hessian:    1
-  active_set_tol_factor: 1.0
+  active_set_hessian:           1
+  active_set_tol_factor:        1.0
+  active_set_lm_floor_fraction: 0.0
+  active_set_box_tol:           0.0

@@ -47,6 +47,7 @@ class SCPSegment():
         self.cp_cost              = 0
         self.cp_subproblem_status = None
         self._active_set_layout_cache = None
+        self._active_set_box_layout_cache = None
 
         self.create_cvxpy_parameters()
         self.create_cvxpy_variables()
@@ -83,6 +84,7 @@ class SCPSegment():
 
         self.iter_data_list = []
         self.lm_mu = 1e-8
+        self._auto_kappa_state = 0.0
 
         self.current_iter_data = recursive_attrdict({
             "iter_num": 0,
@@ -329,10 +331,8 @@ class SCPSegment():
 
     def _active_set_layout(self):
         """(constraint, is_eq, dim) for every nonconvex ineq/eq constraint
-        (including initial_/final_ variants) eligible for the active-set
-        Hessian projection. The set of eligible constraint objects and their
-        dims/node-subsets are fixed for the life of an SCP solve, so this is
-        computed once and cached rather than re-derived every iteration.
+        eligible for the active-set projection. Cached: fixed for the life
+        of a solve.
         """
         if self._active_set_layout_cache is None:
             layout = []
@@ -347,70 +347,58 @@ class SCPSegment():
             self._active_set_layout_cache = layout
         return self._active_set_layout_cache
 
+    def _active_set_box_layout(self):
+        """(nodes, col, side, bound_value) for every state/control box-limit
+        row eligible for the active-set projection. These are hard QP
+        bounds, not linearized rows, so the Jacobian row is just a unit
+        vector. Opt-in via `flags.active_set_box_tol` (0 = off). Cached.
+        """
+        if self._active_set_box_layout_cache is None:
+            idx_state = self.index_map.indices.z.state
+            idx_ctrl  = self.index_map.indices.nu.control
+            n_z = self.index_map.n.z
+            N = self.index_map.N.all
+            # `col` below is already in the combined (n_z + n_nu) column
+            # space that H/J use, i.e. control columns are offset by n_z.
+            node_sets = [
+                (scp_constraint_type_module.scp_state_limits,           np.arange(N),      idx_state,       0),
+                (scp_constraint_type_module.scp_initial_state_limits,   np.array([0]),     idx_state,       0),
+                (scp_constraint_type_module.scp_final_state_limits,     np.array([N - 1]), idx_state,       0),
+                (scp_constraint_type_module.scp_control_limits,         np.arange(N),      idx_ctrl,       n_z),
+                (scp_constraint_type_module.scp_initial_control_limits, np.array([0]),     idx_ctrl,       n_z),
+                (scp_constraint_type_module.scp_final_control_limits,   np.array([N - 1]), idx_ctrl,       n_z),
+            ]
+            layout = []
+            for constraint in self.constraints.values():
+                for cls, nodes, idx_map, col_offset in node_sets:
+                    if not isinstance(constraint, cls):
+                        continue
+                    c = constraint.constraint
+                    for j, local_i in enumerate(c.lower_idx):
+                        col = col_offset + int(idx_map[local_i])
+                        layout.append((nodes, col, 'lower', float(np.atleast_1d(c.lower_value)[j])))
+                    for j, local_i in enumerate(c.upper_idx):
+                        col = col_offset + int(idx_map[local_i])
+                        layout.append((nodes, col, 'upper', float(np.atleast_1d(c.upper_value)[j])))
+                    break
+            self._active_set_box_layout_cache = layout
+        return self._active_set_box_layout_cache
+
     def _project_active_set_hessian(self, H: np.ndarray, H_base: np.ndarray) -> np.ndarray:
-        """SQP-style reduced Hessian: project each node's H_k onto the null
-        space of the nonlinear path constraints (`nonconvex_inequality` /
-        `nonconvex_equality`, including initial_/final_ variants) that are
-        active at that node, so the trust-region metric only carries
-        curvature in directions those constraints don't already pin down.
+        """Project each node's H_k onto the null space of currently-active
+        constraint rows (SQP-style reduced Hessian), batched over all N
+        nodes:
 
-        Vectorized over all N nodes at once (a single batched linalg call)
-        rather than looping in Python and calling `pinv` per node. The key
-        enabler: which constraint *types* apply at which nodes is static
-        (fixed by `_active_set_layout`), so a fixed-shape
-        `(N, dim_total, d)` Jacobian array can be built with zero rows for
-        whatever doesn't apply at a given node this iteration — inactive
-        rows, or rows from a constraint that isn't even defined at that
-        node (e.g. `initial_`/`final_` variants elsewhere). Zero rows don't
-        perturb the projector: for any J' formed by appending zero rows to
-        J, null(J') == null(J), so this is exact, not an approximation.
+            P_k = I - J_k^T (J_k J_k^T)^+ J_k
+            H_floor_k  = (1 - kappa) * P_k H_base_k P_k^T + kappa * H_base_k
+            H_proj_k   = H_floor_k + P_k (H_k - H_base_k) P_k^T
 
-        The projector itself, `P_k = I - J_k^T (J_k J_k^T)^+ J_k`, uses the
-        Penrose identity `pinv(J) = J^T pinv(J J^T)` (holds for any J,
-        any rank) to pinv the `(dim_total, dim_total)` Gram matrix instead
-        of the `(dim_total, d)` Jacobian directly — cheaper whenever
-        dim_total < d, which is the usual case here (a handful of active
-        path-constraint rows against a state+control dimension of order
-        10-30).
-
-        Two variants, chosen by `flags.active_set_preserve_lm`:
-
-        - False (default): project all of H_k, including the LM-damped
-          `lm_mu` floor (`H_base_k`). Theoretically this leaves active
-          directions with no step-size control besides the linearized
-          constraint's own (often still-weak) penalty and the line search
-          — but empirically this is the version that actually produced the
-          wins on `car` (47 vs 63 iters at tol_factor=1000) and
-          `lander_6dof` (converges vs. never converges at tol_factor=10000).
-        - True: leave H_base_k (the trust-region-radius control) un-projected
-          and only project the constraint/cost curvature on top of it. This
-          fixes a narrow-tolerance regression seen on `car` (flickering
-          active-set membership destabilizing the step with no floor left),
-          but also erases the wide-tolerance win there — the floor turns out
-          to be redundant drag, not protection, once the active set is large
-          and stable. Kept available for further active-set-criterion work
-          (e.g. dual-based or persistence-based activeness) rather than as
-          the recommended default.
-
-        Activeness: equality rows are always active; inequality row i is
-        active when g0[i] >= -tol_factor * constraint.eps[i], i.e. within
-        the same nondimensional tolerance already used for feasibility.
-        Everything else (box limits, dynamics, boundary conditions) is out
-        of scope for this first experiment.
-
-        Optional smoothing (`flags.active_set_smooth_width_factor > 0`):
-        since a hard activeness mask is discontinuous exactly where it
-        matters (constraints hovering at the boundary flip in/out between
-        iterations — see the `preserve_lm` note above), rows within
-        `smooth_width_factor * eps` *below* the hard threshold are still
-        included, but Tikhonov-regularized in the Gram matrix by a weight
-        `lambda_i` ramping from 0 at the threshold to
-        `active_set_smooth_lambda` at the outer edge of the band, instead
-        of being sharply excluded. `lambda_i = 0` recovers exact hard
-        projection for that row; larger `lambda_i` progressively damps its
-        contribution to the null-space removal. Default width is 0, which
-        reduces this exactly to the hard-mask formula above (lambda == 0
-        for every included row).
+        Rows come from `_active_set_layout` (nonconvex ineq/eq) and
+        `_active_set_box_layout` (box limits, opt-in). Row activeness is
+        a continuous `[0, 1]` weight (`flags.active_set_tol_factor`
+        hard/smoothed threshold, or `active_set_dual_weighted`), scaled
+        into `J` before the Gram matrix is formed. `kappa` is
+        `flags.active_set_lm_floor_fraction` or `_auto_kappa()`.
         """
         N = self.index_map.N.all
         d = H.shape[-1]
@@ -418,14 +406,22 @@ class SCPSegment():
         smooth_width_factor = float(getattr(self.flags, 'active_set_smooth_width_factor', 0.0))
         smooth_lambda = float(getattr(self.flags, 'active_set_smooth_lambda', 0.0))
 
-        layout = self._active_set_layout()
-        dim_total = sum(dim for _, _, dim in layout)
+        box_tol     = float(getattr(self.flags, 'active_set_box_tol', 0.0))
+        box_layout  = self._active_set_box_layout() if box_tol > 0 else []
+
+        layout        = self._active_set_layout()
+        dim_nonconvex = sum(dim for _, _, dim in layout)
+        dim_box       = len(box_layout)
+        dim_total     = dim_nonconvex + dim_box
         if dim_total == 0:
             return H
 
+        dual_weighted = bool(getattr(self.flags, 'active_set_dual_weighted', False))
+        dual_eps      = float(getattr(self.flags, 'active_set_dual_eps', 1e-6))
+
         J    = np.zeros((N, dim_total, d))
-        mask = np.zeros((N, dim_total), dtype=bool)
-        lam  = np.zeros((N, dim_total))
+        row_weight = np.zeros((N, dim_total))  # continuous row weight in [0, 1]; scales J below
+        lam        = np.zeros((N, dim_total))
 
         row = 0
         for constraint, is_eq, dim in layout:
@@ -440,23 +436,47 @@ class SCPSegment():
             nodes = constraint.nodes
 
             if is_eq:
-                include = np.ones_like(g0, dtype=bool)
-                lam_g   = np.zeros_like(g0)
+                weight = np.ones_like(g0)
+                lam_g  = np.zeros_like(g0)
+            elif dual_weighted:
+                # weight from the row's own dual, normalized by W (dual scales with W's range)
+                dual = np.abs(np.asarray(constraint.lagrangian_dual))
+                W    = np.asarray(constraint.W)
+                if W.shape == dual.shape:
+                    dual = dual / np.maximum(W, 1e-12)  # guard only; W is already >= 1e-5
+                weight = dual / (dual + dual_eps)
+                lam_g  = np.zeros_like(g0)
             elif smooth_width_factor > 0:
                 width   = smooth_width_factor * constraint.eps  # (dim,)
                 d0      = g0 - (-tol)                            # >= 0 means hard-active
-                include = d0 >= -width
+                weight  = (d0 >= -width).astype(float)
                 lam_g   = smooth_lambda * np.clip(-d0 / width, 0.0, 1.0)
             else:
-                include = g0 >= -tol
-                lam_g   = np.zeros_like(g0)
+                weight = (g0 >= -tol).astype(float)
+                lam_g  = np.zeros_like(g0)
 
-            J[nodes, row:row + dim, :] = np.concatenate([dgdz, dgdnu], axis=-1)
-            mask[nodes, row:row + dim] = include
-            lam[nodes, row:row + dim]  = lam_g
+            J[nodes, row:row + dim, :]      = np.concatenate([dgdz, dgdnu], axis=-1)
+            row_weight[nodes, row:row + dim] = weight
+            lam[nodes, row:row + dim]        = lam_g
             row += dim
 
-        J *= mask[:, :, np.newaxis]
+        assert row == dim_nonconvex
+
+        if dim_box > 0:
+            z_ref  = self.cp_params.z_ref.value   # (N, n_z)  or None on the very first call
+            nu_ref = self.cp_params.nu_ref.value  # (N, n_nu)
+            if z_ref is not None and nu_ref is not None:
+                ref_full = np.concatenate([z_ref, nu_ref], axis=-1)  # (N, d)
+                for nodes, col, side, bound in box_layout:
+                    J[nodes, row, col] = 1.0
+                    val    = ref_full[nodes, col]
+                    active = (val <= bound + box_tol) if side == 'lower' else (val >= bound - box_tol)
+                    row_weight[nodes, row] = active.astype(float)
+                    row += 1
+            else:
+                row += dim_box
+
+        J *= np.sqrt(row_weight)[:, :, np.newaxis]
 
         idx = np.arange(dim_total)
         Lambda = np.zeros((N, dim_total, dim_total))
@@ -466,27 +486,51 @@ class SCPSegment():
         gram = J @ Jt + Lambda                        # (N, dim_total, dim_total)
         P    = np.eye(d)[np.newaxis, :, :] - Jt @ np.linalg.pinv(gram) @ J
 
-        preserve_lm = bool(getattr(self.flags, 'active_set_preserve_lm', False))
+        if bool(getattr(self.flags, 'active_set_auto_kappa', False)):
+            kappa = self._auto_kappa()
+        else:
+            kappa_default = 1.0 if bool(getattr(self.flags, 'active_set_preserve_lm', False)) else 0.0
+            kappa = float(getattr(self.flags, 'active_set_lm_floor_fraction', kappa_default))
+        kappa = min(max(kappa, 0.0), 1.0)
+
         Pt = np.swapaxes(P, -1, -2)
-        if preserve_lm:
-            H_extra = H - H_base
-            return H_base + P @ H_extra @ Pt
-        return P @ H @ Pt
+        H_extra = H - H_base
+        if kappa == 0.0:
+            return P @ H @ Pt
+        H_floor = (1.0 - kappa) * (P @ H_base @ Pt) + kappa * H_base
+        return H_floor + P @ H_extra @ Pt
 
     def _adapt_levenberg(self, iteration: int) -> None:
         if iteration < 2:
+            self._last_merit_ratio = 1.0
             return
         prev = self.iter_data_list[-1]
         prev_prev = self.iter_data_list[-2]
         merit_curr = prev.cost + prev.penalty_cost
         merit_prev = prev_prev.cost + prev_prev.penalty_cost
         ratio = merit_curr / merit_prev if merit_prev != 0 else 1.0
+        self._last_merit_ratio = ratio
         if ratio > 1.0:
             self.lm_mu = min(self.lm_mu * 3.0, 1e4)
         elif ratio > 0.99:
             self.lm_mu = min(self.lm_mu * 1.5, 1e4)
         else:
             self.lm_mu = max(self.lm_mu * 0.7, 1e-6)
+
+    def _auto_kappa(self) -> float:
+        """Auto-tuned `kappa`: persists across iterations, nudged toward 1
+        on a bad/flat merit ratio and toward 0 on a good one.
+        """
+        kappa = getattr(self, '_auto_kappa_state', 0.0)
+        ratio = getattr(self, '_last_merit_ratio', 1.0)
+        if ratio > 1.0:
+            kappa = min(kappa + 0.25, 1.0)
+        elif ratio > 0.99:
+            kappa = min(kappa + 0.05, 1.0)
+        else:
+            kappa = max(kappa - 0.1, 0.0)
+        self._auto_kappa_state = kappa
+        return kappa
 
     def read_solution(self) -> None:
         self._dz_new  = self.dz.value
