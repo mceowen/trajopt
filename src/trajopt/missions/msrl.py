@@ -83,3 +83,61 @@ def nonlinear_aero(x, u, t, params, fcns):
     D = (1 / mass) * 0.5 * rho * v**2 * Cd * sref
 
     return AttrDict({"L": L, "D": D, "Cl": Cl, "Cd": Cd})
+
+def downrange_crossrange(x, u, t, params, fcns):
+    """[downrange, crossrange] (m) to the touchdown target, PCPF construction.
+
+    Downrange is the great-circle range to the target resolved along the
+    horizontal velocity direction, crossrange the component normal to it
+    (positive when the target is right of track). Target longitude/latitude
+    come from params.target (deg).
+    """
+    theta = jnp.deg2rad(x[1])
+    phi = jnp.deg2rad(x[2])
+    psi = jnp.deg2rad(x[5])
+
+    theta_t = jnp.deg2rad(params.target.lon)
+    phi_t = jnp.deg2rad(params.target.lat)
+
+    # unit position vectors of vehicle and target in PCPF
+    r_veh = jnp.array([
+        jnp.cos(theta) * jnp.cos(phi),
+        jnp.sin(theta) * jnp.cos(phi),
+        jnp.sin(phi),
+    ])
+    r_tgt = jnp.array([
+        jnp.cos(theta_t) * jnp.cos(phi_t),
+        jnp.sin(theta_t) * jnp.cos(phi_t),
+        jnp.sin(phi_t),
+    ])
+
+    # local North/East unit vectors at the vehicle in PCPF
+    n_hat = jnp.array([
+        -jnp.cos(theta) * jnp.sin(phi),
+        -jnp.sin(theta) * jnp.sin(phi),
+        jnp.cos(phi),
+    ])
+    e_hat = jnp.array([-jnp.sin(theta), jnp.cos(theta), 0.0])
+
+    # bearing to target, clockwise from north
+    bearing = jnp.arctan2(jnp.dot(r_tgt, e_hat), jnp.dot(r_tgt, n_hat))
+
+    # atan2 form of the great-circle central angle: unlike acos(dot), its
+    # derivatives stay well-conditioned at the small separations near deploy
+    central = jnp.arctan2(
+        jnp.linalg.norm(jnp.cross(r_veh, r_tgt)),
+        jnp.dot(r_veh, r_tgt),
+    )
+    R = params.planet.r * central
+
+    return jnp.array([R * jnp.cos(bearing - psi), R * jnp.sin(bearing - psi)])
+
+def deploy_range_bias(x, u, t, params, fcns):
+    """Deploy-surface residual [downrange - range_bias, crossrange] (m).
+
+    Zero on the arc params.target.range_bias (m) uprange of the touchdown
+    target with heading aligned toward it (deploy range bias, Mendeck & Craig
+    AIAA 2011-6639, Fig. 3).
+    """
+    dr_cr = downrange_crossrange(x, u, t, params, fcns)
+    return dr_cr - jnp.array([params.target.range_bias, 0.0])

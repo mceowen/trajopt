@@ -236,10 +236,11 @@ class scp_rate_regularization(SCPCost):
         w         = self.cost.w
         norm_type = self.cost.norm_type
         is_nu     = self.cost.set == "control"
+        idx       = jnp.asarray(self.cost.idx)
 
         def eval_fn(z, nu, params):
             traj  = nu if is_nu else z
-            delta = traj[1:] - traj[:-1]
+            delta = traj[1:, idx] - traj[:-1, idx]
             if norm_type == "l2":
                 return w * jnp.sum(delta ** 2)
             return w * jnp.sum(jnp.abs(delta))

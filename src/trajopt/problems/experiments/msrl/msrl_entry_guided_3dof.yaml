@@ -7,12 +7,22 @@ trajectory:
       fcns:
         density_model: trajopt/missions/msrl.py:density_model
         nonlinear_aero: trajopt/missions/msrl.py:nonlinear_aero
+        downrange_crossrange: trajopt/missions/msrl.py:downrange_crossrange
+        deploy_range_bias: trajopt/missions/msrl.py:deploy_range_bias
 
       params:
         planet:
           inherit: trajopt/missions/configs/planets/mars.yaml
         vehicle:
           inherit: trajopt/missions/configs/vehicles/msrl.yaml
+
+        # touchdown target and deploy range bias (Mendeck & Craig Fig. 3):
+        # guidance targets the touchdown site; chute deploy occurs on the arc
+        # range_bias (m) uprange of it with heading aligned at the target
+        target:
+          lon: 77.39
+          lat: 18.49
+          range_bias: 16370.0
 
         # density polynomial coefficients
         a: -4.418967
@@ -63,12 +73,17 @@ trajectory:
         initial_state:
           type: initial_state
           value: [3456160, 68.20, 14.12, 7935.15, -7.7075, 62.2803]
-        
-        final_cross_range_down_range:
-          type: final_nonconvex_inequality
-          fcn: fcns.downrange_crossrange
-          upper: []
-          lower: []
+
+        # parachute-deploy radius and velocity
+        final_state:
+          type: final_state
+          value: [3404600, null, null, 500.0, null, null]
+
+        # deploy surface: downrange = range_bias, crossrange = 0
+        deploy_surface:
+          type: final_nonconvex_equality
+          fcn: fcns.deploy_range_bias
+          scale: [10000.0, 10000.0]
 
         state_limits:
           type: state_limits
@@ -86,13 +101,16 @@ trajectory:
           idx: [0]
 
       costs:
-        min_terminal_velocity:
-          type: nonconvex_terminal
-          fcn: fcns.velocity
+        bank_rate_smoothness:
+          type: rate_regularization
+          set: control
+          idx: [0]
+          norm_type: l2
+          w: 0.001
 
       guess:
         t_start: 0.0
-        t_stop: 150.0
+        t_stop: 250.0
         u_start: [120.0, 0.0]
         u_stop: [0, 0.0]
 
@@ -111,5 +129,5 @@ analysis:
   type: standalone
   compute_iters: false
   show_iters: false
-  show_convergence: false
+  show_convergence: true
   show_weights: false
