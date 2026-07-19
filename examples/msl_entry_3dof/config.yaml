@@ -1,6 +1,6 @@
 
 # problem statement (mission and model)
-inherit: trajopt/formulations/msl_entry_3dof.yaml
+inherit: trajopt/problems/msl_entry_3dof.yaml
 
 
 # solution method
