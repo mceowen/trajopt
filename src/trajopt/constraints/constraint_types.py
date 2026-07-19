@@ -299,6 +299,8 @@ class convex_inequality(Constraint):
 
         self.M_state_nd2d = np.asarray(nondim.M.state.nd2d)
         self.M_ctrl_nd2d  = np.asarray(nondim.M.control.nd2d)
+        
+        self.time_scale = nondim.time_scale
 
         self.M_out_d2nd = np.diag(1.0 / np.abs(self.scale))
 
@@ -365,6 +367,7 @@ class nonconvex_inequality(Constraint):
         self.M_out_d2nd   = jnp.diag(1.0 / jnp.abs(jnp.asarray(self.scale)))
         self.M_state_nd2d = jnp.asarray(nondim.M.state.nd2d)
         self.M_ctrl_nd2d  = jnp.asarray(nondim.M.control.nd2d)
+        self.time_scale     = nondim.time_scale
 
     @property
     def upper(self):
@@ -375,7 +378,7 @@ class nonconvex_inequality(Constraint):
         return self.M_out_d2nd @ jnp.atleast_1d(self._lower_dim) if self._lower_dim is not None else None
 
     def fcn_txu_nd(self, x, u, t, params):
-        g = self.M_out_d2nd @ self.fcn_txu_dim(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, t, params)
+        g = self.M_out_d2nd @ self.fcn_txu_dim(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, self.time_scale * t, params)
         pieces = []
         if self.lower is not None:
             pieces.append(self.lower - g)
@@ -430,9 +433,10 @@ class nonconvex_equality(Constraint):
         self.M_out_d2nd   = jnp.diag(1.0 / jnp.abs(jnp.asarray(self.scale)))
         self.M_state_nd2d = jnp.asarray(nondim.M.state.nd2d)
         self.M_ctrl_nd2d  = jnp.asarray(nondim.M.control.nd2d)
+        self.time_scale     = nondim.time_scale
 
     def fcn_txu_nd(self, x, u, t, params):
-        return self.M_out_d2nd @ self.fcn_txu_dim(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, t, params)
+        return self.M_out_d2nd @ self.fcn_txu_dim(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, self.time_scale * t, params)
 
     def fcn_znu(self, z, nu, params):
         x, t, _, u, _ = self.index_map.unpack_znu(z, nu)
@@ -552,11 +556,13 @@ class dynamics(Constraint):
         self.M_state_nd2d = jnp.asarray(nondim.M.state.nd2d)
         self.M_ctrl_nd2d  = jnp.asarray(nondim.M.control.nd2d)
 
+        self.time_scale     = nondim.time_scale
+
         self.ctcs_constraints = ()
         self.running_costs = ()
 
     def fcn_txu_nd(self, x, u, t, params):
-        return self.M_out_d2nd @ self.fcn_txu_dim(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, t, params)
+        return self.M_out_d2nd @ self.fcn_txu_dim(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, self.time_scale * t, params)
 
     def fcn_znu(self, z, nu, params):
         x, t, _, u, s = self.index_map.unpack_znu(z, nu)
