@@ -6,7 +6,10 @@ flags:
   ignore_dpp:         0
   second_order:       1
   line_search:        1
+  min_eig_psd:        1e-6
+  alpha_min_ls:       1e-7
   discretize: ms
+  nsub: 3
   eps_state: [0.001]
   iter_max: 300
 

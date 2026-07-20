@@ -378,8 +378,8 @@ class SCPSegment():
         for constraint in self.constraints.values():
             constraint.update_W_dual(self, alpha)
 
-def _psd_sqrt(H_batch):
+def _psd_sqrt(H_batch, min_eig_psd):
     eigvals, eigvecs = np.linalg.eigh(H_batch)
-    eigvals_reg = np.maximum(eigvals, 1e-6)
+    eigvals_reg = np.maximum(eigvals, min_eig_psd)
     sqrt_eigvals = np.sqrt(eigvals_reg)
     return sqrt_eigvals[..., :, np.newaxis] * np.transpose(eigvecs, (0, 2, 1))
