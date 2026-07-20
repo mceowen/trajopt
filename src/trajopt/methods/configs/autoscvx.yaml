@@ -7,6 +7,7 @@ flags:
   second_order:       0
   line_search:        0
   min_eig_psd:        1e-6
+  alpha_min_ls:       1e-7
   discretize: ms
   nsub: 3
   eps_state: [0.001]
