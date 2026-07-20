@@ -81,6 +81,7 @@ class nonconvex_terminal:
         self.M_out_d2nd   = jnp.atleast_1d(1 / self.scale) if self.scale is not None else jnp.atleast_1d(1.0)
         self.M_state_nd2d = jnp.asarray(nondim.M.state.nd2d)
         self.M_ctrl_nd2d  = jnp.asarray(nondim.M.control.nd2d)
+        self.time_scale     = nondim.time_scale
 
         if self.backend == "jax":
             self.fcn_compiled = jax.jit(self.fcn_znu)
@@ -98,7 +99,7 @@ class nonconvex_terminal:
 
     def fcn_txu_nd(self, x, u, t, params):
         return self.M_out_d2nd @ jnp.atleast_1d(
-            self.fcn_txu_dim(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, t, params)
+            self.fcn_txu_dim(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, self.time_scale * t, params)
         )
 
     def fcn_znu(self, z, nu, params):
@@ -169,10 +170,11 @@ class nonconvex_running:
         self.M_out_d2nd   = jnp.atleast_1d(1 / self.scale) if self.scale is not None else jnp.atleast_1d(1.0)
         self.M_state_nd2d = jnp.asarray(nondim.M.state.nd2d)
         self.M_ctrl_nd2d  = jnp.asarray(nondim.M.control.nd2d)
+        self.time_scale     = nondim.time_scale
 
     def fcn_txu_nd(self, x, u, t, params):
         return self.M_out_d2nd @ jnp.atleast_1d(
-            self.fcn_txu_dim(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, t, params)
+            self.fcn_txu_dim(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, self.time_scale * t, params)
         )
 
     def fcn_znu(self, z, nu, params):
@@ -201,9 +203,11 @@ class nonconvex_minimax:
         self.M_state_nd2d = jnp.asarray(nondim.M.state.nd2d)
         self.M_ctrl_nd2d  = jnp.asarray(nondim.M.control.nd2d)
 
+        self.time_scale     = nondim.time_scale
+
     def fcn_txu_nd(self, x, u, t, params):
         return self.M_out_d2nd @ jnp.atleast_1d(
-            self.fcn_txu_dim(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, t, params)
+            self.fcn_txu_dim(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, self.time_scale * t, params)
         )
 
     def fcn_znu(self, z, nu, params):

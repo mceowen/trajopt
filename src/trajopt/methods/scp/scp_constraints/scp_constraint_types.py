@@ -6,6 +6,10 @@ import numpy as np
 from trajopt.methods.common import pseudospectral
 from trajopt.methods.scp.scp_constraints.scp_constraint import SCPConstraint
 
+#jax.config.update("jax_compilation_cache_dir", "/absolute/path/to/jax_cache")
+#jax.config.update("jax_persistent_cache_min_compile_time_secs", 0.0)
+#jax.config.update("jax_persistent_cache_min_entry_size_bytes", -1)
+
 # ---------------------------------------------------------------------------
 # dynamics
 # ---------------------------------------------------------------------------

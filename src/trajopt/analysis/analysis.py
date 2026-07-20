@@ -114,14 +114,14 @@ def analyze_segment(subprob, config):
         # re-dimensionalize and store the data that the plots consume
         analyzed.append(AttrDict({
             "t_opt":         z_opt[:, idx.z.time].squeeze(-1) * time_scale,
-            "z_opt":         z_opt[:, idx.z.state] @ nondim.M.state.nd2d,
-            "nu_opt":        nu_opt[:, idx.nu.control] @ nondim.M.control.nd2d,
+            "x_opt":         z_opt[:, idx.z.state] @ nondim.M.state.nd2d,
+            "u_opt":        nu_opt[:, idx.nu.control] @ nondim.M.control.nd2d,
             "t_nl":          z_nl[:, idx.z.time].squeeze(-1) * time_scale,
-            "z_nl":          z_nl[:, idx.z.state] @ nondim.M.state.nd2d,
-            "nu_nl":         nu_nl[:, idx.nu.control] @ nondim.M.control.nd2d,
+            "x_nl":          z_nl[:, idx.z.state] @ nondim.M.state.nd2d,
+            "u_nl":         nu_nl[:, idx.nu.control] @ nondim.M.control.nd2d,
             "t_init_nl":     z_init[:, idx.z.time].squeeze(-1) * time_scale,
-            "z_init_nl":     z_init[:, idx.z.state] @ nondim.M.state.nd2d,
-            "nu_init_nl":    nu_init[:, idx.nu.control] @ nondim.M.control.nd2d,
+            "x_init_nl":     z_init[:, idx.z.state] @ nondim.M.state.nd2d,
+            "u_init_nl":    nu_init[:, idx.nu.control] @ nondim.M.control.nd2d,
             "trajplot_data": trajplot_data,
         }))
 
