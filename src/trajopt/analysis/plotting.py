@@ -58,7 +58,53 @@ MARKER_DEFAULTS = {
 }
 
 
-def plot(traj_analyzer, data):
+def save_figures(figs, save_dir, *, format="pdf", dpi=None):
+    """Write each figure to save_dir/<name>.<format> and return the paths."""
+    dpi = plot_options.save_dpi if dpi is None else dpi
+    os.makedirs(save_dir, exist_ok=True)
+    paths = []
+    for name, fig in figs.items():
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            fig.tight_layout()
+        path = os.path.join(save_dir, f"{name}.{format}")
+        fig.savefig(path, dpi=dpi, pad_inches=0.02)
+        paths.append(path)
+    print(f"Saved {len(figs)} figures to {save_dir}/")
+    return paths
+
+
+def show_figures(figs=None):
+    """Display the figures."""
+    plt.show()
+
+
+def plot(traj_analyzer, data, *, save=True, show=False, save_dir=None, format="pdf"):
+    """Build the standalone figures and return them as {group_name: Figure}."""
+    figs = build_standalone(traj_analyzer, data)
+
+    if save:
+        save_figures(figs, save_dir or os.path.join("plots", "standalone"), format=format)
+
+    analysis_cfg = traj_analyzer.config.get("analysis", {})
+    if analysis_cfg.get('show_convergence', False):
+        conv = convergence_plots(traj_analyzer, save=save)
+        if conv is not None:
+            figs['convergence'] = conv
+
+    if analysis_cfg.get('show_weights', False):
+        weights = convergence_weight_plots(traj_analyzer, save=save)
+        if weights is not None:
+            figs['convergence_weights'] = weights
+
+    if show:
+        show_figures(figs)
+
+    return figs
+
+
+def build_standalone(traj_analyzer, data):
+    """Construct the standalone trajectory figures."""
     analysis_cfg = traj_analyzer.config.get("analysis", {})
     show_iters = analysis_cfg.get("show_iters", False)
     method         = list(data.keys())[0]
@@ -148,30 +194,24 @@ def plot(traj_analyzer, data):
     for fig in figs.values():
         fig.axes[0].legend(handles=handles, loc='best', fontsize=8, framealpha=0.8)
 
-    save_dir = os.path.join("plots", "standalone")
-    os.makedirs(save_dir, exist_ok=True)
-    for name, fig in figs.items():
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", UserWarning)
-            fig.tight_layout()
-        fig.savefig(os.path.join(save_dir, f"{name}.pdf"), dpi=plot_options.save_dpi, pad_inches=0.02)
-    print(f"Saved {len(figs)} figures to {save_dir}/")
-
-    if analysis_cfg.get('show_convergence', False):
-        convergence_plots(traj_analyzer)
-
-    if analysis_cfg.get('show_weights', False):
-        convergence_weight_plots(traj_analyzer)
-
-    if plt.isinteractive() or plt.get_backend().lower() not in ("agg", "pdf", "svg"):
-        plt.show()
-    else:
-        plt.close('all')
+    return figs
 
 
-def plot_method_variation(traj_analyzer, data):
-    """Overlay trajectories from multiple methods on shared axes."""
-    analysis_cfg = traj_analyzer.config.get("analysis", {})
+def plot_method_variation(traj_analyzer, data, *, save=True, show=False, save_dir=None, format="pdf"):
+    """Build the method-comparison figures and return them as {group_name: Figure}."""
+    figs = build_method_variation(traj_analyzer, data)
+
+    if save:
+        save_figures(figs, save_dir or os.path.join("plots", "method_variation"), format=format)
+
+    if show:
+        show_figures(figs)
+
+    return figs
+
+
+def build_method_variation(traj_analyzer, data):
+    """Overlay the trajectories of several methods on shared axes."""
     methods = list(data.keys())
 
     ref_last = data[methods[0]]["runs"][0]["iter_data_list"][-1]
@@ -286,19 +326,7 @@ def plot_method_variation(traj_analyzer, data):
     for fig in figs.values():
         fig.axes[0].legend(handles=handles, loc='best', fontsize=7, framealpha=0.8)
 
-    save_dir = os.path.join("plots", "method_variation")
-    os.makedirs(save_dir, exist_ok=True)
-    for name, fig in figs.items():
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", UserWarning)
-            fig.tight_layout()
-        fig.savefig(os.path.join(save_dir, f"{name}.pdf"), dpi=plot_options.save_dpi, pad_inches=0.02)
-    print(f"Saved {len(figs)} figures to {save_dir}/")
-
-    if plt.isinteractive() or plt.get_backend().lower() not in ("agg", "pdf", "svg"):
-        plt.show()
-    else:
-        plt.close('all')
+    return figs
 
 
 def _setup_ax(ax, traj):
