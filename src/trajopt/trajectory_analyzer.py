@@ -50,7 +50,7 @@ class TrajectoryAnalyzer():
             plotting.plot(self, data)
 
     def reconfigure(self):
-        """Rebuild the Trajectory and SCPMethod objects from ``self.config``.
+        """Rebuild the Trajectory and SCPMethod objects from self.config.
 
         Call this after modifying ``self.config`` from external code (e.g., a C
         interface) to propagate the changes into the internal problem objects.

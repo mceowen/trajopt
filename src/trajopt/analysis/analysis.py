@@ -3,37 +3,30 @@ import copy
 import jax
 import numpy as np
 
+from trajopt.analysis.results import Iterate, MissionResult, RunResult
 from trajopt.methods.common import integrators, pseudospectral
 from trajopt.utils import tools
-from trajopt.utils.tools import AttrDict, recursive_attrdict
+from trajopt.utils.tools import AttrDict
 
 jax.config.update("jax_enable_x64", True)
 
-"""
-outline of solution_data structure:
-results = {
-    "trajectories": 
-        "segments":
-            [{"iter_data_list": [...]}, {"iter_data_list": [...]}, ...]
-}
-"""
-
-def perform_analysis(traj):
+def perform_analysis(traj) -> RunResult:
     """Propagate every segment's iterates and merge them into one mission trajectory."""
     scp_segments = traj.method.scp_trajectory.scp_segments
     segments = [analyze_segment(subprob, traj.config) for subprob in scp_segments.values()]
 
     if len(segments) == 1:
-        iter_data_list = segments[0]
+        iter_mappings = segments[0]
     else:
-        n_iters        = min(len(seg) for seg in segments)
-        iter_data_list = [concat([seg[i] for seg in segments]) for i in range(n_iters)]
+        n_iters       = min(len(seg) for seg in segments)
+        iter_mappings = [concat([seg[i] for seg in segments]) for i in range(n_iters)]
 
     scp_iters = []
     for subprob in scp_segments.values():
         scp_iters = subprob.iter_data_list
 
-    return AttrDict({"iter_data_list": iter_data_list, "scp_iters": scp_iters})
+    iter_data_list = [Iterate.from_mapping(m) for m in iter_mappings]
+    return RunResult(iter_data_list=iter_data_list, scp_iters=scp_iters)
 
 
 def analyze_segment(subprob, config):
@@ -113,6 +106,7 @@ def analyze_segment(subprob, config):
 
         # re-dimensionalize and store the data that the plots consume
         analyzed.append(AttrDict({
+            "iter_num":      int(iter_data.iter_num),
             "t_opt":         z_opt[:, idx.z.time].squeeze(-1) * time_scale,
             "x_opt":         z_opt[:, idx.z.state] @ nondim.M.state.nd2d,
             "u_opt":        nu_opt[:, idx.nu.control] @ nondim.M.control.nd2d,
@@ -153,12 +147,12 @@ def concat(items):
     return head
 
 
-def run_standalone_analysis(traj):
-    """Analyze a single solve and wrap it in the {method: {runs: [...]}} schema."""
+def run_standalone_analysis(traj) -> MissionResult:
+    """Analyze a single solve and wrap it in the MissionResult schema."""
     method_name = traj.config.method.get("name", "method1")
     if not getattr(traj, "_solved", False):
         traj.solve()
-    return recursive_attrdict({method_name: {"runs": [perform_analysis(traj)]}})
+    return MissionResult(runs_by_method={method_name: [perform_analysis(traj)]})
 
 
 def run_method_variation(traj):
@@ -185,7 +179,7 @@ def run_method_variation(traj):
     methods_cfg = traj.config.analysis.methods
     config_path = traj.config_path
 
-    results = {}
+    runs_by_method = {}
     for method_name, overrides in methods_cfg.items():
         print(f"\n{'='*60}")
         print(f"  Solving: {method_name}")
@@ -193,10 +187,9 @@ def run_method_variation(traj):
 
         method_traj = TrajectoryAnalyzer(config_path, method_overrides=dict(overrides) if overrides else None)
         method_traj.solve()
-        result = perform_analysis(method_traj)
-        results[method_name] = {"runs": [result]}
+        runs_by_method[method_name] = [perform_analysis(method_traj)]
 
-    return recursive_attrdict(results)
+    return MissionResult(runs_by_method=runs_by_method)
 
 
 def run_mc_analysis(traj):
@@ -241,4 +234,4 @@ def run_mc_analysis(traj):
             print(f"=== {method_name} | run {i} / {num} ===")
 
     traj.config = nominal_config
-    return recursive_attrdict({method_name: {"runs": runs}})
+    return MissionResult(runs_by_method={method_name: runs})
