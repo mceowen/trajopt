@@ -74,6 +74,16 @@ trajectory:
           type: initial_state
           value: [3456160, 68.20, 14.12, 7935.15, -7.7075, 62.2803]
 
+        # pre-bank attitude held into guidance initiation
+        initial_control:
+          type: initial_control
+          value: [120, null]
+
+        # bank commanded to zero as the deploy sequence begins
+        final_control:
+          type: final_control
+          value: [0, null]
+
         # parachute-deploy radius and velocity
         final_state:
           type: final_state
@@ -99,6 +109,33 @@ trajectory:
           type: control_rate_limit
           value: [10]
           idx: [0]
+
+        # aerodynamic load sqrt(L^2 + D^2). 15 g is the MSL entry
+        # structural design load and the unconstrained solution 
+        # peaks near 16.3 g, so this is an active constraint.
+        max_load:
+          type: nonconvex_inequality
+          fcn: fcns.aero_load
+          upper: 15.0
+          scale: [15.0]
+
+        # heat rate (W/cm^2) and dynamic pressure (kPa)
+        # unconstrained peaks are about 111 W/cm^2 and 34 kPa
+        # max_heat_rate:
+        #   type: nonconvex_inequality
+        #   fcn: fcns.heat_rate
+        #   upper: 165.0
+        #   scale: [165.0]
+        #
+        # max_dynamic_pressure:
+        #   type: nonconvex_inequality
+        #   fcn: fcns.dynamic_pressure
+        #   upper: 35.0
+        #   scale: [35.0]
+
+      trajplots:
+        aero_load:
+          upper_limit: 15.0
 
       costs:
         bank_rate_smoothness:
