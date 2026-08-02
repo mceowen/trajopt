@@ -81,6 +81,18 @@ class SCPMethod():
 
         return alpha_min
 
+    def step_is_usable(self, max_step: float = 1e6) -> bool:
+        """Whether the step is real, since a solver at its iteration limit can return nonsense."""
+        for scp_segment in self.scp_trajectory.scp_segments.values():
+            for expr in (scp_segment.dz, scp_segment.dnu):
+                value = expr.value
+                if value is None:
+                    return False
+                value = np.asarray(value)
+                if not np.isfinite(value).all() or np.max(np.abs(value)) > max_step:
+                    return False
+        return True
+
     def warmup_jax(self):
         """Run a dummy discretization pass to trigger all JAX JIT compilations."""
         print("Compiling JAX kernels (warmup)...", end=" ", flush=True)
@@ -110,6 +122,12 @@ class SCPMethod():
             if self.cp_subproblem.status not in {"optimal", "optimal_inaccurate", "user_limit"}:
                 print(f"Terminated from non-optimal convex subproblem! Status: {self.cp_subproblem.status}")
                 break
+
+            if not self.step_is_usable():
+                print(f"  step rejected (status {self.cp_subproblem.status}), tightening trust region")
+                for scp_segment in self.scp_trajectory.scp_segments.values():
+                    scp_segment.lm_mu = min(scp_segment.lm_mu * 10.0, 1e4)
+                continue
 
             self.update_current_iter_data()
             self.display_status()
