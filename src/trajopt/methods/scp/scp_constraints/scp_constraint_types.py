@@ -852,6 +852,45 @@ class scp_control_rate_limit(SCPConstraint):
             dt_k = (scp_segment.t_ref[k + 1, 0] + scp_segment.dt[k + 1, 0]) - (scp_segment.t_ref[k, 0] + scp_segment.dt[k, 0])
             scp_segment.cp_constraints.append(M_sel @ du_k <= dt_k * np.concatenate([value, value]))
 
+
+class scp_control_accel_limit(SCPConstraint):
+    """|u_{k+1} - 2 u_k + u_{k-1}| <= value * dt_{k-1} * dt_k, bilinear rhs linearized for DPP."""
+
+    def create_cvxpy_parameters(self, scp_segment):
+        N = scp_segment.index_map.N.all
+        self.dt_ref_param  = cp.Parameter((N - 1,), name=f"dt_ref_{self.name}",      value=np.zeros(N - 1))
+        self.dt_prod_param = cp.Parameter((N - 2,), name=f"dt_ref_prod_{self.name}", value=np.zeros(N - 2))
+
+    def create_cvxpy_constraints(self, scp_segment):
+        idx_ctrl = scp_segment.index_map.indices.nu.control
+        value    = self.constraint.value
+        M_sel    = self.constraint.M_select
+        N        = scp_segment.index_map.N.all
+
+        def u_at(k):
+            return scp_segment.cp_params.nu_ref[k, idx_ctrl] + scp_segment.dnu[k, idx_ctrl]
+
+        for k in range(1, N - 1):
+            d2u_k = u_at(k + 1) - 2 * u_at(k) + u_at(k - 1)
+
+            # variable parts of the intervals on either side of node k
+            d_km = scp_segment.dt[k, 0]     - scp_segment.dt[k - 1, 0]
+            d_k  = scp_segment.dt[k + 1, 0] - scp_segment.dt[k, 0]
+
+            dt_prod_k = (
+                self.dt_prod_param[k - 1]
+                + self.dt_ref_param[k - 1] * d_k
+                + self.dt_ref_param[k] * d_km
+            )
+            scp_segment.cp_constraints.append(M_sel @ d2u_k <= dt_prod_k * np.concatenate([value, value]))
+
+    def update_cvxpy_parameters(self, scp_segment):
+        t_ref  = np.asarray(scp_segment.t_ref)[:, 0]
+        dt_ref = np.maximum(np.diff(t_ref), 0.0)
+
+        self.dt_ref_param.value  = dt_ref
+        self.dt_prod_param.value = dt_ref[:-1] * dt_ref[1:]
+
 # ---------------------------------------------------------------------------
 # final time
 # ---------------------------------------------------------------------------

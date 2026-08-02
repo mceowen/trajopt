@@ -241,6 +241,19 @@ class control_rate_limit(Constraint):
         return nondim.time_scale * nondim.M.control.d2nd[np.ix_(self.idx, self.idx)] @ self._value_dim
 
 
+class control_accel_limit(control_rate_limit):
+    """|u_{k+1} - 2 u_k + u_{k-1}| <= value * dt_{k-1} * dt_k."""
+
+    def __init__(self, cnstr_config, segment):
+        super().__init__(cnstr_config, segment)
+        self.type = "control_accel_limit"
+
+    @property
+    def value(self):
+        nondim = self._nondim
+        return nondim.time_scale**2 * nondim.M.control.d2nd[np.ix_(self.idx, self.idx)] @ self._value_dim
+
+
 class final_time(Constraint):
     def __init__(self, cnstr_config: dict, segment) -> None:
         index_map = segment.index_map
