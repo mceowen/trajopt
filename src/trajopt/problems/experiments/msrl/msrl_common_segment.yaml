@@ -1,0 +1,41 @@
+# shared by the MSRL entry and descent segments, each supplies its own nonlinear_aero
+
+inherit: trajopt/models/configs/reentry_3dof.yaml
+
+fcns:
+  density_model: trajopt/missions/msrl.py:density_model
+  downrange_crossrange: trajopt/missions/msrl.py:downrange_crossrange
+  target_miss_distance_sq: trajopt/missions/msrl.py:target_miss_distance_sq
+
+params:
+  planet:
+    inherit: trajopt/missions/configs/planets/mars.yaml
+  vehicle:
+    inherit: trajopt/missions/configs/vehicles/msrl.yaml
+
+  # no range bias here, the descent segment makes it fall out of the solution
+  target:
+    lon: 77.39
+    lat: 18.49
+    r_sep: 3394550.0   # backshell separation radius
+
+  # density polynomial coefficients
+  a: -4.418967
+  b: -56.76770
+  c: 1.621266
+  d: 379.3357
+  e: 8564.256
+  f: 8414.405
+  g: -988.7042
+  h: 4461.988
+  i: 31.36062
+
+constraints:
+  dynamics:
+    type: dynamics
+    fcn: fcns.dynamics
+
+  # descent ends below the mean radius and overrides this floor
+  state_limits:
+    type: state_limits
+    lower: ["${params.planet.r}", null, null, 100.0, null, null]
