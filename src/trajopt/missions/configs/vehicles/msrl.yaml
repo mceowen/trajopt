@@ -1,5 +1,11 @@
 mass: 5400.0
 sref: 17.5
-sref_chute: 363.0
+
+# MSL nominal S_0 from D_0 = 21.348 m (Cruz et al. AIAA 2013-1276, Table 1)
+sref_chute: 357.94
+
+cd_chute: 0.6
+eta_chute: 1.0      # Mach efficiency factor, the eta(M) profile is not available yet
+cd_backshell: 1.30  # time average estimation
 
 kQ: 0.000120337

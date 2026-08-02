@@ -84,8 +84,23 @@ def nonlinear_aero(x, u, t, params, fcns):
 
     return AttrDict({"L": L, "D": D, "Cl": Cl, "Cd": Cd})
 
+def parachute_aero(x, u, t, params, fcns):
+    """Post-deployment drag acceleration, no lift from parachute."""
+    v = x[3]
+
+    rho = fcns.density_model(x, u, t, params, fcns)
+
+    vehicle = params.vehicle
+    cd_chute = vehicle.eta_chute * vehicle.cd_chute
+    drag_area = vehicle.sref * vehicle.cd_backshell + vehicle.sref_chute * cd_chute
+
+    D = (0.5 * rho * v**2 / vehicle.mass) * drag_area
+    L = 0.0 * D
+
+    return AttrDict({"L": L, "D": D})
+
 def downrange_crossrange(x, u, t, params, fcns):
-    """[downrange, crossrange] (m) to the touchdown target, PCPF construction.
+    """[downrange, crossrange] (m) to the touchdown target PCPF.
 
     Downrange is the great-circle range to the target resolved along the
     horizontal velocity direction, crossrange the component normal to it
@@ -122,8 +137,7 @@ def downrange_crossrange(x, u, t, params, fcns):
     # bearing to target, clockwise from north
     bearing = jnp.arctan2(jnp.dot(r_tgt, e_hat), jnp.dot(r_tgt, n_hat))
 
-    # atan2 form of the great-circle central angle: unlike acos(dot), its
-    # derivatives stay well-conditioned at the small separations near deploy
+    # atan2 form of the great-circle central angle rather than acos(dot)
     central = jnp.arctan2(
         jnp.linalg.norm(jnp.cross(r_veh, r_tgt)),
         jnp.dot(r_veh, r_tgt),
@@ -141,3 +155,39 @@ def deploy_range_bias(x, u, t, params, fcns):
     """
     dr_cr = downrange_crossrange(x, u, t, params, fcns)
     return dr_cr - jnp.array([params.target.range_bias, 0.0])
+
+def target_miss_distance_sq(x, u, t, params, fcns):
+    """Squared great-circle miss distance (m^2) to the touchdown target."""
+    theta = jnp.deg2rad(x[1])
+    phi = jnp.deg2rad(x[2])
+
+    theta_t = jnp.deg2rad(params.target.lon)
+    phi_t = jnp.deg2rad(params.target.lat)
+
+    r_veh = jnp.array([
+        jnp.cos(theta) * jnp.cos(phi),
+        jnp.sin(theta) * jnp.cos(phi),
+        jnp.sin(phi),
+    ])
+    r_tgt = jnp.array([
+        jnp.cos(theta_t) * jnp.cos(phi_t),
+        jnp.sin(theta_t) * jnp.cos(phi_t),
+        jnp.sin(phi_t),
+    ])
+
+    central = jnp.arctan2(
+        jnp.linalg.norm(jnp.cross(r_veh, r_tgt)),
+        jnp.dot(r_veh, r_tgt),
+    )
+
+    return jnp.array([(params.planet.r * central)**2])
+
+def deploy_position_error_sq(x, u, t, params, fcns):
+    """Squared local-horizontal position error (m^2) to params.deploy_target."""
+    theta_d = jnp.deg2rad(params.deploy_target.lon)
+    phi_d = jnp.deg2rad(params.deploy_target.lat)
+
+    e_dr = params.planet.r * (jnp.deg2rad(x[1]) - theta_d) * jnp.cos(phi_d)
+    e_cr = params.planet.r * (jnp.deg2rad(x[2]) - phi_d)
+
+    return jnp.array([e_dr**2 + e_cr**2])
