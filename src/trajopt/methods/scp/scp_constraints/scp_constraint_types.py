@@ -699,7 +699,7 @@ class scp_ctcs_nonconvex_inequality(SCPConstraint):
 # continuity (cross-segment)
 # ---------------------------------------------------------------------------
 
-class scp_continuity(SCPConstraint):
+class scp_full_continuity(SCPConstraint):
 
     def init_penalty(self, scp_segment):
         self._scp_segment = scp_segment
@@ -719,6 +719,18 @@ class scp_continuity(SCPConstraint):
             self.add_penalty_cost(seg)
         else:
             seg.cp_constraints.append(residual == 0)
+
+
+class scp_state_continuity(scp_full_continuity):
+    pass
+
+
+class scp_control_continuity(scp_full_continuity):
+    pass
+
+
+class scp_time_continuity(scp_full_continuity):
+    pass
 
 
 # ---------------------------------------------------------------------------

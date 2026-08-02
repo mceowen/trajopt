@@ -455,18 +455,87 @@ class final_nonconvex_equality(nonconvex_equality):
         self.type = "final_nonconvex_equality"
 
 
-class continuity(Constraint):
+class full_continuity(Constraint):
+    """State, control, and time match at the segment boundary."""
     def __init__(self, cnstr_config: dict, segment) -> None:
         self.name = cnstr_config.name
-        self.type = "continuity"
+        self.type = "full_continuity"
         self.segment_name = cnstr_config.segment
-        self.dimension = segment.index_map.n.state
+        n = segment.index_map.n
+        self.dimension = n.state + n.control + n.time
 
     def residual(self, other_scp_segment, this_scp_segment):
         idx_state = this_scp_segment.index_map.indices.z.state
-        z_other_final = other_scp_segment.cp_params.z_ref[-1, idx_state] + other_scp_segment.dz[-1, idx_state]
-        z_this_initial = this_scp_segment.cp_params.z_ref[0, idx_state] + this_scp_segment.dz[0, idx_state]
-        return z_other_final - z_this_initial
+        idx_time  = this_scp_segment.index_map.indices.z.time
+        idx_ctrl  = this_scp_segment.index_map.indices.nu.control
+
+        x_other = other_scp_segment.cp_params.z_ref[-1, idx_state] + other_scp_segment.dz[-1, idx_state]
+        x_this  = this_scp_segment.cp_params.z_ref[0, idx_state]  + this_scp_segment.dz[0, idx_state]
+
+        u_other = other_scp_segment.cp_params.nu_ref[-1, idx_ctrl] + other_scp_segment.dnu[-1, idx_ctrl]
+        u_this  = this_scp_segment.cp_params.nu_ref[0, idx_ctrl]  + this_scp_segment.dnu[0, idx_ctrl]
+
+        t_other = other_scp_segment.cp_params.z_ref[-1, idx_time] + other_scp_segment.dz[-1, idx_time]
+        t_this  = this_scp_segment.cp_params.z_ref[0, idx_time]  + this_scp_segment.dz[0, idx_time]
+
+        return cp.hstack([x_other - x_this, u_other - u_this, t_other - t_this])
+
+
+class state_continuity(Constraint):
+    """State matches at the segment boundary."""
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        self.name = cnstr_config.name
+        self.type = "state_continuity"
+        self.segment_name = cnstr_config.segment
+        self.idx = cnstr_config.get("idx", None)
+        if self.idx is not None:
+            self.dimension = len(self.idx)
+        else:
+            self.dimension = segment.index_map.n.state
+
+    def residual(self, other_scp_segment, this_scp_segment):
+        idx_state = this_scp_segment.index_map.indices.z.state
+        if self.idx is not None:
+            idx_state = [idx_state[i] for i in self.idx]
+        x_other = other_scp_segment.cp_params.z_ref[-1, idx_state] + other_scp_segment.dz[-1, idx_state]
+        x_this  = this_scp_segment.cp_params.z_ref[0, idx_state]  + this_scp_segment.dz[0, idx_state]
+        return x_other - x_this
+
+
+class control_continuity(Constraint):
+    """Control matches at the segment boundary."""
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        self.name = cnstr_config.name
+        self.type = "control_continuity"
+        self.segment_name = cnstr_config.segment
+        self.idx = cnstr_config.get("idx", None)
+        if self.idx is not None:
+            self.dimension = len(self.idx)
+        else:
+            self.dimension = segment.index_map.n.control
+
+    def residual(self, other_scp_segment, this_scp_segment):
+        idx_ctrl = this_scp_segment.index_map.indices.nu.control
+        if self.idx is not None:
+            idx_ctrl = [idx_ctrl[i] for i in self.idx]
+        u_other = other_scp_segment.cp_params.nu_ref[-1, idx_ctrl] + other_scp_segment.dnu[-1, idx_ctrl]
+        u_this  = this_scp_segment.cp_params.nu_ref[0, idx_ctrl]  + this_scp_segment.dnu[0, idx_ctrl]
+        return u_other - u_this
+
+
+class time_continuity(Constraint):
+    """Time matches at the segment boundary."""
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        self.name = cnstr_config.name
+        self.type = "time_continuity"
+        self.segment_name = cnstr_config.segment
+        self.dimension = segment.index_map.n.time
+
+    def residual(self, other_scp_segment, this_scp_segment):
+        idx_time = this_scp_segment.index_map.indices.z.time
+        t_other = other_scp_segment.cp_params.z_ref[-1, idx_time] + other_scp_segment.dz[-1, idx_time]
+        t_this  = this_scp_segment.cp_params.z_ref[0, idx_time]  + this_scp_segment.dz[0, idx_time]
+        return t_other - t_this
 
 
 class dynamics(Constraint):
