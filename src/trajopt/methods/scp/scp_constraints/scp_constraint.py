@@ -142,6 +142,12 @@ class SCPConstraint():
         iter_num = scp_segment.current_iter_data.iter_num
         rho = max(0.0, 1.0 - iter_num / freeze_iters)
 
+        # past freeze_iters the weights stop moving, so an open buffer can never close
+        chk = scp_segment.current_iter_data.get("chk", None)
+        settled = chk is not None and float(chk.dz) < 1.0
+        if rho == 0.0 and settled and not self.is_feasible:
+            rho = 0.05
+
         if self.vb_type == "split":
             if self.penalty.W.autotune:
                 Wh_p = self.W_p * self.vb_p / (0.9 * self.eps)
