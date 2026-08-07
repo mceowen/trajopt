@@ -1,5 +1,6 @@
 method:
-  inherit: trajopt/methods/configs/autoscvx.yaml
+  # autoscvx leaves the terminal buffer open here
+  inherit: trajopt/methods/configs/so-scvx.yaml
 
   solver_opts:
     solver: CLARABEL

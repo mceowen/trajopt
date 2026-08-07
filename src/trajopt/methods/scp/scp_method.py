@@ -59,8 +59,11 @@ class SCPMethod():
         for scp_segment in self.scp_trajectory.scp_segments.values():
             scp_segment.record_iter_data()
 
-    def line_search(self, c1=1e-4, beta=0.5, max_iter=20, alpha_min=1e-7):
+    def line_search(self, c1=1e-4, beta=0.5, max_iter=20, alpha_min=None):
         segments = self.scp_trajectory.scp_segments
+
+        if alpha_min is None:
+            alpha_min = float(getattr(self.method_config.flags, 'alpha_min_ls', 1e-7))
 
         phi_0, dphi = 0.0, 0.0
         for seg in segments.values():

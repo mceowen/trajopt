@@ -81,7 +81,9 @@ class SCPSegment():
         initial_guess.set_initial_guess(segment, self)
 
         self.iter_data_list = []
-        self.lm_mu = 1e-8
+        # with lm_adapt off the eigenvalue floor keeps the metric positive definite
+        self.lm_adapt = bool(int(getattr(self.flags, 'lm_adapt', 1)))
+        self.lm_mu = 1e-8 if self.lm_adapt else 0.0
 
         self.current_iter_data = recursive_attrdict({
             "iter_num": 0,
@@ -310,7 +312,8 @@ class SCPSegment():
             H = np.tile(np.eye(n_z + n_nu), (N, 1, 1))
         else:
             H = np.zeros((N, n_z + n_nu, n_z + n_nu))
-            self._adapt_levenberg(iteration)
+            if self.lm_adapt:
+                self._adapt_levenberg(iteration)
             H += self.lm_mu * np.eye(n_z + n_nu)[np.newaxis, :, :]
 
         for constraint in self.constraints.values():
@@ -319,7 +322,7 @@ class SCPSegment():
         for cost in self.costs.values():
             cost.accumulate_hessian(self, H)
 
-        self.cp_params.L.value = _psd_sqrt(H)
+        self.cp_params.L.value = _psd_sqrt(H, float(getattr(self.flags, 'min_eig_psd', 0.0)))
 
     def _adapt_levenberg(self, iteration: int) -> None:
         if iteration < 2:
@@ -394,8 +397,8 @@ class SCPSegment():
         for constraint in self.constraints.values():
             constraint.update_W_dual(self, alpha)
 
-def _psd_sqrt(H_batch):
+def _psd_sqrt(H_batch, min_eig_psd=0.0):
     eigvals, eigvecs = np.linalg.eigh(H_batch)
-    eigvals_reg = np.maximum(eigvals, 0.0)
+    eigvals_reg = np.maximum(eigvals, min_eig_psd)
     sqrt_eigvals = np.sqrt(eigvals_reg)
     return sqrt_eigvals[..., :, np.newaxis] * np.transpose(eigvecs, (0, 2, 1))

@@ -6,10 +6,11 @@ flags:
   ignore_dpp:         0
   second_order:       1
   line_search:        1
-  min_eig_psd:        0.0    # eigenvalue floor for the trust-region Hessian square root
-  alpha_min_ls:       1e-7   # smallest line-search step
+  lm_adapt:           0
+  min_eig_psd:        1e-6
+  alpha_min_ls:       1e-7
   discretize: ms
-  nsub: 10                   # RK4 substeps per multiple-shooting interval
+  nsub: 3
   eps_state: [0.001]
   iter_max: 300
 
@@ -19,10 +20,11 @@ weights:
 
 penalty:
   default:
+    norm: l1
     W:
       penalty: True
-      autotune: True
-      init: 1.0
+      autotune: False
+      init: 1.0e3
     dual:
       penalty: True
       autotune: True
