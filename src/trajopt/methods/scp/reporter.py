@@ -55,7 +55,7 @@ _BASE_COLUMNS = [
     _Column("vb_dyn",  "vb_dyn/eps",  12, "sci"),
     _Column("status",  "Status",      12, "str"),
     _Column("alpha",   "alpha",       8,  "f4"),
-    _Column("tof",     "ToF [s]",     10, "f3"),
+    _Column("duration", "Duration [s]", 12, "f3"),
     _Column("cost",    "Cost",        14, "g"),
     _Column("penalty", "Penalty",     14, "g"),
 ]
@@ -112,6 +112,17 @@ class SolveReporter:
             print(reason)
         print(f"Total SCP time: {total_ms:.1f} ms (discretize: {disc_ms:.1f}, solve: {solve_ms:.1f})")
 
+    def trajectory_summary(self, segments):
+        """Print each segment's start, end and duration, then the time of flight."""
+        if self.quiet or not segments:
+            return
+        if len(segments) > 1:
+            name_w = max(len(name) for name, _, _ in segments)
+            print("Segment times")
+            for name, t_start, t_final in segments:
+                print(f"  {name:<{name_w}}  {t_start:10.3f} → {t_final:10.3f} s   ({t_final - t_start:.3f} s)")
+        print(f"Time of flight: {segments[-1][2] - segments[0][1]:.3f} s")
+
     @staticmethod
     def _extract(iter_data, segment_name):
         chk = iter_data.chk
@@ -128,7 +139,7 @@ class SolveReporter:
             "vb_dyn":  float(getattr(chk, "dynamics")),
             "status":  str(getattr(iter_data, "status")),
             "alpha":   float(getattr(iter_data, "alpha", 1.0)),
-            "tof":     float(getattr(iter_data, "T_opt")),
+            "duration": float(getattr(iter_data, "t_final")) - float(getattr(iter_data, "t_start")),
             "cost":    float(getattr(iter_data, "cost")),
             "penalty": float(getattr(iter_data, "penalty_cost", 0.0)),
         }

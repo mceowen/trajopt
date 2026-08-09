@@ -87,6 +87,8 @@ class SCPSegment():
             "iter_num": 0,
             "z_opt": self.initial_guess.z,
             "nu_opt": self.initial_guess.nu,
+            "t_start": float(self.initial_guess.t[0]) * self.nondim.time_scale,
+            "t_final": float(self.initial_guess.t[-1]) * self.nondim.time_scale,
             "cost": 0.0,
             "penalty_cost": 0.0,
             "vb":     AttrDict({c.name: c.vb     for c in self.constraints.values() if c.shape is not None}),
@@ -356,11 +358,14 @@ class SCPSegment():
 
         x_opt_new, t_opt_new, beta_opt_new, u_opt_new, s_opt_new = self.index_map.unpack_znu(z_new, nu_new)
 
-        T_opt_new  = float(np.asarray(t_opt_new[-1]).ravel()[0])
+        # times are measured from the start of the trajectory, not the segment
+        t_start_new = float(np.asarray(t_opt_new[0]).ravel()[0])
+        t_final_new = float(np.asarray(t_opt_new[-1]).ravel()[0])
 
         self.current_iter_data.x_opt    = x_opt_new
         self.current_iter_data.t_opt    = t_opt_new
-        self.current_iter_data.T_opt    = T_opt_new * self.nondim.time_scale
+        self.current_iter_data.t_start  = t_start_new * self.nondim.time_scale
+        self.current_iter_data.t_final  = t_final_new * self.nondim.time_scale
         self.current_iter_data.beta_opt = beta_opt_new
         self.current_iter_data.u_opt    = u_opt_new
         self.current_iter_data.s_opt    = s_opt_new

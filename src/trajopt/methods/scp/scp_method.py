@@ -152,6 +152,10 @@ class SCPMethod():
             reason=reason, total_ms=total_ms,
             disc_ms=total_discretization_ms, solve_ms=total_solve_ms,
         )
+        self.reporter.trajectory_summary([
+            (s.name, s.current_iter_data.t_start, s.current_iter_data.t_final)
+            for s in self.scp_trajectory.scp_segments.values()
+        ])
 
     def display_status(self) -> None:
         multi = len(self.scp_trajectory.scp_segments) > 1
