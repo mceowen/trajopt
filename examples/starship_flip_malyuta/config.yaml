@@ -56,7 +56,6 @@ method:
   inherit: trajopt/methods/configs/autoscvx.yaml
 
   flags:
-    free_final_time: 1
     iter_max: 100
   
   solver_opts:

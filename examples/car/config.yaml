@@ -3,7 +3,6 @@ method:
 
   flags:
     equal_dt: 1
-    free_final_time: 0
     flag_conv: 1
 
   conv:
@@ -41,6 +40,14 @@ trajectory:
         final_state:
           type: final_state
           value: [0.25, 1.0, "${np.deg2rad(90)}"]
+
+        initial_time:
+          type: initial_time
+          value: 0.0
+
+        final_time:
+          type: final_time
+          value: 4.0
 
         control_limits:
           type: control_limits

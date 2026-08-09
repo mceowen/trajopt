@@ -39,6 +39,8 @@ class SCPSegment():
             costClass = getattr(scp_cost_type_module, scp_class_name)
             self.costs[cost_name] = costClass(cost, self)
 
+        self.free_final_time = self.derive_free_final_time()
+
         self.initialize()
 
         self.cp_params            = AttrDict()
@@ -52,16 +54,40 @@ class SCPSegment():
         self.create_cvxpy_constraints()
         self.create_cvxpy_cost()
 
+    def find_constraint(self, cnstr_type):
+        """The segment's constraint of the given type, or None."""
+        return next((c.constraint for c in self.constraints.values() if c.type == cnstr_type), None)
+
+    def derive_free_final_time(self) -> bool:
+        """False only when initial_time and a fixed final_time pin both ends."""
+        initial = self.find_constraint("initial_time")
+        final   = self.find_constraint("final_time")
+
+        if initial is not None and self.find_constraint("time_continuity") is not None:
+            raise ValueError(
+                f"segment '{self.name}' declares both initial_time and time_continuity; "
+                "its start epoch comes from the preceding segment, so drop the initial_time"
+            )
+
+        return not (initial is not None and final is not None and final.is_fixed)
+
     def initialize(self) -> None:
         segment = self.segment
 
         self.initial_guess = AttrDict()
 
+        # the guess supplies whichever end the constraints do not give
         cfg_guess             = segment.guess
-        t_start               = getattr(cfg_guess, 't_start', 0.0)
-        t_stop                = cfg_guess.t_stop
-        t_start_nd            = t_start / self.nondim.time_scale
-        t_stop_nd             = t_stop / self.nondim.time_scale
+        initial_time_cnstr    = self.find_constraint("initial_time")
+        final_time_cnstr      = self.find_constraint("final_time")
+
+        t_start_nd            = (initial_time_cnstr.value if initial_time_cnstr is not None
+                                 else getattr(cfg_guess, 't_start', 0.0) / self.nondim.time_scale)
+        if not self.free_final_time:
+            t_stop_nd = final_time_cnstr.fixed_value
+        else:
+            t_stop_nd = cfg_guess.t_stop / self.nondim.time_scale
+
         self.Ts_init          = t_stop_nd - t_start_nd
         t_init                = np.linspace(t_start_nd, t_stop_nd, self.index_map.N.all)
         dt_init               = np.diff(t_init)
@@ -140,7 +166,7 @@ class SCPSegment():
         self.cp_vars.dgamma = cp.Variable((N, n_rc),   name="dgamma") if n_rc   > 0 else None
         self.cp_vars.du     = cp.Variable((N, n_u),    name="du")
 
-        if bool(self.flags.free_final_time):
+        if self.free_final_time:
             self.cp_vars.dt = cp.Variable((N, n_t), name="dt")
             self.cp_vars.ds = cp.Variable((N, 1),   name="ds")
         else:
@@ -167,7 +193,7 @@ class SCPSegment():
         for constraint in self.constraints.values():
             constraint.create_cvxpy_constraints(self)
 
-        if bool(self.flags.free_final_time):
+        if self.free_final_time:
             self.create_free_final_time_constraints()
 
     def create_cvxpy_cost(self) -> None:

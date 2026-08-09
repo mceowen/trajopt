@@ -254,7 +254,23 @@ class control_accel_limit(control_rate_limit):
         return nondim.time_scale**2 * nondim.M.control.d2nd[np.ix_(self.idx, self.idx)] @ self._value_dim
 
 
+class initial_time(Constraint):
+    """Sets the time the segment starts at, else it comes from guess.t_start."""
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        self.type = "initial_time"
+        self.name = cnstr_config.name
+        self.dimension = 1
+
+        self._value_dim = cnstr_config["value"]
+        self._nondim = segment.nondim
+
+    @property
+    def value(self):
+        return self._value_dim / self._nondim.time_scale
+
+
 class final_time(Constraint):
+    """Sets the time the segment ends at. value fixes it, lower and upper bound it."""
     def __init__(self, cnstr_config: dict, segment) -> None:
         index_map = segment.index_map
         nondim = segment.nondim
@@ -264,11 +280,20 @@ class final_time(Constraint):
         self.dimension = 1
 
         fixed = cnstr_config.get("value", None)
+        self._fixed_dim = fixed
         self._lower_dim = cnstr_config.get("lower", fixed)
         self._upper_dim = cnstr_config.get("upper", fixed)
 
         self._N_all = index_map.N.all
         self._nondim = nondim
+
+    @property
+    def is_fixed(self):
+        return self._fixed_dim is not None
+
+    @property
+    def fixed_value(self):
+        return self._fixed_dim / self._nondim.time_scale if self.is_fixed else None
 
     @property
     def lower(self):

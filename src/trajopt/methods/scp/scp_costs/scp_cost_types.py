@@ -160,7 +160,7 @@ class scp_convex_running(SCPCost):
 
 class scp_min_time(SCPCost):
     def create_cvxpy_cost(self, scp_segment):
-        if bool(scp_segment.flags.free_final_time):
+        if scp_segment.free_final_time:
             s = scp_segment.t_ref[:, 0] + scp_segment.dt[:, 0]
             scp_segment.cp_cost += cp.sum(s)
 
