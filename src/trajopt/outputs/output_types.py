@@ -5,6 +5,37 @@ import numpy as np
 from trajopt.utils import tools
 
 
+def resolve_extractor(output_config, index_map, fcns):
+    """Return the function an output evaluates, named by fcn: or by component: and idx:."""
+    if "fcn" in output_config:
+        return tools.resolve_function_from_string(output_config.fcn, fcns)
+
+    name = output_config.get("component")
+    if name is None:
+        raise ValueError(
+            f"output '{output_config.name}' needs either fcn: or component:"
+        )
+
+    for set_name, components in index_map.components.items():
+        if name in components:
+            idx = components[name]
+            break
+    else:
+        known = sorted(n for c in index_map.components.values() for n in c)
+        raise ValueError(
+            f"output '{output_config.name}' names unknown component '{name}'; "
+            f"known components are {known}"
+        )
+
+    if "idx" in output_config:
+        idx = idx[np.atleast_1d(output_config.idx)]
+    idx = jnp.asarray(idx)
+
+    if set_name == "state":
+        return lambda x, u, t, params: jnp.atleast_1d(x)[idx]
+    return lambda x, u, t, params: jnp.atleast_1d(u)[idx]
+
+
 class spatial:
     def __init__(self, output_config, segment):
         index_map = segment.index_map
@@ -24,7 +55,7 @@ class spatial:
         self.invert_x   = output_config.get("invert_x", False)
         self.index_map  = index_map
 
-        self.fcn_txu_dim    = tools.resolve_function_from_string(output_config.fcn, fcns)
+        self.fcn_txu_dim    = resolve_extractor(output_config, index_map, fcns)
         self.M_state_nd2d   = jnp.asarray(nondim.M.state.nd2d)
         self.M_ctrl_nd2d    = jnp.asarray(nondim.M.control.nd2d)
         self.time_scale     = float(nondim.time_scale)
@@ -98,7 +129,7 @@ class time_series:
         self.show_iters = output_config.get("show_iters")
         self.index_map  = index_map
 
-        self.fcn_txu_dim  = tools.resolve_function_from_string(output_config.fcn, fcns)
+        self.fcn_txu_dim  = resolve_extractor(output_config, index_map, fcns)
         self.M_state_nd2d = jnp.asarray(nondim.M.state.nd2d)
         self.M_ctrl_nd2d  = jnp.asarray(nondim.M.control.nd2d)
         self.time_scale   = float(nondim.time_scale)

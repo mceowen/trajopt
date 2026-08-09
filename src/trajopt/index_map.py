@@ -15,6 +15,12 @@ class IndexMap:
         n_state   = max(max(group.idx) for group in segment_config.state.values()) + 1
         n_control = max(max(group.idx) for group in segment_config.control.values()) + 1
 
+        # each component name and where it sits in the state or control vector
+        self.components = AttrDict({
+            "state":   {name: np.asarray(group.idx) for name, group in segment_config.state.items()},
+            "control": {name: np.asarray(group.idx) for name, group in segment_config.control.items()},
+        })
+
         self.n = AttrDict({"state": n_state, "control": n_control})
         self.N = AttrDict({"all": segment_config.num_nodes})
 

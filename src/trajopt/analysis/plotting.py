@@ -103,16 +103,17 @@ def plot(traj_analyzer, data, *, save=True, show=False, save_dir=None, format="p
     return figs
 
 
-def _group_outputs(outputs):
-    """Group the outputs named in declared by their figure, dropping the rest.
+#: figure name used when a declared output does not name a group
+DEFAULT_GROUP = "outputs"
 
-    Groups are a plotting concern — one group is one figure, one output is one
-    subplot — so they live in each channel's ``meta`` rather than in the data
-    layout, and the figure layout is rebuilt from them here.
-    """
+
+def _group_outputs(outputs, declared):
+    """Group the declared outputs by figure, one figure per group and one subplot per output."""
     grouped = {}
     for name, output in outputs.items():
-        grouped.setdefault(output.meta.group, {})[name] = output
+        if name not in declared:
+            continue
+        grouped.setdefault(output.meta.group or DEFAULT_GROUP, {})[name] = output
     return grouped
 
 
@@ -131,9 +132,9 @@ def build_standalone(traj_analyzer, data):
     method         = list(data.keys())[0]
     iters_all      = data[method]["runs"][0]["iter_data_list"]
     last_iter      = iters_all[-1]
-    traj_data      = _group_outputs(last_iter["outputs"])
-    first_segment  = next(iter(traj_analyzer.trajectory.segments.values()))
     traj_configs   = _output_configs(traj_analyzer)
+    traj_data      = _group_outputs(last_iter["outputs"], traj_configs)
+    first_segment  = next(iter(traj_analyzer.trajectory.segments.values()))
     fcns           = first_segment.fcns
 
     figs, axs = {}, {}
@@ -235,10 +236,10 @@ def build_method_variation(traj_analyzer, data):
     methods = list(data.keys())
 
     ref_last = data[methods[0]]["runs"][0]["iter_data_list"][-1]
-    ref_traj_data = _group_outputs(ref_last["outputs"])
+    traj_configs = _output_configs(traj_analyzer)
+    ref_traj_data = _group_outputs(ref_last["outputs"], traj_configs)
 
     first_segment = next(iter(traj_analyzer.trajectory.segments.values()))
-    traj_configs = _output_configs(traj_analyzer)
     fcns = first_segment.fcns
 
     figs, axs = {}, {}
@@ -269,7 +270,7 @@ def build_method_variation(traj_analyzer, data):
         color = colors[m_idx]
         mp = _method_pens(color)
         m_last = data[method_name]["runs"][0]["iter_data_list"][-1]
-        m_traj_data = _group_outputs(m_last["outputs"])
+        m_traj_data = _group_outputs(m_last["outputs"], traj_configs)
 
         for group_name, group_data in m_traj_data.items():
             for i, (traj_name, output) in enumerate(group_data.items()):

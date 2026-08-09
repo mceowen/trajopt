@@ -81,8 +81,15 @@ def analyze_segment(subprob, config):
                 z_opt, tau_nodes, nu_opt, dynamics, params, _solver=traj_solver,
             )
 
+        # an output from the config replaces the one built here with the same name
+        outputs = auto_outputs(
+            segment,
+            opt        = (z_opt,  nu_opt),
+            nl_prop    = (z_nl,   nu_nl),
+            init_guess = (z_init, nu_init),
+        )
+
         # outputs the config declares
-        outputs = AttrDict({})
         for output in segment.outputs.values():
             if not hasattr(output, "compute_values"):
                 continue
@@ -131,6 +138,44 @@ def analyze_segment(subprob, config):
         }))
 
     return analyzed
+
+
+def auto_outputs(segment, **representations):
+    """Build one SI-unit output per state and control component, plus time and the augmented states."""
+    index_map = segment.index_map
+    nondim    = segment.nondim
+    idx       = index_map.indices
+
+    sliced = {}
+    for rep, (z, nu) in representations.items():
+        x = z[:, idx.z.state] @ nondim.M.state.nd2d
+        u = nu[:, idx.nu.control] @ nondim.M.control.nd2d
+        sliced[rep] = {
+            **{f"state:{n}":   x[:, i]  for n, i in index_map.components.state.items()},
+            **{f"control:{n}": u[:, i]  for n, i in index_map.components.control.items()},
+            "time":            z[:, idx.z.time] * nondim.time_scale,
+            "dilation_factor": nu[:, idx.nu.dilation_factor],
+            "ctcs":            z[:, idx.z.ctcs],
+            "running_cost":    z[:, idx.z.running_cost],
+        }
+
+    outputs = AttrDict({})
+    for key in next(iter(sliced.values())):
+        name = key.split(":", 1)[1] if ":" in key else key
+        if any(sliced[rep][key].shape[1] == 0 for rep in sliced):
+            continue  # augmented block this segment does not have
+        outputs[name] = AttrDict({
+            **{rep: sliced[rep][key] for rep in sliced},
+            "limits":  None,
+            "quivers": [],
+            "meta": AttrDict({
+                "name": name, "type": "time_series", "group": None,
+                "title": None, "xlabel": None, "ylabel": None, "zlabel": None,
+                "tick_nbins": None, "markers": None, "invert_x": False,
+                "show_iters": None, "trigger_line": None, "units": None,
+            }),
+        })
+    return outputs
 
 
 #: each value array and the time grid whose length it matches
