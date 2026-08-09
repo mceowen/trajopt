@@ -4,7 +4,7 @@
       .runs_by_method: {method: [RunResult, ...]}
         RunResult                    # one solve; run 0 is the nominal case
           .iter_data_list: [Iterate]
-          .scp_iters                 # raw solver-side iterate data
+          .solver_iters              # {segment: per-iteration solver data}
           .final -> Iterate          # last iterate
             Iterate                  # one SCP iterate, in SI units
               t_opt / x_opt / u_opt              values at the nodes
@@ -78,10 +78,10 @@ class Iterate(_MappingShim):
 
 @dataclass(frozen=True)
 class RunResult(_MappingShim):
-    """One solve: its propagated iterates plus raw solver data."""
+    """One solve: its propagated iterates plus the per-segment solver data."""
 
     iter_data_list: list[Iterate]
-    scp_iters: Any
+    solver_iters: Mapping[str, list]
 
     @property
     def final(self) -> Iterate:

@@ -25,12 +25,10 @@ def perform_analysis(traj) -> RunResult:
             pad_missing_outputs(per_segment)
             iter_mappings.append(concat(per_segment))
 
-    scp_iters = []
-    for subprob in scp_segments.values():
-        scp_iters = subprob.iter_data_list
+    solver_iters = {name: subprob.iter_data_list for name, subprob in scp_segments.items()}
 
     iter_data_list = [Iterate.from_mapping(m) for m in iter_mappings]
-    return RunResult(iter_data_list=iter_data_list, scp_iters=scp_iters)
+    return RunResult(iter_data_list=iter_data_list, solver_iters=solver_iters)
 
 
 def analyze_segment(subprob, config):
