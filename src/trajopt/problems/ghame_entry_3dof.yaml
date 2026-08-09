@@ -57,9 +57,9 @@ trajectory:
 
       costs:
         max_crossrange:
-          type: terminal_state
+          type: final_state
           idx: [2]
-          sign: -1
+          w: -1
 
       guess:
         type: propagation

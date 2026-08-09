@@ -15,14 +15,26 @@ class min_time:
         self.nodes = cost_config.get("nodes", np.arange(0, segment.index_map.N.all))
 
 
-class terminal_state:
+class final_state:
+    """Weighted sum of the chosen state components at the final node. Negative w maximizes."""
     def __init__(self, cost_config: dict, segment) -> None:
-        self.type = "terminal_state"
+        self.type = "final_state"
         self.name = cost_config["name"]
         self.group = cost_config.get("group", None)
         self.nodes = cost_config.get("nodes", np.array([segment.index_map.N.all - 1]))
         self.idx = cost_config["idx"]
-        self.sign = cost_config.get("sign", 1)
+        self.w = cost_config.get("w", 1.0)
+
+
+class final_control:
+    """Weighted sum of the chosen control components at the final node. Negative w maximizes."""
+    def __init__(self, cost_config: dict, segment) -> None:
+        self.type = "final_control"
+        self.name = cost_config["name"]
+        self.group = cost_config.get("group", None)
+        self.nodes = cost_config.get("nodes", np.array([segment.index_map.N.all - 1]))
+        self.idx = cost_config["idx"]
+        self.w = cost_config.get("w", 1.0)
 
 
 class min_norm_terminal:
