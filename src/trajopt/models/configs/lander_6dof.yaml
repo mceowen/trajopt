@@ -85,7 +85,7 @@ time:
 # TRAJECTORIES
 # ===============================
 
-trajplots:
+outputs:
   position:
     type: time_series
     fcn: fcns.pos_vec

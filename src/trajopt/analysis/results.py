@@ -10,7 +10,12 @@
               t_opt / x_opt / u_opt              values at the nodes
               t_nl  / x_nl  / u_nl               propagated trajectory
               t_init_nl / x_init_nl / u_init_nl  initial guess
-              trajplot_data                      group -> name -> payload
+              outputs                            {name: output}
+              channels                           {name: output.opt}
+
+Each output holds three value arrays, ``opt``, ``nl_prop`` and ``init_guess``,
+plus its ``limits``, ``quivers`` and ``meta``. The ``meta`` block holds the
+type, the figure group and the axis labels.
 
 All arrays are in SI units. ``x_*`` holds the physical states only, with time
 in ``t_*``. Every container also supports dict-style access, so
@@ -63,7 +68,7 @@ class Iterate(_MappingShim):
     t_init_nl: np.ndarray
     x_init_nl: np.ndarray
     u_init_nl: np.ndarray
-    trajplot_data: Mapping[str, Any]
+    outputs: Mapping[str, Any]
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any]) -> "Iterate":

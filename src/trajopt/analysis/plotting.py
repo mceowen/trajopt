@@ -103,6 +103,27 @@ def plot(traj_analyzer, data, *, save=True, show=False, save_dir=None, format="p
     return figs
 
 
+def _group_outputs(outputs):
+    """Group the outputs named in declared by their figure, dropping the rest.
+
+    Groups are a plotting concern — one group is one figure, one output is one
+    subplot — so they live in each channel's ``meta`` rather than in the data
+    layout, and the figure layout is rebuilt from them here.
+    """
+    grouped = {}
+    for name, output in outputs.items():
+        grouped.setdefault(output.meta.group, {})[name] = output
+    return grouped
+
+
+def _output_configs(traj_analyzer):
+    """Merge the outputs: config blocks of every segment into one mapping."""
+    merged = {}
+    for segment_cfg in traj_analyzer.config.trajectory.segments.values():
+        merged.update(segment_cfg.get('outputs', {}))
+    return merged
+
+
 def build_standalone(traj_analyzer, data):
     """Construct the standalone trajectory figures."""
     analysis_cfg = traj_analyzer.config.get("analysis", {})
@@ -110,9 +131,9 @@ def build_standalone(traj_analyzer, data):
     method         = list(data.keys())[0]
     iters_all      = data[method]["runs"][0]["iter_data_list"]
     last_iter      = iters_all[-1]
-    traj_data      = last_iter["trajplot_data"]
+    traj_data      = _group_outputs(last_iter["outputs"])
     first_segment  = next(iter(traj_analyzer.trajectory.segments.values()))
-    traj_configs   = next(iter(traj_analyzer.config.trajectory.segments.values())).get('trajplots', {})
+    traj_configs   = _output_configs(traj_analyzer)
     fcns           = first_segment.fcns
 
     figs, axs = {}, {}
@@ -120,7 +141,7 @@ def build_standalone(traj_analyzer, data):
         figsize = plot_options.figsize
         pad_3d  = 0.08
         grid    = _create_grid(len(group_data))
-        is_3d   = {i: (d.type == "spatial" and d.opt_vals["values"].shape[1] == 3)
+        is_3d   = {i: (d.meta.type == "spatial" and d.opt.shape[1] == 3)
                    for i, d in enumerate(group_data.values())}
 
         fig = plt.figure(figsize=figsize)
@@ -136,20 +157,20 @@ def build_standalone(traj_analyzer, data):
     iters_to_show = iters_all[1:] if show_iters else []
 
     for group_name, group_data in traj_data.items():
-        for i, (traj_name, trajplot) in enumerate(group_data.items()):
+        for i, (traj_name, output) in enumerate(group_data.items()):
             ax = axs[group_name][i]
-            _setup_ax(ax, trajplot)
-            if trajplot.type == "spatial":
-                _plot_spatial(ax, trajplot, iters_to_show, last_iter)
+            _setup_ax(ax, output.meta)
+            if output.meta.type == "spatial":
+                _plot_spatial(ax, output, iters_to_show, last_iter)
             else:
-                _plot_time_series(ax, trajplot, iters_to_show, last_iter)
+                _plot_time_series(ax, output, iters_to_show, last_iter)
 
     for group_name, group_data in traj_data.items():
-        for i, (traj_name, trajplot) in enumerate(group_data.items()):
-            if trajplot.type == "spatial":
+        for i, (traj_name, output) in enumerate(group_data.items()):
+            if output.meta.type == "spatial":
                 ax       = axs[group_name][i]
-                dim      = trajplot.opt_vals["values"].shape[1]
-                traj_cfg = traj_configs.get(traj_name, trajplot)
+                dim      = output.opt.shape[1]
+                traj_cfg = traj_configs.get(traj_name, output.meta)
 
                 limits_opt_only = traj_cfg.get("limits_opt_only", False)
                 if limits_opt_only:
@@ -166,15 +187,14 @@ def build_standalone(traj_analyzer, data):
 
     for group_name, group_data in traj_data.items():
         trigger_time = _find_trigger_time(group_data, last_iter)
-        for i, (traj_name, trajplot) in enumerate(group_data.items()):
+        for i, (traj_name, output) in enumerate(group_data.items()):
             ax   = axs[group_name][i]
-            vals = trajplot.opt_vals["values"]
-            if trajplot.type == "spatial":
+            vals = output.opt
+            if output.meta.type == "spatial":
                 traj_cfg = traj_configs.get(traj_name, {})
                 equal_aspect = bool(traj_cfg.get("equal_aspect", False))
-                init_vals = trajplot.init_nl_vals.get("values", None) if hasattr(trajplot, "init_nl_vals") else None
-                all_vals = np.vstack([vals, init_vals]) if init_vals is not None else vals
-                all_vals = _include_quiver_extents(all_vals, trajplot)
+                all_vals = np.vstack([vals, output.init_guess])
+                all_vals = _include_quiver_extents(all_vals, output)
                 _set_limits_from_data(ax, all_vals, equal_aspect=equal_aspect)
                 if traj_cfg.get("xlim") is not None:
                     ax.set_xlim(traj_cfg["xlim"])
@@ -183,7 +203,7 @@ def build_standalone(traj_analyzer, data):
             else:
                 t = last_iter["t_opt"]
                 _set_time_series_limits(ax, t[:vals.shape[0]], vals,
-                                        limits=trajplot.nl_vals.get("limits", {}))
+                                        limits=output.limits or {})
                 if trigger_time is not None:
                     ax.axvline(trigger_time, color='gray', ls='--', lw=0.8, alpha=0.7, zorder=1)
 
@@ -215,16 +235,16 @@ def build_method_variation(traj_analyzer, data):
     methods = list(data.keys())
 
     ref_last = data[methods[0]]["runs"][0]["iter_data_list"][-1]
-    ref_traj_data = ref_last["trajplot_data"]
+    ref_traj_data = _group_outputs(ref_last["outputs"])
 
     first_segment = next(iter(traj_analyzer.trajectory.segments.values()))
-    traj_configs = next(iter(traj_analyzer.config.trajectory.segments.values())).get('trajplots', {})
+    traj_configs = _output_configs(traj_analyzer)
     fcns = first_segment.fcns
 
     figs, axs = {}, {}
     for group_name, group_data in ref_traj_data.items():
         grid = _create_grid(len(group_data))
-        is_3d = {i: (d.type == "spatial" and d.opt_vals["values"].shape[1] == 3)
+        is_3d = {i: (d.meta.type == "spatial" and d.opt.shape[1] == 3)
                  for i, d in enumerate(group_data.values())}
 
         fig = plt.figure(figsize=plot_options.figsize)
@@ -239,8 +259,8 @@ def build_method_variation(traj_analyzer, data):
         figs[group_name] = fig
 
     for group_name, group_data in ref_traj_data.items():
-        for i, (traj_name, trajplot) in enumerate(group_data.items()):
-            _setup_ax(axs[group_name][i], trajplot)
+        for i, (traj_name, output) in enumerate(group_data.items()):
+            _setup_ax(axs[group_name][i], output.meta)
 
     all_spatial_vals = {}
     all_ts_ranges = {}
@@ -249,34 +269,33 @@ def build_method_variation(traj_analyzer, data):
         color = colors[m_idx]
         mp = _method_pens(color)
         m_last = data[method_name]["runs"][0]["iter_data_list"][-1]
-        m_traj_data = m_last["trajplot_data"]
+        m_traj_data = _group_outputs(m_last["outputs"])
 
         for group_name, group_data in m_traj_data.items():
-            for i, (traj_name, trajplot) in enumerate(group_data.items()):
+            for i, (traj_name, output) in enumerate(group_data.items()):
                 ax = axs[group_name][i]
                 key = (group_name, i)
 
-                if trajplot.type == "spatial":
-                    dim = trajplot.opt_vals["values"].shape[1]
+                if output.meta.type == "spatial":
+                    dim = output.opt.shape[1]
                     _is_3d = dim == 3
 
-                    def _unpack(vals, d=_is_3d):
-                        v = vals["values"]
+                    def _unpack(v, d=_is_3d):
                         return (v[:, 0], v[:, 1], v[:, 2]) if d else (v[:, 0], v[:, 1])
 
-                    coords_nl = _unpack(trajplot.nl_vals)
+                    coords_nl = _unpack(output.nl_prop)
                     _draw(ax, *coords_nl[:2], mp.nl, z=coords_nl[2] if _is_3d else None)
-                    coords_opt = _unpack(trajplot.opt_vals)
+                    coords_opt = _unpack(output.opt)
                     _draw(ax, *coords_opt[:2], mp.opt, z=coords_opt[2] if _is_3d else None)
 
-                    combined = np.vstack([trajplot.opt_vals["values"], trajplot.nl_vals["values"]])
+                    combined = np.vstack([output.opt, output.nl_prop])
                     prev = all_spatial_vals.get(key)
                     all_spatial_vals[key] = np.vstack([prev, combined]) if prev is not None else combined
                 else:
                     t_nl = m_last["t_nl"]
                     t_opt = m_last["t_opt"]
-                    nl_v = trajplot.nl_vals["values"].squeeze()
-                    opt_v = trajplot.opt_vals["values"].squeeze()
+                    nl_v = output.nl_prop.squeeze()
+                    opt_v = output.opt.squeeze()
                     _draw(ax, t_nl,  nl_v,  mp.nl)
                     _draw(ax, t_opt, opt_v, mp.opt)
 
@@ -284,22 +303,22 @@ def build_method_variation(traj_analyzer, data):
                     v_all = np.concatenate([nl_v.ravel(), opt_v.ravel()])
                     if key not in all_ts_ranges:
                         all_ts_ranges[key] = {"t_min": t_all.min(), "t_max": t_all.max(),
-                                              "v_min": v_all.min(), "v_max": v_all.max()}
+                                              "v_min": np.nanmin(v_all), "v_max": np.nanmax(v_all)}
                     else:
                         r = all_ts_ranges[key]
                         r["t_min"] = min(r["t_min"], t_all.min())
                         r["t_max"] = max(r["t_max"], t_all.max())
-                        r["v_min"] = min(r["v_min"], v_all.min())
-                        r["v_max"] = max(r["v_max"], v_all.max())
+                        r["v_min"] = min(r["v_min"], np.nanmin(v_all))
+                        r["v_max"] = max(r["v_max"], np.nanmax(v_all))
 
     for group_name, group_data in ref_traj_data.items():
         trigger_time = _find_trigger_time(group_data, ref_last)
-        for i, (traj_name, trajplot) in enumerate(group_data.items()):
+        for i, (traj_name, output) in enumerate(group_data.items()):
             ax = axs[group_name][i]
             key = (group_name, i)
-            if trajplot.type == "spatial":
-                traj_cfg = traj_configs.get(traj_name, trajplot)
-                dim = trajplot.opt_vals["values"].shape[1]
+            if output.meta.type == "spatial":
+                traj_cfg = traj_configs.get(traj_name, output.meta)
+                dim = output.opt.shape[1]
                 _plot_overlays(ax, traj_cfg, dim, first_segment.params, fcns)
 
                 if key in all_spatial_vals:
@@ -314,7 +333,7 @@ def build_method_variation(traj_analyzer, data):
                 t_arr = np.array([r["t_min"], r["t_max"]])
                 v_arr = np.array([r["v_min"], r["v_max"]])
                 _set_time_series_limits(ax, t_arr, v_arr,
-                                        limits=trajplot.nl_vals.get("limits", {}))
+                                        limits=output.limits or {})
                 if trigger_time is not None:
                     ax.axvline(trigger_time, color='gray', ls='--', lw=0.8, alpha=0.7, zorder=1)
 
@@ -367,53 +386,51 @@ def _draw(ax, x, y, pen, z=None, n_iters=1, i=0):
 
 
 def _plot_spatial(ax, traj, iters_to_show, last_iter):
-    dim   = traj.opt_vals["values"].shape[1]
+    dim   = traj.opt.shape[1]
     is_3d = dim == 3
 
-    def unpack(vals):
-        v = vals["values"]
+    def unpack(v):
         return (v[:, 0], v[:, 1], v[:, 2]) if is_3d else (v[:, 0], v[:, 1])
 
-    n = len(iters_to_show)
+    name = traj.meta.name
+    n    = len(iters_to_show)
     for i, it in enumerate(iters_to_show):
-        traj_it = it["trajplot_data"]
-        group   = _find_group(traj_it, traj.name)
-        if group is _NOT_FOUND: continue
-        t = traj_it[group][traj.name]
+        t = it["outputs"].get(name)
+        if t is None: continue
 
-        coords = unpack(t.nl_vals)
+        coords = unpack(t.nl_prop)
         _draw(ax, *coords[:2], pens.itr_nl,  z=coords[2] if is_3d else None, n_iters=n, i=i)
-        coords = unpack(t.opt_vals)
+        coords = unpack(t.opt)
         _draw(ax, *coords[:2], pens.itr_opt, z=coords[2] if is_3d else None, n_iters=n, i=i)
 
-    coords = unpack(traj.init_nl_vals)
+    coords = unpack(traj.init_guess)
     _draw(ax, *coords[:2], pens.init, z=coords[2] if is_3d else None)
-    coords = unpack(traj.nl_vals)
+    coords = unpack(traj.nl_prop)
     _draw(ax, *coords[:2], pens.nl,   z=coords[2] if is_3d else None)
-    coords = unpack(traj.opt_vals)
+    coords = unpack(traj.opt)
     _draw(ax, *coords[:2], pens.opt,  z=coords[2] if is_3d else None)
 
-    _plot_markers(ax, traj, dim)
+    _plot_markers(ax, traj.meta, dim)
     _plot_quivers(ax, traj, dim)
 
 
 def _plot_time_series(ax, traj, iters_to_show, last_iter):
-    n = len(iters_to_show)
+    name = traj.meta.name
+    n    = len(iters_to_show)
     for i, it in enumerate(iters_to_show):
-        traj_it = it["trajplot_data"]
-        group   = _find_group(traj_it, traj.name)
-        if group is _NOT_FOUND: continue
-        t = traj_it[group][traj.name]
+        t = it["outputs"].get(name)
+        if t is None: continue
 
-        _draw(ax, it["t_nl"],  t.nl_vals["values"].squeeze(),  pens.itr_nl,  n_iters=n, i=i)
-        _draw(ax, it["t_opt"], t.opt_vals["values"].squeeze(), pens.itr_opt, n_iters=n, i=i)
+        _draw(ax, it["t_nl"],  t.nl_prop.squeeze(), pens.itr_nl,  n_iters=n, i=i)
+        _draw(ax, it["t_opt"], t.opt.squeeze(),     pens.itr_opt, n_iters=n, i=i)
 
-    _draw(ax, last_iter["t_init_nl"], traj.init_nl_vals["values"].squeeze(), pens.init)
-    _draw(ax, last_iter["t_nl"],      traj.nl_vals["values"].squeeze(),      pens.nl)
-    _draw(ax, last_iter["t_opt"],     traj.opt_vals["values"].squeeze(),     pens.opt)
+    _draw(ax, last_iter["t_init_nl"], traj.init_guess.squeeze(), pens.init)
+    _draw(ax, last_iter["t_nl"],      traj.nl_prop.squeeze(),    pens.nl)
+    _draw(ax, last_iter["t_opt"],     traj.opt.squeeze(),        pens.opt)
 
-    upper = traj.get("upper_limit") or traj.nl_vals.get("limits", {}).get("upper")
-    lower = traj.get("lower_limit") or traj.nl_vals.get("limits", {}).get("lower")
+    limits = traj.limits or {}
+    upper = limits.get("upper")
+    lower = limits.get("lower")
     for val in filter(None, [upper, lower]):
         if isinstance(val, np.ndarray):
             t = last_iter["t_nl"]
@@ -443,13 +460,13 @@ def _plot_markers(ax, traj, dim):
 
 
 def _plot_quivers(ax, traj, dim):
-    for q in (traj.opt_vals.get("quivers") or []):
+    for q in (traj.quivers or []):
         cfg    = dict(q["config"]) if isinstance(q["config"], tuple) else q["config"]
         stride = int(cfg.get("stride", 1))
         scale  = float(cfg.get("scale", 1.0)) * (-1.0 if cfg.get("negate") else 1.0)
 
-        idx  = np.arange(0, len(traj.opt_vals["values"]), stride)
-        o    = traj.opt_vals["values"][idx]
+        idx  = np.arange(0, len(traj.opt), stride)
+        o    = traj.opt[idx]
         if q.get("origins") is not None:
             o = o + q["origins"][idx]
         d    = q["dirs"][idx] * scale
@@ -521,10 +538,11 @@ def _padded_lim(lo, hi, margin=0.08):
 
 
 def _set_limits_from_data(ax, vals, margin=0.08, equal_aspect=False):
-    ax.set_xlim(*_padded_lim(vals[:, 0].min(), vals[:, 0].max(), margin))
-    ax.set_ylim(*_padded_lim(vals[:, 1].min(), vals[:, 1].max(), margin))
+    # an output missing from a segment is NaN over that stretch
+    ax.set_xlim(*_padded_lim(np.nanmin(vals[:, 0]), np.nanmax(vals[:, 0]), margin))
+    ax.set_ylim(*_padded_lim(np.nanmin(vals[:, 1]), np.nanmax(vals[:, 1]), margin))
     if vals.shape[1] >= 3 and hasattr(ax, 'set_zlim'):
-        ax.set_zlim(*_padded_lim(vals[:, 2].min(), vals[:, 2].max(), margin))
+        ax.set_zlim(*_padded_lim(np.nanmin(vals[:, 2]), np.nanmax(vals[:, 2]), margin))
         if equal_aspect:
             _set_equal_aspect_3d(ax)
     elif equal_aspect:
@@ -546,26 +564,26 @@ def _set_equal_aspect_3d(ax):
 
 def _set_time_series_limits(ax, t, vals, margin=0.08, limits=None):
     ax.set_xlim(*_padded_lim(t.min(), t.max(), margin))
-    vmin, vmax = vals.min(), vals.max()
+    vmin, vmax = np.nanmin(vals), np.nanmax(vals)
     if limits:
         for lim in (limits.get("upper"), limits.get("lower")):
             if lim is None:
                 continue
             if isinstance(lim, np.ndarray):
-                vmin, vmax = min(vmin, lim.min()), max(vmax, lim.max())
+                vmin, vmax = min(vmin, np.nanmin(lim)), max(vmax, np.nanmax(lim))
             elif isinstance(lim, (int, float)):
                 vmin, vmax = min(vmin, lim), max(vmax, lim)
     ax.set_ylim(*_padded_lim(vmin, vmax, margin))
 
 
 def _include_quiver_extents(all_vals, traj):
-    for q in (traj.opt_vals.get("quivers") or []):
+    for q in (traj.quivers or []):
         cfg      = dict(q["config"]) if isinstance(q["config"], tuple) else q["config"]
         stride   = int(cfg.get("stride", 1))
         scale    = float(cfg.get("scale", 1.0)) * (-1.0 if cfg.get("negate") else 1.0)
         centered = bool(cfg.get("centered", False))
 
-        origins = traj.opt_vals["values"][::stride]
+        origins = traj.opt[::stride]
         if q.get("origins") is not None:
             origins = origins + q["origins"][::stride]
         dirs = q["dirs"][::stride] * scale
@@ -720,14 +738,14 @@ def _convergence_weight_plot(subprob, suffix, save=True):
 
 
 def _find_trigger_time(group_data, last_iter):
-    """Find the trigger time from any trajplot in the group that has trigger_line config."""
-    for trajplot in group_data.values():
-        tl = trajplot.get("trigger_line")
+    """Return the time the first output in the group crosses its trigger, or None."""
+    for output in group_data.values():
+        tl = output.meta.get("trigger_line")
         if tl is None:
             continue
         threshold = float(tl["threshold"])
         direction = tl.get("direction", "below")
-        vals = trajplot.opt_vals["values"].squeeze()
+        vals = output.opt.squeeze()
         t = last_iter["t_opt"][:len(vals)]
         if direction == "below":
             crossed = np.where(vals[:-1] >= threshold, vals[1:] < threshold, False)
@@ -743,12 +761,3 @@ def _find_trigger_time(group_data, last_iter):
         frac = (threshold - v0) / dv
         return float(t[idx] + frac * (t[idx + 1] - t[idx]))
     return None
-
-
-_NOT_FOUND = object()
-
-def _find_group(traj_data, name):
-    for group_name, group in traj_data.items():
-        if name in group:
-            return group_name
-    return _NOT_FOUND

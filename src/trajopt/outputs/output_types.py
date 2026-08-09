@@ -6,31 +6,31 @@ from trajopt.utils import tools
 
 
 class spatial:
-    def __init__(self, trajplot_config, segment):
+    def __init__(self, output_config, segment):
         index_map = segment.index_map
         nondim = segment.nondim
         fcns = segment.fcns
 
         self.type       = "spatial"
-        self.name       = trajplot_config.name
-        self.group      = trajplot_config.get("group")
-        self.units      = trajplot_config.get("units")
-        self.title      = trajplot_config.get("title")
-        self.xlabel     = trajplot_config.get("xlabel")
-        self.ylabel     = trajplot_config.get("ylabel")
-        self.zlabel     = trajplot_config.get("zlabel")
-        self.tick_nbins = trajplot_config.get("tick_nbins")
-        self.markers    = trajplot_config.get("markers")
-        self.invert_x   = trajplot_config.get("invert_x", False)
+        self.name       = output_config.name
+        self.group      = output_config.get("group")
+        self.units      = output_config.get("units")
+        self.title      = output_config.get("title")
+        self.xlabel     = output_config.get("xlabel")
+        self.ylabel     = output_config.get("ylabel")
+        self.zlabel     = output_config.get("zlabel")
+        self.tick_nbins = output_config.get("tick_nbins")
+        self.markers    = output_config.get("markers")
+        self.invert_x   = output_config.get("invert_x", False)
         self.index_map  = index_map
 
-        self.fcn_txu_dim    = tools.resolve_function_from_string(trajplot_config.fcn, fcns)
+        self.fcn_txu_dim    = tools.resolve_function_from_string(output_config.fcn, fcns)
         self.M_state_nd2d   = jnp.asarray(nondim.M.state.nd2d)
         self.M_ctrl_nd2d    = jnp.asarray(nondim.M.control.nd2d)
         self.time_scale     = float(nondim.time_scale)
         self.fcn_batched    = jax.jit(jax.vmap(self.fcn_znu, in_axes=(0, 0, None)))
 
-        raw_quivers = trajplot_config.get("quivers", {}) or {}
+        raw_quivers = output_config.get("quivers", {}) or {}
         quiver_configs = list(raw_quivers.values()) if isinstance(raw_quivers, dict) else list(raw_quivers)
         self._quiver_batches = []
         for qcfg in quiver_configs:
@@ -66,7 +66,7 @@ class spatial:
         x, t, _, u, _ = self.index_map.unpack_znu(z, nu)
         return self.fcn_txu_nd(x, u, t, params)
 
-    def compute_trajplot_values(self, z, nu, params):
+    def compute_values(self, z, nu, params):
         z_jax, nu_jax = jnp.asarray(z), jnp.asarray(nu)
         values = np.asarray(self.fcn_batched(z_jax, nu_jax, params))
         quivers = [
@@ -81,32 +81,32 @@ class spatial:
 
 
 class time_series:
-    def __init__(self, trajplot_config, segment):
+    def __init__(self, output_config, segment):
         index_map = segment.index_map
         nondim = segment.nondim
         fcns = segment.fcns
 
         self.type       = "time_series"
-        self.name       = trajplot_config.name
-        self.group      = trajplot_config.get("group")
-        self.units      = trajplot_config.get("units")
-        self.title      = trajplot_config.get("title")
-        self.xlabel     = trajplot_config.get("xlabel")
-        self.ylabel     = trajplot_config.get("ylabel")
-        self.zlabel     = trajplot_config.get("zlabel")
-        self.tick_nbins = trajplot_config.get("tick_nbins")
-        self.show_iters = trajplot_config.get("show_iters")
+        self.name       = output_config.name
+        self.group      = output_config.get("group")
+        self.units      = output_config.get("units")
+        self.title      = output_config.get("title")
+        self.xlabel     = output_config.get("xlabel")
+        self.ylabel     = output_config.get("ylabel")
+        self.zlabel     = output_config.get("zlabel")
+        self.tick_nbins = output_config.get("tick_nbins")
+        self.show_iters = output_config.get("show_iters")
         self.index_map  = index_map
 
-        self.fcn_txu_dim  = tools.resolve_function_from_string(trajplot_config.fcn, fcns)
+        self.fcn_txu_dim  = tools.resolve_function_from_string(output_config.fcn, fcns)
         self.M_state_nd2d = jnp.asarray(nondim.M.state.nd2d)
         self.M_ctrl_nd2d  = jnp.asarray(nondim.M.control.nd2d)
         self.time_scale   = float(nondim.time_scale)
         self.fcn_batched  = jax.jit(jax.vmap(self.fcn_znu, in_axes=(0, 0, None)))
 
-        self.upper_limit = trajplot_config.get("upper_limit")
-        self.lower_limit = trajplot_config.get("lower_limit")
-        self.trigger_line = trajplot_config.get("trigger_line")
+        self.upper_limit = output_config.get("upper_limit")
+        self.lower_limit = output_config.get("lower_limit")
+        self.trigger_line = output_config.get("trigger_line")
         self.upper_limit_batched = None
         self.lower_limit_batched = None
 
@@ -142,7 +142,7 @@ class time_series:
         x, t, _, u, _ = self.index_map.unpack_znu(z, nu)
         return self.fcn_txu_nd(x, u, t, params)
 
-    def compute_trajplot_values(self, z, nu, params):
+    def compute_values(self, z, nu, params):
         z_jax, nu_jax = jnp.asarray(z), jnp.asarray(nu)
         values = np.asarray(self.fcn_batched(z_jax, nu_jax, params))
         upper = self.upper_limit

@@ -79,7 +79,7 @@ trajectory:
           type: nonconvex_terminal
           fcn: fcns.velocity
 
-      trajplots:
+      outputs:
         heat_rate:
           upper_limit: 3.33
 

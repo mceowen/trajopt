@@ -116,7 +116,7 @@ trajectory:
         #   upper: 35.0
         #   scale: [35.0]
 
-      trajplots:
+      outputs:
         aero_load:
           upper_limit: 13.0
 
