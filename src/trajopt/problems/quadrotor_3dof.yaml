@@ -14,9 +14,6 @@ trajectory:
         thrust_norm:      trajopt/models/quadrotor_3dof.py:thrust_norm
         obstacle:         trajopt/models/quadrotor_3dof.py:obstacle
         max_thrust_cone:  trajopt/models/quadrotor_3dof.py:max_thrust_cone
-        height:           trajopt/models/quadrotor_3dof.py:height
-        pos_x:            trajopt/models/quadrotor_3dof.py:pos_x
-        pos_y:            trajopt/models/quadrotor_3dof.py:pos_y
         xz:               trajopt/models/quadrotor_3dof.py:xz
         yz:               trajopt/models/quadrotor_3dof.py:yz
         one:              trajopt/models/quadrotor_3dof.py:one

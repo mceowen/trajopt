@@ -54,12 +54,6 @@ def angular(x, u, t, params, fcns):
 def control(x, u, t, params, fcns):
     return jnp.array([u[0], u[1]])
 
-def thrust_magnitude(x, u, t, params, fcns):
-    return jnp.array([u[0]])
-
-def gimbal_angle(x, u, t, params, fcns):
-    return jnp.array([u[1]])
-
 def thrust_dir(x, u, t, params, fcns):
     delta = u[1]
     e_i = fcns.ei(x, u, t, params, fcns)

@@ -5,7 +5,6 @@ fcns:
   u_squared_cost: cartpole.py:u_squared_cost
   state_pos:      cartpole.py:state_pos
   state_vel:      cartpole.py:state_vel
-  control_force:  cartpole.py:control_force
   cart_pos:       cartpole.py:cart_pos
   pole_dir:       cartpole.py:pole_dir
 
@@ -50,7 +49,7 @@ outputs:
 
   control:
     type: time_series
-    fcn: fcns.control_force
+    component: fx1
     group: control
     title: "Force vs Time"
     xlabel: "Time (s)"

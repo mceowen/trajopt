@@ -9,15 +9,6 @@ fcns:
   max_thrust_cone: ../quadrotor_3dof.py:max_thrust_cone
   obstacle:        ../quadrotor_3dof.py:obstacle
   obstacle_xy:     ../quadrotor_3dof.py:obstacle_xy
-  height:          ../quadrotor_3dof.py:height
-  pos_x:           ../quadrotor_3dof.py:pos_x
-  pos_y:           ../quadrotor_3dof.py:pos_y
-  vel_x:           ../quadrotor_3dof.py:vel_x
-  vel_y:           ../quadrotor_3dof.py:vel_y
-  vel_z:           ../quadrotor_3dof.py:vel_z
-  thrust_x:        ../quadrotor_3dof.py:thrust_x
-  thrust_y:        ../quadrotor_3dof.py:thrust_y
-  thrust_z:        ../quadrotor_3dof.py:thrust_z
   xy:              ../quadrotor_3dof.py:xy
   xyz:             ../quadrotor_3dof.py:xyz
   xz:              ../quadrotor_3dof.py:xz
@@ -58,7 +49,7 @@ time.scale: 1.0
 outputs:
   pos_x:
     type: time_series
-    fcn: fcns.pos_x
+    component: x
     group: state_pos
     title: "X Position vs Time"
     xlabel: "Time (s)"
@@ -66,7 +57,7 @@ outputs:
 
   pos_y:
     type: time_series
-    fcn: fcns.pos_y
+    component: y
     group: state_pos
     title: "Y Position vs Time"
     xlabel: "Time (s)"
@@ -74,7 +65,7 @@ outputs:
 
   height:
     type: time_series
-    fcn: fcns.height
+    component: z
     group: state_pos
     title: "Z Position vs Time"
     xlabel: "Time (s)"
@@ -82,7 +73,7 @@ outputs:
 
   vel_x:
     type: time_series
-    fcn: fcns.vel_x
+    component: vx
     group: state_vel
     title: "X Velocity vs Time"
     xlabel: "Time (s)"
@@ -90,7 +81,7 @@ outputs:
 
   vel_y:
     type: time_series
-    fcn: fcns.vel_y
+    component: vy
     group: state_vel
     title: "Y Velocity vs Time"
     xlabel: "Time (s)"
@@ -98,7 +89,7 @@ outputs:
 
   vel_z:
     type: time_series
-    fcn: fcns.vel_z
+    component: vz
     group: state_vel
     title: "Z Velocity vs Time"
     xlabel: "Time (s)"
@@ -106,7 +97,7 @@ outputs:
 
   thrust_x:
     type: time_series
-    fcn: fcns.thrust_x
+    component: Tx
     group: control
     title: "Tx vs Time"
     xlabel: "Time (s)"
@@ -114,7 +105,7 @@ outputs:
 
   thrust_y:
     type: time_series
-    fcn: fcns.thrust_y
+    component: Ty
     group: control
     title: "Ty vs Time"
     xlabel: "Time (s)"
@@ -122,7 +113,7 @@ outputs:
 
   thrust_z:
     type: time_series
-    fcn: fcns.thrust_z
+    component: Tz
     group: control
     title: "Tz vs Time"
     xlabel: "Time (s)"

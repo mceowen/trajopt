@@ -15,16 +15,7 @@ fcns:
   cvx_tilt_limit:         trajopt/models/lander_6dof.py:cvx_tilt_limit
 
   # state trajectories
-  mass:               trajopt/models/lander_6dof.py:mass
-  pos_vec:            trajopt/models/lander_6dof.py:pos_vec
-  vel_vec:            trajopt/models/lander_6dof.py:vel_vec
-  quat_vec:           trajopt/models/lander_6dof.py:quat_vec
-  ang_vel_vec:        trajopt/models/lander_6dof.py:ang_vel_vec
-
   # control trajectories
-  thrust_x:           trajopt/models/lander_6dof.py:thrust_x
-  thrust_y:           trajopt/models/lander_6dof.py:thrust_y
-  thrust_z:           trajopt/models/lander_6dof.py:thrust_z
   thrust_mag:         trajopt/models/lander_6dof.py:thrust_mag
 
   # spatial trajectories
@@ -45,7 +36,6 @@ fcns:
   thrust_dir_3d:      trajopt/models/lander_6dof.py:thrust_dir_3d
 
   # constraint plot trajectories
-  altitude_traj:      trajopt/models/lander_6dof.py:altitude_traj
   speed_traj:         trajopt/models/lander_6dof.py:speed_traj
   angular_speed_traj: trajopt/models/lander_6dof.py:angular_speed_traj
   glide_slope_traj:   trajopt/models/lander_6dof.py:glide_slope_traj
@@ -88,7 +78,7 @@ time:
 outputs:
   position:
     type: time_series
-    fcn: fcns.pos_vec
+    component: pos
     group: state
     title: "Position vs Time"
     xlabel: "Time (s)"
@@ -96,7 +86,7 @@ outputs:
 
   velocity:
     type: time_series
-    fcn: fcns.vel_vec
+    component: vel
     group: state
     title: "Velocity vs Time"
     xlabel: "Time (s)"
@@ -104,7 +94,7 @@ outputs:
 
   quaternion:
     type: time_series
-    fcn: fcns.quat_vec
+    component: quat
     group: state
     title: Quaternion vs Time
     xlabel: Time (s)
@@ -112,7 +102,7 @@ outputs:
 
   angular_velocity:
     type: time_series
-    fcn: fcns.ang_vel_vec
+    component: angv
     group: state
     title: "Angular Velocity vs Time"
     xlabel: "Time (s)"
@@ -120,7 +110,8 @@ outputs:
 
   thrust_x:
     type: time_series
-    fcn: fcns.thrust_x
+    component: thrust
+    idx: 0
     group: control
     title: Tx vs Time
     xlabel: Time (s)
@@ -128,7 +119,8 @@ outputs:
 
   thrust_y:
     type: time_series
-    fcn: fcns.thrust_y
+    component: thrust
+    idx: 1
     group: control
     title: Ty vs Time
     xlabel: Time (s)
@@ -136,7 +128,8 @@ outputs:
 
   thrust_z:
     type: time_series
-    fcn: fcns.thrust_z
+    component: thrust
+    idx: 2
     group: control
     title: Tz vs Time
     xlabel: Time (s)
@@ -152,7 +145,7 @@ outputs:
 
   mass:
     type: time_series
-    fcn: fcns.mass
+    component: mass
     group: state_mass
     title: "Mass vs Time"
     xlabel: "Time (s)"
@@ -239,7 +232,8 @@ outputs:
 
   stl_altitude:
     type: time_series
-    fcn: fcns.altitude_traj
+    component: pos
+    idx: 0
     group: stl_constraints
     title: "Altitude vs Time"
     xlabel: "Time (s)"

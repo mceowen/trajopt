@@ -147,30 +147,6 @@ def cvx_tilt_limit(x, u, params):
 # trajectory helper functions
 # =============================================================================
 
-def mass(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
-    return jnp.array([x[0]])
-
-def pos_vec(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
-    return x[1:4]
-
-def vel_vec(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
-    return x[4:7]
-
-def quat_vec(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
-    return x[7:11]
-
-def ang_vel_vec(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
-    return x[11:14]
-
-def thrust_x(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
-    return jnp.array([u[0]])
-
-def thrust_y(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
-    return jnp.array([u[1]])
-
-def thrust_z(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
-    return jnp.array([u[2]])
-
 def thrust_mag(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
     return jnp.array([jnp.linalg.norm(u[:3])])
 
@@ -235,9 +211,6 @@ def thrust_dir_3d(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict
 # =============================================================================
 # STL constraint trajectory helpers (for plotting)
 # =============================================================================
-
-def altitude_traj(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
-    return jnp.array([x[1]])
 
 def speed_traj(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
     return jnp.array([jnp.sqrt(x[4] ** 2 + x[5] ** 2 + x[6] ** 2 + 1e-6)])
