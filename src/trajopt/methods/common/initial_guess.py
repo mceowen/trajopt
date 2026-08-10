@@ -7,17 +7,68 @@ from trajopt.methods.common import pseudospectral
 from trajopt.methods.scp.scp_costs import scp_cost_types
 
 
+def resolve_guess_type(segment, method_segment):
+    """The segment's guess type, else the method config's, else propagation."""
+    seg_type = getattr(segment.guess, "type", None)
+    if seg_type is not None:
+        return seg_type
+
+    method_guess = getattr(method_segment.method_config, "guess", None)
+    if method_guess is not None:
+        return getattr(method_guess, "type", "propagation")
+
+    return "propagation"
+
+
 def set_initial_guess(segment, method_segment):
-    guess_type = getattr(segment.guess, "type", "propagation")
+    guess_type = resolve_guess_type(segment, method_segment)
 
     if guess_type == "propagation":
         nonlinear_initial_guess(segment, method_segment)
     elif guess_type == "straight_line":
         straight_line_initial_guess(segment, method_segment)
+    else:
+        raise ValueError(
+            f"segment '{segment.name}': unknown guess type '{guess_type}' "
+            "(expected 'propagation' or 'straight_line')"
+        )
 
     method_segment.cost_init = scp_cost_types.compute_nonconvex_terminal_costs(
         method_segment.initial_guess.z, method_segment.initial_guess.nu, segment, method_segment
     )
+
+
+def _constraint_of_type(segment, type_name):
+    return next((c for c in segment.constraints.values() if c.type == type_name), None)
+
+
+def _endpoint_states(segment):
+    """Nondimensional endpoints from guess.x_start/x_stop, else the boundary constraints."""
+    cfg  = segment.guess
+    n_x  = segment.index_map.n.state
+    d2nd = segment.nondim.M.state.d2nd
+
+    if hasattr(cfg, "x_start"):
+        x0 = d2nd @ np.atleast_1d(cfg.x_start)
+    else:
+        cnstr = _constraint_of_type(segment, "initial_state")
+        if cnstr is None:
+            raise ValueError(
+                f"segment '{segment.name}': a straight-line guess needs either "
+                "guess.x_start or an initial_state constraint"
+            )
+        x0 = np.zeros(n_x)
+        x0[np.asarray(cnstr.idx, dtype=int)] = cnstr.value
+
+    if hasattr(cfg, "x_stop"):
+        xf = d2nd @ np.atleast_1d(cfg.x_stop)
+    else:
+        xf = x0.copy()
+        cnstr = _constraint_of_type(segment, "final_state")
+        if cnstr is not None:
+            xf[np.asarray(cnstr.idx, dtype=int)] = cnstr.value
+
+    return x0, xf
 
 
 def straight_line_initial_guess(segment, method_segment):
@@ -26,8 +77,7 @@ def straight_line_initial_guess(segment, method_segment):
     N    = index_map.N.all
     cfg  = segment.guess
 
-    x0 = segment.nondim.M.state.d2nd   @ np.atleast_1d(cfg.x_start)
-    xf = segment.nondim.M.state.d2nd   @ np.atleast_1d(cfg.x_stop)
+    x0, xf = _endpoint_states(segment)
     u0 = segment.nondim.M.control.d2nd @ np.atleast_1d(cfg.u_start)
     uf = segment.nondim.M.control.d2nd @ np.atleast_1d(cfg.u_stop)
 
