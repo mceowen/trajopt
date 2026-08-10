@@ -1,30 +1,23 @@
-"""Typed result of :meth:`TrajectoryAnalyzer.analyze`::
+"""What analyze() returns, in SI units. Every container also takes dict access.
 
-    MissionResult                    # what analyze() returns
-      .runs_by_method: {method: [RunResult, ...]}
-        RunResult                    # one solve; run 0 is the nominal case
+    MissionResult
+      .runs_by_method: {method: [RunResult, ...]}   run 0 is the nominal case
+        RunResult
           .iter_data_list: [Iterate]
-          .solver_iters              # {segment: per-iteration solver data}
-          .final -> Iterate          # last iterate
-            Iterate                  # one SCP iterate, in SI units
-              t_opt / x_opt / u_opt              values at the nodes
-              t_nl  / x_nl  / u_nl               propagated trajectory
-              t_init_nl / x_init_nl / u_init_nl  initial guess
-              outputs                            {name: output}
-              channels                           {name: output.opt}
-
-Each output holds three value arrays, ``opt``, ``nl_prop`` and ``init_guess``,
-plus its ``limits``, ``quivers`` and ``meta``. The ``meta`` block holds the
-type, the figure group and the axis labels.
-
-All arrays are in SI units. ``x_*`` holds the physical states only, with time
-in ``t_*``. Every container also supports dict-style access, so
-``iterate["x_opt"]`` works alongside ``iterate.x_opt``.
+          .solver_iters                             {segment: per-iteration solver data}
+          .final -> Iterate
+            Iterate
+              t_opt / x_opt / u_opt                 values at the nodes
+              t_nl  / x_nl  / u_nl                  propagated trajectory
+              t_init_nl / x_init_nl / u_init_nl     initial guess
+              outputs                               {name: opt, nl_prop, init_guess, limits, quivers, meta}
+              channels                              {name: output.opt}
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, fields
+from functools import cached_property
 from typing import Any, Mapping
 
 import numpy as np
@@ -54,6 +47,13 @@ class _MappingShim:
         return iter(self.keys())
 
 
+def _as_column(values: np.ndarray) -> np.ndarray:
+    values = np.asarray(values)
+    if values.ndim == 2 and values.shape[1] == 1:
+        return values[:, 0]
+    return values
+
+
 @dataclass(frozen=True)
 class Iterate(_MappingShim):
     """One SCP iterate in SI units."""
@@ -74,6 +74,13 @@ class Iterate(_MappingShim):
     def from_mapping(cls, data: Mapping[str, Any]) -> "Iterate":
         """Build an Iterate from a mapping of the same field names."""
         return cls(**{f.name: data[f.name] for f in fields(cls)})
+
+    @cached_property
+    def channels(self) -> AttrDict:
+        """Every output's node values keyed by name, single-column ones as 1-D."""
+        return AttrDict({
+            name: _as_column(output.opt) for name, output in self.outputs.items()
+        })
 
 
 @dataclass(frozen=True)
