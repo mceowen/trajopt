@@ -1,0 +1,10 @@
+inherit: autoscvx2.yaml
+
+penalty:
+  final_state:
+    vb: 'none'
+  final_control:
+    vb: 'none'
+
+guess:
+  type: straight_line

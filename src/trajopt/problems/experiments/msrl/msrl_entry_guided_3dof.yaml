@@ -157,7 +157,7 @@ trajectory:
         u_stop: [0, 0.0]
 
 method:
-  inherit: trajopt/methods/configs/autoscvx.yaml
+  inherit: trajopt/methods/configs/autoscvx2.yaml
 
   flags:
     equal_dt: 1

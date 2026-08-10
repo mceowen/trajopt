@@ -47,7 +47,7 @@ trajectory:
 
 
 method:
-  inherit: trajopt/methods/configs/autoscvx.yaml
+  inherit: trajopt/methods/configs/autoscvx2.yaml
   
   solver_opts:
     solver: QOCO

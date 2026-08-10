@@ -1,5 +1,5 @@
 method:
-  inherit: trajopt/methods/configs/autoscvx.yaml
+  inherit: trajopt/methods/configs/autoscvx2.yaml
 
   flags:
     equal_dt: 1

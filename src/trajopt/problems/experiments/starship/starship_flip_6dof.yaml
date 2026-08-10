@@ -53,7 +53,7 @@ trajectory:
 
 method:
   type: SCP
-  inherit: trajopt/methods/configs/autoscvx.yaml
+  inherit: trajopt/methods/configs/autoscvx2.yaml
 
   flags:
     iter_max: 100

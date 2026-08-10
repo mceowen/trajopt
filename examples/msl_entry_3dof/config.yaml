@@ -5,7 +5,7 @@ inherit: trajopt/problems/msl_entry_3dof.yaml
 
 # solution method
 method:
-  inherit: trajopt/methods/configs/autoscvx.yaml
+  inherit: trajopt/methods/configs/autoscvx2.yaml
 
   solver_opts:
     solver: QOCO
