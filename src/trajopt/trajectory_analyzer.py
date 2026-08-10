@@ -1,6 +1,7 @@
 import trajopt.utils.config_loader as config_loader
 import trajopt.analysis.analysis as analysis
 import trajopt.analysis.plotting as plotting
+from trajopt.analysis.results import Iterate
 from trajopt.trajectory import Trajectory
 from trajopt.methods.scp.scp_method import SCPMethod
 from trajopt.utils.tools import deep_merge, recursive_attrdict
@@ -40,17 +41,33 @@ class TrajectoryAnalyzer():
 
         return self.results
 
-    def plot(self, data):
+    @property
+    def solution(self) -> Iterate:
+        """Final iterate of the nominal run of the primary method, in SI units."""
+        results = getattr(self, "results", None)
+        if results is None:
+            raise RuntimeError("No results yet; call analyze() before accessing solution.")
+        method_name = self.config.method.get("name", "method1")
+        return results.final_iterate(method_name)
+
+    def plot(self, data=None, *, save=True, show=False, save_dir=None, format="pdf"):
+        """Build the trajectory figures and return them as {name: Figure}."""
+        if data is None:
+            data = getattr(self, "results", None)
+            if data is None:
+                data = self.analyze()
+
         analysis_cfg = self.config.get("analysis", {})
         analysis_type = analysis_cfg.get("type", "standalone")
 
         if analysis_type == "method_variation":
-            plotting.plot_method_variation(self, data)
-        else:
-            plotting.plot(self, data)
+            return plotting.plot_method_variation(
+                self, data, save=save, show=show, save_dir=save_dir, format=format)
+        return plotting.plot(
+            self, data, save=save, show=show, save_dir=save_dir, format=format)
 
     def reconfigure(self):
-        """Rebuild the Trajectory and SCPMethod objects from ``self.config``.
+        """Rebuild the Trajectory and SCPMethod objects from self.config.
 
         Call this after modifying ``self.config`` from external code (e.g., a C
         interface) to propagate the changes into the internal problem objects.

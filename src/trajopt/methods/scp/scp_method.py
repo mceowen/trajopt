@@ -3,6 +3,7 @@ import time
 import numpy as np
 import cvxpy as cp
 
+from trajopt.methods.scp.reporter import SolveReporter
 from trajopt.methods.scp.scp_trajectory import SCPTrajectory
 
 class SCPMethod():
@@ -18,16 +19,19 @@ class SCPMethod():
         self.cp_cost = sum(seg.cp_cost for seg in self.scp_trajectory.scp_segments.values())
         self.cp_constraints = [c for s in self.scp_trajectory.scp_segments.values() for c in s.cp_constraints]
         self.cp_subproblem = cp.Problem(cp.Minimize(self.cp_cost), self.cp_constraints)
-        
+
         total_param_scalars = sum(p.size for p in self.cp_subproblem.parameters())
         self._converged = False
 
-        print("subproblem stats:")
-        print("------------------------------------------------------------")
-        print(f"total number of segments: {len(self.scp_trajectory.scp_segments)}")
-        print(f"total number of cvxpy parameters: {total_param_scalars}")
-        print(f"total number of cvxpy constraints: {len(self.cp_constraints)}")
-        print(f"is DPP: {self.cp_subproblem.is_dcp(dpp=True)}")
+        quiet = bool(self.method_config.flags.get("quiet", False))
+        multi = len(self.scp_trajectory.scp_segments) > 1
+        self.reporter = SolveReporter(multi=multi, quiet=quiet)
+        self.reporter.subproblem_stats(
+            num_segments=len(self.scp_trajectory.scp_segments),
+            num_params=total_param_scalars,
+            num_constraints=len(self.cp_constraints),
+            is_dpp=self.cp_subproblem.is_dcp(dpp=True),
+        )
 
     def update_cvxpy_parameters(self) -> None:
         for scp_segment in self.scp_trajectory.scp_segments.values():
@@ -59,8 +63,11 @@ class SCPMethod():
         for scp_segment in self.scp_trajectory.scp_segments.values():
             scp_segment.record_iter_data()
 
-    def line_search(self, c1=1e-4, beta=0.5, max_iter=20, alpha_min=1e-7):
+    def line_search(self, c1=1e-4, beta=0.5, max_iter=20, alpha_min=None):
         segments = self.scp_trajectory.scp_segments
+
+        if alpha_min is None:
+            alpha_min = float(getattr(self.method_config.flags, 'alpha_min_ls', 1e-7))
 
         phi_0, dphi = 0.0, 0.0
         for seg in segments.values():
@@ -95,36 +102,35 @@ class SCPMethod():
 
     def warmup_jax(self):
         """Run a dummy discretization pass to trigger all JAX JIT compilations."""
-        print("Compiling JAX kernels (warmup)...", end=" ", flush=True)
+        self.reporter.message("Compiling JAX kernels (warmup)...")
         warmup_start = time.perf_counter()
         self.update_cvxpy_parameters()
         warmup_ms = (time.perf_counter() - warmup_start) * 1000.0
-        print(f"done ({warmup_ms:.0f} ms)")
+        self.reporter.message(f"done ({warmup_ms:.0f} ms)")
 
-    def solve(self):
+    def solve(self, verbose=None):
+        if verbose is not None:
+            self.reporter.quiet = not verbose
 
         self.warmup_jax()
-
-        print("-" * 204)
-        print("  Iteration |  Discretization |   Solve   |    Parse   |  log(dx/eps) | log(vb_ineq/eps) | log(vb_eq/eps) | log(vb_term/eps) | log(vb_dyn/eps) | Solve status | alpha |  Time of    |   Cost    |  Penalty  ")
-        print("            |    time [ms]    | time [ms] |  time [ms] |     (state)  |    (ncvx_ineq)   |   (ncvx_eq)    |      (terminal)  |    (dynamics)   |              |       |  Flight [s] |           |   Cost    ")
-        print("-" * 204)
+        self.reporter.header()
 
         max_iter = int(self.method_config.flags.iter_max)
 
         total_discretization_ms = 0.0
         total_solve_ms = 0.0
+        reason = None
 
         for i in range(max_iter + 1):
             self.update_cvxpy_parameters()
             self.cp_subproblem.solve(warm_start=False, **self.method_config.solver_opts)
 
             if self.cp_subproblem.status not in {"optimal", "optimal_inaccurate", "user_limit"}:
-                print(f"Terminated from non-optimal convex subproblem! Status: {self.cp_subproblem.status}")
+                reason = f"Terminated from non-optimal convex subproblem! Status: {self.cp_subproblem.status}"
                 break
 
             if not self.step_is_usable():
-                print(f"  step rejected (status {self.cp_subproblem.status}), tightening trust region")
+                self.reporter.message(f"  step rejected (status {self.cp_subproblem.status}), tightening trust region")
                 for scp_segment in self.scp_trajectory.scp_segments.values():
                     scp_segment.lm_mu = min(scp_segment.lm_mu * 10.0, 1e4)
                 continue
@@ -137,44 +143,27 @@ class SCPMethod():
             total_solve_ms += self.cp_subproblem.solver_stats.solve_time * 1000.0
 
             if self._converged:
-                print("Terminated from convergence criteria!")
+                reason = "Terminated from convergence criteria!"
                 break
 
         ran_iterations = any(s.iter_data_list[-1].iter_num > 0 for s in self.scp_trajectory.scp_segments.values())
-        if ran_iterations and not self._converged:
-            print("Terminated from hitting maximum iterations!")
+        if reason is None and ran_iterations and not self._converged:
+            reason = "Terminated from hitting maximum iterations!"
 
         total_ms = total_discretization_ms + total_solve_ms
-        print(f"\nTotal SCP time: {total_ms:.1f} ms (discretize: {total_discretization_ms:.1f}, solve: {total_solve_ms:.1f})")
+        self.reporter.footer(
+            reason=reason, total_ms=total_ms,
+            disc_ms=total_discretization_ms, solve_ms=total_solve_ms,
+        )
+        self.reporter.trajectory_summary([
+            (s.name, s.current_iter_data.t_start, s.current_iter_data.t_final)
+            for s in self.scp_trajectory.scp_segments.values()
+        ])
 
     def display_status(self) -> None:
         multi = len(self.scp_trajectory.scp_segments) > 1
         for scp_segment in self.scp_trajectory.scp_segments.values():
-            current_iter_data = scp_segment.current_iter_data
-
-            with np.errstate(divide="ignore"):
-                log_dz_ratio      = float(np.log10(current_iter_data.chk.dz))
-                log_vb_ineq_ratio = float(np.log10(current_iter_data.chk.nonconvex_inequality))
-                log_vb_eq_ratio   = float(np.log10(current_iter_data.chk.nonconvex_equality))
-                log_vb_term_ratio = float(np.log10(current_iter_data.chk.final_state))
-                log_vb_dyn_ratio  = float(np.log10(current_iter_data.chk.dynamics))
-
-            prefix = f"[{scp_segment.name}] " if multi else ""
-            print(
-                prefix + "{:^12d}|{:^17.1f}|{:^11.1f}|{:^12.1f}|{:^+14.1f}|{:^+18.1f}|{:^+16.1f}|{:^+18.1f}|{:^+17.1f}|{:^14s}|{:^7.3f}|{:^13.2f}|{:^11.1f}|{:^11.1f}".format(
-                    int(current_iter_data.iter_num),
-                    float(current_iter_data.discretization_time),
-                    float(current_iter_data.solve_time),
-                    float(current_iter_data.parse_time),
-                    log_dz_ratio,
-                    log_vb_ineq_ratio,
-                    log_vb_eq_ratio,
-                    log_vb_term_ratio,
-                    log_vb_dyn_ratio,
-                    str(current_iter_data.status),
-                    float(current_iter_data.get("alpha", 1.0)),
-                    float(current_iter_data.T_opt),
-                    float(current_iter_data.cost),
-                    float(current_iter_data.get("penalty_cost", 0.0)),
-                )
+            self.reporter.row(
+                scp_segment.current_iter_data,
+                segment_name=scp_segment.name if multi else None,
             )

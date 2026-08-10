@@ -10,8 +10,6 @@ fcns:
   velocity: starship.py:velocity
   angular: starship.py:angular
   control: starship.py:control
-  thrust_magnitude: starship.py:thrust_magnitude
-  gimbal_angle: starship.py:gimbal_angle
   thrust_dir: starship.py:thrust_dir
   engine_offset: starship.py:engine_offset
   cvx_glide_slope: starship.py:cvx_glide_slope
@@ -48,7 +46,7 @@ control:
 time: 
   scale: 1
 
-trajplots:
+outputs:
   spatial:
     type: spatial
     group: spatial
@@ -96,7 +94,7 @@ trajplots:
 
   thrust:
     type: time_series
-    fcn: fcns.thrust_magnitude
+    component: thrust
     group: control
     title: "Thrust vs Time"
     xlabel: "Time (s)"
@@ -104,7 +102,7 @@ trajplots:
 
   gimbal:
     type: time_series
-    fcn: fcns.gimbal_angle
+    component: gimbal
     group: control
     title: "Gimbal Angle vs Time"
     xlabel: "Time (s)"

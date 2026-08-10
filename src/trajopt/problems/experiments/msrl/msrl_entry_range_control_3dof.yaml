@@ -95,12 +95,11 @@ trajectory:
         u_stop: [0, 0.0]
 
 method:
-  inherit: trajopt/methods/configs/autoscvx.yaml
+  inherit: trajopt/methods/configs/autoscvx2.yaml
 
   flags:
     equal_dt: 1
     zoh_dilation: 1
-    free_final_time: 1
 
   solver_opts:
     solver: PIQP

@@ -12,14 +12,8 @@ fcns:
   long_lat_alt: trajopt/models/reentry_3dof.py:long_lat_alt
   density_model: trajopt/models/reentry_3dof.py:exp_density
   altitude: trajopt/models/reentry_3dof.py:altitude
-  longitude: trajopt/models/reentry_3dof.py:longitude
-  latitude: trajopt/models/reentry_3dof.py:latitude
   altitude_rate: trajopt/models/reentry_3dof.py:altitude_rate
   velocity: trajopt/models/reentry_3dof.py:velocity
-  fpa: trajopt/models/reentry_3dof.py:fpa
-  heading: trajopt/models/reentry_3dof.py:heading
-  bank: trajopt/models/reentry_3dof.py:bank
-  aoa: trajopt/models/reentry_3dof.py:aoa
   nonlinear_aero: trajopt/models/reentry_3dof.py:nonlinear_aero
 
 # ===============================
@@ -58,7 +52,7 @@ time.scale: 100.0
 # TRAJECTORIES FOR PLOTTING
 # ===============================
 
-trajplots:
+outputs:
   altitude:
     type: time_series
     fcn: "fcns.altitude * 0.001"
@@ -69,7 +63,7 @@ trajplots:
 
   longitude:
     type: time_series
-    fcn: fcns.longitude
+    component: theta
     group: state
     title: "Longitude vs Time"
     xlabel: "Time (s)"
@@ -77,7 +71,7 @@ trajplots:
 
   latitude:
     type: time_series
-    fcn: fcns.latitude
+    component: phi
     group: state
     title: "Latitude vs Time"
     xlabel: "Time (s)"
@@ -85,7 +79,7 @@ trajplots:
 
   velocity:
     type: time_series
-    fcn: fcns.velocity
+    component: v
     group: state
     title: "Velocity vs Time"
     xlabel: "Time (s)"
@@ -93,7 +87,7 @@ trajplots:
 
   fpa:
     type: time_series
-    fcn: fcns.fpa
+    component: gamma
     group: state
     title: "Flight Path Angle vs Time"
     xlabel: "Time (s)"
@@ -101,7 +95,7 @@ trajplots:
 
   heading:
     type: time_series
-    fcn: fcns.heading
+    component: psi
     group: state
     title: "Heading Angle vs Time"
     xlabel: "Time (s)"
@@ -109,7 +103,7 @@ trajplots:
 
   bank_angle:
     type: time_series
-    fcn: fcns.bank
+    component: bank
     group: control
     title: "Bank Angle vs Time"
     xlabel: "Time (s)"
@@ -117,7 +111,7 @@ trajplots:
 
   angle_of_attack:
     type: time_series
-    fcn: fcns.aoa
+    component: aoa
     group: control
     title: "Angle of Attack vs Time"
     xlabel: "Time (s)"
@@ -126,7 +120,7 @@ trajplots:
   long_lat_trajectory_plot:
     type: spatial
     fcn: fcns.long_lat
-    group: state_trajplots
+    group: state_spatial
     title: "Longitude vs Latitude"
     xlabel: "Longitude (deg)"
     ylabel: "Latitude (deg)"
@@ -135,7 +129,7 @@ trajplots:
   long_lat_alt_trajectory_plot:
     type : spatial
     fcn: "fcns.long_lat_alt * [1, 1, 0.001]"
-    group: state_trajplots
+    group: state_spatial
     title: "3D Trajectory"
     xlabel: "Longitude (deg)"
     ylabel: "Latitude (deg)"

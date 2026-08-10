@@ -2,13 +2,11 @@ flags:
   equal_dt:           1
   zoh_dilation:       1
   flag_conv:          1
-  ignore_dpp:         0
   second_order:       0
-  line_search:        1        # off lets the penalty autotune run away
+  line_search:        1
   alpha_min_ls:       1.0e-7   # smallest line-search step
   discretize: ms
   nsub: 10                   # RK4 substeps per multiple-shooting interval
-  eps_state: [0.001]
   iter_max: 300
 
 weights:
@@ -17,15 +15,14 @@ weights:
 
 penalty:
   default:
+    norm: l1
     W:
       penalty: True
-      autotune: True
-      init: 1.0
+      autotune: False
+      init: 1000.0
     dual:
-      penalty: True
-      autotune: True
+      autotune: False
       init: 0.0
-      beta: 1.0
     vb: standard
     eps: [0.0001]
 

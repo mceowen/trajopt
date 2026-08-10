@@ -35,21 +35,6 @@ def max_thrust_cone(x, u, params):
     return cp.norm(u[:, 0:3], axis=1) - T_max
 
 
-def pos_x(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
-    """x-position."""
-    return jnp.array([x[0]])
-
-
-def pos_y(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
-    """y-position."""
-    return jnp.array([x[1]])
-
-
-def height(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
-    """Height (z-position)."""
-    return jnp.array([x[2]])
-
-
 def xy(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
     """xy-position."""
     return x[0:2]
@@ -69,24 +54,6 @@ def xyz(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array
     """xyz-position."""
     return x[0:3]
 
-
-def vel_x(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
-    return jnp.array([x[3]])
-
-def vel_y(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
-    return jnp.array([x[4]])
-
-def vel_z(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
-    return jnp.array([x[5]])
-
-def thrust_x(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
-    return jnp.array([u[0]])
-
-def thrust_y(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
-    return jnp.array([u[1]])
-
-def thrust_z(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
-    return jnp.array([u[2]])
 
 def one(x, u, t, params, fcns):
     return jnp.array([1.0])

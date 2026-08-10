@@ -72,11 +72,11 @@ control.torque:
 # TRAJECTORY DEFINITIONS
 # ===============================
 
-trajplots:
+outputs:
   long_lat_trajectory_plot:
     type: spatial
     fcn: trajopt/models/reentry_6dof.py:long_lat
-    group: state_trajplots
+    group: state_spatial
     title: "Longitude vs Latitude"
     xlabel: "Longitude (deg)"
     ylabel: "Latitude (deg)"
@@ -85,7 +85,7 @@ trajplots:
   long_lat_alt_trajectory_plot:
     type : spatial
     fcn: "fcns.long_lat_alt * [1, 1, 0.001]"
-    group: state_trajplots
+    group: state_spatial
     title: "3D Trajectory"
     xlabel: "Longitude (deg)"
     ylabel: "Latitude (deg)"

@@ -35,9 +35,6 @@ def state_pos(x, u, t, params, fcns):
 def state_vel(x, u, t, params, fcns):
     return jnp.array([x[2], x[3]])
 
-def control_force(x, u, t, params, fcns):
-    return jnp.array([u[0]])
-
 def cart_pos(x, u, t, params, fcns):
     return jnp.array([x[0], 0.0])
 

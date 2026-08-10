@@ -39,6 +39,8 @@ class SCPSegment():
             costClass = getattr(scp_cost_type_module, scp_class_name)
             self.costs[cost_name] = costClass(cost, self)
 
+        self.free_final_time = self.derive_free_final_time()
+
         self.initialize()
 
         self.cp_params            = AttrDict()
@@ -52,16 +54,40 @@ class SCPSegment():
         self.create_cvxpy_constraints()
         self.create_cvxpy_cost()
 
+    def find_constraint(self, cnstr_type):
+        """The segment's constraint of the given type, or None."""
+        return next((c.constraint for c in self.constraints.values() if c.type == cnstr_type), None)
+
+    def derive_free_final_time(self) -> bool:
+        """False only when initial_time and a fixed final_time pin both ends."""
+        initial = self.find_constraint("initial_time")
+        final   = self.find_constraint("final_time")
+
+        if initial is not None and self.find_constraint("time_continuity") is not None:
+            raise ValueError(
+                f"segment '{self.name}' declares both initial_time and time_continuity; "
+                "its start epoch comes from the preceding segment, so drop the initial_time"
+            )
+
+        return not (initial is not None and final is not None and final.is_fixed)
+
     def initialize(self) -> None:
         segment = self.segment
 
         self.initial_guess = AttrDict()
 
+        # the guess supplies whichever end the constraints do not give
         cfg_guess             = segment.guess
-        t_start               = getattr(cfg_guess, 't_start', 0.0)
-        t_stop                = cfg_guess.t_stop
-        t_start_nd            = t_start / self.nondim.time_scale
-        t_stop_nd             = t_stop / self.nondim.time_scale
+        initial_time_cnstr    = self.find_constraint("initial_time")
+        final_time_cnstr      = self.find_constraint("final_time")
+
+        t_start_nd            = (initial_time_cnstr.value if initial_time_cnstr is not None
+                                 else getattr(cfg_guess, 't_start', 0.0) / self.nondim.time_scale)
+        if not self.free_final_time:
+            t_stop_nd = final_time_cnstr.fixed_value
+        else:
+            t_stop_nd = cfg_guess.t_stop / self.nondim.time_scale
+
         self.Ts_init          = t_stop_nd - t_start_nd
         t_init                = np.linspace(t_start_nd, t_stop_nd, self.index_map.N.all)
         dt_init               = np.diff(t_init)
@@ -81,12 +107,16 @@ class SCPSegment():
         initial_guess.set_initial_guess(segment, self)
 
         self.iter_data_list = []
-        self.lm_mu = 1e-8
+        # with lm_adapt off, min_eig_psd keeps the metric positive definite
+        self.lm_adapt = bool(int(getattr(self.flags, 'lm_adapt', 1)))
+        self.lm_mu = 1e-8 if self.lm_adapt else 0.0
 
         self.current_iter_data = recursive_attrdict({
             "iter_num": 0,
             "z_opt": self.initial_guess.z,
             "nu_opt": self.initial_guess.nu,
+            "t_start": float(self.initial_guess.t[0]) * self.nondim.time_scale,
+            "t_final": float(self.initial_guess.t[-1]) * self.nondim.time_scale,
             "cost": 0.0,
             "penalty_cost": 0.0,
             "vb":     AttrDict({c.name: c.vb     for c in self.constraints.values() if c.shape is not None}),
@@ -138,7 +168,7 @@ class SCPSegment():
         self.cp_vars.dgamma = cp.Variable((N, n_rc),   name="dgamma") if n_rc   > 0 else None
         self.cp_vars.du     = cp.Variable((N, n_u),    name="du")
 
-        if bool(self.flags.free_final_time):
+        if self.free_final_time:
             self.cp_vars.dt = cp.Variable((N, n_t), name="dt")
             self.cp_vars.ds = cp.Variable((N, 1),   name="ds")
         else:
@@ -165,7 +195,7 @@ class SCPSegment():
         for constraint in self.constraints.values():
             constraint.create_cvxpy_constraints(self)
 
-        if bool(self.flags.free_final_time):
+        if self.free_final_time:
             self.create_free_final_time_constraints()
 
     def create_cvxpy_cost(self) -> None:
@@ -310,7 +340,8 @@ class SCPSegment():
             H = np.tile(np.eye(n_z + n_nu), (N, 1, 1))
         else:
             H = np.zeros((N, n_z + n_nu, n_z + n_nu))
-            self._adapt_levenberg(iteration)
+            if self.lm_adapt:
+                self._adapt_levenberg(iteration)
             H += self.lm_mu * np.eye(n_z + n_nu)[np.newaxis, :, :]
 
         for constraint in self.constraints.values():
@@ -319,7 +350,7 @@ class SCPSegment():
         for cost in self.costs.values():
             cost.accumulate_hessian(self, H)
 
-        self.cp_params.L.value = _psd_sqrt(H)
+        self.cp_params.L.value = _psd_sqrt(H, float(getattr(self.flags, 'min_eig_psd', 0.0)))
 
     def _adapt_levenberg(self, iteration: int) -> None:
         if iteration < 2:
@@ -356,11 +387,14 @@ class SCPSegment():
 
         x_opt_new, t_opt_new, beta_opt_new, u_opt_new, s_opt_new = self.index_map.unpack_znu(z_new, nu_new)
 
-        T_opt_new  = float(np.asarray(t_opt_new[-1]).ravel()[0])
+        # times are measured from the start of the trajectory, not the segment
+        t_start_new = float(np.asarray(t_opt_new[0]).ravel()[0])
+        t_final_new = float(np.asarray(t_opt_new[-1]).ravel()[0])
 
         self.current_iter_data.x_opt    = x_opt_new
         self.current_iter_data.t_opt    = t_opt_new
-        self.current_iter_data.T_opt    = T_opt_new * self.nondim.time_scale
+        self.current_iter_data.t_start  = t_start_new * self.nondim.time_scale
+        self.current_iter_data.t_final  = t_final_new * self.nondim.time_scale
         self.current_iter_data.beta_opt = beta_opt_new
         self.current_iter_data.u_opt    = u_opt_new
         self.current_iter_data.s_opt    = s_opt_new
@@ -394,8 +428,8 @@ class SCPSegment():
         for constraint in self.constraints.values():
             constraint.update_W_dual(self, alpha)
 
-def _psd_sqrt(H_batch):
+def _psd_sqrt(H_batch, min_eig_psd=0.0):
     eigvals, eigvecs = np.linalg.eigh(H_batch)
-    eigvals_reg = np.maximum(eigvals, 0.0)
+    eigvals_reg = np.maximum(eigvals, min_eig_psd)
     sqrt_eigvals = np.sqrt(eigvals_reg)
     return sqrt_eigvals[..., :, np.newaxis] * np.transpose(eigvecs, (0, 2, 1))

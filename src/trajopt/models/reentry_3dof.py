@@ -142,16 +142,6 @@ def altitude(x: Array, u: Array, t: float, params: dict, fcns: dict) -> Array:
     return jnp.array([x[0] - params.planet.r])
 
 
-def longitude(x: Array, u: Array, t: float, params: dict, fcns: dict) -> Array:
-    """Longitude (deg)."""
-    return jnp.array([x[1]])
-
-
-def latitude(x: Array, u: Array, t: float, params: dict, fcns: dict) -> Array:
-    """Latitude (deg)."""
-    return jnp.array([x[2]])
-
-
 def altitude_rate(x: Array, u: Array, t: float, params: dict, fcns: dict) -> Array:
     """Altitude rate: v * sin(fpa) (m/s)."""
     v = x[3]
@@ -162,26 +152,6 @@ def altitude_rate(x: Array, u: Array, t: float, params: dict, fcns: dict) -> Arr
 def velocity(x: Array, u: Array, t: float, params: dict, fcns: dict) -> Array:
     """Velocity (m/s)."""
     return jnp.array([x[3]])
-
-
-def fpa(x: Array, u: Array, t: float, params: dict, fcns: dict) -> Array:
-    """Flight-path angle (deg)."""
-    return jnp.array([x[4]])
-
-
-def heading(x: Array, u: Array, t: float, params: dict, fcns: dict) -> Array:
-    """Heading angle (deg)."""
-    return jnp.array([x[5]])
-
-
-def bank(x: Array, u: Array, t: float, params: dict, fcns: dict) -> Array:
-    """Bank angle (deg)."""
-    return jnp.array([u[0]])
-
-
-def aoa(x: Array, u: Array, t: float, params: dict, fcns: dict) -> Array:
-    """Angle of attack (deg)."""
-    return jnp.array([u[1]])
 
 
 def exp_density(x: Array, u: Array, t: float, params: dict, fcns: dict | None = None) -> Array:

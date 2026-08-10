@@ -1,5 +1,5 @@
 method:
-  inherit: trajopt/methods/configs/autoscvx.yaml
+  inherit: trajopt/methods/configs/autoscvx2.yaml
 
   conv:
     iter_max: 100
@@ -54,9 +54,9 @@ trajectory:
 
       costs:
         max_crossrange:
-          type: terminal_state
+          type: final_state
           idx: [2]
-          sign: -1
+          w: -1
 
       guess:
         type: straight_line

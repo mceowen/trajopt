@@ -3,7 +3,7 @@ from trajopt.index_map import IndexMap
 from trajopt.nondim import Nondim
 import trajopt.constraints.constraint_types as constraint_type_module
 import trajopt.costs.cost_types as cost_type_module
-import trajopt.trajplots.trajplot_types as trajplot_type_module
+import trajopt.outputs.output_types as output_type_module
 from trajopt.utils.tools import AttrDict, resolve_function_from_string
 
 class Segment:
@@ -51,13 +51,13 @@ class Segment:
 
         self._wire_running_costs()
 
-        # create dictionary of trajplots
-        self.trajplots = AttrDict()
-        for trajplot_name, trajplot_config in segment_config.get("trajplots", AttrDict()).items():
-            trajplot_config.name = trajplot_name
-            trajplot_type = trajplot_config.type
-            trajplotClass = getattr(trajplot_type_module, trajplot_type)
-            self.trajplots[trajplot_name] = trajplotClass(trajplot_config, self)
+        # create dictionary of outputs
+        self.outputs = AttrDict()
+        for output_name, output_config in segment_config.get("outputs", AttrDict()).items():
+            output_config.name = output_name
+            output_type = output_config.type
+            outputClass = getattr(output_type_module, output_type)
+            self.outputs[output_name] = outputClass(output_config, self)
 
         print("------------------------------------------------------------")
         print("\n")

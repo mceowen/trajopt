@@ -88,9 +88,8 @@ def load_configuration() -> dict:
 def extract_data(config: dict, data: dict) -> dict:
     """Extract key variables from each Monte Carlo run.
 
-    Supports the new TrajectoryAnalyzer format where each run contains
-    ``scp_iters`` (a list of raw SCP iteration AttrDicts) alongside the
-    propagated ``iter_data_list``.
+    Each run carries ``solver_iters`` (per-iteration algorithm data, keyed by
+    segment) alongside the propagated ``iter_data_list``.
     """
     print("Extracting data from runs...")
     extracted: dict = {}
@@ -111,20 +110,26 @@ def extract_data(config: dict, data: dict) -> dict:
         }
 
         for run_data in method_data["runs"]:
-            iters = run_data.get("scp_iters", run_data.get("iters", []))
-            num_iters = max(len(iters) - 1, 1)
+            segments = list(run_data.get("solver_iters", {}).values())
+            # every segment records the same solve and parse time
+            timed = segments[0] if segments else []
+            num_iters = max(len(timed) - 1, 1)
 
             time_solve = 0.0
             time_disc = 0.0
             time_parse = 0.0
-            for it in iters:
+            for it in timed:
                 if int(it.get("iter_num", 0)) == 0:
                     continue
                 time_solve += float(it.get("solve_time", 0))
-                time_disc += float(it.get("discretization_time", it.get("prop_time", 0)))
                 time_parse += float(it.get("parse_time", 0))
+            for iters in segments:
+                for it in iters:
+                    if int(it.get("iter_num", 0)) == 0:
+                        continue
+                    time_disc += float(it.get("discretization_time", it.get("prop_time", 0)))
 
-            last = iters[-1] if iters else {}
+            last = timed[-1] if timed else {}
 
             chk = last.get("chk", last.get("conv_data", {}))
             dyn_defect = float(chk.get("dynamics", 0))

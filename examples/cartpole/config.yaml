@@ -1,10 +1,9 @@
 method:
-  inherit: trajopt/methods/configs/autoscvx.yaml
+  inherit: trajopt/methods/configs/autoscvx2.yaml
 
   flags:
     equal_dt: 1
     zoh_dilation: 1
-    free_final_time: 0
     flag_conv: 1
 
   conv:
@@ -40,6 +39,14 @@ trajectory:
         final_state:
           type: final_state
           value: [1, "${np.pi}", 0, 0]
+
+        initial_time:
+          type: initial_time
+          value: 0.0
+
+        final_time:
+          type: final_time
+          value: 2.0
 
         state_limits:
           type: state_limits

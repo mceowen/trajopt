@@ -54,7 +54,7 @@ class scp_dynamics(SCPConstraint):
             return
 
         N_grid    = scp_segment.index_map.N.all
-        nsub      = 10
+        nsub      = int(getattr(scp_segment.flags, 'nsub', 10))
         delta_tau = 1.0 / (N_grid - 1)
         dt_rk4    = delta_tau / nsub
 
@@ -895,6 +895,10 @@ class scp_control_accel_limit(SCPConstraint):
 # final time
 # ---------------------------------------------------------------------------
 
+class scp_initial_time(SCPConstraint):
+    """Does not add a constraint. The start time is applied when the grid is built."""
+
+
 class scp_final_time(SCPConstraint):
     def create_cvxpy_parameters(self, scp_segment):
         scp_segment.cp_params.T_min  = cp.Parameter(nonneg=True, name="T_min")
@@ -903,14 +907,14 @@ class scp_final_time(SCPConstraint):
         scp_segment.cp_params.dt_max = cp.Parameter(nonneg=True, name="dt_max")
 
     def create_cvxpy_constraints(self, scp_segment):
-        N = scp_segment.index_map.N.all
-        scp_segment.cp_constraints.append(scp_segment.dt[0, 0] == 0)
+        # a fixed grid holds constant times, which already meet these bounds
+        if not scp_segment.free_final_time:
+            return
 
-        if scp_segment.flags.discretize == "ps":
-            tau = scp_segment.cp_params.tau
-            for k in range(1, N - 1):
-                scp_segment.cp_constraints.append(scp_segment.dt[k, 0] == tau[k] * scp_segment.dt[N - 1, 0])
-        else:
+        N = scp_segment.index_map.N.all
+
+        # pseudospectral node spacing comes from the collocation scheme instead
+        if scp_segment.flags.discretize != "ps":
             for k in range(N - 1):
                 t_k          = scp_segment.t_ref[k, 0] + scp_segment.dt[k, 0]
                 t_kp         = scp_segment.t_ref[k + 1, 0] + scp_segment.dt[k + 1, 0]

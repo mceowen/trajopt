@@ -1,10 +1,9 @@
 method:
-  inherit: trajopt/methods/configs/autoscvx.yaml
+  inherit: trajopt/methods/configs/autoscvx2.yaml
 
   flags:
     equal_dt: 1
     flag_conv: 1
-    free_final_time: 1
 
   solver_opts:
     solver: PIQP
@@ -79,7 +78,7 @@ trajectory:
           type: nonconvex_terminal
           fcn: fcns.velocity
 
-      trajplots:
+      outputs:
         heat_rate:
           upper_limit: 3.33
 

@@ -3,41 +3,36 @@ import copy
 import jax
 import numpy as np
 
+from trajopt.analysis.results import Iterate, MissionResult, RunResult
 from trajopt.methods.common import integrators, pseudospectral
 from trajopt.utils import tools
-from trajopt.utils.tools import AttrDict, recursive_attrdict
+from trajopt.utils.tools import AttrDict
 
 jax.config.update("jax_enable_x64", True)
 
-"""
-outline of solution_data structure:
-results = {
-    "trajectories": 
-        "segments":
-            [{"iter_data_list": [...]}, {"iter_data_list": [...]}, ...]
-}
-"""
-
-def perform_analysis(traj):
+def perform_analysis(traj) -> RunResult:
     """Propagate every segment's iterates and merge them into one mission trajectory."""
     scp_segments = traj.method.scp_trajectory.scp_segments
     segments = [analyze_segment(subprob, traj.config) for subprob in scp_segments.values()]
 
     if len(segments) == 1:
-        iter_data_list = segments[0]
+        iter_mappings = segments[0]
     else:
-        n_iters        = min(len(seg) for seg in segments)
-        iter_data_list = [concat([seg[i] for seg in segments]) for i in range(n_iters)]
+        n_iters       = min(len(seg) for seg in segments)
+        iter_mappings = []
+        for i in range(n_iters):
+            per_segment = [seg[i] for seg in segments]
+            pad_missing_outputs(per_segment)
+            iter_mappings.append(concat(per_segment))
 
-    scp_iters = []
-    for subprob in scp_segments.values():
-        scp_iters = subprob.iter_data_list
+    solver_iters = {name: subprob.iter_data_list for name, subprob in scp_segments.items()}
 
-    return AttrDict({"iter_data_list": iter_data_list, "scp_iters": scp_iters})
+    iter_data_list = [Iterate.from_mapping(m) for m in iter_mappings]
+    return RunResult(iter_data_list=iter_data_list, solver_iters=solver_iters)
 
 
 def analyze_segment(subprob, config):
-    """Propagate each iterate's nonlinear trajectory and evaluate the segment's trajplots."""
+    """Propagate each iterate and evaluate the segment's outputs."""
     segment    = subprob.segment
     params     = segment.params
     nondim     = segment.nondim
@@ -86,33 +81,50 @@ def analyze_segment(subprob, config):
                 z_opt, tau_nodes, nu_opt, dynamics, params, _solver=traj_solver,
             )
 
-        # general trajplot values (not necessarily constraints as specified in the problem)
-        trajplot_data = AttrDict({})
-        for trajplot in segment.trajplots.values():
-            if not hasattr(trajplot, "compute_trajplot_values"):
+        # an output from the config replaces the one built here with the same name
+        outputs = auto_outputs(
+            segment,
+            opt        = (z_opt,  nu_opt),
+            nl_prop    = (z_nl,   nu_nl),
+            init_guess = (z_init, nu_init),
+        )
+
+        # outputs the config declares
+        for output in segment.outputs.values():
+            if not hasattr(output, "compute_values"):
                 continue
 
-            output = AttrDict({
-                "name":         trajplot.name,
-                "type":         trajplot.type,
-                "opt_vals":     trajplot.compute_trajplot_values(z_opt,  nu_opt,  params),
-                "nl_vals":      trajplot.compute_trajplot_values(z_nl,   nu_nl,   params),
-                "init_nl_vals": trajplot.compute_trajplot_values(z_init, nu_init, params),
-                "title":        getattr(trajplot, "title", None),
-                "xlabel":       getattr(trajplot, "xlabel", None),
-                "ylabel":       getattr(trajplot, "ylabel", None),
-                "zlabel":       getattr(trajplot, "zlabel", None),
-                "tick_nbins":   getattr(trajplot, "tick_nbins", None),
-                "markers":      getattr(trajplot, "markers", None),
-                "invert_x":     getattr(trajplot, "invert_x", False),
-                "show_iters":   getattr(trajplot, "show_iters", None),
-                "trigger_line": getattr(trajplot, "trigger_line", None),
-            })
+            opt        = output.compute_values(z_opt,  nu_opt,  params)
+            nl_prop    = output.compute_values(z_nl,   nu_nl,   params)
+            init_guess = output.compute_values(z_init, nu_init, params)
 
-            trajplot_data.setdefault(trajplot.group, AttrDict({}))[trajplot.name] = output
+            # limits come from the propagated values, quivers from the nodes
+            outputs[output.name] = AttrDict({
+                "opt":        opt["values"],
+                "nl_prop":    nl_prop["values"],
+                "init_guess": init_guess["values"],
+                "limits":     nl_prop["limits"],
+                "quivers":    opt["quivers"],
+                "meta": AttrDict({
+                    "name":         output.name,
+                    "type":         output.type,
+                    "group":        output.group,
+                    "title":        getattr(output, "title", None),
+                    "xlabel":       getattr(output, "xlabel", None),
+                    "ylabel":       getattr(output, "ylabel", None),
+                    "zlabel":       getattr(output, "zlabel", None),
+                    "tick_nbins":   getattr(output, "tick_nbins", None),
+                    "markers":      getattr(output, "markers", None),
+                    "invert_x":     getattr(output, "invert_x", False),
+                    "show_iters":   getattr(output, "show_iters", None),
+                    "trigger_line": getattr(output, "trigger_line", None),
+                    "units":        getattr(output, "units", None),
+                }),
+            })
 
         # re-dimensionalize and store the data that the plots consume
         analyzed.append(AttrDict({
+            "iter_num":      int(iter_data.iter_num),
             "t_opt":         z_opt[:, idx.z.time].squeeze(-1) * time_scale,
             "x_opt":         z_opt[:, idx.z.state] @ nondim.M.state.nd2d,
             "u_opt":        nu_opt[:, idx.nu.control] @ nondim.M.control.nd2d,
@@ -122,19 +134,91 @@ def analyze_segment(subprob, config):
             "t_init_nl":     z_init[:, idx.z.time].squeeze(-1) * time_scale,
             "x_init_nl":     z_init[:, idx.z.state] @ nondim.M.state.nd2d,
             "u_init_nl":    nu_init[:, idx.nu.control] @ nondim.M.control.nd2d,
-            "trajplot_data": trajplot_data,
+            "outputs":       outputs,
         }))
 
     return analyzed
 
 
-def concat(items):
-    """Concatenate matching analysis payloads node-wise across segments.
+def auto_outputs(segment, **representations):
+    """Build one SI-unit output per state and control component, plus time and the augmented states."""
+    index_map = segment.index_map
+    nondim    = segment.nondim
+    idx       = index_map.indices
 
-    Arrays that cannot be stacked (e.g. states of segments with different
-    dimensions) keep the first segment's values, since only the time grids
-    and trajplot values are plotted across the whole mission.
-    """
+    sliced = {}
+    for rep, (z, nu) in representations.items():
+        x = z[:, idx.z.state] @ nondim.M.state.nd2d
+        u = nu[:, idx.nu.control] @ nondim.M.control.nd2d
+        sliced[rep] = {
+            **{f"state:{n}":   x[:, i]  for n, i in index_map.components.state.items()},
+            **{f"control:{n}": u[:, i]  for n, i in index_map.components.control.items()},
+            "time":            z[:, idx.z.time] * nondim.time_scale,
+            "dilation_factor": nu[:, idx.nu.dilation_factor],
+            "ctcs":            z[:, idx.z.ctcs],
+            "running_cost":    z[:, idx.z.running_cost],
+        }
+
+    outputs = AttrDict({})
+    for key in next(iter(sliced.values())):
+        name = key.split(":", 1)[1] if ":" in key else key
+        if any(sliced[rep][key].shape[1] == 0 for rep in sliced):
+            continue  # augmented block this segment does not have
+        outputs[name] = AttrDict({
+            **{rep: sliced[rep][key] for rep in sliced},
+            "limits":  None,
+            "quivers": [],
+            "meta": AttrDict({
+                "name": name, "type": "time_series", "group": None,
+                "title": None, "xlabel": None, "ylabel": None, "zlabel": None,
+                "tick_nbins": None, "markers": None, "invert_x": False,
+                "show_iters": None, "trigger_line": None, "units": None,
+            }),
+        })
+    return outputs
+
+
+#: each value array and the time grid whose length it matches
+_REPRESENTATIONS = (("opt", "t_opt"), ("nl_prop", "t_nl"), ("init_guess", "t_init_nl"))
+
+
+def pad_missing_outputs(per_segment):
+    """Fill the outputs a segment is missing with NaN, in place."""
+    template = {}
+    for segment_data in per_segment:
+        for name, output in segment_data.outputs.items():
+            template.setdefault(name, output)
+
+    for segment_data in per_segment:
+        for name, output in template.items():
+            if name in segment_data.outputs:
+                continue
+            segment_data.outputs[name] = AttrDict({
+                key: np.full((len(segment_data[t_key]), output[key].shape[1]), np.nan)
+                for key, t_key in _REPRESENTATIONS
+            } | {
+                "limits":  _nan_like(output.limits, len(segment_data.t_nl)),
+                "quivers": [
+                    {**q, "dirs": np.full_like(q["dirs"], np.nan),
+                     "origins": None if q.get("origins") is None else np.full_like(q["origins"], np.nan)}
+                    for q in (output.quivers or [])
+                ],
+                "meta": output.meta,
+            })
+
+
+def _nan_like(limits, n):
+    """Replace any per-node limit array with NaN, keeping scalar limits as they are."""
+    if not limits:
+        return limits
+    return {
+        k: (np.full(n, np.nan) if isinstance(v, np.ndarray) else v)
+        for k, v in limits.items()
+    }
+
+
+def concat(items):
+    """Join each segment's values end to end. Arrays that cannot be stacked keep the first segment's."""
     head = items[0]
 
     if isinstance(head, np.ndarray):
@@ -153,12 +237,12 @@ def concat(items):
     return head
 
 
-def run_standalone_analysis(traj):
-    """Analyze a single solve and wrap it in the {method: {runs: [...]}} schema."""
+def run_standalone_analysis(traj) -> MissionResult:
+    """Analyze a single solve and wrap it in the MissionResult schema."""
     method_name = traj.config.method.get("name", "method1")
     if not getattr(traj, "_solved", False):
         traj.solve()
-    return recursive_attrdict({method_name: {"runs": [perform_analysis(traj)]}})
+    return MissionResult(runs_by_method={method_name: [perform_analysis(traj)]})
 
 
 def run_method_variation(traj):
@@ -185,7 +269,7 @@ def run_method_variation(traj):
     methods_cfg = traj.config.analysis.methods
     config_path = traj.config_path
 
-    results = {}
+    runs_by_method = {}
     for method_name, overrides in methods_cfg.items():
         print(f"\n{'='*60}")
         print(f"  Solving: {method_name}")
@@ -193,10 +277,9 @@ def run_method_variation(traj):
 
         method_traj = TrajectoryAnalyzer(config_path, method_overrides=dict(overrides) if overrides else None)
         method_traj.solve()
-        result = perform_analysis(method_traj)
-        results[method_name] = {"runs": [result]}
+        runs_by_method[method_name] = [perform_analysis(method_traj)]
 
-    return recursive_attrdict(results)
+    return MissionResult(runs_by_method=runs_by_method)
 
 
 def run_mc_analysis(traj):
@@ -241,4 +324,4 @@ def run_mc_analysis(traj):
             print(f"=== {method_name} | run {i} / {num} ===")
 
     traj.config = nominal_config
-    return recursive_attrdict({method_name: {"runs": runs}})
+    return MissionResult(runs_by_method={method_name: runs})

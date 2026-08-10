@@ -160,7 +160,7 @@ class scp_convex_running(SCPCost):
 
 class scp_min_time(SCPCost):
     def create_cvxpy_cost(self, scp_segment):
-        if bool(scp_segment.flags.free_final_time):
+        if scp_segment.free_final_time:
             s = scp_segment.t_ref[:, 0] + scp_segment.dt[:, 0]
             scp_segment.cp_cost += cp.sum(s)
 
@@ -177,17 +177,30 @@ class scp_min_norm_terminal(SCPCost):
         target = self.cost.value if self.cost.value is not None else np.zeros(len(self.cost.idx))
         scp_segment.cp_cost += cp.norm(zf[self.cost.idx] - target)
 
-class scp_terminal_state(SCPCost):
+class scp_final_state(SCPCost):
     def create_cvxpy_cost(self, scp_segment):
         zf = scp_segment.cp_params.z_ref[-1] + scp_segment.dz[-1]
-        scp_segment.cp_cost += self.cost.sign * zf[self.cost.idx]
+        scp_segment.cp_cost += self.cost.w * zf[self.cost.idx]
 
     def merit_cost(self, scp_segment):
-        sign = self.cost.sign
-        idx  = jnp.array(self.cost.idx)
+        w   = self.cost.w
+        idx = jnp.array(self.cost.idx)
 
         def eval_fn(z, nu, params):
-            return sign * jnp.sum(z[-1, idx])
+            return w * jnp.sum(z[-1, idx])
+        return eval_fn
+
+class scp_final_control(SCPCost):
+    def create_cvxpy_cost(self, scp_segment):
+        nuf = scp_segment.cp_params.nu_ref[-1] + scp_segment.dnu[-1]
+        scp_segment.cp_cost += self.cost.w * nuf[self.cost.idx]
+
+    def merit_cost(self, scp_segment):
+        w   = self.cost.w
+        idx = jnp.array(self.cost.idx)
+
+        def eval_fn(z, nu, params):
+            return w * jnp.sum(nu[-1, idx])
         return eval_fn
 
 class scp_regularization(SCPCost):
