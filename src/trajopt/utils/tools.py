@@ -135,35 +135,36 @@ def expand_to_array_if_scalar(x: Any, n: int) -> np.ndarray:
     return x
 
 def resolve_function_from_string(fcn_string: str, fcns: "AttrDict | None" = None) -> Callable:
-    """Resolve a function reference string to a callable."""
+    """Resolve a function reference string to a callable. The fcns. prefix is optional."""
     if isinstance(fcn_string, str):
         has_stl = any(op in fcn_string for op in ("<=", ">=", " and ", " or ", " implies "))
-        has_fcns_ref = "fcns." in fcn_string
 
         if fcns is not None:
-            if not has_stl and not has_fcns_ref:
-                msg = (
-                    f"Function reference '{fcn_string}' is not allowed directly in constraint/cost configs. "
-                    f"Add it to the 'fcns' dict at the top of your YAML and reference it as 'fcns.{fcn_string.rsplit(':', 1)[-1]}'."
-                )
+            if ".py:" in fcn_string:
                 raise ValueError(
-                    msg,
+                    f"Function reference '{fcn_string}' is not allowed directly in constraint/cost configs. "
+                    f"Add it to the 'fcns' dict at the top of your YAML and reference it as '{fcn_string.rsplit(':', 1)[-1]}'.",
                 )
 
             if has_stl:
                 from trajopt.constraints.stl import parse_stl_expression
                 return parse_stl_expression(fcn_string, fcns)
 
-            if has_fcns_ref:
-                ns = {}
-                for name, fn in fcns.items():
-                    if isinstance(fn, str):
-                        fn = resolve_function_from_string(fn)
-                    if "fcns" in inspect.signature(fn).parameters:
-                        fn = partial(fn, fcns=fcns)
-                    ns[name] = _FcnExpr(fn)
+            ns = {}
+            for name, fn in fcns.items():
+                if isinstance(fn, str):
+                    fn = resolve_function_from_string(fn)
+                if "fcns" in inspect.signature(fn).parameters:
+                    fn = partial(fn, fcns=fcns)
+                ns[name] = _FcnExpr(fn)
+            try:
                 result = eval(fcn_string.replace("fcns.", ""), {"__builtins__": {}}, ns)
-                return result._fcn if isinstance(result, _FcnExpr) else result
+            except NameError as e:
+                raise ValueError(
+                    f"'{fcn_string}' names a function that is not registered: {e.name}\n"
+                    f"  registered: {sorted(fcns)}",
+                ) from None
+            return result._fcn if isinstance(result, _FcnExpr) else result
 
     file_path_str, func_name = fcn_string.rsplit(":", 1)
     file_path = Path(file_path_str).resolve()
