@@ -3,6 +3,8 @@ import cvxpy as cp
 import jax
 import jax.numpy as jnp
 
+from trajopt.utils.tools import deep_merge
+
 
 class SCPConstraint():
     nonnegative_dual = False
@@ -54,7 +56,16 @@ class SCPConstraint():
         raw = getattr(self.constraint, 'eps', 1e-4)
         self.eps = np.broadcast_to(np.atleast_1d(raw), (shape[-1],)).copy()
 
-        self.penalty = scp_segment.penalty_config.get(self.type, scp_segment.penalty_config.get('default'))
+        # a penalty.<type> block only names the keys it changes
+        default  = scp_segment.penalty_config.get('default')
+        override = scp_segment.penalty_config.get(self.type)
+        if override is None:
+            self.penalty = default
+        elif default is None:
+            self.penalty = override
+        else:
+            self.penalty = deep_merge(default, override)
+
         self.shape   = shape
         self.vb      = np.zeros(shape)
         self.vb_type = getattr(self.penalty, 'vb', 'standard') if self.penalty else 'standard'
