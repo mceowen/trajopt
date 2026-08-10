@@ -5,7 +5,7 @@ fcns:
   x1x2:           perching_glider_tedrake.py:x1x2
   body_dir:       perching_glider_tedrake.py:body_dir
   terminal_box:   perching_glider_tedrake.py:terminal_box
-  u_squared_cost: perching_glider_tedrake.py: u_squared_cost
+  u_squared_cost: perching_glider_tedrake.py:u_squared_cost
 
 state:
   x1:
