@@ -5,7 +5,13 @@ inherit: trajopt/problems/msl_entry_3dof.yaml
 
 # solution method
 method:
-  inherit: trajopt/methods/configs/autoscvx2.yaml
+  inherit: trajopt/methods/configs/autoscvx2-entry.yaml
 
   solver_opts:
     solver: QOCO
+
+# penalty:
+  # dynamics:
+  #   vb: standard        # keep dynamics as a slack buffer
+  # final_nonconvex_equality:
+  #   vb: 'none'           # force terminal condition to a hard (zero-buffer) constraint

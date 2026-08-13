@@ -473,20 +473,20 @@ class scp_nonconvex_inequality(SCPConstraint):
         self.g0_param    = cp.Parameter((nn, dim),       name=f"g0_{self.name}")
 
     def create_cvxpy_constraints(self, scp_segment):
-        if self.vb_var is None:
-            return
         self.cp_ineq_constraints = []
         for i, k in enumerate(self.nodes):
+            vb_i = self.vb_var[i] if self.vb_var is not None else 0
             cnst = (
                 self.dgdz_param[i] @ scp_segment.dz[k, :]
                 + self.dgdnu_param[i] @ scp_segment.dnu[k, :]
                 + self.g0_param[i]
-                - self.vb_var[i]
+                - vb_i
                 <= 0
             )
             self.cp_ineq_constraints.append(cnst)
             scp_segment.cp_constraints.append(cnst)
-            scp_segment.cp_constraints.append(self.vb_var[i] >= 0)
+            if self.vb_var is not None:
+                scp_segment.cp_constraints.append(self.vb_var[i] >= 0)
 
     def update_cvxpy_parameters(self, scp_segment):
         if not hasattr(self, 'g0_param'):
@@ -602,15 +602,14 @@ class scp_nonconvex_equality(SCPConstraint):
         self.g0_param    = cp.Parameter((nn, dim),       name=f"g0_{self.name}")
 
     def create_cvxpy_constraints(self, scp_segment):
-        if self.vb_var is None:
-            return
         self.cp_eq_constraints = []
         for i, k in enumerate(self.nodes):
+            vb_i = self.vb_var[i] if self.vb_var is not None else 0
             cnst = (
                 self.dgdz_param[i] @ scp_segment.dz[k, :]
                 + self.dgdnu_param[i] @ scp_segment.dnu[k, :]
                 + self.g0_param[i]
-                - self.vb_var[i]
+                - vb_i
                 == 0
             )
             self.cp_eq_constraints.append(cnst)
