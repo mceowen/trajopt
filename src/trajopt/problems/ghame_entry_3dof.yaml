@@ -1,5 +1,5 @@
 method:
-  inherit: trajopt/methods/configs/autoscvx2.yaml
+  inherit: trajopt/methods/configs/autoscvx-term.yaml
 
   flags:
     iter_max: 200

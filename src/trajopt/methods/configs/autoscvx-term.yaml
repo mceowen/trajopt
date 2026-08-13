@@ -2,6 +2,6 @@ inherit: autoscvx.yaml
 
 penalty:
   dynamics:
-    vb: 'none'
+    vb: none
   initial_state:
-    vb: 'none'
+    vb: none
