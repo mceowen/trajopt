@@ -9,6 +9,9 @@ from trajopt.utils.tools import deep_merge
 class SCPConstraint():
     nonnegative_dual = False
 
+    STATE_INDEXED   = ("dynamics", "initial_state", "final_state", "state_continuity")
+    CONTROL_INDEXED = ("initial_control", "final_control", "control_continuity")
+
     def __init__(self, constraint, scp_segment) -> None:
         self.constraint = constraint
         self.type       = constraint.type
@@ -53,10 +56,77 @@ class SCPConstraint():
 
     def compile_merit_penalty(self, scp_segment): pass
 
-    def _alloc_penalty(self, scp_segment, shape):
-        raw = getattr(self.constraint, 'eps', 1e-4)
-        self.eps = np.broadcast_to(np.atleast_1d(raw), (shape[-1],)).copy()
+    def _component_labels(self, scp_segment, width):
+        """Component name for each buffer slot, or None if the slots are unnamed."""
+        index_map = scp_segment.index_map
 
+        if self.type in self.STATE_INDEXED:
+            group = index_map.components.state
+        elif self.type in self.CONTROL_INDEXED:
+            group = index_map.components.control
+        else:
+            return None
+
+        position = {}
+        for name, idx in group.items():
+            for i in np.atleast_1d(idx):
+                position[int(i)] = name
+
+        # the dynamics buffer covers z = [x, t, beta, gamma]
+        if self.type == "dynamics":
+            labels  = [position.get(i) for i in range(index_map.n.state)]
+            labels += ["t"] * index_map.n.time
+            return labels + [None] * (width - len(labels))
+
+        idx = getattr(self.constraint, "idx", None)
+        if idx is not None:
+            idx = np.atleast_1d(idx)
+            if len(idx) == width:
+                return [position.get(int(i)) for i in idx]
+            return None
+
+        if width == len(position):
+            return [position.get(i) for i in range(width)]
+        return None
+
+    def _resolve_eps(self, scp_segment, shape):
+        """Feasibility tolerance: constraint eps, else penalty eps, else 1e-4.
+
+        A mapping sets the components it names, the rest take its 'default' key.
+        """
+        raw = getattr(self.constraint, 'eps', None)
+        if raw is None:
+            raw = getattr(self.penalty, 'eps', None) if self.penalty else None
+        if raw is None:
+            raw = 1e-4
+
+        if not hasattr(raw, 'items'):
+            return np.broadcast_to(np.atleast_1d(raw), (shape[-1],)).copy()
+
+        entries = dict(raw)
+        default = entries.pop('default', 1e-4)
+        eps     = np.broadcast_to(np.atleast_1d(default), (shape[-1],)).astype(float).copy()
+
+        labels = self._component_labels(scp_segment, shape[-1])
+        if labels is None:
+            raise ValueError(
+                f"constraint '{self.name}' ({self.type}): eps names components "
+                f"{sorted(entries)}, but this constraint's buffer has no named "
+                "components. Give a single value or a full-length list instead."
+            )
+
+        for name, value in entries.items():
+            slots = [i for i, label in enumerate(labels) if label == name]
+            if not slots:
+                known = sorted(x for x in set(labels) if x is not None)
+                raise ValueError(
+                    f"constraint '{self.name}' ({self.type}): eps names "
+                    f"'{name}', which is not one of its components {known}"
+                )
+            eps[slots] = float(value)
+        return eps
+
+    def _alloc_penalty(self, scp_segment, shape):
         # a penalty.<type> block only names the keys it changes
         default  = scp_segment.penalty_config.get('default')
         override = scp_segment.penalty_config.get(self.type)
@@ -68,6 +138,7 @@ class SCPConstraint():
             self.penalty = deep_merge(default, override)
 
         self.shape   = shape
+        self.eps     = self._resolve_eps(scp_segment, shape)
         self.vb      = np.zeros(shape)
         self.vb_type      = getattr(self.penalty, 'vb', 'standard') if self.penalty else 'standard'
         # under l1 the parameters named W_sqrt carry W itself

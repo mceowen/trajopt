@@ -37,7 +37,10 @@ class Segment:
             cnstr_config.name = cnstr_name
             cnstr_type = cnstr_config.type
             constraintClass = getattr(constraint_type_module, cnstr_type)
-            self.constraints[cnstr_name] = constraintClass(cnstr_config, self)
+            cnstr = constraintClass(cnstr_config, self)
+            if "eps" in cnstr_config:
+                cnstr.eps = cnstr_config.eps
+            self.constraints[cnstr_name] = cnstr
 
         self._wire_ctcs_constraints()
 
