@@ -1,0 +1,1 @@
+inherit: trajopt/problems/experiments/msrl/msrl_edl_3dof.yaml
