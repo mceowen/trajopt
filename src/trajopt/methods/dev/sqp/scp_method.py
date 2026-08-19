@@ -87,7 +87,14 @@ class SCPMethod():
 
         for i in range(max_iter + 1):
             self.update_cvxpy_parameters()
-            self.cp_subproblem.solve(warm_start=False, **self.method_config.solver_opts)
+
+            try:
+                self.cp_subproblem.solve(warm_start=False, **self.method_config.solver_opts)
+            except cp.error.SolverError as exc:
+                self.reporter.message(f"  subproblem refused ({exc}), tightening trust region")
+                for scp_segment in self.scp_trajectory.scp_segments.values():
+                    scp_segment.lm_mu = min(max(scp_segment.lm_mu, 1e-6) * 10.0, 1e4)
+                continue
 
             if self.cp_subproblem.status not in {"optimal", "optimal_inaccurate", "user_limit"}:
                 reason = f"Terminated from non-optimal convex subproblem! Status: {self.cp_subproblem.status}"
