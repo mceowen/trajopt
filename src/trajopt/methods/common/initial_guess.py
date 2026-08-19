@@ -13,6 +13,9 @@ def _scp_cost_types(method_config):
     return importlib.import_module(f"trajopt.methods.{method_class}.scp_costs.scp_cost_types")
 
 
+CHAIN_FROM_PREVIOUS = "previous"
+
+
 def resolve_guess_type(segment, method_segment):
     """The segment's guess type, else the method config's, else propagation."""
     seg_type = getattr(segment.guess, "type", None)
@@ -24,6 +27,14 @@ def resolve_guess_type(segment, method_segment):
         return getattr(method_guess, "type", "propagation")
 
     return "propagation"
+
+
+def guess_endpoint(method_segment):
+    """Final state of a segment's initial guess, in dimensional units."""
+    segment = method_segment.segment
+    z = np.asarray(method_segment.initial_guess.z)
+    x_nd = z[:, segment.index_map.indices.z.state]
+    return x_nd[-1] @ np.asarray(segment.nondim.M.state.nd2d).T
 
 
 def set_initial_guess(segment, method_segment):

@@ -58,6 +58,11 @@ class SCPSegment():
         """The segment's constraint of the given type, or None."""
         return next((c.constraint for c in self.constraints.values() if c.type == cnstr_type), None)
 
+    def inherits_start_epoch(self) -> bool:
+        """True when a preceding segment sets this segment's start time."""
+        return any(self.find_constraint(t) is not None
+                   for t in ("time_continuity", "full_continuity"))
+
     def derive_free_final_time(self) -> bool:
         """False only when initial_time and a fixed final_time pin both ends."""
         initial = self.find_constraint("initial_time")
@@ -213,7 +218,9 @@ class SCPSegment():
     def create_free_final_time_constraints(self) -> None:
         N = self.index_map.N.all
 
-        self.cp_constraints.append(self.dt[0, 0] == 0)
+        # the ps mesh below is built around a fixed node 0
+        if self.flags.discretize == "ps" or not self.inherits_start_epoch():
+            self.cp_constraints.append(self.dt[0, 0] == 0)
 
         if self.flags.discretize == "ps":
             tau = self.cp_params.tau
