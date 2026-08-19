@@ -1,8 +1,10 @@
+import cvxpy as cp
 import jax.numpy as jnp
 from trajopt.utils.tools import AttrDict
 
 # x = [r, theta, phi, v, fpa, heading]
-# u = [bank, aoa]
+# u = [bank, aoa] through parachute descent
+# u = [bank, aoa, aT_v, aT_n, aT_s] during powered descent
 
 def density_model(x, u, t, params, fcns):
 
@@ -98,6 +100,87 @@ def parachute_aero(x, u, t, params, fcns):
     L = 0.0 * D
 
     return AttrDict({"L": L, "D": D})
+
+def lander_aero(x, u, t, params, fcns):
+    """Drag-only aero for the lander, after backshell separation."""
+    v = x[3]
+
+    rho = fcns.density_model(x, u, t, params, fcns)
+
+    vehicle = params.vehicle
+    D = (0.5 * rho * v**2 / vehicle.mass_lander) * vehicle.sref_lander * vehicle.cd_lander
+    L = 0.0 * D
+
+    return AttrDict({"L": L, "D": D})
+
+def powered_descent_dynamics(x, u, t, params, fcns):
+    """3-DoF entry dynamics with thrust acceleration in the velocity frame.
+
+    aT_v acts along the velocity, aT_n normal to it in the vertical plane,
+    and aT_s out of plane. Bank and angle of attack keep their slots in the
+    control vector, and the powered segment holds them at zero.
+    """
+    Om = jnp.deg2rad(params.planet.omega)
+    mu = params.planet.mu
+
+    r, theta, phi, v, gamma, psi = x
+
+    phi_rad = jnp.deg2rad(phi)
+    gamma_rad = jnp.deg2rad(gamma)
+    psi_rad = jnp.deg2rad(psi)
+
+    sigma_rad = jnp.deg2rad(u[0])
+    aT_v = u[2]
+    aT_n = u[3]
+    aT_s = u[4]
+
+    aero = fcns.nonlinear_aero(x, u, t, params, fcns)
+    L = aero.L
+    D = aero.D
+
+    cp_ = jnp.cos(phi_rad)
+    sp = jnp.sin(phi_rad)
+    tp = jnp.tan(phi_rad)
+    cg = jnp.cos(gamma_rad)
+    sg = jnp.sin(gamma_rad)
+    tg = jnp.tan(gamma_rad)
+    cps = jnp.cos(psi_rad)
+    sps = jnp.sin(psi_rad)
+    cs = jnp.cos(sigma_rad)
+    ss = jnp.sin(sigma_rad)
+
+    g = mu / r**2
+
+    return jnp.array(
+        [
+            v * sg,
+            jnp.rad2deg(v * cg * sps / (r * cp_)),
+            jnp.rad2deg(v * cg * cps / r),
+            -D + aT_v - g * sg + Om**2 * r * cp_ * (sg * cp_ - cg * sp * cps),
+            jnp.rad2deg(
+                (1 / v) * (L * cs + aT_n + v**2 * cg / r - g * cg)
+                + 2 * Om * cp_ * sps
+                + Om**2 * r * (1 / v) * cp_ * (cg * cp_ + sg * cps * sp),
+            ),
+            jnp.rad2deg(
+                (1 / v) * ((L * ss + aT_s) / cg + v**2 * cg * sps * tp / r)
+                - 2 * Om * (tg * cps * cp_ - sp)
+                + Om**2 * r * (1 / (v * cg)) * sps * sp * cp_,
+            ),
+        ],
+    )
+
+def thrust_accel_mag(x, u, t, params, fcns):
+    """Thrust acceleration magnitude (m/s^2), smoothed near zero."""
+    return jnp.array([jnp.sqrt(u[2]**2 + u[3]**2 + u[4]**2 + 1e-6)])
+
+def thrust_accel_sq(x, u, t, params, fcns):
+    """Squared thrust acceleration magnitude, the fuel proxy."""
+    return jnp.array([u[2]**2 + u[3]**2 + u[4]**2])
+
+def max_thrust_accel_cone(x, u, params):
+    """||aT|| <= vehicle.aT_max, as a CVXPY second-order cone."""
+    return cp.norm(u[:, 2:5], axis=1) - float(params.vehicle.aT_max)
 
 def downrange_crossrange(x, u, t, params, fcns):
     """[downrange, crossrange] (m) to the touchdown target PCPF.
