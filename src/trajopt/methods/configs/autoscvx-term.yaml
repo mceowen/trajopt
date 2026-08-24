@@ -1,7 +1,0 @@
-inherit: autoscvx.yaml
-
-penalty:
-  dynamics:
-    vb: 'none'
-  initial_state:
-    vb: 'none'

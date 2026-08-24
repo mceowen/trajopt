@@ -1,0 +1,7 @@
+method_class: dev.sqp
+
+inherit: autoscvx.yaml
+
+weights:
+  beta:           0.1
+  gamma:          0.1

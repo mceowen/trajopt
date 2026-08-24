@@ -1,0 +1,35 @@
+method_class: dev.sqp
+
+flags:
+  equal_dt:           1
+  zoh_dilation:       1
+  flag_conv:          1
+  second_order:       0
+  line_search:        1
+  alpha_min_ls:       1.0e-7   # smallest line-search step
+  discretize: ms
+  nsub: 10                   # RK4 substeps per multiple-shooting interval
+  iter_max: 300
+
+weights:
+  alpha_z: 1.0
+  alpha_nu: 1.0
+
+penalty:
+  default:
+    norm: l1
+    W:
+      penalty: True
+      autotune: False
+      init: 1000.0
+    dual:
+      autotune: False
+      init: 0.0
+    vb: standard
+    eps: [0.0001]
+
+guess:
+  type: propagation
+
+solver_opts:
+  solver: QOCO

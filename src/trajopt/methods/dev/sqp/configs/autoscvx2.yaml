@@ -1,0 +1,7 @@
+method_class: dev.sqp
+
+inherit: autoscvx.yaml
+
+flags:
+  second_order: 1
+  min_eig_psd:  0.0   # eigenvalue floor for the trust-region Hessian square root

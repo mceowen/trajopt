@@ -23,9 +23,9 @@ def thrust_norm(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) 
 
 
 def obstacle(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array:
-    """Distance from circular obstacle centered at (5,5) in xy-plane."""
+    """Distance from a circular obstacle in the xy-plane (extends infinitely in z)."""
     r = x[0:2]
-    pos_obs = jnp.array([5, 5])
+    pos_obs = jnp.asarray(params.obstacle.pos)
     return jnp.array([jnp.linalg.norm(r - pos_obs)])
 
 
@@ -62,6 +62,8 @@ def u_squared(x, u, t, params, fcns):
     return jnp.array([jnp.sum(jnp.square(u))])
 
 def obstacle_xy(params, ax) -> np.ndarray:
-    """Circle boundary of the obstacle in the xy-plane (center (5,5), radius 4)."""
+    """Circle boundary of the obstacle in the xy-plane."""
+    cx, cy = params.obstacle.pos
+    r = params.obstacle.radius
     th = np.linspace(0, 2 * np.pi, 200)
-    return np.column_stack([5.0 + 4.0 * np.cos(th), 5.0 + 4.0 * np.sin(th)])
+    return np.column_stack([cx + r * np.cos(th), cy + r * np.sin(th)])

@@ -1,0 +1,9 @@
+method_class: dev.sqp
+
+inherit: autoscvx.yaml
+
+penalty:
+  dynamics:
+    vb: 'none'
+  initial_state:
+    vb: 'none'

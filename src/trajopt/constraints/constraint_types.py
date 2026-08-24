@@ -379,6 +379,9 @@ class final_convex_inequality(convex_inequality):
         self.type = "final_convex_inequality"
 
 
+_RESERVED_CONSTRAINT_KEYS = {"type", "fcn", "name", "lower", "upper", "scale", "eps"}
+
+
 class nonconvex_inequality(Constraint):
     def __init__(self, cnstr_config: dict, segment) -> None:
         index_map = segment.index_map
@@ -391,6 +394,12 @@ class nonconvex_inequality(Constraint):
         self._upper_dim = cnstr_config.get("upper", None)
         self._lower_dim = cnstr_config.get("lower", None)
         self.index_map = index_map
+
+        # any non-standard fields (e.g. a fixed 'pos') are exposed to the
+        # model fcn under params.<constraint name>, alongside its own params
+        extra = {k: v for k, v in cnstr_config.items() if k not in _RESERVED_CONSTRAINT_KEYS}
+        if extra:
+            params[self.name] = tools.deep_merge(params.get(self.name, {}), extra)
 
         self.fcn_string = cnstr_config.fcn
         self.fcn_txu_dim = tools.resolve_function_from_string(self.fcn_string, fcns)

@@ -1,5 +1,5 @@
 method:
-  inherit: trajopt/methods/configs/autoscvx2.yaml
+  inherit: trajopt/methods/dev/sqp/configs/autoscvx2.yaml
 
   flags:
     equal_dt: 1
@@ -10,7 +10,9 @@ method:
     eps_state:  0.001
     eps_dyn:    0.00001
     eps_defect: 1.0
-    eps_cost:   1
+
+  penalty:
+    eps_cost: 1
 
   solver_opts:
     solver: CLARABEL

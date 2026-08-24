@@ -28,12 +28,12 @@ def check_convergence_tolerance(method_segment) -> None:
     defect              = current_iter_data.get("defect", 0)
     bool_ncvx_dyn_state = np.all(np.abs(defect) <= method_segment.eps_dyn)
     bool_ncvx_ineq      = all(
-        np.all(np.abs(h.g_nl) <= np.atleast_1d(h.eps))
+        np.all(np.abs(h.g_nl) <= np.atleast_1d(h.penalty_state.eps))
         for h in constraints
         if "nonconvex_inequality" in h.type and getattr(h, "g_nl", None) is not None
     )
     bool_ncvx_eq        = all(
-        np.all(np.abs(h.g_nl) <= np.atleast_1d(h.eps))
+        np.all(np.abs(h.g_nl) <= np.atleast_1d(h.penalty_state.eps))
         for h in constraints
         if "nonconvex_equality" in h.type and getattr(h, "g_nl", None) is not None
     )

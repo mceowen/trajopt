@@ -1,0 +1,174 @@
+trajectory:
+  segments:
+    entry:
+      num_nodes: 100
+      inherit: trajopt/models/configs/reentry_3dof.yaml
+
+      fcns:
+        density_model: trajopt/missions/msrl.py:density_model
+        nonlinear_aero: trajopt/missions/msrl.py:nonlinear_aero
+        downrange_crossrange: trajopt/missions/msrl.py:downrange_crossrange
+        deploy_range_bias: trajopt/missions/msrl.py:deploy_range_bias
+
+      params:
+        planet:
+          inherit: trajopt/missions/configs/planets/mars.yaml
+        vehicle:
+          inherit: trajopt/missions/configs/vehicles/msrl.yaml
+
+        # touchdown target and deploy range bias (Mendeck & Craig Fig. 3):
+        # guidance targets the touchdown site; chute deploy occurs on the arc
+        # range_bias (m) uprange of it with heading aligned at the target
+        target:
+          lon: 77.39
+          lat: 18.49
+          range_bias: 16370.0
+
+        # density polynomial coefficients
+        a: -4.418967
+        b: -56.76770
+        c: 1.621266
+        d: 379.3357
+        e: 8564.256
+        f: 8414.405
+        g: -988.7042
+        h: 4461.988
+        i: 31.36062
+
+        # lift polynomial coefficients
+        a_l: 0.679945
+        b_l: -9.522473
+        c_l: 59.179219
+        d_l: -215.423516
+        e_l: 510.853276
+        f_l: -830.748818
+        g_l: 950.127376
+        h_l: -771.365024
+        i_l: 443.191605
+        j_l: -177.601759
+        k_l: 48.232018
+        l_l: -8.362472
+        m_l: 1.177526
+
+        # drag polynomial coefficients
+        a_d: 1.458554
+        b_d: -20.501723
+        c_d: 128.239298
+        d_d: -470.835046
+        e_d: 1126.686522
+        f_d: -1844.173832
+        g_d: 2106.728736
+        h_d: -1681.164677
+        i_d: 921.349863
+        j_d: -333.513962
+        k_d: 74.164741
+        l_d: -8.758177
+        m_d: 1.684456
+
+      constraints:
+        dynamics:
+          type: dynamics
+          fcn: fcns.dynamics
+
+        initial_state:
+          type: initial_state
+          value: [3456160, 68.20, 14.12, 7935.15, -7.7075, 62.2803]
+
+        # pre-bank attitude held into guidance initiation
+        initial_control:
+          type: initial_control
+          value: [120, null]
+
+        # bank commanded to zero as the deploy sequence begins
+        final_control:
+          type: final_control
+          value: [0, null]
+
+        # parachute-deploy radius and velocity
+        final_state:
+          type: final_state
+          value: [3404600, null, null, 500.0, null, null]
+
+        # deploy surface: downrange = range_bias, crossrange = 0
+        deploy_surface:
+          type: final_nonconvex_equality
+          fcn: fcns.deploy_range_bias
+          scale: [10000.0, 10000.0]
+
+        state_limits:
+          type: state_limits
+          lower: ["${params.planet.r}", null, null, 100.0, null, null]
+          # upper: [null , null, null, null, null, null]
+
+        # bank is modulo 360 deg, so the wide box lets the solve pass through lift-down
+        bank_aoa_angle_limits:
+          type: control_limits
+          lower: [-360.0, null]
+          upper: [360.0, null]
+
+        # bank rate and acceleration limits (MSRL project data, Jul 2026)
+        bank_angle_rate_limit:
+          type: control_rate_limit
+          value: [13]
+          idx: [0]
+
+        bank_angle_accel_limit:
+          type: control_accel_limit
+          value: [5]
+          idx: [0]
+
+        # 13 g imposed against a 15 g structural limit
+        max_load:
+          type: nonconvex_inequality
+          fcn: fcns.aero_load
+          upper: 13.0
+          scale: [13.0]
+
+        # heat rate (W/cm^2) and dynamic pressure (kPa)
+        # unconstrained peaks are about 111 W/cm^2 and 34 kPa
+        # max_heat_rate:
+        #   type: nonconvex_inequality
+        #   fcn: fcns.heat_rate
+        #   upper: 165.0
+        #   scale: [165.0]
+        #
+        # max_dynamic_pressure:
+        #   type: nonconvex_inequality
+        #   fcn: fcns.dynamic_pressure
+        #   upper: 35.0
+        #   scale: [35.0]
+
+      outputs:
+        aero_load:
+          upper_limit: 13.0
+
+      costs:
+        bank_rate_smoothness:
+          type: rate_regularization
+          set: control
+          idx: [0]
+          norm_type: l2
+          w: 0.001
+
+      guess:
+        t_start: 0.0
+        t_stop: 250.0
+        u_start: [120.0, 0.0]
+        u_stop: [0, 0.0]
+
+method:
+  inherit: trajopt/methods/dev/sqp/configs/autoscvx2.yaml
+
+  flags:
+    equal_dt: 1
+    zoh_dilation: 1
+
+  solver_opts:
+    solver: PIQP
+
+analysis:
+  type: standalone
+  compute_iters: false
+  show_iters: false
+  show_convergence: true
+  show_weights: false

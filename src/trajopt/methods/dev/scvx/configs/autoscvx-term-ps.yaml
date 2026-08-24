@@ -1,0 +1,7 @@
+method_class: dev.scvx
+
+inherit: autoscvx-term.yaml
+
+flags:
+  equal_dt: 0
+  discretize: ps

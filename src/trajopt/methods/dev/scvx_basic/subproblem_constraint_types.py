@@ -1,0 +1,734 @@
+from typing import TYPE_CHECKING
+
+import cvxpy as cp
+import numpy as np
+
+from trajopt.methods.scp import discretize
+
+if TYPE_CHECKING:
+    from trajopt.methods.scp.scvx import SCvx
+
+
+CREATE_PARAMETER_REGISTRY:         dict = {}
+CREATE_VARIABLE_REGISTRY:          dict = {}
+CREATE_CONSTRAINT_REGISTRY:        dict = {}
+CREATE_COST_REGISTRY:              dict = {}
+UPDATE_PARAMETER_REGISTRY:         dict = {}
+UPDATE_CURRENT_ITER_DATA_REGISTRY: dict = {}
+
+
+# =============================================================================
+# DYNAMICS
+# =============================================================================
+
+def create_cvxpy_parameters_dynamics(method: "SCvx") -> None:
+    """Create cvxpy parameters for the dynamics constraint."""
+    N, n_z, n_nu = method.N.time_grid, method.n.z, method.n.nu
+
+    if method.flags.discretize == "ms":
+        method.cp_params.Ak  = cp.Parameter((N - 1, n_z, n_z), name="Ak")
+        method.cp_params.Bk  = cp.Parameter((N - 1, n_z, n_nu), name="Bk")
+        method.cp_params.Bkp = cp.Parameter((N - 1, n_z, n_nu), name="Bkp")
+        method.cp_params.z_m = cp.Parameter((N, n_z), name="z_minus")
+
+    if method.flags.discretize == "ps":
+        N_col = N - 1
+        _, _, _, D_np = discretize.compute_ps_differentiation_matrix(N_col)
+        method.ps_D = D_np
+
+        method.cp_params.ps_f_ref = cp.Parameter((N_col, n_z),       name="ps_f_ref")
+        method.cp_params.ps_Ac    = cp.Parameter((N_col, n_z, n_z),  name="ps_Ac")
+        method.cp_params.ps_Bc    = cp.Parameter((N_col, n_z, n_nu), name="ps_Bc")
+
+def create_cvxpy_constraints_dynamics(method: "SCvx") -> None:
+    """Create cvxpy constraints enforcing the discretized dynamics."""
+    problem = method.problem
+    N       = method.N.time_grid
+
+    # pseudo-spectral dynamics constraint
+    if method.flags.discretize == "ps":
+        method.cp_constraints.append(discretize.build_ps_dyn_constraints(method))
+
+    # multiple shooting dynamics constraint
+    if method.flags.discretize == "ms":
+        vb_dyn = method.cp_vars.vb_stack.get("dynamics", None)
+        for k in range(N - 1):
+            rhs = (method.cp_params.Ak[k] @ method.dz[k] + method.cp_params.Bk[k] @ method.dnu[k] + method.cp_params.Bkp[k] @ method.dnu[k + 1] + (vb_dyn[k] if vb_dyn is not None else 0))
+            method.cp_constraints.append(method.dz[k + 1] + method.cp_params.z_ref[k + 1] - method.cp_params.z_m[k + 1] == rhs)
+
+    # ctcs integral constraint
+    if problem.constraints.has(ct=1):
+        for k in range(N - 1):
+            method.cp_constraints.append(
+                (method.cp_params.z_ref[k + 1, method.indices.z.ctcs] + method.dz[k + 1, method.indices.z.ctcs])
+                - (method.cp_params.z_ref[k, method.indices.z.ctcs] + method.dz[k, method.indices.z.ctcs])
+                <= method.cp_params.eps_ctcs)
+
+# =============================================================================
+# INITIAL STATE
+# =============================================================================
+
+
+def create_cvxpy_constraints_initial_state(method: "SCvx") -> None:
+    """Create cvxpy constraints fixing the initial state."""
+    for constraint in method.problem.constraints.get(type="initial_state"):
+        cnst_idx = constraint.idx
+        method.cp_constraints.append(method.dz[0, cnst_idx] + method.cp_params.z_ref[0, cnst_idx] == constraint.value)
+
+
+# =============================================================================
+# FINAL STATE
+# =============================================================================
+
+def create_cvxpy_constraints_final_state(method: "SCvx") -> None:
+    """Create cvxpy constraints on the final state with virtual buffer slack."""
+    for constraint in method.problem.constraints.get(type="final_state"):
+        cnst_idx = constraint.idx
+        value    = constraint.value
+        vb_term  = method.cp_vars.vb_stack.final_state if method.cp_vars.vb_stack.final_state is not None else 0.0
+
+        method.cp_constraints.append(method.dz[-1, cnst_idx] + method.cp_params.z_ref[-1, cnst_idx] - vb_term == value)
+
+
+# =============================================================================
+# NONCONVEX INEQUALITY
+# =============================================================================
+
+def create_cvxpy_parameters_nonconvex_inequality(method: "SCvx") -> None:
+    """Create cvxpy parameters for the linearized nonconvex inequality constraints."""
+    N, n_z, n_nu = method.N.time_grid, method.n.z, method.n.nu
+    n_ineq       = method.problem.index_map.n.nonconvex_inequality
+
+    method.cp_params.dgdz  = cp.Parameter((N, n_ineq, n_z),  name="dgdz")
+    method.cp_params.dgdnu = cp.Parameter((N, n_ineq, n_nu), name="dgdnu")
+    method.cp_params.g0    = cp.Parameter((N, n_ineq),        name="g0")
+
+
+def create_cvxpy_constraints_nonconvex_inequality(method: "SCvx") -> None:
+    """Create cvxpy constraints for the linearized nonconvex inequalities."""
+    for k in range(method.N.time_grid):
+        method.cp_constraints.append(
+            method.cp_params.dgdz[k] @ method.dz[k, :]
+            + method.cp_params.dgdnu[k] @ method.dnu[k, :]
+            + method.cp_params.g0[k]
+            - method.cp_vars.vb_stack.nonconvex_inequality[k]
+            <= 0,
+        )
+        method.cp_constraints.append(method.cp_vars.vb_stack.nonconvex_inequality[k] >= 0)
+
+
+# =============================================================================
+# CONVEX INEQUALITY
+# =============================================================================
+
+def create_cvxpy_constraints_convex_inequality(method: "SCvx") -> None:
+    """Create cvxpy constraints for convex inequality constraints."""
+    for k in range(method.N.time_grid):
+        for constraint in method.problem.constraints.get(ct=0, type="convex_inequality"):
+            if k in constraint.nodes:
+
+                x_k = method.cp_params.z_ref[k, method.indices.z.state] + method.dz[k,  method.indices.z.state]
+                u_k = method.cp_params.nu_ref[k, method.indices.nu.control] + method.dnu[k, method.indices.nu.control]
+
+                expr = constraint.fcn_dim(0, x_k, u_k, method.problem.params)
+
+                method.cp_constraints.append(expr <= 0)
+
+
+# =============================================================================
+# STATE LIMITS
+# =============================================================================
+
+def create_cvxpy_constraints_state_limits(method: "SCvx") -> None:
+    """Create cvxpy constraints for state lower/upper bounds."""
+    for k in range(method.N.time_grid):
+        for constraint in method.problem.constraints.get(ct=0, type="state_limits"):
+            if k in constraint.nodes:
+                x_k = method.cp_params.z_ref[k, method.indices.z.state] + method.dz[k, method.indices.z.state]
+                if constraint.lower_idx:
+                    method.cp_constraints.append(x_k[constraint.lower_idx] >= constraint.lower_value)
+                if constraint.upper_idx:
+                    method.cp_constraints.append(x_k[constraint.upper_idx] <= constraint.upper_value)
+
+
+# =============================================================================
+# CONTROL LIMITS
+# =============================================================================
+
+def create_cvxpy_constraints_control_limits(method: "SCvx") -> None:
+    """Create cvxpy constraints for control lower/upper bounds."""
+    for k in range(method.N.time_grid):
+        for constraint in method.problem.constraints.get(ct=0, type="control_limits"):
+            if k in constraint.nodes:
+                u_k = method.cp_params.nu_ref[k, method.indices.nu.control] + method.dnu[k, method.indices.nu.control]
+                if constraint.lower_idx:
+                    method.cp_constraints.append(u_k[constraint.lower_idx] >= constraint.lower_value)
+                if constraint.upper_idx:
+                    method.cp_constraints.append(u_k[constraint.upper_idx] <= constraint.upper_value)
+
+
+# =============================================================================
+# CONTROL RATE LIMIT
+# =============================================================================
+
+def create_cvxpy_constraints_control_rate_limit(method: "SCvx") -> None:
+    """Create cvxpy constraints limiting the control rate of change."""
+    for k in range(method.N.time_grid - 1):
+        for constraint in method.problem.constraints.get(ct=0, type="control_rate_limit"):
+            value = constraint.value
+            M_sel = constraint.M_select
+            du_k  = (
+                method.cp_params.nu_ref[k + 1, method.indices.nu.control] + method.dnu[k + 1, method.indices.nu.control]
+                - (method.cp_params.nu_ref[k, method.indices.nu.control]  + method.dnu[k,     method.indices.nu.control])
+            )
+            dt_k = (method.t_ref[k + 1, 0] + method.dt[k + 1, 0]) - (method.t_ref[k, 0] + method.dt[k, 0])
+            method.cp_constraints.append(M_sel @ du_k <= dt_k * np.concatenate([value, value]))
+
+
+# =============================================================================
+# FREE FINAL TIME
+# =============================================================================
+
+def create_cvxpy_parameters_free_final_time(method: "SCvx") -> None:
+    """Create cvxpy parameters for the free-final-time formulation."""
+    method.cp_params.ddt_max = cp.Parameter(nonneg=True, name="ddt_max")
+
+
+def create_cvxpy_constraints_free_final_time(method: "SCvx") -> None:
+    """Create cvxpy constraints for the free-final-time formulation."""
+    N = method.N.time_grid
+
+    method.cp_constraints.append(method.dt[0, 0] == 0)
+
+    for k in range(N - 1):
+        t_k = method.t_ref[k, 0] + method.dt[k, 0]
+
+        method.cp_constraints.append(cp.abs(method.dt[k, 0]) <= method.cp_params.ddt_max)
+        method.cp_constraints.append(t_k >= 0)
+        method.cp_constraints.append(method.s_ref[k, 0] + method.ds[k, 0] >= 0.0)
+
+        if hasattr(method.flags, "equal_dt") and bool(method.flags.equal_dt) and k > 1:
+            method.cp_constraints.append(method.dt[k, 0] == method.dt[1, 0])
+
+    method.cp_constraints.append(method.s_ref[N - 1, 0] + method.ds[N - 1, 0] >= 0.0)
+
+
+# =============================================================================
+# FINAL TIME
+# =============================================================================
+
+def create_cvxpy_parameters_final_time(method: "SCvx") -> None:
+    """Create cvxpy parameters for the final-time bounds constraint."""
+    method.cp_params.T_min   = cp.Parameter(nonneg=True, name="T_min")
+    method.cp_params.T_max   = cp.Parameter(nonneg=True, name="T_max")
+    method.cp_params.dt_min  = cp.Parameter(nonneg=True, name="dt_min")
+    method.cp_params.dt_max  = cp.Parameter(nonneg=True, name="dt_max")
+
+
+def create_cvxpy_constraints_final_time(method: "SCvx") -> None:
+    """Create cvxpy constraints bounding the final time and interval lengths."""
+    N = method.N.time_grid
+
+    method.cp_constraints.append(method.dt[0, 0] == 0)
+
+    for k in range(N - 1):
+        t_k  = method.t_ref[k,     0] + method.dt[k,     0]
+        t_kp = method.t_ref[k + 1, 0] + method.dt[k + 1, 0]
+        t_interval_k = t_kp - t_k
+
+        method.cp_constraints.append(t_interval_k <= method.cp_params.dt_max)
+        method.cp_constraints.append(t_interval_k >= method.cp_params.dt_min)
+
+    method.cp_constraints.append(method.cp_params.T_min <= method.t_ref[-1, 0] + method.dt[-1, 0])
+    method.cp_constraints.append(method.t_ref[-1, 0] + method.dt[-1, 0] <= method.cp_params.T_max)
+
+
+def update_cvxpy_parameters_final_time_values(method: "SCvx") -> None:
+    """Update final-time cvxpy parameter values from the problem constraints."""
+    for constraint in method.problem.constraints.get(type="final_time"):
+        if constraint.lower is not None:
+            method.cp_params.T_min.value  = float(constraint.lower)
+            method.cp_params.dt_min.value = float(constraint.dt_min)
+        if constraint.upper is not None:
+            method.cp_params.T_max.value  = float(constraint.upper)
+            method.cp_params.dt_max.value = float(constraint.dt_max)
+
+
+# =============================================================================
+# AXIS ANGLE CONE
+# =============================================================================
+
+def create_cvxpy_constraints_axis_angle_cone(method: "SCvx") -> None:
+    """Create cvxpy constraints for axis-angle cone constraints."""
+    for k in range(method.N.time_grid):
+        for constraint in method.problem.constraints.get(ct=0, type="axis_angle_cone"):
+            cnst_idx = constraint.idx
+            axis     = constraint.axis
+            if constraint.set == "state":
+                method.cp_constraints.append(
+                    constraint.cos_theta_max * cp.norm(method.cp_params.z_ref[k, cnst_idx] + method.dz[k, cnst_idx])
+                    <= axis @ (method.cp_params.z_ref[k, cnst_idx] + method.dz[k, cnst_idx]),
+                )
+            elif constraint.set == "control":
+                method.cp_constraints.append(
+                    constraint.cos_theta_max * cp.norm(method.cp_params.nu_ref[k, cnst_idx] + method.dnu[k, cnst_idx])
+                    <= axis @ (method.cp_params.nu_ref[k, cnst_idx] + method.dnu[k, cnst_idx]),
+                )
+
+
+# =============================================================================
+# MAX NORM CONE
+# =============================================================================
+
+def create_cvxpy_constraints_max_norm_cone(method: "SCvx") -> None:
+    """Create cvxpy constraints for max-norm cone constraints."""
+    for k in range(method.N.time_grid):
+        for constraint in method.problem.constraints.get(ct=0, type="max_norm_cone"):
+            cnst_idx  = constraint.idx
+            upper = constraint.upper
+            if constraint.set == "state":
+                method.cp_constraints.append(cp.norm(method.cp_params.z_ref[k, cnst_idx] + method.dz[k, cnst_idx]) <= upper)
+            elif constraint.set == "control":
+                method.cp_constraints.append(cp.norm(method.cp_params.nu_ref[k, cnst_idx] + method.dnu[k, cnst_idx]) <= upper)
+
+
+# =============================================================================
+# QUATERNION CONE
+# =============================================================================
+
+def create_cvxpy_constraints_quaternion_cone(method: "SCvx") -> None:
+    """Create cvxpy constraints for quaternion cone constraints."""
+    for k in range(method.N.time_grid):
+        for constraint in method.problem.constraints.get(ct=0, type="quaternion_cone"):
+            q_idx = constraint.quat_start_idx
+            method.cp_constraints.append(
+                cp.norm(
+                    method.cp_params.z_ref[k, q_idx + 2 : q_idx + 4] + method.dz[k, q_idx + 2 : q_idx + 4],
+                ) <= constraint.rhs,
+            )
+
+
+# =============================================================================
+# AFFINE
+# =============================================================================
+
+def create_cvxpy_constraints_AFFINE(method: "SCvx") -> None:
+    """Create cvxpy constraints for affine equality constraints."""
+    N = method.N.time_grid
+    for k in range(N):
+        for constraint in method.problem.constraints.get(ct=0, type="AFFINE"):
+            if not constraint.convex:
+                continue
+            if not _active_at(k, N, constraint.time_steps):
+                continue
+            cnst_idx = constraint.idx
+            AA, bb   = constraint.A, constraint.b
+            if constraint.set == "state":
+                method.cp_constraints.append(AA @ (method.cp_params.z_ref[k, cnst_idx]  + method.dz[k,  cnst_idx]) == bb)
+            elif constraint.set == "control":
+                method.cp_constraints.append(AA @ (method.cp_params.nu_ref[k, cnst_idx] + method.dnu[k, cnst_idx]) == bb)
+
+
+# =============================================================================
+# POLYTOPE
+# =============================================================================
+
+def create_cvxpy_constraints_POLYTOPE(method: "SCvx") -> None:
+    """Create cvxpy constraints for polytope (linear inequality) constraints."""
+    N = method.N.time_grid
+    for k in range(N):
+        for constraint in method.problem.constraints.get(ct=0, type="POLYTOPE"):
+            if not constraint.convex:
+                continue
+            if not _active_at(k, N, constraint.time_steps):
+                continue
+            cnst_idx = constraint.idx
+            AA, bb   = constraint.A, constraint.b
+            if constraint.set == "state":
+                method.cp_constraints.append(AA @ (method.cp_params.z_ref[k, cnst_idx]  + method.dz[k,  cnst_idx]) <= bb)
+            elif constraint.set == "control":
+                method.cp_constraints.append(AA @ (method.cp_params.nu_ref[k, cnst_idx] + method.dnu[k, cnst_idx]) <= bb)
+
+
+# =============================================================================
+# SOC
+# =============================================================================
+
+def create_cvxpy_constraints_SOC(method: "SCvx") -> None:
+    """Create cvxpy constraints for second-order cone constraints."""
+    N = method.N.time_grid
+    for k in range(N):
+        for constraint in method.problem.constraints.get(ct=0, type="SOC"):
+            if not constraint.convex:
+                continue
+            if not _active_at(k, N, constraint.time_steps):
+                continue
+            cnst_idx     = constraint.idx
+            AA, bb, CC, dd = constraint.A, constraint.b, constraint.C, constraint.d
+            if constraint.set == "state":
+                method.cp_constraints.append(
+                    cp.norm(AA @ (method.cp_params.z_ref[k, cnst_idx] + method.dz[k, cnst_idx]) + bb)
+                    <= CC @ (method.cp_params.z_ref[k, cnst_idx] + method.dz[k, cnst_idx]) + dd,
+                )
+            elif constraint.set == "control":
+                method.cp_constraints.append(
+                    cp.norm(AA @ (method.cp_params.nu_ref[k, cnst_idx] + method.dnu[k, cnst_idx]) + bb)
+                    <= CC @ (method.cp_params.nu_ref[k, cnst_idx] + method.dnu[k, cnst_idx]) + dd,
+                )
+
+
+# =============================================================================
+# MINIMAX EPIGRAPH
+# =============================================================================
+
+def create_cvxpy_variables_minimax_epigraph(method: "SCvx") -> None:
+    """Create the cvxpy epigraph variable for minimax nonconvex costs."""
+    if method.problem.costs.has(type="nonconvex", minimax=1):
+        method.minimax_epigraph_upperbound = cp.Variable((1,), name="minimax_epigraph_upperbound")
+
+
+def create_cvxpy_constraints_minimax_epigraph(method: "SCvx") -> None:
+    """Create cvxpy epigraph constraints bounding the minimax nonconvex cost."""
+    for k in range(method.N.time_grid):
+        for cost in method.problem.costs.get(type="nonconvex", minimax=1):
+            method.cp_constraints.append(
+                method.cp_params.w_cost_times_dcostdx[k] @ method.dz[k, :]
+                + method.cp_params.w_cost_times_dcostdu[k] @ method.dnu[k, :]
+                + method.cp_params.w_cost_times_cost0[k]
+                <= method.minimax_epigraph_upperbound,
+            )
+
+
+# =============================================================================
+# Utility
+# =============================================================================
+
+def _active_at(k: int, N: int, time_steps: str | list) -> bool:
+    """Return whether node k is active for the given time_steps specification."""
+    if time_steps == "all":
+        return True
+    return k in time_steps or (k - N) in time_steps
+
+
+# =============================================================================
+# COSTS
+# Each function receives `method` and accumulates into method.cp_cost.
+# =============================================================================
+
+def create_cvxpy_cost_nonconvex(method: "SCvx") -> None:
+    """Accumulate the linearized nonconvex cost into the cvxpy objective."""
+    JAX_TYPES = ("nonconvex", "terminal", "running")
+    jax_costs = [c for t in JAX_TYPES for c in method.problem.costs.get(type=t)]
+    if not jax_costs:
+        return
+    first_jax_type = method.problem.costs.cost_type_list[
+        next(i for i, t in enumerate(method.problem.costs.cost_type_list) if t in JAX_TYPES)
+    ]
+    if first_jax_type != "nonconvex":
+        return
+    method.cp_cost += (
+        cp.sum(method.cp_params.w_cost_times_cost0)
+        + cp.sum(cp.multiply(method.cp_params.w_cost_times_dcostdx, method.dz))
+        + cp.sum(cp.multiply(method.cp_params.w_cost_times_dcostdu, method.dnu))
+    )
+
+
+def create_cvxpy_cost_terminal(method: "SCvx") -> None:
+    """Accumulate the linearized terminal cost into the cvxpy objective."""
+    JAX_TYPES = ("nonconvex", "terminal", "running")
+    jax_costs = [c for t in JAX_TYPES for c in method.problem.costs.get(type=t)]
+    if not jax_costs:
+        return
+    first_jax_type = method.problem.costs.cost_type_list[
+        next(i for i, t in enumerate(method.problem.costs.cost_type_list) if t in JAX_TYPES)
+    ]
+    if first_jax_type != "terminal":
+        return
+    method.cp_cost += (
+        cp.sum(method.cp_params.w_cost_times_cost0)
+        + cp.sum(cp.multiply(method.cp_params.w_cost_times_dcostdx, method.dz))
+        + cp.sum(cp.multiply(method.cp_params.w_cost_times_dcostdu, method.dnu))
+    )
+
+
+def create_cvxpy_cost_running(method: "SCvx") -> None:
+    """Accumulate the linearized running cost into the cvxpy objective."""
+    JAX_TYPES = ("nonconvex", "terminal", "running")
+    jax_costs = [c for t in JAX_TYPES for c in method.problem.costs.get(type=t)]
+    if not jax_costs:
+        return
+    first_jax_type = method.problem.costs.cost_type_list[
+        next(i for i, t in enumerate(method.problem.costs.cost_type_list) if t in JAX_TYPES)
+    ]
+    if first_jax_type != "running":
+        return
+    method.cp_cost += (
+        cp.sum(method.cp_params.w_cost_times_cost0)
+        + cp.sum(cp.multiply(method.cp_params.w_cost_times_dcostdx, method.dz))
+        + cp.sum(cp.multiply(method.cp_params.w_cost_times_dcostdu, method.dnu))
+    )
+
+
+def create_cvxpy_cost_convex_terminal(method: "SCvx") -> None:
+    """Accumulate convex terminal costs into the cvxpy objective."""
+    for cost in method.problem.costs.get(type="convex_terminal"):
+        for k in np.atleast_1d(cost.nodes):
+            x_k = method.cp_params.z_ref[k, method.indices.z.state] + method.dz[k, method.indices.z.state]
+            u_k = method.cp_params.nu_ref[k, method.indices.nu.control] + method.dnu[k, method.indices.nu.control]
+            method.cp_cost += cost.w * cost.fcn_dim(0, x_k, u_k, method.problem.params)
+
+
+def create_cvxpy_cost_convex_running(method: "SCvx") -> None:
+    """Accumulate convex running costs into the cvxpy objective."""
+    N = method.N.time_grid
+    for cost in method.problem.costs.get(type="convex_running"):
+        for k in range(N):
+            if k in cost.nodes:
+                x_k = method.cp_params.z_ref[k, method.indices.z.state] + method.dz[k, method.indices.z.state]
+                u_k = method.cp_params.nu_ref[k, method.indices.nu.control] + method.dnu[k, method.indices.nu.control]
+                method.cp_cost += cost.w * cost.fcn_dim(0, x_k, u_k, method.problem.params) * (1.0 / N)
+
+
+def create_cvxpy_cost_minimax_epigraph(method: "SCvx") -> None:
+    """Accumulate the minimax epigraph upper bound into the cvxpy objective."""
+    for cost in method.problem.costs.get(type="nonconvex", minimax=1):
+        method.cp_cost += method.minimax_epigraph_upperbound
+
+
+def create_cvxpy_cost_min_time(method: "SCvx") -> None:
+    """Accumulate the minimum-time cost into the cvxpy objective."""
+    if bool(method.flags.free_final_time):
+        for cost in method.problem.costs.get(type="min_time"):
+            method.cp_cost += cp.sum(method.t_ref[-1] + method.dt[-1])
+
+
+def create_cvxpy_cost_min_norm_terminal(method: "SCvx") -> None:
+    """Accumulate the minimum-norm terminal cost into the cvxpy objective."""
+    for cost in method.problem.costs.get(type="min_norm_terminal"):
+        zf     = method.cp_params.z_ref[-1] + method.dz[-1]
+        target = cost.value if cost.value is not None else np.zeros(len(cost.idx))
+        method.cp_cost += method.cp_params.w_cost * cp.norm(zf[cost.idx] - target)
+
+
+def create_cvxpy_cost_terminal_state(method: "SCvx") -> None:
+    """Accumulate the terminal-state cost into the cvxpy objective."""
+    for cost in method.problem.costs.get(type="terminal_state"):
+        zf = method.cp_params.z_ref[-1] + method.dz[-1]
+        method.cp_cost += cost.sign * method.cp_params.w_cost * zf[cost.idx]
+
+
+def create_cvxpy_cost_regularization(method: "SCvx") -> None:
+    """Accumulate the trajectory regularization cost into the cvxpy objective."""
+    N = method.N.time_grid
+    for cost in method.problem.costs.get(type="regularization"):
+        if cost.set == "control":
+            traj = method.cp_params.nu_ref + method.dnu
+        elif cost.set == "state":
+            traj = method.cp_params.z_ref + method.dz
+        else:
+            continue
+
+        if cost.norm_type == "l2":
+            method.cp_cost += cost.w * cp.sum_squares(traj) * (1 / N)
+        elif cost.norm_type == "l1":
+            method.cp_cost += cost.w * cp.norm1(traj) * (1 / N)
+
+
+def create_cvxpy_cost_rate_regularization(method: "SCvx") -> None:
+    """Accumulate the trajectory rate regularization cost into the cvxpy objective."""
+    N = method.N.time_grid
+    for cost in method.problem.costs.get(type="rate_regularization"):
+        if cost.set == "control":
+            traj = method.cp_params.nu_ref + method.dnu
+        elif cost.set == "state":
+            traj = method.cp_params.z_ref + method.dz
+        else:
+            continue
+
+        traj_minus = traj[:-1, cost.idx]
+        traj_plus  = traj[1:,  cost.idx]
+        delta      = traj_plus - traj_minus
+
+        if cost.norm_type == "l2":
+            method.cp_cost += cost.w * cp.sum_squares(delta) * (1 / N)
+        elif cost.norm_type == "l1":
+            method.cp_cost += cost.w * cp.norm1(delta) * (1 / N)
+
+
+def create_cvxpy_cost_trust_region(method: "SCvx") -> None:
+    """Accumulate the trust-region penalty into the cvxpy objective."""
+    method.cp_cost += (method.cp_params.tr_z * cp.sum_squares(method.dz) + method.cp_params.tr_nu * cp.sum_squares(method.dnu))
+
+
+def create_cvxpy_cost_quadratic_penalty(method: "SCvx") -> None:
+    """Accumulate the quadratic virtual-buffer penalty into the cvxpy objective."""
+    VB = 0.0
+    for cnstr_type in method.W_stack.keys():
+        W_sqrt = method.cp_params.W_sqrt.get(cnstr_type)
+        vb     = method.cp_vars.vb_stack.get(cnstr_type)
+        if W_sqrt is None or vb is None:
+            continue
+        if hasattr(W_sqrt, "shape") and len(W_sqrt.shape) == 2:
+            for k in range(W_sqrt.shape[0]):
+                VB += cp.sum_squares(cp.diag(W_sqrt[k, :]) @ vb[k, :])
+        else:
+            VB += cp.sum_squares(cp.diag(W_sqrt) @ vb)
+    method.cp_cost += 0.5 * VB
+
+
+def create_cvxpy_cost_dual(method: "SCvx") -> None:
+    """Accumulate the dual (Lagrangian) penalty term into the cvxpy objective."""
+    DUAL = 0.0
+    for cnstr_type in method.dual_stack.keys():
+        dual_param = method.cp_params.dual.get(cnstr_type)
+        vb         = method.cp_vars.vb_stack.get(cnstr_type)
+        if dual_param is None or vb is None:
+            continue
+        DUAL += cp.sum(cp.multiply(vb, dual_param))
+    method.cp_cost += DUAL
+
+
+def update_cvxpy_parameters_dynamics(method: "SCvx") -> None:
+    """Update the dynamics cvxpy parameter values from the current iterate."""
+    z_opt  = method.current_iter_data.z_opt
+    nu_opt = method.current_iter_data.nu_opt
+
+    if method.flags.discretize == "ms":
+        Ak, Bk, Bkp, z_minus = discretize.compute_linsys_discrete(
+            z_opt, nu_opt, method.problem, method,
+        )
+        method.cp_params.Ak.value  = Ak
+        method.cp_params.Bk.value  = Bk
+        method.cp_params.Bkp.value = Bkp
+        method.cp_params.z_m.value = z_minus
+
+    if method.flags.discretize == "ps":
+        f_ref_col, Ac_col, Bc_col = discretize.compute_ps_dynamics_and_jacobians(
+            z_opt, nu_opt, method.problem, method,
+        )
+        method.cp_params.ps_f_ref.value = f_ref_col
+        method.cp_params.ps_Ac.value    = Ac_col
+        method.cp_params.ps_Bc.value    = Bc_col
+
+
+def update_cvxpy_parameters_nonconvex_inequality(method: "SCvx") -> None:
+    """Update the nonconvex inequality cvxpy parameters from the current iterate."""
+    z_opt  = method.current_iter_data.z_opt
+    nu_opt = method.current_iter_data.nu_opt
+
+    if method.problem.constraints.has(ct=0, type="nonconvex_inequality"):
+        g, dgdz, dgdnu = discretize.compute_nonconvex_constraints(z_opt, nu_opt, method.problem, method)
+
+        method.cp_params.dgdz.value  = dgdz
+        method.cp_params.dgdnu.value = dgdnu
+        method.cp_params.g0.value    = g
+
+
+def update_cvxpy_parameters_nonconvex_costs(method: "SCvx") -> None:
+    """Update the nonconvex cost cvxpy parameters from the current iterate."""
+    z_opt  = method.current_iter_data.z_opt
+    nu_opt = method.current_iter_data.nu_opt
+
+    cost, dcostdx, dcostdu = discretize.compute_nonconvex_costs(
+        z_opt, nu_opt, method.problem, method,
+    )
+    method.cp_params.w_cost_times_dcostdx.value = method.cp_params.w_cost.value * dcostdx
+    method.cp_params.w_cost_times_dcostdu.value = method.cp_params.w_cost.value * dcostdu
+    method.cp_params.w_cost_times_cost0.value   = method.cp_params.w_cost.value * cost
+
+
+def update_cvxpy_parameters_free_final_time_(method: "SCvx") -> None:
+    """Update the free-final-time cvxpy parameter values."""
+    if bool(method.flags.free_final_time):
+        method.cp_params.ddt_max.value = float(method.ddt_max)
+
+
+# =============================================================================
+# UPDATE CURRENT ITER DATA
+# =============================================================================
+
+def update_current_iter_data_dynamics(method: "SCvx") -> None:
+    """Record the dynamics defect on current_iter_data for the current iterate."""
+    problem = method.problem
+
+    z_opt  = method.current_iter_data.z_opt
+    nu_opt = method.current_iter_data.nu_opt
+
+    if method.flags.discretize == "ms":
+        _, _, _, z_minus_nl = discretize.compute_linsys_discrete(z_opt, nu_opt, problem, method)
+        method.current_iter_data.defect = z_opt[1:] - z_minus_nl[1:]
+
+
+def update_current_iter_data_nonconvex_inequality(method: "SCvx") -> None:
+    """Record the nonlinear nonconvex inequality values on current_iter_data."""
+    problem = method.problem
+    z_opt  = method.current_iter_data.z_opt
+    nu_opt = method.current_iter_data.nu_opt
+    g_nl, _, _ = discretize.compute_nonconvex_constraints(z_opt, nu_opt, problem, method)
+    method.current_iter_data.g_nonconvex_inequality = g_nl
+
+
+# =============================================================================
+# REGISTRIES
+# =============================================================================
+
+CREATE_PARAMETER_REGISTRY.update({
+    "dynamics":               create_cvxpy_parameters_dynamics,
+    "nonconvex_inequality":   create_cvxpy_parameters_nonconvex_inequality,
+    "final_time":             create_cvxpy_parameters_final_time,
+    "free_final_time":        create_cvxpy_parameters_free_final_time,
+})
+
+CREATE_VARIABLE_REGISTRY.update({
+    "minimax_epigraph":       create_cvxpy_variables_minimax_epigraph,
+})
+
+CREATE_CONSTRAINT_REGISTRY.update({
+    "dynamics":               create_cvxpy_constraints_dynamics,
+    "initial_state":          create_cvxpy_constraints_initial_state,
+    "final_state":            create_cvxpy_constraints_final_state,
+    "nonconvex_inequality":   create_cvxpy_constraints_nonconvex_inequality,
+    "convex_inequality":      create_cvxpy_constraints_convex_inequality,
+    "state_limits":           create_cvxpy_constraints_state_limits,
+    "control_limits":         create_cvxpy_constraints_control_limits,
+    "control_rate_limit":     create_cvxpy_constraints_control_rate_limit,
+    "final_time":             create_cvxpy_constraints_final_time,
+    "free_final_time":        create_cvxpy_constraints_free_final_time,
+    "axis_angle_cone":        create_cvxpy_constraints_axis_angle_cone,
+    "max_norm_cone":          create_cvxpy_constraints_max_norm_cone,
+    "quaternion_cone":        create_cvxpy_constraints_quaternion_cone,
+    "AFFINE":                 create_cvxpy_constraints_AFFINE,
+    "POLYTOPE":               create_cvxpy_constraints_POLYTOPE,
+    "SOC":                    create_cvxpy_constraints_SOC,
+    "minimax_epigraph":       create_cvxpy_constraints_minimax_epigraph,
+})
+
+CREATE_COST_REGISTRY.update({
+    "nonconvex":              create_cvxpy_cost_nonconvex,
+    "terminal":               create_cvxpy_cost_terminal,
+    "running":                create_cvxpy_cost_running,
+    "convex_terminal":        create_cvxpy_cost_convex_terminal,
+    "convex_running":         create_cvxpy_cost_convex_running,
+    "minimax_epigraph":       create_cvxpy_cost_minimax_epigraph,
+    "min_time":               create_cvxpy_cost_min_time,
+    "min_norm_terminal":      create_cvxpy_cost_min_norm_terminal,
+    "terminal_state":         create_cvxpy_cost_terminal_state,
+    "regularization":         create_cvxpy_cost_regularization,
+    "rate_regularization":    create_cvxpy_cost_rate_regularization,
+    "trust_region":           create_cvxpy_cost_trust_region,
+    "quadratic_penalty":      create_cvxpy_cost_quadratic_penalty,
+    "dual":                   create_cvxpy_cost_dual,
+})
+
+UPDATE_PARAMETER_REGISTRY.update({
+    "dynamics":               update_cvxpy_parameters_dynamics,
+    "nonconvex_inequality":   update_cvxpy_parameters_nonconvex_inequality,
+    "costs":                  update_cvxpy_parameters_nonconvex_costs,
+    "final_time":             update_cvxpy_parameters_final_time_values,
+    "free_final_time":        update_cvxpy_parameters_free_final_time_,
+})
+
+UPDATE_CURRENT_ITER_DATA_REGISTRY.update({
+    "dynamics":               update_current_iter_data_dynamics,
+    "nonconvex_inequality":   update_current_iter_data_nonconvex_inequality,
+})

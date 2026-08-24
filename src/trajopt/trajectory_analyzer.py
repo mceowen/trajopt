@@ -1,15 +1,34 @@
+import os
+import sys
+
 import trajopt.utils.config_loader as config_loader
 import trajopt.analysis.analysis as analysis
 import trajopt.analysis.plotting as plotting
 from trajopt.analysis.results import Iterate
 from trajopt.trajectory import Trajectory
-from trajopt.methods.scp.scp_method import SCPMethod
 from trajopt.utils.tools import deep_merge, recursive_attrdict
+
+
+class _Tee:
+    """A writable stream that duplicates everything written to it across several streams."""
+
+    def __init__(self, *streams):
+        self._streams = streams
+
+    def write(self, data):
+        for stream in self._streams:
+            stream.write(data)
+
+    def flush(self):
+        for stream in self._streams:
+            stream.flush()
 
 
 class TrajectoryAnalyzer():
 
     def __init__(self, config_path, method_overrides=None) -> None:
+
+        self._start_console_log()
 
         self.config_path = config_path
         self.config = config_loader.load_trajopt_config(config_path)
@@ -18,8 +37,26 @@ class TrajectoryAnalyzer():
             self.config.method = deep_merge(self.config.method, recursive_attrdict(method_overrides))
 
         self.trajectory = Trajectory(self.config.trajectory)
+        SCPMethod = config_loader.resolve_scp_method_class(self.config.method)
         self.method = SCPMethod(self.config.method, self.trajectory)
         self._solved = False
+
+    def _start_console_log(self, path=None):
+        """Tee everything printed from here on to plots/console_log.txt as well as the terminal."""
+        path = path or os.path.join("plots", "console_log.txt")
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        self._console_log_file = open(path, "w")
+        self._orig_stdout = sys.stdout
+        sys.stdout = _Tee(self._orig_stdout, self._console_log_file)
+
+    def stop_console_log(self):
+        """Restore stdout and close the log file."""
+        if getattr(self, "_orig_stdout", None) is not None:
+            sys.stdout = self._orig_stdout
+            self._orig_stdout = None
+        if getattr(self, "_console_log_file", None) is not None:
+            self._console_log_file.close()
+            self._console_log_file = None
 
     def solve(self):
         self.method.solve()
@@ -85,5 +122,6 @@ class TrajectoryAnalyzer():
         """
         print("Reconfiguring trajopt with updated config...")
         self.trajectory = Trajectory(self.config.trajectory)
+        SCPMethod = config_loader.resolve_scp_method_class(self.config.method)
         self.method = SCPMethod(self.config.method, self.trajectory)
         self._solved = False

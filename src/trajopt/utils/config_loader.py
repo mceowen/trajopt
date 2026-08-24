@@ -1,3 +1,4 @@
+import importlib
 import importlib.resources
 import importlib.util
 import re
@@ -27,6 +28,29 @@ def load_trajopt_config(config_path: str) -> AttrDict:
         return _eval_values(config, {"np": np}, segment_params={})
     except Exception as e:
         raise type(e)(f"error evaluating expressions in '{config_path}': {e}") from None
+
+# =============================================================================
+# METHOD CLASS RESOLUTION
+# =============================================================================
+
+DEFAULT_METHOD_CLASS = "dev.scvx"
+
+
+def resolve_scp_method_class(method_config: AttrDict):
+    """Import and return the SCPMethod class named by method_config.method_class.
+
+    ``method_class`` (e.g. "sqp" or "scvx") selects which sibling package under
+    ``trajopt.methods`` to load the solver implementation from.
+    """
+    method_class = method_config.get("method_class", DEFAULT_METHOD_CLASS)
+    try:
+        module = importlib.import_module(f"trajopt.methods.{method_class}.scp_method")
+    except ModuleNotFoundError:
+        raise ValueError(
+            f"unknown method_class '{method_class}': expected a package under "
+            "trajopt.methods (e.g. 'sqp' or 'scvx') containing a scp_method.py module"
+        ) from None
+    return module.SCPMethod
 
 # =============================================================================
 # YAML LOADING

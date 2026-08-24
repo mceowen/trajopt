@@ -1,0 +1,48 @@
+method_class: dev.scvx
+
+flags:
+  equal_dt:           1
+  zoh_dilation:       1
+  flag_conv:          1
+  ignore_dpp:         0
+  second_order:       0
+  line_search:        0        # off lets the penalty autotune run away
+  alpha_min_ls:       1.0e-7   # smallest line-search step
+  discretize: ms
+  nsub: 10                   # RK4 substeps per multiple-shooting interval
+  eps_state: [0.01]
+  iter_max: 300
+
+penalty:
+  tr_step:
+    z:
+      default: 0.5
+    nu:
+      default: 0.1
+  default:
+    W:
+      penalty: True
+      autotune: True
+      init: 1.0
+    dual:
+      penalty: True
+      autotune: True
+      init: 0.0
+      beta: 1.0
+    vb: none
+    eps: [0.0001]
+    eps_floor: 0.000001
+    fac_eps:  0.3 #0.0
+    fac_target: 0.01 # 1, 0.001
+  dynamics:
+    vb: standard
+  nonconvex_equality:
+    vb: standard
+  nonconvex_inequality:
+    vb: standard
+
+guess:
+  type: straight_line
+
+solver_opts:
+  solver: CLARABEL

@@ -97,6 +97,15 @@ def plot(traj_analyzer, data, *, save=True, show=False, save_dir=None, format="p
         if weights is not None:
             figs['convergence_weights'] = weights
 
+        weights_mean = convergence_weight_mean_plots(traj_analyzer, save=save)
+        if weights_mean is not None:
+            figs['convergence_weights_mean'] = weights_mean
+
+    if analysis_cfg.get('show_vb', False):
+        vb = convergence_vb_plots(traj_analyzer, save=save)
+        if vb is not None:
+            figs['convergence_vb'] = vb
+
     if show:
         show_figures(figs)
 
@@ -614,7 +623,7 @@ def _convergence_plot(subprob, suffix, save=True):
     costs   = [it.cost for it in iters]
 
     eps_by_name = {
-        sc.name: np.atleast_1d(sc.eps)
+        sc.name: np.atleast_1d(sc.penalty_state.eps)
         for sc in subprob.constraints.values()
         if sc.shape is not None
     }
@@ -664,6 +673,88 @@ def convergence_weight_plots(traj_analyzer, save=True):
 
 
 def _convergence_weight_plot(subprob, suffix, save=True):
+    """Plot every individual W/dual component (not just the mean) as its own thin line, one color per constraint."""
+    iters = subprob.iter_data_list[1:]
+    if not iters:
+        return
+
+    has_W    = hasattr(iters[0], 'W')    and iters[0].W
+    has_dual = hasattr(iters[0], 'dual') and iters[0].dual
+    has_split = hasattr(iters[0], 'W_p') and iters[0].W_p
+
+    if not has_W and not has_dual and not has_split:
+        return
+
+    k = np.arange(1, len(iters) + 1)
+    fig, axes = plt.subplots(1, 2, figsize=(14, 4.5))
+
+    all_types = list(iters[0].W.keys()) if has_W else list(iters[0].dual.keys())
+    colors    = dict(zip(all_types, _method_colors(len(all_types)))) if all_types else {}
+
+    def _plot_components(ax, key, ct, ls):
+        """Plot every flattened component of it.<key>[ct] across iterations as its own thin line."""
+        stacked = np.stack([np.ravel(np.abs(np.asarray(getattr(it, key)[ct]))) for it in iters])
+        color = colors.get(ct, [0, 0, 0])
+        for j in range(stacked.shape[1]):
+            ax.semilogy(k, stacked[:, j], ls, color=color, lw=0.8, alpha=0.6)
+
+    def _legend_proxy(ax, ct, label, ls='-'):
+        ax.plot([], [], ls, color=colors.get(ct, [0, 0, 0]), label=label)
+
+    if has_W:
+        ax = axes[0]
+        for ct in all_types:
+            if has_split and ct in iters[0].W_p:
+                _plot_components(ax, 'W_p', ct, '-')
+                _plot_components(ax, 'W_m', ct, '--')
+                _legend_proxy(ax, ct, f'{ct} (+)', '-')
+                _legend_proxy(ax, ct, f'{ct} (-)', '--')
+            else:
+                _plot_components(ax, 'W', ct, '-')
+                _legend_proxy(ax, ct, ct, '-')
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('W')
+        ax.set_title('Quadratic Penalty Weights', fontsize=plot_options.title_fontsize, pad=plot_options.title_pad)
+        ax.legend(fontsize=7, loc='best')
+        ax.grid(True, alpha=0.3)
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+
+    if has_dual:
+        ax = axes[1]
+        dual_types = list(iters[0].dual.keys())
+        for ct in dual_types:
+            if has_split and ct in iters[0].dual_p:
+                _plot_components(ax, 'dual_p', ct, '-')
+                _plot_components(ax, 'dual_m', ct, '--')
+                _legend_proxy(ax, ct, f'{ct} (+)', '-')
+                _legend_proxy(ax, ct, f'{ct} (-)', '--')
+            else:
+                _plot_components(ax, 'dual', ct, '-')
+                _legend_proxy(ax, ct, ct, '-')
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel(r'$|\lambda|$')
+        ax.set_title('Linear (Dual) Weights', fontsize=plot_options.title_fontsize, pad=plot_options.title_pad)
+        ax.legend(fontsize=7, loc='best')
+        ax.grid(True, alpha=0.3)
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+
+    plt.tight_layout()
+    if save:
+        save_dir = os.path.join("plots", "standalone")
+        os.makedirs(save_dir, exist_ok=True)
+        fig.savefig(os.path.join(save_dir, f"convergence_weights{suffix}.pdf"), dpi=plot_options.save_dpi, pad_inches=0.02)
+
+    return fig
+
+
+def convergence_weight_mean_plots(traj_analyzer, save=True):
+    scp_segments = traj_analyzer.method.scp_trajectory.scp_segments
+    multi        = len(scp_segments) > 1
+    figs         = [_convergence_weight_mean_plot(seg, f"_{name}" if multi else "", save) for name, seg in scp_segments.items()]
+    return figs[0] if figs else None
+
+
+def _convergence_weight_mean_plot(subprob, suffix, save=True):
     iters = subprob.iter_data_list[1:]
     if not iters:
         return
@@ -733,7 +824,66 @@ def _convergence_weight_plot(subprob, suffix, save=True):
     if save:
         save_dir = os.path.join("plots", "standalone")
         os.makedirs(save_dir, exist_ok=True)
-        fig.savefig(os.path.join(save_dir, f"convergence_weights{suffix}.pdf"), dpi=plot_options.save_dpi, pad_inches=0.02)
+        fig.savefig(os.path.join(save_dir, f"convergence_weights_mean{suffix}.pdf"), dpi=plot_options.save_dpi, pad_inches=0.02)
+
+    return fig
+
+
+def convergence_vb_plots(traj_analyzer, save=True):
+    scp_segments = traj_analyzer.method.scp_trajectory.scp_segments
+    multi        = len(scp_segments) > 1
+    figs         = [_convergence_vb_plot(seg, f"_{name}" if multi else "", save) for name, seg in scp_segments.items()]
+    return figs[0] if figs else None
+
+
+def _convergence_vb_plot(subprob, suffix, save=True):
+    iters = subprob.iter_data_list[1:]
+    if not iters:
+        return
+
+    has_vb    = hasattr(iters[0], 'vb')   and iters[0].vb
+    has_split = hasattr(iters[0], 'vb_p') and iters[0].vb_p
+
+    if not has_vb and not has_split:
+        return
+
+    eps_by_name = {
+        sc.name: np.atleast_1d(sc.penalty_state.eps)
+        for sc in subprob.constraints.values()
+        if sc.shape is not None
+    }
+
+    k = np.arange(1, len(iters) + 1)
+    fig, ax = plt.subplots(1, 1, figsize=(7, 4.5))
+
+    def _series(vb_key, ct):
+        eps_ct = eps_by_name.get(ct, np.atleast_1d(1.0))
+        return [float(np.max(np.abs(getattr(it, vb_key)[ct]) / eps_ct)) for it in iters]
+
+    if has_split:
+        for ct in iters[0].vb_p.keys():
+            ax.semilogy(k, _series('vb_p', ct), 'o-',  ms=3, label=f'{ct} (+)')
+            ax.semilogy(k, _series('vb_m', ct), 's--', ms=3, label=f'{ct} (-)')
+        for ct in iters[0].vb.keys():
+            if ct not in iters[0].vb_p:
+                ax.semilogy(k, _series('vb', ct), 'o-', ms=3, label=ct)
+    else:
+        for ct in iters[0].vb.keys():
+            ax.semilogy(k, _series('vb', ct), 'o-', ms=3, label=ct)
+
+    ax.axhline(1.0, color='k', ls='--', lw=0.8)
+    ax.set_xlabel('Iteration')
+    ax.set_ylabel(r'$\|vb\|_\infty / \epsilon$')
+    ax.set_title('Constraint Buffer Violations', fontsize=plot_options.title_fontsize, pad=plot_options.title_pad)
+    ax.legend(fontsize=7, loc='best')
+    ax.grid(True, alpha=0.3)
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+
+    plt.tight_layout()
+    if save:
+        save_dir = os.path.join("plots", "standalone")
+        os.makedirs(save_dir, exist_ok=True)
+        fig.savefig(os.path.join(save_dir, f"convergence_vb{suffix}.pdf"), dpi=plot_options.save_dpi, pad_inches=0.02)
 
     return fig
 

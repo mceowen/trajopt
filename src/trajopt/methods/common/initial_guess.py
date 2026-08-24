@@ -1,10 +1,16 @@
+import importlib
 from typing import TYPE_CHECKING
 
 import numpy as np
 import jax.numpy as jnp
 from trajopt.methods.common import integrators
 from trajopt.methods.common import pseudospectral
-from trajopt.methods.scp.scp_costs import scp_cost_types
+
+
+def _scp_cost_types(method_config):
+    """Import the scp_cost_types module for the method named by method_config.method_class."""
+    method_class = getattr(method_config, "method_class", "scvx")
+    return importlib.import_module(f"trajopt.methods.{method_class}.scp_costs.scp_cost_types")
 
 
 def resolve_guess_type(segment, method_segment):
@@ -33,7 +39,8 @@ def set_initial_guess(segment, method_segment):
             "(expected 'propagation' or 'straight_line')"
         )
 
-    method_segment.cost_init = scp_cost_types.compute_nonconvex_terminal_costs(
+    cost_types = _scp_cost_types(method_segment.method_config)
+    method_segment.cost_init = cost_types.compute_nonconvex_terminal_costs(
         method_segment.initial_guess.z, method_segment.initial_guess.nu, segment, method_segment
     )
 

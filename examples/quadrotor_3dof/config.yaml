@@ -1,5 +1,22 @@
 method:
-  inherit: trajopt/methods/configs/autoscvx2.yaml
+  # OPTION A: autoscvx-term (pair with propagation guess)
+  inherit: trajopt/methods/dev/scvx/configs/autoscvx-term.yaml
+  # OPTION B: autoscvx, standard (pair with straight_line guess)
+  #inherit: trajopt/methods/dev/scvx/configs/autoscvx.yaml
+
+  flags:
+    flag_conv: 0
+
+  penalty:
+    eps_cost: 0.01
+    tr_step:
+      z:
+        default: 0.5
+        t: 10.0
+      nu:
+        default: 0.5
+    default:
+      fac_target: 0.001
 
   solver_opts:
     solver: CLARABEL
@@ -24,11 +41,21 @@ trajectory:
           inherit: trajopt/missions/configs/planets/earth.yaml
         vehicle:
           inherit: trajopt/missions/configs/vehicles/quadrotor.yaml
+        obstacle:
+          radius: 4.0
 
       constraints:
         dynamics:
           type: dynamics
           fcn: fcns.dynamics
+          eps:
+            default: 0.001
+            #x:  0.01
+            #y:  0.01
+            #z:  0.01
+            #vx: 0.01
+            #vy: 0.01
+            #vz: 0.01
 
         initial_state:
           type: initial_state
@@ -37,6 +64,7 @@ trajectory:
         final_state:
           type: final_state
           value: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
+          eps: 0.01
 
         max_thrust:
           type: convex_inequality
@@ -50,34 +78,45 @@ trajectory:
         obstacle:
           type: nonconvex_inequality
           fcn: fcns.obstacle
-          lower: 4.0
+          pos: [5.5, 4.5]   # x, y (extends infinitely in z)
+          lower: "${params.obstacle.radius}"
+          scale: "${[params.obstacle.radius]}"
+          eps: 0.0004
 
         final_time:
           type: final_time
           lower: 1.0
-          upper: 10.0
+          upper: 20.0
 
       costs:
-        # min_time:
+        min_time:
+          type: min_time
+
+        # min_control_effort:
         #   type: nonconvex_running
-        #   fcn: fcns.one
-        
-        min_control_effort:
-          type: nonconvex_running
-          fcn: fcns.u_squared
+        #   fcn: fcns.u_squared
 
       guess:
-        type: straight_line
+        # OPTION A: propagation (pair with method OPTION A above)
+        type: propagation
         t_start: 0.0
-        t_stop: 10.0
+        t_stop: 7.0
         x_start: [0.0, 0.0, 5.0, 0.0, 0.5, 0.0]
-        x_stop: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
-        u_start: [0, 0, 1]
-        u_stop: [0, 0, 1]
+        u_start: "${(np.array([0, 0, params.planet.g]) * params.vehicle.mass) + np.array([0.08, 0.08, 0.0])}"
+        u_stop:  "${(np.array([0, 0, params.planet.g]) * params.vehicle.mass) + np.array([0.08, 0.08, 0.0])}"
+
+        # OPTION B: straight_line (pair with method OPTION B above)
+        # type: straight_line
+        # t_start: 0.0
+        # t_stop: 10.0
+        # x_start: [0.0, 0.0, 5.0, 0.0, 0.5, 0.0]
+        # x_stop: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
+        # u_start: [0, 0, 1]
+        # u_stop: [0, 0, 1]
 
 analysis:
   type: standalone
   compute_iters: true
   show_iters: true
-  show_convergence: false
-  show_weights: false
+  show_convergence: true
+  show_weights: true

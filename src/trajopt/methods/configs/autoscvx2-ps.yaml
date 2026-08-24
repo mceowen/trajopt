@@ -1,6 +1,0 @@
-inherit: autoscvx2.yaml
-
-flags:
-  equal_dt: 0
-  discretize: ps
-  hp_segments: 10

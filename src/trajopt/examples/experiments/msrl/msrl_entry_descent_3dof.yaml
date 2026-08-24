@@ -1,0 +1,205 @@
+# MSRL multiphase problem: guided entry linked at deploy to an uncontrolled descent
+
+trajectory:
+  segments:
+
+    # guided entry: guidance initiation to parachute deployment
+    entry:
+      num_nodes: 100
+      inherit: msrl_common_segment.yaml
+
+      fcns:
+        nonlinear_aero: trajopt/missions/msrl.py:nonlinear_aero
+        deploy_position_error_sq: trajopt/missions/msrl.py:deploy_position_error_sq
+
+      params:
+        deploy_target:
+          lon: 77.275
+          lat: 18.406
+
+        # lift polynomial coefficients
+        a_l: 0.679945
+        b_l: -9.522473
+        c_l: 59.179219
+        d_l: -215.423516
+        e_l: 510.853276
+        f_l: -830.748818
+        g_l: 950.127376
+        h_l: -771.365024
+        i_l: 443.191605
+        j_l: -177.601759
+        k_l: 48.232018
+        l_l: -8.362472
+        m_l: 1.177526
+
+        # drag polynomial coefficients
+        a_d: 1.458554
+        b_d: -20.501723
+        c_d: 128.239298
+        d_d: -470.835046
+        e_d: 1126.686522
+        f_d: -1844.173832
+        g_d: 2106.728736
+        h_d: -1681.164677
+        i_d: 921.349863
+        j_d: -333.513962
+        k_d: 74.164741
+        l_d: -8.758177
+        m_d: 1.684456
+
+      constraints:
+        initial_state:
+          type: initial_state
+          value: [3456160, 68.20, 14.12, 7935.15, -7.7075, 62.2803]
+
+        # pre-bank attitude held into guidance initiation
+        initial_control:
+          type: initial_control
+          value: [120, null]
+
+        # bank commanded to zero as the deploy sequence begins
+        final_control:
+          type: final_control
+          value: [0, null]
+
+        # deployment box: M 0.7 to 2.0, q 700 to 900 Pa
+        deploy_mach:
+          type: final_state_limits
+          lower: [null, null, null, "${0.7 * params.planet.a_sound}", null, null]
+          upper: [null, null, null, "${2.0 * params.planet.a_sound}", null, null]
+
+        deploy_dynamic_pressure:
+          type: final_nonconvex_inequality
+          fcn: fcns.dynamic_pressure
+          lower: 0.7
+          upper: 0.9
+          scale: [0.9]
+
+        # 6 km of descent above separation, without it the descent collapses to zero
+        deploy_altitude:
+          type: final_state_limits
+          lower: ["${params.target.r_sep + 6000.0}", null, null, null, null, null]
+
+        bank_aoa_angle_limits:
+          type: control_limits
+          lower: [-360.0, null]
+          upper: [360.0, null]
+
+        # bank rate and acceleration limits
+        bank_angle_rate_limit:
+          type: control_rate_limit
+          value: [13]
+          idx: [0]
+
+        bank_angle_accel_limit:
+          type: control_accel_limit
+          value: [5]
+          idx: [0]
+
+        # 13 g imposed against a 15 g structural limit
+        max_load:
+          type: nonconvex_inequality
+          fcn: fcns.aero_load
+          upper: 13.0
+          scale: [13.0]
+
+        # inactive: peaks are about 102 W/cm^2 and 27 kPa
+        # max_heat_rate:
+        #   type: nonconvex_inequality
+        #   fcn: fcns.heat_rate
+        #   upper: 165.0
+        #   scale: [165.0]
+        #
+        # max_dynamic_pressure:
+        #   type: nonconvex_inequality
+        #   fcn: fcns.dynamic_pressure
+        #   upper: 35.0
+        #   scale: [35.0]
+
+      outputs:
+        aero_load:
+          upper_limit: 13.0
+
+      costs:
+        # the 13 deg/s limit alone is not enough
+        bank_rate_smoothness:
+          type: rate_regularization
+          set: control
+          idx: [0]
+          norm_type: l2
+          w: 0.001
+
+      # J1, squared error to a prescribed deploy point. Works against J2:
+      #
+      #   deploy_targeting:
+      #     type: nonconvex_terminal
+      #     fcn: fcns.deploy_position_error_sq
+      #     scale: 1000000.0
+
+      guess:
+        t_start: 0.0
+        t_stop: 250.0
+        u_start: [120.0, 0.0]
+        u_stop: [0, 0.0]
+
+    descent:
+      num_nodes: 40
+      inherit: msrl_common_segment.yaml
+
+      fcns:
+        nonlinear_aero: trajopt/missions/msrl.py:parachute_aero
+
+      constraints:
+        state_continuity:
+          type: state_continuity
+          segment: entry
+
+        time_continuity:
+          type: time_continuity
+          segment: entry
+
+        final_state:
+          type: final_state
+          value: ["${params.target.r_sep}", null, null, null, null, null]
+
+        # ends below the mean radius
+        state_limits:
+          type: state_limits
+          lower: ["${params.target.r_sep - 2000.0}", null, null, 100.0, null, null]
+
+        # no bank authority under the parachute
+        no_control_authority:
+          type: control_limits
+          lower: [0.0, 0.0]
+          upper: [0.0, 0.0]
+
+      costs:
+        # J2: squared miss distance, which pulls the deploy point uprange
+        touchdown_targeting:
+          type: nonconvex_terminal
+          fcn: fcns.target_miss_distance_sq
+          scale: 1000000.0
+
+      guess:
+        t_start: 215.0
+        t_stop: 270.0
+        x_start: [3400550, 77.13, 18.37, 429.0, -16.0, 64.5]   # M 1.95, q 790 Pa
+        u_start: [0.0, 0.0]
+        u_stop: [0.0, 0.0]
+
+method:
+  inherit: trajopt/methods/dev/sqp/configs/autoscvx2.yaml
+
+  flags:
+    equal_dt: 1
+    zoh_dilation: 1
+
+  solver_opts:
+    solver: PIQP
+
+analysis:
+  type: standalone
+  compute_iters: false
+  show_iters: false
+  show_convergence: true
+  show_weights: false

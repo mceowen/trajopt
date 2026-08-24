@@ -1,0 +1,13 @@
+method_class: dev.sqp
+
+inherit: autoscvx.yaml
+
+flags:
+  equal_dt: 0
+  discretize: ps
+  line_search: 1
+  hp_segments: 10
+
+# penalty:
+#   initial_state:
+#     vb: 'none'
