@@ -119,6 +119,16 @@ trajectory:
         aero_load:
           upper_limit: 13.0
 
+        guidance_off_vel:
+          type: event
+          component: v
+          before_end: 6.0
+          group: state
+          units: m/s
+          title: "Guidance-off Velocity"
+          xlabel: "Time (s)"
+          ylabel: "Velocity (m/s)"
+
       costs:
         # the 13 deg/s limit alone is not enough
         bank_rate_smoothness:
@@ -135,9 +145,10 @@ trajectory:
       #     fcn: fcns.deploy_position_error_sq
       #     scale: 1000000.0
 
+      # the guessed boundary matches the one the descent declares
       guess:
         t_start: 0.0
-        t_stop: 250.0
+        t_stop: 215.0
         u_start: [120.0, 0.0]
         u_stop: [0, 0.0]
 
@@ -182,7 +193,7 @@ trajectory:
       guess:
         t_start: 215.0
         t_stop: 270.0
-        x_start: [3400550, 77.13, 18.37, 429.0, -16.0, 64.5]   # M 1.95, q 790 Pa
+        x_start: previous          # deploy state the entry guess propagates to
         u_start: [0.0, 0.0]
         u_stop: [0.0, 0.0]
 
@@ -194,6 +205,13 @@ method:
   flags:
     equal_dt: 1
     zoh_dilation: 1
+
+  # eps is nondimensional, so 1e-4 on an angle is 0.36 arcsec
+  penalty:
+    dynamics:
+      eps: {gamma: 1.0e-3, psi: 1.0e-3}
+    state_continuity:
+      eps: {gamma: 1.0e-3, psi: 1.0e-3}
 
   solver_opts:
     solver: PIQP

@@ -143,6 +143,16 @@ trajectory:
         aero_load:
           upper_limit: 13.0
 
+        guidance_off_vel:
+          type: event
+          component: v
+          before_end: 6.0
+          group: state
+          units: m/s
+          title: "Guidance-off Velocity"
+          xlabel: "Time (s)"
+          ylabel: "Velocity (m/s)"
+
       costs:
         bank_rate_smoothness:
           type: rate_regularization
