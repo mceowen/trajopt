@@ -200,21 +200,33 @@ trajectory:
 
 # solution method
 method:
-  inherit: trajopt/methods/dev/sqp/configs/autoscvx2.yaml
+  inherit: trajopt/methods/dev/scvx/configs/autoscvx-term.yaml
 
   flags:
     equal_dt: 1
     zoh_dilation: 1
+    # nondimensional step gate, wider on gamma and psi
+    eps_state: [1.0e-4, 1.0e-4, 1.0e-4, 1.0e-4, 1.0e-3, 1.0e-3]
+    iter_max: 400
 
-  # eps is nondimensional, so 1e-4 on an angle is 0.36 arcsec
   penalty:
-    dynamics:
-      eps: {gamma: 1.0e-3, psi: 1.0e-3}
-    state_continuity:
-      eps: {gamma: 1.0e-3, psi: 1.0e-3}
+    # bank is in degrees at scale 1, the states are O(1)
+    tr_step:
+      z:
+        default: 2.0
+      nu:
+        default: 2.0
+
+    # only buffered constraints read eps
+    final_state:
+      eps: [1.0e-4]
+    nonconvex_inequality:
+      eps: [1.0e-4]
+    final_nonconvex_inequality:
+      eps: [1.0e-4]
 
   solver_opts:
-    solver: PIQP
+    solver: CLARABEL
 
 
 # analysis
