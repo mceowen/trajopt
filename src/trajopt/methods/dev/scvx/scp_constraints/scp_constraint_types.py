@@ -338,20 +338,21 @@ class scp_nonconvex_inequality(SCPConstraint):
         self.g0_param    = cp.Parameter((nn, dim),       name=f"g0_{self.name}")
 
     def create_cvxpy_constraints(self, scp_segment):
-        if self.penalty_state.vb_var is None:
+        if self.shape is None:
             return
+        vb = self.penalty_state.vb_var
         self.cp_ineq_constraints = []
         for i, k in enumerate(self.nodes):
-            cnst = (
+            g_lin = (
                 self.dgdz_param[i] @ scp_segment.dz[k, :]
                 + self.dgdnu_param[i] @ scp_segment.dnu[k, :]
                 + self.g0_param[i]
-                - self.penalty_state.vb_var[i]
-                <= 0
             )
+            cnst = (g_lin - vb[i] <= 0) if vb is not None else (g_lin <= 0)
             self.cp_ineq_constraints.append(cnst)
             scp_segment.cp_constraints.append(cnst)
-            scp_segment.cp_constraints.append(self.penalty_state.vb_var[i] >= 0)
+            if vb is not None:
+                scp_segment.cp_constraints.append(vb[i] >= 0)
 
     def update_cvxpy_parameters(self, scp_segment):
         if not hasattr(self, 'g0_param'):
@@ -429,17 +430,17 @@ class scp_nonconvex_equality(SCPConstraint):
         self.g0_param    = cp.Parameter((nn, dim),       name=f"g0_{self.name}")
 
     def create_cvxpy_constraints(self, scp_segment):
-        if self.penalty_state.vb_var is None:
+        if self.shape is None:
             return
+        vb = self.penalty_state.vb_var
         self.cp_eq_constraints = []
         for i, k in enumerate(self.nodes):
-            cnst = (
+            g_lin = (
                 self.dgdz_param[i] @ scp_segment.dz[k, :]
                 + self.dgdnu_param[i] @ scp_segment.dnu[k, :]
                 + self.g0_param[i]
-                - self.penalty_state.vb_var[i]
-                == 0
             )
+            cnst = (g_lin - vb[i] == 0) if vb is not None else (g_lin == 0)
             self.cp_eq_constraints.append(cnst)
             scp_segment.cp_constraints.append(cnst)
 
