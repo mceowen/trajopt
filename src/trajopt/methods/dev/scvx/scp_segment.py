@@ -48,6 +48,7 @@ class SCPSegment():
         self.cp_constraints       = []
         self.cp_cost              = 0
         self.cp_subproblem_status = None
+        self.tr_scale             = 1.0
 
         self.create_cvxpy_parameters()
         self.create_cvxpy_variables()
@@ -301,14 +302,14 @@ class SCPSegment():
 
         self.current_iter_data.discretization_time = (disc_end_time - disc_start_time) * 1000
 
-        self.cp_params.tr_x.value = 1 / self._resolve_tr_step('z', 'x')
-        self.cp_params.tr_t.value = 1 / self._resolve_tr_step('z', 't')
+        self.cp_params.tr_x.value = self.tr_scale / self._resolve_tr_step('z', 'x')
+        self.cp_params.tr_t.value = self.tr_scale / self._resolve_tr_step('z', 't')
         if self.index_map.n.ctcs > 0:
-            self.cp_params.tr_ctcs.value = 1 / self._resolve_tr_step('z', 'ctcs')
+            self.cp_params.tr_ctcs.value = self.tr_scale / self._resolve_tr_step('z', 'ctcs')
         if self.index_map.n.running_cost > 0:
-            self.cp_params.tr_gamma.value = 1 / self._resolve_tr_step('z', 'gamma')
-        self.cp_params.tr_u.value = 1 / self._resolve_tr_step('nu', 'u')
-        self.cp_params.tr_s.value = 1 / self._resolve_tr_step('nu', 's')
+            self.cp_params.tr_gamma.value = self.tr_scale / self._resolve_tr_step('z', 'gamma')
+        self.cp_params.tr_u.value = self.tr_scale / self._resolve_tr_step('nu', 'u')
+        self.cp_params.tr_s.value = self.tr_scale / self._resolve_tr_step('nu', 's')
 
         for constraint in self.constraints.values():
             constraint.update_penalty_parameters(self)

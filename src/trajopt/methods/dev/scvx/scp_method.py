@@ -5,6 +5,11 @@ import cvxpy as cp
 
 from trajopt.methods.dev.scvx.reporter import SolveReporter
 from trajopt.methods.dev.scvx.scp_trajectory import SCPTrajectory
+from trajopt.methods.common import trust_region
+
+TR_SCALE_MAX  = 1.0e6
+TR_SCALE_STEP = 10.0
+TR_SCALE_DECAY = 0.7
 
 class SCPMethod():
 
@@ -81,12 +86,22 @@ class SCPMethod():
 
         for i in range(max_iter + 1):
             self.update_cvxpy_parameters()
-            self.cp_subproblem.solve(warm_start=False, **self.method_config.solver_opts)
+
+            try:
+                self.cp_subproblem.solve(warm_start=False, **self.method_config.solver_opts)
+            except cp.error.SolverError as exc:
+                self.tighten_trust_region(f"subproblem refused ({exc})")
+                continue
 
             if self.cp_subproblem.status not in {"optimal", "optimal_inaccurate", "user_limit"}:
                 reason = f"Terminated from non-optimal convex subproblem! Status: {self.cp_subproblem.status}"
                 break
 
+            if not trust_region.step_is_usable(self):
+                self.tighten_trust_region(f"step rejected (status {self.cp_subproblem.status})")
+                continue
+
+            self.relax_trust_region()
             self.update_current_iter_data()
             self.display_status()
 
@@ -111,6 +126,18 @@ class SCPMethod():
             (s.name, s.current_iter_data.t_start, s.current_iter_data.t_final)
             for s in self.scp_trajectory.scp_segments.values()
         ])
+
+    def tighten_trust_region(self, why: str) -> None:
+        """Increase tr_scale by one step, up to the limit."""
+        for scp_segment in self.scp_trajectory.scp_segments.values():
+            scp_segment.tr_scale = min(scp_segment.tr_scale * TR_SCALE_STEP, TR_SCALE_MAX)
+        self.reporter.message(f"  {why}, tightening trust region")
+
+    def relax_trust_region(self) -> None:
+        """Decrease tr_scale towards 1.0."""
+        for scp_segment in self.scp_trajectory.scp_segments.values():
+            if scp_segment.tr_scale > 1.0:
+                scp_segment.tr_scale = max(scp_segment.tr_scale * TR_SCALE_DECAY, 1.0)
 
     def display_status(self) -> None:
         multi = len(self.scp_trajectory.scp_segments) > 1
