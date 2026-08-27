@@ -305,6 +305,9 @@ method:
       eps: [1.0e-4]
     nonconvex_inequality:
       eps: [1.0e-4]
+    final_nonconvex_inequality:
+      # needs buffer on the deploy corridor for dispersed initial states
+      vb: standard
 
   # the thrust magnitude bound is a cone
   solver_opts:
