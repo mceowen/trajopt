@@ -36,18 +36,9 @@ penalty:
     fac_target: 0.01 # 1, 0.001
   dynamics:
     vb: standard
-  # endpoint variants are separate type names
   nonconvex_equality:
     vb: standard
-  initial_nonconvex_equality:
-    vb: standard
-  final_nonconvex_equality:
-    vb: standard
   nonconvex_inequality:
-    vb: standard
-  initial_nonconvex_inequality:
-    vb: standard
-  final_nonconvex_inequality:
     vb: standard
 
 guess:

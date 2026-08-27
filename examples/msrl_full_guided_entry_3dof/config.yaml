@@ -193,6 +193,8 @@ method:
     nonconvex_inequality:
       eps: [1.0e-4]
     final_nonconvex_equality:
+      # needs buffer on terminal constraint to maintain feasibility
+      vb: standard
       eps: [1.0e-4]
 
   solver_opts:
