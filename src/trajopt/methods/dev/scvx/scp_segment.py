@@ -249,7 +249,7 @@ class SCPSegment():
             s_kp = self.s_ref[k+1, 0] + self.ds[k+1, 0]
             
             self.cp_constraints.append(t_k >= 0)
-            # self.cp_constraints.append(0.1 <= s_k)
+            self.cp_constraints.append(0.0 <= s_k)
             # self.cp_constraints.append(cp.abs(s_kp - s_k) <= 0.5)
 
             if hasattr(self.flags, "equal_dt") and bool(self.flags.equal_dt):
@@ -259,6 +259,8 @@ class SCPSegment():
 
             if hasattr(self.flags, "zoh_dilation") and bool(self.flags.zoh_dilation):
                 self.cp_constraints.append(s_k == s_kp)
+
+        self.cp_constraints.append(0.0 <= self.s_ref[N - 1, 0] + self.ds[N - 1, 0])
 
     def create_cost_trust_region(self) -> None:
         if self.flags.discretize not in ("ms", "ps"):
