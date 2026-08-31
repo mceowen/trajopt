@@ -40,6 +40,8 @@ penalty:
     vb: standard
   nonconvex_inequality:
     vb: standard
+  final_nonconvex_inequality:
+    vb: standard
 
 guess:
   type: straight_line
