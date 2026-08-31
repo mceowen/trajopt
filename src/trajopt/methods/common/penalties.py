@@ -68,9 +68,9 @@ class Penalty(AttrDict):
 # =============================================================================
 
 def _autotune_W(W, vb, eps, cfg):
-    eps_target = np.maximum(cfg.fac_target * eps * np.sign(vb), cfg.fac_eps * np.abs(vb))
+    eps_target = np.maximum(cfg.fac_target * eps, cfg.fac_eps * np.abs(vb))
     with np.errstate(invalid='ignore', divide='ignore'):
-        Wh = np.nan_to_num(W * vb * np.sign(vb) / eps_target, nan=0.0, posinf=0.0, neginf=0.0)
+        Wh = np.nan_to_num(W * vb / (eps_target  * np.sign(vb)), nan=0.0, posinf=0.0, neginf=0.0)
     return np.maximum(Wh, cfg.eps_floor)
 
 
