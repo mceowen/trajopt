@@ -180,7 +180,9 @@ method:
     iter_max: 400
 
   penalty:
-    # bank is in degrees at scale 1, the states are O(1)
+    default:
+      fac_target: 0.001
+
     tr_step:
       z:
         default: 25.0
