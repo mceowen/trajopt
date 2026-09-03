@@ -185,33 +185,42 @@ On convergence the buffers vanish, so the converged solution satisfies the origi
 
 ## Core Developers
 
-Skye Mceowen and Carlos Morales
+Skye Mceowen, Carlos Morales, Pranav Ramasahayam
 
 
 ## Research Origins and Acknowledgements
 
-TrajOpt originated from Skye Mceowen's PhD thesis research under Dr. Behcet Acikmese in the Autonomous Controls Laboratory at the University of Washington. The research focused on sequential convex trajectory optimization, with early MATLAB prototypes developed in [`entry_opt`](https://github.com/mceowen/entry_opt), [`scp_sandbox`](https://github.com/mceowen/scp_sandbox), and [`trajopt_toolkit`](https://github.com/mceowen/trajopt_toolkit). The current Python package was subsequently developed collaboratively by Skye Mceowen and Carlos Morales into a reusable framework for multi-segment trajectory optimization and algorithm design. The original thesis work focused primarily on first-order methods, while Carlos Morales's PhD work has extended these approaches with second-order method development. The package and earlier prototypes form part of the software contributions of the PhD work.
+TrajOpt originated from Skye Mceowen's PhD thesis research under Dr. Behçet Açıkmeşe in the Autonomous Controls Laboratory at the University of Washington. The research focused on sequential convex trajectory optimization, with early MATLAB prototypes developed in [`entry_opt`](https://github.com/mceowen/entry_opt), [`scp_sandbox`](https://github.com/mceowen/scp_sandbox), and [`trajopt_toolkit`](https://github.com/mceowen/trajopt_toolkit). The current Python package was subsequently developed collaboratively by Skye Mceowen and Carlos Morales into a reusable framework for multi-segment trajectory optimization and algorithm design. The original thesis work focused primarily on first-order methods, while Carlos Morales' MS work has extended these approaches with second-order method development. The package and earlier prototypes form part of the software contributions of the PhD work. This work is being continued by Pranav Ramasahayam for multiphase EDL as Behçet's PhD student.
 
-Additional contributors to the current Python package include Pranav Ramasahayam, Daniel J. Calderone, and Samet Uzun. Earlier development and MATLAB prototypes also benefited from contributions by Jimmy Fowler, Edgerton Cook, Fabio Spada, Jason Zhou, Aman Tiwary, and Chris Sota.
+Additional contributors to the current Python package include Daniel J. Calderone and Samet Uzun. Earlier development and MATLAB prototypes also benefited from contributions by Jimmy Fowler, Edgerton Cook, Fabio Spada, Jason Zhou, Aman Tiwary, and Chris Sota.
 
 The methods in TrajOpt build on the AutoSCvx thesis work and incorporate ideas from related advances in second-order trust-region modeling, continuous-time successive convexification, broader successive-convexification methods, state-triggered constraints, and temporal/logical specification handling.
 
 ### Method References
 
-* __AutoSCvx (auto-tuned primal-dual successive convexification)__:  
-  Mceowen et al., [“Autotuned Primal–Dual Successive Convexification for Reentry Guidance”](https://doi.org/10.2514/1.G008692), Journal of Guidance, Control, and Dynamics, 2025.  
-  Mceowen et al., [“Auto-Tuned Primal-Dual Successive Convexification for Hypersonic Reentry Guidance”](https://doi.org/10.2514/6.2025-1317), AIAA SCITECH 2025 Forum.  
-  Mceowen et al., [“Auto-Tuned Primal-Dual Successive Convexification for Powered Descent Guidance”](https://doi.org/10.2514/6.2026-0972), AIAA SCITECH 2026 Forum.  
-  Mceowen et al., [“Auto-Tuned Successive Convexification for Entry Guidance With Continuous-Time Constraint Satisfaction”](https://doi.org/10.2514/6.2026-0971), AIAA SCITECH 2026 Forum.
+* __AutoSCvx (auto-tuned primal-dual successive convexification)__:
+  Mceowen et al., [“Autotuned Primal–Dual Successive Convexification for Reentry Guidance”](https://doi.org/10.2514/1.G008692), Journal of Guidance, Control, and Dynamics, 2025.
+  Mceowen et al., [“Auto-Tuned Primal-Dual Successive Convexification for Hypersonic Reentry Guidance”](https://doi.org/10.2514/6.2025-1317), AIAA SciTech 2025 Forum.
+  Mceowen et al., [“Auto-Tuned Primal-Dual Successive Convexification for Powered Descent Guidance”](https://doi.org/10.2514/6.2026-0972), AIAA SciTech 2026 Forum.
+  Mceowen et al., [“Auto-Tuned Successive Convexification for Entry Guidance With Continuous-Time Constraint Satisfaction”](https://doi.org/10.2514/6.2026-0971), AIAA SciTech 2026 Forum.
+  Mceowen et al., “Multiphase Entry and Descent for Mars Science Missions”, in preparation for AIAA SciTech 2027 Forum.
 
-* __CT-SCvx (continuous-time successive convexification)__:  
+* __CT-SCvx (continuous-time successive convexification)__:
   Elango et al., [“Continuous-time Successive Convexification for Constrained Trajectory Optimization”](https://doi.org/10.1016/j.automatica.2025.112464), Automatica, 2025.
 
-* __SCvx + STCs (successive convexification with state-triggered constraints)__:  
+* __SCvx + STCs (successive convexification with state-triggered constraints)__:
+  Szmuk and Açıkmeşe, [“Successive Convexification for 6-DoF Mars Rocket Powered Landing with Free-Final-Time”](https://doi.org/10.2514/6.2018-0617), AIAA SciTech 2018 Forum.
   Szmuk et al., [“Successive Convexification for Real-Time Six-Degree-of-Freedom Powered Descent Guidance with State-Triggered Constraints”](https://doi.org/10.2514/1.G004549), Journal of Guidance, Control, and Dynamics, 2020.
+  Malyuta et al., [“Convex Optimization for Trajectory Generation: A Tutorial on Generating Dynamically Feasible Trajectories Reliably and Efficiently”](https://doi.org/10.1109/MCS.2022.3187542), IEEE Control Systems Magazine, 2022.
 
-* __PS-SCP (pseudospectral sequential convex programming)__:  
-  Sagliano et al., [“Six-Degrees-of-Freedom Aero-Propulsive Entry Trajectory Optimization”](https://doi.org/10.2514/6.2024-1171), AIAA SCITECH 2024 Forum.
+* __PS-SCP (pseudospectral sequential convex programming)__:
+  Sagliano et al., [“Six-Degrees-of-Freedom Aero-Propulsive Entry Trajectory Optimization”](https://doi.org/10.2514/6.2024-1171), AIAA SciTech 2024 Forum.
+  Mceowen et al., “A Hybrid Pseudospectral-Multiple-Shooting Approach for 6-DoF Soft Landing”, in preparation for AIAA SciTech 2027 Forum.
 
-* __STL + GMSR (signal temporal logic with generalized-mean smooth robustness)__:  
+* __STL + GMSR (signal temporal logic with generalized-mean smooth robustness)__:
   Uzun et al., [“Optimization with Temporal and Logical Specifications via Generalized Mean-based Smooth Robustness Measures”](https://arxiv.org/abs/2405.10996), arXiv, 2024.
+  Uzun et al., [“Sequential Convex Programming for 6-DoF Powered Descent Guidance with Continuous-Time Compound State-Triggered Constraints”](https://doi.org/10.2514/6.2025-1895), AIAA SciTech 2025 Forum.
+  Uzun and Açıkmeşe, [“Successive Convexification for Trajectory Optimization with Continuous-time Satisfaction of Signal Temporal Logic Specifications”](https://arxiv.org/abs/2606.06896), arXiv, 2026.
+
+* __QOCO (quadratic objective conic optimizer)__:
+  Chari and Açıkmeşe, [“QOCO: A Quadratic Objective Conic Optimizer with Custom Solver Generation”](https://doi.org/10.1007/s12532-026-00311-8), Mathematical Programming Computation, 2026.
