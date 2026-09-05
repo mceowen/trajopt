@@ -637,16 +637,16 @@ class scp_final_control_limits(SCPConstraint):
 
 class scp_control_rate_limit(SCPConstraint):
     def create_cvxpy_constraints(self, scp_segment):
+        if scp_segment.index_map.N.all < 2:
+            return
         idx_ctrl = scp_segment.index_map.indices.nu.control
         value    = self.constraint.value
         M_sel    = self.constraint.M_select
-        for k in range(scp_segment.index_map.N.all - 1):
-            du_k = (
-                scp_segment.cp_params.nu_ref[k + 1, idx_ctrl] + scp_segment.dnu[k + 1, idx_ctrl]
-                - (scp_segment.cp_params.nu_ref[k, idx_ctrl] + scp_segment.dnu[k, idx_ctrl])
-            )
-            dt_k = (scp_segment.t_ref[k + 1, 0] + scp_segment.dt[k + 1, 0]) - (scp_segment.t_ref[k, 0] + scp_segment.dt[k, 0])
-            scp_segment.cp_constraints.append(M_sel @ du_k <= dt_k * np.concatenate([value, value]))
+        u = scp_segment.cp_params.nu_ref[:, idx_ctrl] + scp_segment.dnu[:, idx_ctrl]
+        t = scp_segment.t_ref[:, 0] + scp_segment.dt[:, 0]
+        limits = np.concatenate([value, value])
+        rhs = cp.reshape(t[1:] - t[:-1], (-1, 1), order="C") @ limits[None, :]
+        scp_segment.cp_constraints.append((u[1:] - u[:-1]) @ M_sel.T <= rhs)
 
 
 class scp_control_accel_limit(SCPConstraint):
@@ -663,22 +663,20 @@ class scp_control_accel_limit(SCPConstraint):
         M_sel    = self.constraint.M_select
         N        = scp_segment.index_map.N.all
 
-        def u_at(k):
-            return scp_segment.cp_params.nu_ref[k, idx_ctrl] + scp_segment.dnu[k, idx_ctrl]
-
-        for k in range(1, N - 1):
-            d2u_k = u_at(k + 1) - 2 * u_at(k) + u_at(k - 1)
-
-            # variable parts of the intervals on either side of node k
-            d_km = scp_segment.dt[k, 0]     - scp_segment.dt[k - 1, 0]
-            d_k  = scp_segment.dt[k + 1, 0] - scp_segment.dt[k, 0]
-
-            dt_prod_k = (
-                self.dt_prod_param[k - 1]
-                + self.dt_ref_param[k - 1] * d_k
-                + self.dt_ref_param[k] * d_km
-            )
-            scp_segment.cp_constraints.append(M_sel @ d2u_k <= dt_prod_k * np.concatenate([value, value]))
+        if N < 3:
+            return
+        u = scp_segment.cp_params.nu_ref[:, idx_ctrl] + scp_segment.dnu[:, idx_ctrl]
+        d2u = u[2:] - 2 * u[1:-1] + u[:-2]
+        # Linearize adjacent interval products using the same reference grid.
+        d_interval = scp_segment.dt[1:, 0] - scp_segment.dt[:-1, 0]
+        dt_prod = (
+            self.dt_prod_param
+            + cp.multiply(self.dt_ref_param[:-1], d_interval[1:])
+            + cp.multiply(self.dt_ref_param[1:], d_interval[:-1])
+        )
+        limits = np.concatenate([value, value])
+        rhs = cp.reshape(dt_prod, (-1, 1), order="C") @ limits[None, :]
+        scp_segment.cp_constraints.append(d2u @ M_sel.T <= rhs)
 
     def update_cvxpy_parameters(self, scp_segment):
         t_ref  = np.asarray(scp_segment.t_ref)[:, 0]
