@@ -118,7 +118,7 @@ def powered_descent_dynamics(x, u, t, params, fcns):
 
     aT_v acts along the velocity, aT_n normal to it in the vertical plane,
     and aT_s out of plane. Bank and angle of attack keep their slots in the
-    control vector, and the powered segment holds them at zero.
+    control vector, and the powered phase holds them at zero.
     """
     Om = jnp.deg2rad(params.planet.omega)
     mu = params.planet.mu

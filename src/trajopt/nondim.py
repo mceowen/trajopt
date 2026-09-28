@@ -1,6 +1,5 @@
 import numpy as np
 
-from trajopt.index_map import IndexMap
 from trajopt.utils.tools import AttrDict
 
 
@@ -27,7 +26,7 @@ class ScalingMatrix:
 class Nondim:
     """Nondimensionalize utility class for use in Trajectory."""
 
-    def __init__(self, segment_config: AttrDict, index_map: IndexMap) -> None:
+    def __init__(self, phase_config: AttrDict, index_map) -> None:
         """Initialize all nondimensional parameters."""
         n_x                 = index_map.n.state
         n_u                 = index_map.n.get('control')
@@ -37,7 +36,7 @@ class Nondim:
         self.control_scales = np.ones(n_u)
         self.time_scale     = 1.0
 
-        for state_group_name, state_group in segment_config.state.items():
+        for state_group_name, state_group in phase_config.state.items():
 
             provided_scale = state_group.get("scale", None)
             if provided_scale is None:
@@ -48,7 +47,7 @@ class Nondim:
 
             self.state_scales[state_group["idx"]] = group_scale
 
-        for control_group_name, control_group in segment_config.control.items():
+        for control_group_name, control_group in phase_config.control.items():
             provided_scale = control_group.get("scale", None)
 
             if provided_scale is None:
@@ -59,7 +58,7 @@ class Nondim:
 
             self.control_scales[control_group["idx"]] = group_scale
 
-        provided_scale = segment_config.time.get("scale", None)
+        provided_scale = phase_config.time.get("scale", None)
         if provided_scale is None:
             print("Warning: no time scale provided in 'model.nondim.t_scale', defaulting to 1.0.")
             self.time_scale = 1.0

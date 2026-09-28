@@ -253,7 +253,7 @@ def propagate_from_nodes(z_nodes, tau_nodes, nu_nodes, dynamics, params,
     tau_ref = jnp.asarray(tau_nodes)
     nu_ref  = jnp.asarray(nu_nodes)
 
-    segments = []
+    phases = []
     for k in range(N - 1):
         taus_k, z_k, nu_k = _solver(
             jnp.asarray(z_nodes[k]),
@@ -262,15 +262,15 @@ def propagate_from_nodes(z_nodes, tau_nodes, nu_nodes, dynamics, params,
             tau_ref,
             nu_ref,
         )
-        segments.append((np.asarray(taus_k), np.asarray(z_k), np.asarray(nu_k)))
+        phases.append((np.asarray(taus_k), np.asarray(z_k), np.asarray(nu_k)))
 
-    n_nu    = segments[0][2].shape[1]
+    n_nu    = phases[0][2].shape[1]
     nan_tau = np.array([np.nan])
     nan_z   = np.full((1, n_z),  np.nan)
     nan_nu  = np.full((1, n_nu), np.nan)
 
     flat_tau, flat_z, flat_nu = [], [], []
-    for k, (tau_k, z_k, nu_k) in enumerate(segments):
+    for k, (tau_k, z_k, nu_k) in enumerate(phases):
         flat_tau.append(tau_k)
         flat_z.append(z_k)
         flat_nu.append(nu_k)

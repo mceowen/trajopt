@@ -1,0 +1,8 @@
+method_class: dev.scvx_phases
+formulation_class: dev.phases
+
+inherit: autoscvx-term.yaml
+
+flags:
+  equal_dt: 0
+  discretize: ps

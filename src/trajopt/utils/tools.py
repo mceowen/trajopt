@@ -147,7 +147,7 @@ def resolve_function_from_string(fcn_string: str, fcns: "AttrDict | None" = None
                 )
 
             if has_stl:
-                from trajopt.constraints.stl import parse_stl_expression
+                from trajopt.formulations.common.stl import parse_stl_expression
                 return parse_stl_expression(fcn_string, fcns)
 
             ns = {}

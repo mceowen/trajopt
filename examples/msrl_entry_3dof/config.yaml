@@ -1,6 +1,6 @@
 # problem
 trajectory:
-  segments:
+  phases:
     entry:
       num_nodes: 101
       inherit: trajopt/models/configs/reentry_3dof.yaml
@@ -110,7 +110,7 @@ trajectory:
 
 # solution method
 method:
-  inherit: trajopt/methods/dev/scvx/configs/autoscvx-term.yaml
+  inherit: trajopt/methods/dev/scvx_phases/configs/autoscvx-term.yaml
 
   flags:
     equal_dt: 1

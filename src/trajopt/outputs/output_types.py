@@ -37,10 +37,10 @@ def resolve_extractor(output_config, index_map, fcns):
 
 
 class spatial:
-    def __init__(self, output_config, segment):
-        index_map = segment.index_map
-        nondim = segment.nondim
-        fcns = segment.fcns
+    def __init__(self, output_config, phase):
+        index_map = phase.index_map
+        nondim = phase.nondim
+        fcns = phase.fcns
 
         self.type       = "spatial"
         self.name       = output_config.name
@@ -112,10 +112,10 @@ class spatial:
 
 
 class time_series:
-    def __init__(self, output_config, segment):
-        index_map = segment.index_map
-        nondim = segment.nondim
-        fcns = segment.fcns
+    def __init__(self, output_config, phase):
+        index_map = phase.index_map
+        nondim = phase.nondim
+        fcns = phase.fcns
 
         self.type       = "time_series"
         self.name       = output_config.name
@@ -189,14 +189,14 @@ class event:
     """A value at one instant of the trajectory.
 
     before_end: or after_start: sets the offset in seconds from the end or the
-    start of the segment. The value is interpolated between the two adjacent
+    start of the phase. The value is interpolated between the two adjacent
     nodes. It is then repeated at every node.
     """
 
-    def __init__(self, output_config, segment):
-        index_map = segment.index_map
-        nondim = segment.nondim
-        fcns = segment.fcns
+    def __init__(self, output_config, phase):
+        index_map = phase.index_map
+        nondim = phase.nondim
+        fcns = phase.fcns
 
         self.type       = "event"
         self.name       = output_config.name
@@ -236,7 +236,7 @@ class event:
         return self.fcn_txu_nd(x, u, t, params)
 
     def sample_time(self, t):
-        """Return the instant to report. It stays inside the segment."""
+        """Return the instant to report. It stays inside the phase."""
         if self.before_end is not None:
             t_event = t[-1] - float(self.before_end)
         else:

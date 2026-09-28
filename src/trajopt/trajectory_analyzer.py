@@ -5,7 +5,6 @@ import trajopt.utils.config_loader as config_loader
 import trajopt.analysis.analysis as analysis
 import trajopt.analysis.plotting as plotting
 from trajopt.analysis.results import Iterate
-from trajopt.trajectory import Trajectory
 from trajopt.utils.tools import deep_merge, recursive_attrdict
 
 
@@ -36,6 +35,7 @@ class TrajectoryAnalyzer():
         if method_overrides:
             self.config.method = deep_merge(self.config.method, recursive_attrdict(method_overrides))
 
+        Trajectory = config_loader.resolve_formulation_trajectory_class(self.config.method)
         self.trajectory = Trajectory(self.config.trajectory)
         SCPMethod = config_loader.resolve_scp_method_class(self.config.method)
         self.method = SCPMethod(self.config.method, self.trajectory)
@@ -114,13 +114,14 @@ class TrajectoryAnalyzer():
           and discards all compiled JAX kernels, so the next solve pays
           construction and JIT compilation again. Numeric ``params`` values on
           the JAX path (dynamics, nonconvex constraints/costs) can instead be
-          mutated in place on ``self.trajectory`` segments and are picked up on
+          mutated in place on ``self.trajectory`` phases and are picked up on
           the next solve without a rebuild.
         - ``${...}`` expressions were evaluated once at config load; editing a
           param they referenced does not re-evaluate them. Edit the resolved
           value directly.
         """
         print("Reconfiguring trajopt with updated config...")
+        Trajectory = config_loader.resolve_formulation_trajectory_class(self.config.method)
         self.trajectory = Trajectory(self.config.trajectory)
         SCPMethod = config_loader.resolve_scp_method_class(self.config.method)
         self.method = SCPMethod(self.config.method, self.trajectory)

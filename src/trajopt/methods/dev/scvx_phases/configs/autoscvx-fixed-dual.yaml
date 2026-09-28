@@ -1,0 +1,8 @@
+method_class: dev.scvx_phases
+formulation_class: dev.phases
+
+inherit: autoscvx.yaml
+
+weights:
+  beta:           0.1
+  gamma:          0.1

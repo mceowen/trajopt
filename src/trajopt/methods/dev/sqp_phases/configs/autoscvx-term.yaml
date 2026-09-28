@@ -1,0 +1,10 @@
+method_class: dev.sqp_phases
+formulation_class: dev.phases
+
+inherit: autoscvx.yaml
+
+penalty:
+  dynamics:
+    vb: 'none'
+  initial_state:
+    vb: 'none'

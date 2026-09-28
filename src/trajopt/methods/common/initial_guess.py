@@ -1,78 +1,68 @@
-import importlib
-from typing import TYPE_CHECKING
-
 import numpy as np
 import jax.numpy as jnp
 from trajopt.methods.common import integrators
 from trajopt.methods.common import pseudospectral
 
 
-def _scp_cost_types(method_config):
-    """Import the scp_cost_types module for the method named by method_config.method_class."""
-    method_class = getattr(method_config, "method_class", "scvx")
-    return importlib.import_module(f"trajopt.methods.{method_class}.scp_costs.scp_cost_types")
-
-
 CHAIN_FROM_PREVIOUS = "previous"
 
 
-def resolve_guess_type(segment, method_segment):
-    """The segment's guess type, else the method config's, else propagation."""
-    seg_type = getattr(segment.guess, "type", None)
+def resolve_guess_type(phase, method_phase):
+    """The phase's guess type, else the method config's, else propagation."""
+    seg_type = getattr(phase.guess, "type", None)
     if seg_type is not None:
         return seg_type
 
-    method_guess = getattr(method_segment.method_config, "guess", None)
+    method_guess = getattr(method_phase.method_config, "guess", None)
     if method_guess is not None:
         return getattr(method_guess, "type", "propagation")
 
     return "propagation"
 
 
-def guess_endpoint(method_segment):
-    """Final state of a segment's initial guess, in dimensional units."""
-    segment = method_segment.segment
-    z = np.asarray(method_segment.initial_guess.z)
-    x_nd = z[:, segment.index_map.indices.z.state]
-    return x_nd[-1] @ np.asarray(segment.nondim.M.state.nd2d).T
+def guess_endpoint(method_phase):
+    """Final state of a phase's initial guess, in dimensional units."""
+    phase = method_phase.phase
+    z = np.asarray(method_phase.initial_guess.z)
+    x_nd = z[:, phase.index_map.indices.z.state]
+    return x_nd[-1] @ np.asarray(phase.nondim.M.state.nd2d).T
 
 
-def set_initial_guess(segment, method_segment):
-    guess_type = resolve_guess_type(segment, method_segment)
+def set_initial_guess(phase, method_phase):
+    guess_type = resolve_guess_type(phase, method_phase)
 
     if guess_type == "propagation":
-        nonlinear_initial_guess(segment, method_segment)
+        nonlinear_initial_guess(phase, method_phase)
     elif guess_type == "straight_line":
-        straight_line_initial_guess(segment, method_segment)
+        straight_line_initial_guess(phase, method_phase)
     else:
         raise ValueError(
-            f"segment '{segment.name}': unknown guess type '{guess_type}' "
+            f"phase '{phase.name}': unknown guess type '{guess_type}' "
             "(expected 'propagation' or 'straight_line')"
         )
 
-    cost_types = _scp_cost_types(method_segment.method_config)
-    method_segment.cost_init = cost_types.compute_nonconvex_terminal_costs(
-        method_segment.initial_guess.z, method_segment.initial_guess.nu, segment, method_segment
+    method_phase.cost_init = method_phase.cost_type_module.compute_nonconvex_terminal_costs(
+        method_phase.initial_guess.z, method_phase.initial_guess.nu, phase, method_phase
     )
 
 
-def _constraint_of_type(segment, type_name):
-    return next((c for c in segment.constraints.values() if c.type == type_name), None)
+def _constraint_of_type(phase, type_name):
+    return next((c for c in phase.constraints.values() if c.type == type_name), None)
 
 
-def _endpoint_states(segment):
+def _endpoint_states(phase):
     """Nondimensional endpoints from guess.x_start/x_stop, else the boundary constraints."""
-    cfg  = segment.guess
-    n_x  = segment.index_map.n.state
-    d2nd = segment.nondim.M.state.d2nd
+    cfg  = phase.guess
+    n_x  = phase.index_map.n.state
+    d2nd = phase.nondim.M.state.d2nd
 
     if hasattr(cfg, "x_start"):
         x0 = d2nd @ np.atleast_1d(cfg.x_start)
     else:
-        cnstr = _constraint_of_type(segment, "initial_state")
+        cnstr = _constraint_of_type(phase, "initial_state")
         if cnstr is None:
             raise ValueError(
-                f"segment '{segment.name}': a straight-line guess needs either "
+                f"phase '{phase.name}': a straight-line guess needs either "
                 "guess.x_start or an initial_state constraint"
             )
         x0 = np.zeros(n_x)
@@ -82,25 +72,25 @@ def _endpoint_states(segment):
         xf = d2nd @ np.atleast_1d(cfg.x_stop)
     else:
         xf = x0.copy()
-        cnstr = _constraint_of_type(segment, "final_state")
+        cnstr = _constraint_of_type(phase, "final_state")
         if cnstr is not None:
             xf[np.asarray(cnstr.idx, dtype=int)] = cnstr.value
 
     return x0, xf
 
 
-def straight_line_initial_guess(segment, method_segment):
-    index_map = segment.index_map
-    init = method_segment.initial_guess
+def straight_line_initial_guess(phase, method_phase):
+    index_map = phase.index_map
+    init = method_phase.initial_guess
     N    = index_map.N.all
-    cfg  = segment.guess
+    cfg  = phase.guess
 
-    x0, xf = _endpoint_states(segment)
-    u0 = segment.nondim.M.control.d2nd @ np.atleast_1d(cfg.u_start)
-    uf = segment.nondim.M.control.d2nd @ np.atleast_1d(cfg.u_stop)
+    x0, xf = _endpoint_states(phase)
+    u0 = phase.nondim.M.control.d2nd @ np.atleast_1d(cfg.u_start)
+    uf = phase.nondim.M.control.d2nd @ np.atleast_1d(cfg.u_stop)
 
     t = np.asarray(init.t).reshape(-1)
-    if getattr(method_segment.flags, 'discretize', 'ms') == 'ps':
+    if getattr(method_phase.flags, 'discretize', 'ms') == 'ps':
         _, etau, _, _ = pseudospectral.flipped_radau_differential_operator(N - 1)
         tau = (etau + 1.0) / 2.0
         t   = t[0] + tau * (t[-1] - t[0])
@@ -125,25 +115,25 @@ def straight_line_initial_guess(segment, method_segment):
     init.nu_dense = nu
 
 
-def nonlinear_initial_guess(segment, method_segment):
-    init     = method_segment.initial_guess
-    idx      = segment.index_map.indices
-    N        = segment.index_map.N.all
-    n_z      = segment.index_map.n.z
-    n_nu     = segment.index_map.n.nu
-    dynamics = segment.constraints.dynamics.fcn_znu
-    params   = segment.params
+def nonlinear_initial_guess(phase, method_phase):
+    init     = method_phase.initial_guess
+    idx      = phase.index_map.indices
+    N        = phase.index_map.N.all
+    n_z      = phase.index_map.n.z
+    n_nu     = phase.index_map.n.nu
+    dynamics = phase.constraints.dynamics.fcn_znu
+    params   = phase.params
 
-    cfg     = segment.guess
+    cfg     = phase.guess
     if hasattr(cfg, 'x_start'):
-        x0 = segment.nondim.M.state.d2nd @ np.atleast_1d(cfg.x_start)
+        x0 = phase.nondim.M.state.d2nd @ np.atleast_1d(cfg.x_start)
     else:
-        x0 = segment.constraints.initial_state.value
-    u_start = segment.nondim.M.control.d2nd @ cfg.u_start
-    u_stop  = segment.nondim.M.control.d2nd @ cfg.u_stop
+        x0 = phase.constraints.initial_state.value
+    u_start = phase.nondim.M.control.d2nd @ cfg.u_start
+    u_stop  = phase.nondim.M.control.d2nd @ cfg.u_stop
 
     t = np.asarray(init.t).reshape(-1)
-    if getattr(method_segment.flags, 'discretize', 'ms') == 'ps':
+    if getattr(method_phase.flags, 'discretize', 'ms') == 'ps':
         _, etau, _, _ = pseudospectral.flipped_radau_differential_operator(N - 1)
         tau = (etau + 1.0) / 2.0
         t   = t[0] + tau * (t[-1] - t[0])
