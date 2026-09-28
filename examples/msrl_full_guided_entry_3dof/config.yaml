@@ -2,7 +2,7 @@
 trajectory:
   segments:
     entry:
-      num_nodes: 100
+      num_nodes: 199
       inherit: trajopt/models/configs/reentry_3dof.yaml
 
       fcns:
@@ -159,7 +159,7 @@ trajectory:
           set: control
           idx: [0]
           norm_type: l2
-          w: 0.001
+          w: 0.002
 
       guess:
         t_start: 0.0

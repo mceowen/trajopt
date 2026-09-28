@@ -5,7 +5,7 @@ trajectory:
 
     # guided entry: guidance initiation to parachute deployment
     entry:
-      num_nodes: 100
+      num_nodes: 199
       inherit: trajopt/examples/experiments/msrl/msrl_common_segment.yaml
 
       fcns:
@@ -136,7 +136,7 @@ trajectory:
           set: control
           idx: [0]
           norm_type: l2
-          w: 0.001
+          w: 0.002
 
       # J1, squared error to a prescribed deploy point:
       #
@@ -199,7 +199,7 @@ trajectory:
 
     # powered descent: backshell separation to the terminal descent handoff
     pdg:
-      num_nodes: 30
+      num_nodes: 233
       inherit: trajopt/examples/experiments/msrl/msrl_common_segment.yaml
 
       fcns:

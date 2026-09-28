@@ -4,7 +4,7 @@ trajectory:
 
     # guided entry: guidance initiation to parachute deployment
     entry:
-      num_nodes: 100
+      num_nodes: 199
       inherit: trajopt/examples/experiments/msrl/msrl_common_segment.yaml
 
       fcns:
@@ -136,7 +136,7 @@ trajectory:
           set: control
           idx: [0]
           norm_type: l2
-          w: 0.001
+          w: 0.002
 
       # J1, squared error to a prescribed deploy point. Works against J2:
       #
@@ -206,8 +206,8 @@ method:
     equal_dt: 1
     zoh_dilation: 1
     # nondimensional step gate, wider on gamma and psi
-    eps_state: [1.0e-4, 1.0e-4, 1.0e-4, 1.0e-4, 1.0e-3, 1.0e-3]
-    iter_max: 400
+    eps_state: [1.0e-4, 1.0e-4, 1.0e-4, 1.0e-4, 1.0e-2, 1.0e-2]
+    iter_max: 1000
 
   penalty:
     default:
