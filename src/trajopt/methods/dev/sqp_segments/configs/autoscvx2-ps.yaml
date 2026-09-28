@@ -1,0 +1,9 @@
+method_class: dev.sqp_segments
+formulation_class: dev.segments
+
+inherit: autoscvx2.yaml
+
+flags:
+  equal_dt: 0
+  discretize: ps
+  hp_segments: 10

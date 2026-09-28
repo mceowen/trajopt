@@ -1,14 +1,8 @@
-"""TrajOpt package init.
-
-Enable JAX's persistent compilation cache so jitted kernels aren't
-recompiled from scratch on every cold start. Disable with
-TRAJOPT_DISABLE_JAX_CACHE=1.
-"""
+"""Turns on JAX's persistent compile cache (TRAJOPT_DISABLE_JAX_CACHE=1 to disable)."""
 
 import os
 
-# Silence the "Assume version compatibility. PjRt-IFRT does not
-# track XLA executable versions." warning from XLA.
+# silence XLA's PjRt-IFRT version-compatibility warning
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 
 

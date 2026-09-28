@@ -33,24 +33,34 @@ def load_trajopt_config(config_path: str) -> AttrDict:
 # METHOD CLASS RESOLUTION
 # =============================================================================
 
-DEFAULT_METHOD_CLASS = "dev.scvx"
+DEFAULT_METHOD_CLASS      = "dev.scvx_segments"
+DEFAULT_FORMULATION_CLASS = "dev.segments"
 
 
 def resolve_scp_method_class(method_config: AttrDict):
-    """Import and return the SCPMethod class named by method_config.method_class.
-
-    ``method_class`` (e.g. "sqp" or "scvx") selects which sibling package under
-    ``trajopt.methods`` to load the solver implementation from.
-    """
+    """The ``Method`` class exported by the ``trajopt.methods.<method_class>`` package."""
     method_class = method_config.get("method_class", DEFAULT_METHOD_CLASS)
+    return _import_package_attr("trajopt.methods", method_class, "Method")
+
+
+def resolve_formulation_trajectory_class(method_config: AttrDict):
+    """The ``Trajectory`` class exported by the ``trajopt.formulations.<formulation_class>`` package."""
+    formulation_class = method_config.get("formulation_class", DEFAULT_FORMULATION_CLASS)
+    return _import_package_attr("trajopt.formulations", formulation_class, "Trajectory")
+
+
+def _import_package_attr(root: str, name: str, attr: str):
+    target = f"{root}.{name}"
     try:
-        module = importlib.import_module(f"trajopt.methods.{method_class}.scp_method")
-    except ModuleNotFoundError:
-        raise ValueError(
-            f"unknown method_class '{method_class}': expected a package under "
-            "trajopt.methods (e.g. 'sqp' or 'scvx') containing a scp_method.py module"
-        ) from None
-    return module.SCPMethod
+        package = importlib.import_module(target)
+    except ModuleNotFoundError as e:
+        # only the package itself being absent means a bad name; anything else is a real import error
+        if e.name is None or not (target == e.name or target.startswith(e.name + ".")):
+            raise
+        raise ValueError(f"unknown class '{name}': no package {target}") from None
+    if not hasattr(package, attr):
+        raise ValueError(f"package {root}.{name} does not export '{attr}' from its __init__.py")
+    return getattr(package, attr)
 
 # =============================================================================
 # YAML LOADING
@@ -112,9 +122,7 @@ def _resolve_fcn_paths(d: Any, base_dir: Path) -> Any:
         file_part, func = d.rsplit(":", 1)
         fp = Path(file_part)
 
-        # Support package-rooted references like "trajopt/.../file.py:func".
-        # These should resolve from the installed/importable trajopt package root,
-        # not relative to the local config directory.
+        # "trajopt/..." paths resolve from the package root, not the config dir
         if file_part.startswith("trajopt/"):
             spec = importlib.util.find_spec("trajopt")
             if spec is None or spec.origin is None:
@@ -206,6 +214,10 @@ def _eval_values(obj: Any, ctx: dict, segment_params: dict, key: str | None = No
                     continue
                 result[key] = _eval_values(val, ctx, segment_params)
             return result
+
+        if "params" in obj and isinstance(obj.params, dict):
+            # flat trajectory: eval params first so siblings can use ${params.x}
+            return _eval_segment(obj, key or "trajectory", segment_params)
 
         result = AttrDict({})
         local  = dict(ctx)

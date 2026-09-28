@@ -4,59 +4,55 @@ import numpy as np
 import cvxpy as cp
 
 from trajopt.methods.dev.scvx.reporter import SolveReporter
-from trajopt.methods.dev.scvx.scp_trajectory import SCPTrajectory
+from trajopt.methods.common.scp.subproblem import SCPSubproblem
+from trajopt.utils.tools import AttrDict
 
 class SCPMethod():
+    """SCvx over a single flat trajectory -- one subproblem, no phase splitting."""
 
     def __init__(self, method_config, trajectory) -> None:
 
         self.method_config = method_config
 
-        # create scp trajectory
-        self.scp_trajectory = SCPTrajectory(trajectory, self.method_config)
+        # the whole problem is one flat subproblem
+        self.subproblem = SCPSubproblem(trajectory, self.method_config)
 
-        # define the total cost and constraints from all segments for this method
-        self.cp_cost        = sum(seg.cp_cost for seg in self.scp_trajectory.scp_segments.values())
-        self.cp_constraints = [c for s in self.scp_trajectory.scp_segments.values() for c in s.cp_constraints]
+        # one-entry dict so analysis/plotting can loop over it like the segments methods
+        self.scp_trajectory = AttrDict(scp_subproblems=AttrDict(main=self.subproblem))
+
+        self.cp_cost        = self.subproblem.cp_cost
+        self.cp_constraints = self.subproblem.cp_constraints
         self.cp_subproblem  = cp.Problem(cp.Minimize(self.cp_cost), self.cp_constraints)
 
         total_param_scalars = sum(p.size for p in self.cp_subproblem.parameters())
         self._converged = False
 
         quiet = bool(self.method_config.flags.get("quiet", False))
-        multi = len(self.scp_trajectory.scp_segments) > 1
-        self.reporter = SolveReporter(multi=multi, quiet=quiet)
+        self.reporter = SolveReporter(quiet=quiet)
         self.reporter.subproblem_stats(
-            num_segments=len(self.scp_trajectory.scp_segments),
             num_params=total_param_scalars,
             num_constraints=len(self.cp_constraints),
             is_dpp=self.cp_subproblem.is_dcp(dpp=True),
         )
 
     def update_cvxpy_parameters(self) -> None:
-        for scp_segment in self.scp_trajectory.scp_segments.values():
-            scp_segment.update_cvxpy_parameters()
+        self.subproblem.update_cvxpy_parameters()
 
     def update_current_iter_data(self) -> None:
         parse_time = self.cp_subproblem.compilation_time * 1000.0
         solve_time = self.cp_subproblem.solver_stats.solve_time * 1000.0
 
-        for scp_segment in self.scp_trajectory.scp_segments.values():
-            scp_segment.current_iter_data.parse_time = parse_time
-            scp_segment.current_iter_data.solve_time = solve_time
-            scp_segment.read_solution()
+        self.subproblem.current_iter_data.parse_time = parse_time
+        self.subproblem.current_iter_data.solve_time = solve_time
+        self.subproblem.read_solution()
 
-        for scp_segment in self.scp_trajectory.scp_segments.values():
-            scp_segment.cp_subproblem_status = self.cp_subproblem.status
-            scp_segment.apply_step(alpha=1.0)
+        self.subproblem.cp_subproblem_status = self.cp_subproblem.status
+        self.subproblem.apply_step(alpha=1.0)
 
-        self._converged = all(s.current_iter_data.converged for s in self.scp_trajectory.scp_segments.values())
+        self._converged = self.subproblem.current_iter_data.converged
 
-        for scp_segment in self.scp_trajectory.scp_segments.values():
-            scp_segment.update_W_dual(alpha=1.0)
-
-        for scp_segment in self.scp_trajectory.scp_segments.values():
-            scp_segment.record_iter_data()
+        self.subproblem.update_constraint_penalties(alpha=1.0)
+        self.subproblem.record_iter_data()
 
     def warmup_jax(self):
         """Run a dummy discretization pass to trigger all JAX JIT compilations."""
@@ -90,15 +86,14 @@ class SCPMethod():
             self.update_current_iter_data()
             self.display_status()
 
-            for seg in self.scp_trajectory.scp_segments.values():
-                total_discretization_ms += seg.current_iter_data.discretization_time
+            total_discretization_ms += self.subproblem.current_iter_data.discretization_time
             total_solve_ms += self.cp_subproblem.solver_stats.solve_time * 1000.0
 
             if self._converged:
                 reason = "Terminated from convergence criteria!"
                 break
 
-        ran_iterations = any(s.iter_data_list[-1].iter_num > 0 for s in self.scp_trajectory.scp_segments.values())
+        ran_iterations = self.subproblem.iter_data_list[-1].iter_num > 0
         if reason is None and ran_iterations and not self._converged:
             reason = "Terminated from hitting maximum iterations!"
 
@@ -107,15 +102,9 @@ class SCPMethod():
             reason=reason, total_ms=total_ms,
             disc_ms=total_discretization_ms, solve_ms=total_solve_ms,
         )
-        self.reporter.trajectory_summary([
-            (s.name, s.current_iter_data.t_start, s.current_iter_data.t_final)
-            for s in self.scp_trajectory.scp_segments.values()
-        ])
+        self.reporter.trajectory_summary(
+            self.subproblem.current_iter_data.t_start, self.subproblem.current_iter_data.t_final,
+        )
 
     def display_status(self) -> None:
-        multi = len(self.scp_trajectory.scp_segments) > 1
-        for scp_segment in self.scp_trajectory.scp_segments.values():
-            self.reporter.row(
-                scp_segment.current_iter_data,
-                segment_name=scp_segment.name if multi else None,
-            )
+        self.reporter.row(self.subproblem.current_iter_data)

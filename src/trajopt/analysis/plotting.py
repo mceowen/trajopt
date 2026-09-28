@@ -18,6 +18,15 @@ plt.rcParams.update({
     'path.simplify': True, 'path.simplify_threshold': 0.1,
 })
 
+def _scp_subproblems(method):
+    """A method's dict of per-piece SCP subproblems, whatever it calls the attribute."""
+    scp_trajectory = method.scp_trajectory
+    scp_segments = getattr(scp_trajectory, "scp_segments", None)
+    if scp_segments is not None:
+        return scp_segments
+    return scp_trajectory.scp_subproblems
+
+
 plot_options = AttrDict({
     'figsize':     (12, 3.5),
     'save_dpi':    300,
@@ -126,10 +135,25 @@ def _group_outputs(outputs, declared):
     return grouped
 
 
+def _segment_configs(trajectory_cfg):
+    """The per-segment config blocks, or [trajectory_cfg] itself under a flat (non-segmented) formulation."""
+    if "segments" in trajectory_cfg:
+        return list(trajectory_cfg.segments.values())
+    return [trajectory_cfg]
+
+
+def _first_segment(traj_analyzer):
+    """The runtime first (or only) segment/trajectory object, whichever formulation is in play."""
+    trajectory = traj_analyzer.trajectory
+    if hasattr(trajectory, "segments"):
+        return next(iter(trajectory.segments.values()))
+    return trajectory
+
+
 def _output_configs(traj_analyzer):
     """Merge the outputs: config blocks of every segment into one mapping."""
     merged = {}
-    for segment_cfg in traj_analyzer.config.trajectory.segments.values():
+    for segment_cfg in _segment_configs(traj_analyzer.config.trajectory):
         merged.update(segment_cfg.get('outputs', {}))
     return merged
 
@@ -143,7 +167,7 @@ def build_standalone(traj_analyzer, data):
     last_iter      = iters_all[-1]
     traj_configs   = _output_configs(traj_analyzer)
     traj_data      = _group_outputs(last_iter["outputs"], traj_configs)
-    first_segment  = next(iter(traj_analyzer.trajectory.segments.values()))
+    first_segment  = _first_segment(traj_analyzer)
     fcns           = first_segment.fcns
 
     figs, axs = {}, {}
@@ -248,7 +272,7 @@ def build_method_variation(traj_analyzer, data):
     traj_configs = _output_configs(traj_analyzer)
     ref_traj_data = _group_outputs(ref_last["outputs"], traj_configs)
 
-    first_segment = next(iter(traj_analyzer.trajectory.segments.values()))
+    first_segment = _first_segment(traj_analyzer)
     fcns = first_segment.fcns
 
     figs, axs = {}, {}
@@ -606,7 +630,7 @@ def _include_quiver_extents(all_vals, traj):
 
 
 def convergence_plots(traj_analyzer, save=True):
-    scp_segments = traj_analyzer.method.scp_trajectory.scp_segments
+    scp_segments = _scp_subproblems(traj_analyzer.method)
     multi        = len(scp_segments) > 1
     figs         = [_convergence_plot(seg, f"_{name}" if multi else "", save) for name, seg in scp_segments.items()]
     return figs[0] if figs else None
@@ -666,7 +690,7 @@ def _convergence_plot(subprob, suffix, save=True):
 
 
 def convergence_weight_plots(traj_analyzer, save=True):
-    scp_segments = traj_analyzer.method.scp_trajectory.scp_segments
+    scp_segments = _scp_subproblems(traj_analyzer.method)
     multi        = len(scp_segments) > 1
     figs         = [_convergence_weight_plot(seg, f"_{name}" if multi else "", save) for name, seg in scp_segments.items()]
     return figs[0] if figs else None
@@ -748,7 +772,7 @@ def _convergence_weight_plot(subprob, suffix, save=True):
 
 
 def convergence_weight_mean_plots(traj_analyzer, save=True):
-    scp_segments = traj_analyzer.method.scp_trajectory.scp_segments
+    scp_segments = _scp_subproblems(traj_analyzer.method)
     multi        = len(scp_segments) > 1
     figs         = [_convergence_weight_mean_plot(seg, f"_{name}" if multi else "", save) for name, seg in scp_segments.items()]
     return figs[0] if figs else None
@@ -830,7 +854,7 @@ def _convergence_weight_mean_plot(subprob, suffix, save=True):
 
 
 def convergence_vb_plots(traj_analyzer, save=True):
-    scp_segments = traj_analyzer.method.scp_trajectory.scp_segments
+    scp_segments = _scp_subproblems(traj_analyzer.method)
     multi        = len(scp_segments) > 1
     figs         = [_convergence_vb_plot(seg, f"_{name}" if multi else "", save) for name, seg in scp_segments.items()]
     return figs[0] if figs else None

@@ -12,7 +12,10 @@ jax.config.update("jax_enable_x64", True)
 
 def perform_analysis(traj) -> RunResult:
     """Propagate every segment's iterates and merge them into one mission trajectory."""
-    scp_segments = traj.method.scp_trajectory.scp_segments
+    scp_trajectory = traj.method.scp_trajectory
+    scp_segments = getattr(scp_trajectory, "scp_segments", None)
+    if scp_segments is None:
+        scp_segments = scp_trajectory.scp_subproblems
     segments = [analyze_segment(subprob, traj.config) for subprob in scp_segments.values()]
 
     if len(segments) == 1:
@@ -283,11 +286,7 @@ def run_method_variation(traj):
 
 
 def run_mc_analysis(traj):
-    """Monte Carlo analysis driven entirely by the config (the single source of truth).
-
-    Each run perturbs the values listed under ``config.variations.samples`` (each key
-    is a dot-path into the config), updates the config, and re-solves. Run 0 is the
-    nominal (unperturbed) case.
+    """Monte Carlo over config.variations.samples (dot-paths into the config); run 0 is nominal.
 
     Expected config schema::
 

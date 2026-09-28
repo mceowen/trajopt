@@ -5,7 +5,6 @@ import trajopt.utils.config_loader as config_loader
 import trajopt.analysis.analysis as analysis
 import trajopt.analysis.plotting as plotting
 from trajopt.analysis.results import Iterate
-from trajopt.trajectory import Trajectory
 from trajopt.utils.tools import deep_merge, recursive_attrdict
 
 
@@ -36,6 +35,7 @@ class TrajectoryAnalyzer():
         if method_overrides:
             self.config.method = deep_merge(self.config.method, recursive_attrdict(method_overrides))
 
+        Trajectory = config_loader.resolve_formulation_trajectory_class(self.config.method)
         self.trajectory = Trajectory(self.config.trajectory)
         SCPMethod = config_loader.resolve_scp_method_class(self.config.method)
         self.method = SCPMethod(self.config.method, self.trajectory)
@@ -104,23 +104,9 @@ class TrajectoryAnalyzer():
             self, data, save=save, show=show, save_dir=save_dir, format=format)
 
     def reconfigure(self):
-        """Rebuild the Trajectory and SCPMethod objects from self.config.
-
-        Call this after modifying ``self.config`` from external code (e.g., a C
-        interface) to propagate the changes into the internal problem objects.
-
-        Notes:
-        - This is the full-rebuild path: it reconstructs the CVXPY subproblem
-          and discards all compiled JAX kernels, so the next solve pays
-          construction and JIT compilation again. Numeric ``params`` values on
-          the JAX path (dynamics, nonconvex constraints/costs) can instead be
-          mutated in place on ``self.trajectory`` segments and are picked up on
-          the next solve without a rebuild.
-        - ``${...}`` expressions were evaluated once at config load; editing a
-          param they referenced does not re-evaluate them. Edit the resolved
-          value directly.
-        """
+        """Rebuild trajectory and method from self.config (full rebuild + re-JIT; ${...} isn't re-evaluated)."""
         print("Reconfiguring trajopt with updated config...")
+        Trajectory = config_loader.resolve_formulation_trajectory_class(self.config.method)
         self.trajectory = Trajectory(self.config.trajectory)
         SCPMethod = config_loader.resolve_scp_method_class(self.config.method)
         self.method = SCPMethod(self.config.method, self.trajectory)

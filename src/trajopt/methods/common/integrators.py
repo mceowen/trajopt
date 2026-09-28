@@ -8,10 +8,7 @@ import numpy as np
 # ---------------------------------------------------------------------------
 
 def interpolate_control_foh(tau_nodes, nu_nodes):
-    """First-order hold (linear) control interpolation for multiple shooting.
-
-    Returns a JAX-compatible function nu(z, tau) -> nu_interp.
-    """
+    """FOH (linear) control interpolation for multiple shooting; returns nu(z, tau)."""
     tau_ref = jnp.asarray(tau_nodes)
     nu_ref  = jnp.asarray(nu_nodes)
     N_nodes = tau_ref.shape[0]
@@ -25,11 +22,7 @@ def interpolate_control_foh(tau_nodes, nu_nodes):
 
 
 def interpolate_control_lagrange(tau_nodes, nu_nodes):
-    """Lagrange polynomial control interpolation for pseudospectral methods.
-
-    Builds the barycentric weights once and evaluates the interpolant at any tau.
-    Returns a JAX-compatible function nu(z, tau) -> nu_interp.
-    """
+    """Barycentric Lagrange control interpolation for pseudospectral; returns nu(z, tau)."""
     tau_ref = jnp.asarray(tau_nodes)
     nu_ref  = jnp.asarray(nu_nodes)
     N_nodes = tau_ref.shape[0]
@@ -154,11 +147,7 @@ def make_trajectory_solver(dynamics, params, n_steps, discretize="ms", hp_segmen
 
 def propagate_trajectory(z_nodes, tau_nodes, nu_nodes, dynamics, params,
                          discretize="ms", n_steps=500, hp_segments=1, _solver=None):
-    """Propagate full trajectory from initial condition using interpolated controls.
-
-    For PS: uses piecewise Lagrange interpolation (per h-interval for hp).
-    For MS: uses first-order hold (linear interpolation).
-    """
+    """Propagate from the initial condition with interpolated controls (Lagrange for ps, FOH for ms)."""
     if _solver is None:
         _solver = make_trajectory_solver(dynamics, params, n_steps,
                                          discretize=discretize, hp_segments=hp_segments)

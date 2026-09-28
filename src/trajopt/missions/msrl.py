@@ -100,13 +100,7 @@ def parachute_aero(x, u, t, params, fcns):
     return AttrDict({"L": L, "D": D})
 
 def downrange_crossrange(x, u, t, params, fcns):
-    """[downrange, crossrange] (m) to the touchdown target PCPF.
-
-    Downrange is the great-circle range to the target resolved along the
-    horizontal velocity direction, crossrange the component normal to it
-    (positive when the target is right of track). Target longitude/latitude
-    come from params.target (deg).
-    """
+    """[downrange, crossrange] (m) to params.target; crossrange > 0 when the target is right of track."""
     theta = jnp.deg2rad(x[1])
     phi = jnp.deg2rad(x[2])
     psi = jnp.deg2rad(x[5])
@@ -147,12 +141,7 @@ def downrange_crossrange(x, u, t, params, fcns):
     return jnp.array([R * jnp.cos(bearing - psi), R * jnp.sin(bearing - psi)])
 
 def deploy_range_bias(x, u, t, params, fcns):
-    """Deploy-surface residual [downrange - range_bias, crossrange] (m).
-
-    Zero on the arc params.target.range_bias (m) uprange of the touchdown
-    target with heading aligned toward it (deploy range bias, Mendeck & Craig
-    AIAA 2011-6639, Fig. 3).
-    """
+    """Deploy residual [downrange - range_bias, crossrange] (m); see Mendeck & Craig AIAA 2011-6639, Fig. 3."""
     dr_cr = downrange_crossrange(x, u, t, params, fcns)
     return dr_cr - jnp.array([params.target.range_bias, 0.0])
 

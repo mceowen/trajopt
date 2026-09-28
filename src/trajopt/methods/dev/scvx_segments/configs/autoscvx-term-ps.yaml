@@ -1,0 +1,8 @@
+method_class: dev.scvx_segments
+formulation_class: dev.segments
+
+inherit: autoscvx-term.yaml
+
+flags:
+  equal_dt: 0
+  discretize: ps

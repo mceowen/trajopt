@@ -5,7 +5,7 @@ trajectory:
     # guided entry: guidance initiation to parachute deployment
     entry:
       num_nodes: 100
-      inherit: trajopt/examples/experiments/msrl/msrl_common_segment.yaml
+      inherit: trajopt/formulations/dev/segments/examples/experiments/msrl/msrl_common_segment.yaml
 
       fcns:
         nonlinear_aero: trajopt/missions/msrl.py:nonlinear_aero
@@ -143,7 +143,7 @@ trajectory:
 
     descent:
       num_nodes: 40
-      inherit: trajopt/examples/experiments/msrl/msrl_common_segment.yaml
+      inherit: trajopt/formulations/dev/segments/examples/experiments/msrl/msrl_common_segment.yaml
 
       fcns:
         nonlinear_aero: trajopt/missions/msrl.py:parachute_aero
@@ -189,7 +189,7 @@ trajectory:
 
 # solution method
 method:
-  inherit: trajopt/methods/dev/sqp/configs/autoscvx2.yaml
+  inherit: trajopt/methods/dev/sqp_segments/configs/autoscvx2.yaml
 
   flags:
     equal_dt: 1

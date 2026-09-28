@@ -1,12 +1,4 @@
-"""Penalty-method building blocks for dev/scvx's constraint penalty machinery.
-
-Groups a constraint's W/dual/vb state into one `Penalty` object -- a hybrid
-dataclass/dict (attribute *and* key access, like this codebase's other
-AttrDict-based config objects) -- so it can be passed around as a single
-argument, and factors the W/dual autotuning and penalty-cost math out of the
-constraint classes so it's reusable. Each function below takes the whole
-`Penalty` and extracts what it needs, including the standard-vs-split branch.
-"""
+"""Per-constraint penalty state (W, dual, vb) plus the autotuning and penalty-cost math."""
 
 import numpy as np
 import cvxpy as cp
@@ -94,12 +86,7 @@ def autotune_W(penalty: Penalty) -> None:
 
 
 def autotune_dual(penalty: Penalty) -> None:
-    """Dual-ascent update; mutates penalty.dual (and dual_p/dual_m under split) in place.
-
-    cfg.dual.style selects the step size: unset/'beta' (default, fixed cfg.dual.beta,
-    the original autotune1-style update) or 'al' (Augmented-Lagrangian style, where
-    the step size is the current W, element-wise).
-    """
+    """In-place dual ascent; step is cfg.dual.beta (default) or W elementwise if style='al'."""
     if penalty.vb_type == "split":
         penalty.dual_p = _autotune_dual(penalty.dual_p, penalty.vb_p, penalty.cfg, penalty.nonnegative_dual, penalty.W_p)
         penalty.dual_m = _autotune_dual(penalty.dual_m, penalty.vb_m, penalty.cfg, penalty.nonnegative_dual, penalty.W_m)
@@ -113,13 +100,7 @@ def l1_norm(W_param, vb_var):
 
 
 def l2_norm(W_sqrt_param, vb_var):
-    """l2 penalty term: 0.5 * sum((sqrt(W) * vb)^2) == 0.5 * vb^T diag(W) vb.
-
-    W is stored as a vector (one weight per vb component), which *is* the
-    diagonal of the quadratic form's weight matrix -- squaring sqrt(W)*vb
-    elementwise and summing is diag(W) applied to vb, without materializing
-    the (mostly-zero) full matrix.
-    """
+    """0.5 * vb^T diag(W) vb, computed as 0.5 * sum((sqrt(W) * vb)^2)."""
     return 0.5 * cp.sum_squares(cp.multiply(W_sqrt_param, vb_var))
 
 
@@ -160,9 +141,7 @@ def _dual_cost_value_buffer(dual, vb):
 
 
 def penalty_cost_value(penalty: Penalty) -> float:
-    """Numpy-evaluated total penalty cost (W-term + dual-term) on the current W/dual/vb --
-    the same formula as w_penalty_cost/dual_penalty_cost, but off the solved numpy values
-    rather than the cvxpy parameters, for reporting once a step has been taken."""
+    """Penalty cost (W + dual terms) from the solved numpy values, for reporting."""
     if penalty.vb_type == "split":
         return (_w_cost_value_buffer(penalty.W_p, penalty.vb_p, penalty.norm)
                 + _w_cost_value_buffer(penalty.W_m, penalty.vb_m, penalty.norm)

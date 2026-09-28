@@ -290,11 +290,7 @@ def flipped_radau_differential_operator(N: int) -> tuple[np.ndarray, np.ndarray,
 # ---------------------------------------------------------------------
 
 def flipped_radau_hp_operator(N_col: int, H: int):
-    """Compute the hp-composite fLGR nodes, weights, and per-interval D matrix.
-
-    Instead of assembling a sparse global D matrix, returns the single local D block
-    (scaled by H) along with the global node positions. The caller loops over intervals
-    using D_local on the appropriate slice of the state vector.
+    """hp-composite fLGR nodes/weights plus one local D block (scaled by H) the caller reuses per interval.
 
     Inputs:
         N_col : Total number of collocation nodes (must be divisible by H).

@@ -1,0 +1,14 @@
+method_class: dev.scvx_segments
+formulation_class: dev.segments
+
+inherit: autoscvx.yaml
+
+flags:
+  equal_dt: 0
+  discretize: ps
+  line_search: 1
+  hp_segments: 10
+
+# penalty:
+#   initial_state:
+#     vb: 'none'

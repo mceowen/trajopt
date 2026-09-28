@@ -1,79 +1,68 @@
 method:
-  inherit: trajopt/methods/dev/sqp/configs/autoscvx2.yaml
+  inherit: trajopt/methods/dev/scvx/configs/autoscvx-term.yaml
 
   flags:
     equal_dt: 1
     zoh_dilation: 1
     flag_conv: 1
 
-  conv:
-    eps_state:  0.001
-    eps_dyn:    0.00001
-    eps_defect: 1.0
-
-  penalty:
-    eps_cost: 1
-
   solver_opts:
     solver: CLARABEL
 
 trajectory:
-  segments:
-    swingup:
-      num_nodes: 40
-      inherit: model.yaml
+  num_nodes: 40
+  inherit: model.yaml
 
-      params:
-        g: 9.81
-        mp: 0.3
-        mc: 1
-        l: 0.5
+  params:
+    g: 9.81
+    mp: 0.3
+    mc: 1
+    l: 0.5
 
-      constraints:
-        dynamics:
-          type: dynamics
-          fcn: fcns.dynamics
+  constraints:
+    dynamics:
+      type: dynamics
+      fcn: fcns.dynamics
 
-        initial_state:
-          type: initial_state
-          value: [0, 0, 0, 0]
+    initial_state:
+      type: initial_state
+      value: [0, 0, 0, 0]
 
-        final_state:
-          type: final_state
-          value: [1, "${np.pi}", 0, 0]
+    final_state:
+      type: final_state
+      value: [1, "${np.pi}", 0, 0]
 
-        initial_time:
-          type: initial_time
-          value: 0.0
+    initial_time:
+      type: initial_time
+      value: 0.0
 
-        final_time:
-          type: final_time
-          value: 2.0
+    final_time:
+      type: final_time
+      value: 2.0
 
-        state_limits:
-          type: state_limits
-          lower: [-4, null, null, null]
-          upper: [ 4, null, null, null]
+    state_limits:
+      type: state_limits
+      lower: [-4, null, null, null]
+      upper: [ 4, null, null, null]
 
-        control_limits:
-          type: control_limits
-          lower: [-20]
-          upper: [20]
+    control_limits:
+      type: control_limits
+      lower: [-20]
+      upper: [20]
 
-      costs:
-        u_squared:
-          type: nonconvex_running
-          fcn: fcns.u_squared_cost
-          w: 1.0
+  costs:
+    u_squared:
+      type: nonconvex_running
+      fcn: fcns.u_squared_cost
+      w: 1.0
 
-      guess:
-        type: straight_line
-        t_start: 0.0
-        t_stop: 2.0
-        x_start: [0, 0, 0, 0]
-        x_stop: [1, "${np.pi}", 0, 0]
-        u_start: [0]
-        u_stop: [0]
+  guess:
+    type: propagation
+    t_start: 0.0
+    t_stop: 2.0
+    x_start: [0, 0, 0, 0]
+    u_start: [0]
+    u_stop: [0]
 
 analysis:
   type: standalone

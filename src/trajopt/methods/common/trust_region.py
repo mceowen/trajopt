@@ -6,14 +6,11 @@ import jax.numpy as jnp
 
 # SCP_METHOD
 
-def line_search(self, c1=1e-4, beta=0.5, max_iter=20, alpha_min=None):
-    segments = self.scp_trajectory.scp_segments
-
-    if alpha_min is None:
-        alpha_min = float(getattr(self.method_config.flags, 'alpha_min_ls', 1e-7))
+def line_search(subproblems, alpha_min=1e-7, c1=1e-4, beta=0.5, max_iter=20):
+    subproblems = list(subproblems)
 
     phi_0, dphi = 0.0, 0.0
-    for seg in segments.values():
+    for seg in subproblems:
         v, g = merit_grad_at_zero(seg)
         phi_0 += v
         dphi += g
@@ -22,7 +19,7 @@ def line_search(self, c1=1e-4, beta=0.5, max_iter=20, alpha_min=None):
 
     alpha = 1.0
     for _ in range(max_iter):
-        phi = sum(evaluate_merit_at_alpha(seg, alpha) for seg in segments.values())
+        phi = sum(evaluate_merit_at_alpha(seg, alpha) for seg in subproblems)
         if np.isfinite(phi) and phi <= phi_0 + c1 * alpha * slope:
             return alpha
         alpha *= beta
@@ -32,9 +29,9 @@ def line_search(self, c1=1e-4, beta=0.5, max_iter=20, alpha_min=None):
     return alpha_min
 
 
-def step_is_usable(self, max_step: float = 1e6) -> bool:
+def step_is_usable(subproblems, max_step: float = 1e6) -> bool:
     """Whether the step is real, since a solver at its iteration limit can return nonsense."""
-    for scp_segment in self.scp_trajectory.scp_segments.values():
+    for scp_segment in subproblems:
         for expr in (scp_segment.dz, scp_segment.dnu):
             value = expr.value
             if value is None:
@@ -147,9 +144,6 @@ def merit_grad_at_zero(self):
 
 # SCP_CONSTRAINT
 
-def compile_merit_penalty(self, scp_segment): pass
-
-
 def compile_merit_penalty_from_violation(self, violation):
     l1 = self.penalty_state.norm == "l1"
     if self.penalty_state.vb_type == "split":
@@ -229,8 +223,7 @@ def accumulate_hessian_dynamics(self, scp_segment, H):
 
 
 def accumulate_hessian_nonconvex(self, scp_segment, H, constraints_attr):
-    """Shared by scp_nonconvex_inequality (constraints_attr='cp_ineq_constraints')
-    and scp_nonconvex_equality (constraints_attr='cp_eq_constraints')."""
+    """Hessian contribution of a nonconvex inequality or equality constraint."""
     if not hasattr(self, constraints_attr):
         return
     n_z    = scp_segment.index_map.n.z
@@ -315,9 +308,6 @@ def compile_merit_penalty_scp_nonconvex_equality(self, scp_segment):
 
 
 # SCP_COST
-
-def merit_cost(self, scp_segment): return None
-
 
 def compile_merit_cost(self, scp_segment):
     fn = self.merit_cost(scp_segment)

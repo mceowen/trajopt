@@ -47,10 +47,7 @@ def analyze_quality_metrics(runs: dict, config: dict | None = None, filename: st
 
 
 def load_configuration() -> dict:
-    """Define standard data and metric settings when no config is provided.
-
-    NOTE: Currently these are all implemented data and metric options.
-    """
+    """Default data/metric settings (all the implemented ones) when no config is given."""
     #  All metrics available for calculations
     metrics = [
         "Max",
@@ -86,11 +83,7 @@ def load_configuration() -> dict:
 
 
 def extract_data(config: dict, data: dict) -> dict:
-    """Extract key variables from each Monte Carlo run.
-
-    Each run carries ``solver_iters`` (per-iteration algorithm data, keyed by
-    segment) alongside the propagated ``iter_data_list``.
-    """
+    """Pull the key variables out of each Monte Carlo run."""
     print("Extracting data from runs...")
     extracted: dict = {}
 

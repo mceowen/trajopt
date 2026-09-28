@@ -1,0 +1,636 @@
+import cvxpy as cp
+import jax.numpy as jnp
+import numpy as np
+
+from trajopt.utils import tools
+from trajopt.formulations.common.constraint import Constraint
+
+
+class initial_state(Constraint):
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        self.name = cnstr_config.name
+        self.type = "initial_state"
+
+        nondim = segment.nondim
+        raw_value = cnstr_config["value"]
+
+        if "idx" in cnstr_config:
+            self.idx = cnstr_config.idx
+            self._value_dim = np.atleast_1d(raw_value)
+        else:
+            self.idx = [i for i, v in enumerate(raw_value) if v is not None]
+            self._value_dim = np.atleast_1d([v for v in raw_value if v is not None])
+
+        self.dimension = len(self.idx)
+        self._nondim = nondim
+
+    @property
+    def value(self):
+        return self._nondim.M.state.d2nd[np.ix_(self.idx, self.idx)] @ self._value_dim
+
+
+class final_state(Constraint):
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        self.name = cnstr_config.name
+        self.type = "final_state"
+
+        nondim = segment.nondim
+        raw_value = cnstr_config.value
+
+        if "idx" in cnstr_config:
+            self.idx = cnstr_config["idx"]
+            self._value_dim = np.atleast_1d(raw_value)
+        else:
+            self.idx = [i for i, v in enumerate(raw_value) if v is not None]
+            self._value_dim = np.atleast_1d([v for v in raw_value if v is not None])
+
+        self.dimension = len(self.idx)
+        self._nondim = nondim
+
+    @property
+    def value(self):
+        return self._nondim.M.state.d2nd[np.ix_(self.idx, self.idx)] @ self._value_dim
+
+
+class initial_control(Constraint):
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        self.name = cnstr_config.name
+        self.type = "initial_control"
+
+        nondim = segment.nondim
+        raw_value = cnstr_config["value"]
+
+        if "idx" in cnstr_config:
+            self.idx = cnstr_config.idx
+            self._value_dim = np.atleast_1d(raw_value)
+        else:
+            self.idx = [i for i, v in enumerate(raw_value) if v is not None]
+            self._value_dim = np.atleast_1d([v for v in raw_value if v is not None])
+
+        self.dimension = len(self.idx)
+        self._nondim = nondim
+
+    @property
+    def value(self):
+        return self._nondim.M.control.d2nd[np.ix_(self.idx, self.idx)] @ self._value_dim
+
+
+class final_control(Constraint):
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        self.name = cnstr_config.name
+        self.type = "final_control"
+
+        nondim = segment.nondim
+        raw_value = cnstr_config.value
+
+        if "idx" in cnstr_config:
+            self.idx = cnstr_config["idx"]
+            self._value_dim = np.atleast_1d(raw_value)
+        else:
+            self.idx = [i for i, v in enumerate(raw_value) if v is not None]
+            self._value_dim = np.atleast_1d([v for v in raw_value if v is not None])
+
+        self.dimension = len(self.idx)
+        self._nondim = nondim
+
+    @property
+    def value(self):
+        return self._nondim.M.control.d2nd[np.ix_(self.idx, self.idx)] @ self._value_dim
+
+
+class state_limits(Constraint):
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        index_map = segment.index_map
+        nondim = segment.nondim
+
+        self.name = cnstr_config.name
+        self.type = "state_limits"
+
+        raw_lower = cnstr_config.get("lower", [])
+        raw_upper = cnstr_config.get("upper", [])
+
+        self.lower_idx = [i for i, v in enumerate(raw_lower) if v is not None]
+        self.upper_idx = [i for i, v in enumerate(raw_upper) if v is not None]
+        self._lower_dim = np.atleast_1d([v for v in raw_lower if v is not None]) if self.lower_idx else np.array([])
+        self._upper_dim = np.atleast_1d([v for v in raw_upper if v is not None]) if self.upper_idx else np.array([])
+
+        self.dimension = len(self.lower_idx) + len(self.upper_idx)
+
+        n_elem = index_map.n.state
+        parts = []
+        if self.lower_idx:
+            parts.append(-np.eye(n_elem)[self.lower_idx, :])
+        if self.upper_idx:
+            parts.append(np.eye(n_elem)[self.upper_idx, :])
+        self.M_select = np.vstack(parts) if parts else np.zeros((0, n_elem))
+        self._nondim = nondim
+
+    def _d2nd(self, idx):
+        return self._nondim.M.state.d2nd[np.ix_(idx, idx)]
+
+    @property
+    def lower_value(self):
+        return self._d2nd(self.lower_idx) @ self._lower_dim if self.lower_idx else self._lower_dim
+
+    @property
+    def upper_value(self):
+        return self._d2nd(self.upper_idx) @ self._upper_dim if self.upper_idx else self._upper_dim
+
+    @property
+    def rhs(self):
+        parts = [v for v in (self.lower_value if self.lower_idx else None,
+                             self.upper_value if self.upper_idx else None) if v is not None]
+        return np.concatenate(parts) if parts else np.array([])
+
+
+class initial_state_limits(state_limits):
+    def __init__(self, cnstr_config, segment):
+        super().__init__(cnstr_config, segment)
+        self.type = "initial_state_limits"
+
+
+class final_state_limits(state_limits):
+    def __init__(self, cnstr_config, segment):
+        super().__init__(cnstr_config, segment)
+        self.type = "final_state_limits"
+
+
+class control_limits(Constraint):
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        index_map = segment.index_map
+        nondim = segment.nondim
+
+        self.name = cnstr_config.name
+        self.type = "control_limits"
+
+        raw_lower = cnstr_config.get("lower", [])
+        raw_upper = cnstr_config.get("upper", [])
+
+        self.lower_idx = [i for i, v in enumerate(raw_lower) if v is not None]
+        self.upper_idx = [i for i, v in enumerate(raw_upper) if v is not None]
+        self._lower_dim = np.atleast_1d([v for v in raw_lower if v is not None]) if self.lower_idx else np.array([])
+        self._upper_dim = np.atleast_1d([v for v in raw_upper if v is not None]) if self.upper_idx else np.array([])
+
+        self.dimension = len(self.lower_idx) + len(self.upper_idx)
+
+        n_elem = index_map.n.control
+        parts = []
+        if self.lower_idx:
+            parts.append(-np.eye(n_elem)[self.lower_idx, :])
+        if self.upper_idx:
+            parts.append(np.eye(n_elem)[self.upper_idx, :])
+        self.M_select = np.vstack(parts) if parts else np.zeros((0, n_elem))
+        self._nondim = nondim
+
+    @property
+    def lower_value(self):
+        idx = self.lower_idx
+        return self._nondim.M.control.d2nd[np.ix_(idx, idx)] @ self._lower_dim
+
+    @property
+    def upper_value(self):
+        idx = self.upper_idx
+        return self._nondim.M.control.d2nd[np.ix_(idx, idx)] @ self._upper_dim
+
+    @property
+    def rhs(self):
+        parts = [v for v in (self.lower_value if self.lower_idx else None,
+                             self.upper_value if self.upper_idx else None) if v is not None]
+        return np.concatenate(parts) if parts else np.array([])
+
+
+class initial_control_limits(control_limits):
+    def __init__(self, cnstr_config, segment):
+        super().__init__(cnstr_config, segment)
+        self.type = "initial_control_limits"
+
+
+class final_control_limits(control_limits):
+    def __init__(self, cnstr_config, segment):
+        super().__init__(cnstr_config, segment)
+        self.type = "final_control_limits"
+
+
+class control_rate_limit(Constraint):
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        index_map = segment.index_map
+        nondim = segment.nondim
+
+        self.type = "control_rate_limit"
+        self.name = cnstr_config.name
+
+        raw_value = cnstr_config["value"]
+        if "idx" in cnstr_config:
+            self.idx = cnstr_config.idx
+            self._value_dim = np.atleast_1d(raw_value)
+        else:
+            self.idx = [i for i, v in enumerate(raw_value) if v is not None]
+            self._value_dim = np.atleast_1d([v for v in raw_value if v is not None])
+
+        self.dimension = len(self.idx)
+
+        n_elem = index_map.n.control
+        M_min = -np.eye(n_elem)[self.idx, :]
+        M_max = np.eye(n_elem)[self.idx, :]
+        self.M_select = np.vstack([M_min, M_max])
+        self._nondim = nondim
+
+    @property
+    def value(self):
+        nondim = self._nondim
+        return nondim.time_scale * nondim.M.control.d2nd[np.ix_(self.idx, self.idx)] @ self._value_dim
+
+
+class control_accel_limit(control_rate_limit):
+    """|u_{k+1} - 2 u_k + u_{k-1}| <= value * dt_{k-1} * dt_k."""
+
+    def __init__(self, cnstr_config, segment):
+        super().__init__(cnstr_config, segment)
+        self.type = "control_accel_limit"
+
+    @property
+    def value(self):
+        nondim = self._nondim
+        return nondim.time_scale**2 * nondim.M.control.d2nd[np.ix_(self.idx, self.idx)] @ self._value_dim
+
+
+class initial_time(Constraint):
+    """Sets the time the segment starts at, else it comes from guess.t_start."""
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        self.type = "initial_time"
+        self.name = cnstr_config.name
+        self.dimension = 1
+
+        self._value_dim = cnstr_config["value"]
+        self._nondim = segment.nondim
+
+    @property
+    def value(self):
+        return self._value_dim / self._nondim.time_scale
+
+
+class final_time(Constraint):
+    """Sets the time the segment ends at. value fixes it, lower and upper bound it."""
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        index_map = segment.index_map
+        nondim = segment.nondim
+
+        self.type = "final_time"
+        self.name = cnstr_config.name
+        self.dimension = 1
+
+        fixed = cnstr_config.get("value", None)
+        self._fixed_dim = fixed
+        self._lower_dim = cnstr_config.get("lower", fixed)
+        self._upper_dim = cnstr_config.get("upper", fixed)
+
+        self._N_all = index_map.N.all
+        self._nondim = nondim
+
+    @property
+    def is_fixed(self):
+        return self._fixed_dim is not None
+
+    @property
+    def fixed_value(self):
+        return self._fixed_dim / self._nondim.time_scale if self.is_fixed else None
+
+    @property
+    def lower(self):
+        return self._lower_dim / self._nondim.time_scale if self._lower_dim is not None else None
+
+    @property
+    def upper(self):
+        return self._upper_dim / self._nondim.time_scale if self._upper_dim is not None else None
+
+    @property
+    def dt_min(self):
+        return self.lower / (self._N_all - 1) if self.lower is not None else None
+
+    @property
+    def dt_max(self):
+        return self.upper / (self._N_all - 1) if self.upper is not None else None
+
+
+class convex_inequality(Constraint):
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        index_map = segment.index_map
+        nondim = segment.nondim
+        fcns = segment.fcns
+        params = segment.params
+
+        self.type      = "convex_inequality"
+        self.name      = cnstr_config.name
+        self._upper_dim = cnstr_config.get("upper", None)
+        self._lower_dim = cnstr_config.get("lower", None)
+        self.index_map = index_map
+
+        self.fcn_string = cnstr_config.fcn
+        self.fcn_xu_dim = tools.resolve_function_from_string(self.fcn_string, fcns)
+
+        out = self.fcn_xu_dim(np.ones((1, index_map.n.state)), np.ones((1, index_map.n.control)), params)
+        self.dimension = 1 if out.ndim == 1 else out.shape[1]
+
+        self.scale = np.atleast_1d(cnstr_config.get("scale", np.ones(self.dimension)))
+        if self._upper_dim is not None and self._lower_dim is not None:
+            self.dimension = 2 * self.dimension
+
+        self.M_state_nd2d = np.asarray(nondim.M.state.nd2d)
+        self.M_ctrl_nd2d  = np.asarray(nondim.M.control.nd2d)
+        
+        self.time_scale = nondim.time_scale
+
+        self.M_out_d2nd = np.diag(1.0 / np.abs(self.scale))
+
+    @property
+    def upper(self):
+        return self.M_out_d2nd @ np.atleast_1d(self._upper_dim) if self._upper_dim is not None else None
+
+    @property
+    def lower(self):
+        return self.M_out_d2nd @ np.atleast_1d(self._lower_dim) if self._lower_dim is not None else None
+
+    def fcn_txu_nd(self, x, u, t, params):
+        M_out_diag = np.diag(self.M_out_d2nd)
+        g = cp.multiply(M_out_diag, self.fcn_xu_dim(x @ self.M_state_nd2d.T, u @ self.M_ctrl_nd2d.T, params))
+        pieces = []
+        if self.lower is not None:
+            pieces.append(self.lower - g)
+        if self.upper is not None:
+            pieces.append(g - self.upper)
+        if not pieces:
+            pieces.append(g)
+        return cp.hstack(pieces)
+
+    def fcn_znu(self, z, nu, params):
+        x, t, _, u, _ = self.index_map.unpack_znu(z, nu)
+        return self.fcn_txu_nd(x, u, t, params)
+
+
+class initial_convex_inequality(convex_inequality):
+    def __init__(self, cnstr_config, segment):
+        super().__init__(cnstr_config, segment)
+        self.type = "initial_convex_inequality"
+
+
+class final_convex_inequality(convex_inequality):
+    def __init__(self, cnstr_config, segment):
+        super().__init__(cnstr_config, segment)
+        self.type = "final_convex_inequality"
+
+
+_RESERVED_CONSTRAINT_KEYS = {"type", "fcn", "name", "lower", "upper", "scale", "eps"}
+
+
+class nonconvex_inequality(Constraint):
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        index_map = segment.index_map
+        nondim = segment.nondim
+        fcns = segment.fcns
+        params = segment.params
+
+        self.type      = "nonconvex_inequality"
+        self.name      = cnstr_config.name
+        self._upper_dim = cnstr_config.get("upper", None)
+        self._lower_dim = cnstr_config.get("lower", None)
+        self.index_map = index_map
+
+        # extra fields (e.g. 'pos') show up to the fcn as params.<constraint name>
+        extra = {k: v for k, v in cnstr_config.items() if k not in _RESERVED_CONSTRAINT_KEYS}
+        if extra:
+            params[self.name] = tools.deep_merge(params.get(self.name, {}), extra)
+
+        self.fcn_string = cnstr_config.fcn
+        self.fcn_txu_dim = tools.resolve_function_from_string(self.fcn_string, fcns)
+
+        out = self.fcn_txu_dim(np.ones(index_map.n.state), np.ones(index_map.n.control), 0.0, params)
+        self.dimension = jnp.atleast_1d(out).shape[0]
+
+        self.scale = np.atleast_1d(cnstr_config.get("scale", np.ones(self.dimension)))
+        if self._upper_dim is not None and self._lower_dim is not None:
+            self.dimension = 2 * self.dimension
+
+        self.M_out_d2nd   = jnp.diag(1.0 / jnp.abs(jnp.asarray(self.scale)))
+        self.M_state_nd2d = jnp.asarray(nondim.M.state.nd2d)
+        self.M_ctrl_nd2d  = jnp.asarray(nondim.M.control.nd2d)
+        self.time_scale     = nondim.time_scale
+
+    @property
+    def upper(self):
+        return self.M_out_d2nd @ jnp.atleast_1d(self._upper_dim) if self._upper_dim is not None else None
+
+    @property
+    def lower(self):
+        return self.M_out_d2nd @ jnp.atleast_1d(self._lower_dim) if self._lower_dim is not None else None
+
+    def fcn_txu_nd(self, x, u, t, params):
+        g = self.M_out_d2nd @ self.fcn_txu_dim(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, self.time_scale * t, params)
+        pieces = []
+        if self.lower is not None:
+            pieces.append(self.lower - g)
+        if self.upper is not None:
+            pieces.append(g - self.upper)
+        if not pieces:
+            pieces.append(g)
+        return jnp.concatenate(pieces)
+
+    def fcn_znu(self, z, nu, params):
+        x, t, _, u, _ = self.index_map.unpack_znu(z, nu)
+        return self.fcn_txu_nd(x, u, t, params)
+
+
+class initial_nonconvex_inequality(nonconvex_inequality):
+    def __init__(self, cnstr_config, segment):
+        super().__init__(cnstr_config, segment)
+        self.type = "initial_nonconvex_inequality"
+
+
+class final_nonconvex_inequality(nonconvex_inequality):
+    def __init__(self, cnstr_config, segment):
+        super().__init__(cnstr_config, segment)
+        self.type = "final_nonconvex_inequality"
+
+
+class ctcs_nonconvex_inequality(nonconvex_inequality):
+    def __init__(self, cnstr_config, segment):
+        super().__init__(cnstr_config, segment)
+        self.type = "ctcs_nonconvex_inequality"
+
+
+class nonconvex_equality(Constraint):
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        index_map = segment.index_map
+        nondim = segment.nondim
+        fcns = segment.fcns
+        params = segment.params
+
+        self.type      = "nonconvex_equality"
+        self.name      = cnstr_config.name
+        self.index_map = index_map
+
+        self.fcn_string  = cnstr_config.fcn
+        self.fcn_txu_dim = tools.resolve_function_from_string(self.fcn_string, fcns)
+
+        out = self.fcn_txu_dim(np.ones(index_map.n.state), np.ones(index_map.n.control), 0.0, params)
+        self.dimension = jnp.atleast_1d(out).shape[0]
+
+        self.scale = np.atleast_1d(cnstr_config.get("scale", np.ones(self.dimension)))
+
+        self.M_out_d2nd   = jnp.diag(1.0 / jnp.abs(jnp.asarray(self.scale)))
+        self.M_state_nd2d = jnp.asarray(nondim.M.state.nd2d)
+        self.M_ctrl_nd2d  = jnp.asarray(nondim.M.control.nd2d)
+        self.time_scale     = nondim.time_scale
+
+    def fcn_txu_nd(self, x, u, t, params):
+        return self.M_out_d2nd @ self.fcn_txu_dim(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, self.time_scale * t, params)
+
+    def fcn_znu(self, z, nu, params):
+        x, t, _, u, _ = self.index_map.unpack_znu(z, nu)
+        return self.fcn_txu_nd(x, u, t, params)
+
+
+class initial_nonconvex_equality(nonconvex_equality):
+    def __init__(self, cnstr_config, segment):
+        super().__init__(cnstr_config, segment)
+        self.type = "initial_nonconvex_equality"
+
+
+class final_nonconvex_equality(nonconvex_equality):
+    def __init__(self, cnstr_config, segment):
+        super().__init__(cnstr_config, segment)
+        self.type = "final_nonconvex_equality"
+
+
+class full_continuity(Constraint):
+    """State, control, and time match at the segment boundary."""
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        self.name = cnstr_config.name
+        self.type = "full_continuity"
+        self.segment_name = cnstr_config.segment
+        n = segment.index_map.n
+        self.dimension = n.state + n.control + n.time
+
+    def residual(self, other_scp_segment, this_scp_segment):
+        idx_state = this_scp_segment.index_map.indices.z.state
+        idx_time  = this_scp_segment.index_map.indices.z.time
+        idx_ctrl  = this_scp_segment.index_map.indices.nu.control
+
+        x_other = other_scp_segment.cp_params.z_ref[-1, idx_state] + other_scp_segment.dz[-1, idx_state]
+        x_this  = this_scp_segment.cp_params.z_ref[0, idx_state]  + this_scp_segment.dz[0, idx_state]
+
+        u_other = other_scp_segment.cp_params.nu_ref[-1, idx_ctrl] + other_scp_segment.dnu[-1, idx_ctrl]
+        u_this  = this_scp_segment.cp_params.nu_ref[0, idx_ctrl]  + this_scp_segment.dnu[0, idx_ctrl]
+
+        t_other = other_scp_segment.cp_params.z_ref[-1, idx_time] + other_scp_segment.dz[-1, idx_time]
+        t_this  = this_scp_segment.cp_params.z_ref[0, idx_time]  + this_scp_segment.dz[0, idx_time]
+
+        return cp.hstack([x_other - x_this, u_other - u_this, t_other - t_this])
+
+
+class state_continuity(Constraint):
+    """State matches at the segment boundary."""
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        self.name = cnstr_config.name
+        self.type = "state_continuity"
+        self.segment_name = cnstr_config.segment
+        self.idx = cnstr_config.get("idx", None)
+        if self.idx is not None:
+            self.dimension = len(self.idx)
+        else:
+            self.dimension = segment.index_map.n.state
+
+    def residual(self, other_scp_segment, this_scp_segment):
+        idx_state = this_scp_segment.index_map.indices.z.state
+        if self.idx is not None:
+            idx_state = [idx_state[i] for i in self.idx]
+        x_other = other_scp_segment.cp_params.z_ref[-1, idx_state] + other_scp_segment.dz[-1, idx_state]
+        x_this  = this_scp_segment.cp_params.z_ref[0, idx_state]  + this_scp_segment.dz[0, idx_state]
+        return x_other - x_this
+
+
+class control_continuity(Constraint):
+    """Control matches at the segment boundary."""
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        self.name = cnstr_config.name
+        self.type = "control_continuity"
+        self.segment_name = cnstr_config.segment
+        self.idx = cnstr_config.get("idx", None)
+        if self.idx is not None:
+            self.dimension = len(self.idx)
+        else:
+            self.dimension = segment.index_map.n.control
+
+    def residual(self, other_scp_segment, this_scp_segment):
+        idx_ctrl = this_scp_segment.index_map.indices.nu.control
+        if self.idx is not None:
+            idx_ctrl = [idx_ctrl[i] for i in self.idx]
+        u_other = other_scp_segment.cp_params.nu_ref[-1, idx_ctrl] + other_scp_segment.dnu[-1, idx_ctrl]
+        u_this  = this_scp_segment.cp_params.nu_ref[0, idx_ctrl]  + this_scp_segment.dnu[0, idx_ctrl]
+        return u_other - u_this
+
+
+class time_continuity(Constraint):
+    """Time matches at the segment boundary."""
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        self.name = cnstr_config.name
+        self.type = "time_continuity"
+        self.segment_name = cnstr_config.segment
+        self.dimension = segment.index_map.n.time
+
+    def residual(self, other_scp_segment, this_scp_segment):
+        idx_time = this_scp_segment.index_map.indices.z.time
+        t_other = other_scp_segment.cp_params.z_ref[-1, idx_time] + other_scp_segment.dz[-1, idx_time]
+        t_this  = this_scp_segment.cp_params.z_ref[0, idx_time]  + this_scp_segment.dz[0, idx_time]
+        return t_other - t_this
+
+
+class dynamics(Constraint):
+    def __init__(self, cnstr_config: dict, segment) -> None:
+        index_map = segment.index_map
+        nondim = segment.nondim
+        fcns = segment.fcns
+
+        self.type       = "dynamics"
+        self.name       = cnstr_config.name
+        self.index_map  = index_map
+        self.dimension  = index_map.n.z
+
+        self.fcn_string  = cnstr_config.fcn
+        self.fcn_txu_dim = tools.resolve_function_from_string(self.fcn_string, fcns)
+
+        self.M_out_d2nd   = jnp.asarray(nondim.M.state.d2nd * nondim.time_scale)
+        self.M_state_nd2d = jnp.asarray(nondim.M.state.nd2d)
+        self.M_ctrl_nd2d  = jnp.asarray(nondim.M.control.nd2d)
+
+        self.time_scale     = nondim.time_scale
+
+        self.ctcs_constraints = ()
+        self.running_costs = ()
+
+    def fcn_txu_nd(self, x, u, t, params):
+        return self.M_out_d2nd @ self.fcn_txu_dim(self.M_state_nd2d @ x, self.M_ctrl_nd2d @ u, self.time_scale * t, params)
+
+    def fcn_znu(self, z, nu, params):
+        x, t, _, u, s = self.index_map.unpack_znu(z, nu)
+
+        dx_dt = self.fcn_txu_nd(x, u, t, params)
+        dt_dt = jnp.asarray([1.0], dtype=z.dtype)
+
+        n_ctcs = len(self.index_map.indices.z.ctcs)
+        if self.ctcs_constraints:
+            ctcs_values = jnp.concatenate(
+                [jnp.atleast_1d(c.fcn_znu(z, nu, params)) for c in self.ctcs_constraints],
+            )
+            dbeta_dt = jnp.maximum(ctcs_values, 0.0)**2
+        else:
+            dbeta_dt = jnp.zeros(n_ctcs, dtype=z.dtype)
+
+        n_rc = len(self.index_map.indices.z.running_cost)
+        if self.running_costs:
+            dgamma_dt = jnp.concatenate(
+                [jnp.atleast_1d(c.fcn_znu(z, nu, params)) for c in self.running_costs],
+            )
+        else:
+            dgamma_dt = jnp.zeros(n_rc, dtype=z.dtype)
+
+        return s * jnp.concatenate([dx_dt, dt_dt, dbeta_dt, dgamma_dt])

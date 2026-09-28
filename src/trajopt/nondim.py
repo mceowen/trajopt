@@ -1,6 +1,5 @@
 import numpy as np
 
-from trajopt.index_map import IndexMap
 from trajopt.utils.tools import AttrDict
 
 
@@ -27,7 +26,7 @@ class ScalingMatrix:
 class Nondim:
     """Nondimensionalize utility class for use in Trajectory."""
 
-    def __init__(self, segment_config: AttrDict, index_map: IndexMap) -> None:
+    def __init__(self, segment_config: AttrDict, index_map) -> None:
         """Initialize all nondimensional parameters."""
         n_x                 = index_map.n.state
         n_u                 = index_map.n.get('control')
@@ -66,8 +65,7 @@ class Nondim:
         else:
             self.time_scale = provided_scale
 
-        # built once; the scaling matrices are computed on access from the
-        # current scales, so they can never go stale.
+        # scaling matrices are recomputed from the current scales on access
         self.M              = AttrDict({})
         self.M.state        = ScalingMatrix(self, "state_scales")
         self.M.control      = ScalingMatrix(self, "control_scales")
