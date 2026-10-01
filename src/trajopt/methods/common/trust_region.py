@@ -6,6 +6,19 @@ import jax.numpy as jnp
 
 # SCP_METHOD
 
+def tighten_scp_trust_region(subproblems) -> None:
+    """Increase first-order retry weights, without changing configured step sizes."""
+    for subproblem in subproblems:
+        subproblem.tr_scale = min(subproblem.tr_scale * 10.0, 1.0e6)
+
+
+def relax_scp_trust_region(subproblems) -> None:
+    """Return first-order retry weights towards their configured values."""
+    for subproblem in subproblems:
+        if subproblem.tr_scale > 1.0:
+            subproblem.tr_scale = max(subproblem.tr_scale * 0.7, 1.0)
+
+
 def line_search(subproblems, alpha_min=1e-7, c1=1e-4, beta=0.5, max_iter=20):
     subproblems = list(subproblems)
 

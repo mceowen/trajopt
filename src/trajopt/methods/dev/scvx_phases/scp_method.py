@@ -5,6 +5,7 @@ import cvxpy as cp
 
 from trajopt.methods.dev.scvx_phases.reporter import SolveReporter
 from trajopt.methods.dev.scvx_phases.scp_trajectory import SCPTrajectory
+from trajopt.methods.common import trust_region
 
 class SCPMethod():
 
@@ -81,12 +82,23 @@ class SCPMethod():
 
         for i in range(max_iter + 1):
             self.update_cvxpy_parameters()
-            self.cp_subproblem.solve(warm_start=False, **self.method_config.solver_opts)
+            try:
+                self.cp_subproblem.solve(warm_start=False, **self.method_config.solver_opts)
+            except cp.error.SolverError as exc:
+                trust_region.tighten_scp_trust_region(self.scp_trajectory.scp_phases.values())
+                self.reporter.message(f"  subproblem refused ({exc}), tightening trust region")
+                continue
 
             if self.cp_subproblem.status not in {"optimal", "optimal_inaccurate", "user_limit"}:
                 reason = f"Terminated from non-optimal convex subproblem! Status: {self.cp_subproblem.status}"
                 break
 
+            if not trust_region.step_is_usable(self.scp_trajectory.scp_phases.values()):
+                trust_region.tighten_scp_trust_region(self.scp_trajectory.scp_phases.values())
+                self.reporter.message(f"  step rejected (status {self.cp_subproblem.status}), tightening trust region")
+                continue
+
+            trust_region.relax_scp_trust_region(self.scp_trajectory.scp_phases.values())
             self.update_current_iter_data()
             self.display_status()
 
