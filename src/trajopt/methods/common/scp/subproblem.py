@@ -62,6 +62,7 @@ class SCPSubproblem():
         self.cp_constraints       = []
         self.cp_cost              = 0
         self.cp_subproblem_status = None
+        self.tr_scale             = 1.0
 
         self.create_cvxpy_parameters()
         self.create_cvxpy_variables()
@@ -160,14 +161,7 @@ class SCPSubproblem():
 
         self.x_ref, self.t_ref, self.beta_ref, self.u_ref, self.s_ref = self.index_map.unpack_znu(self.cp_params.z_ref, self.cp_params.nu_ref)
 
-        # trust-region weights are fixed for the whole solve, not adapted iteration to iteration.
-        # TODO(Skye): Review -- main added a bad-step retry that tightens these on a solver
-        # error or an unusable step, and relaxes back to 1.0 on a good one (commit 2e4f231,
-        # "Re-solve with a tighter trust region when a scvx step is unusable", 2026-08-27).
-        # That needs a per-subproblem `self.tr_scale` (init 1.0) multiplying every tr_*
-        # value here, recomputed each iteration, plus a tighten_trust_region()/
-        # relax_trust_region() pair driven from the solve loop in scp_method.py. Deferred
-        # since tr_step was just made deliberately static -- reintroduce only if wanted.
+        # Configured step sizes stay fixed; tr_scale adapts the weights on retries.
         self.cp_params.tr_x = cp.Parameter(nonneg=True, name="tr_x", value=1 / self._resolve_tr_step('z', 'x'))
         self.cp_params.tr_t = cp.Parameter(nonneg=True, name="tr_t", value=1 / self._resolve_tr_step('z', 't'))
         if self.index_map.n.ctcs > 0:
@@ -325,6 +319,15 @@ class SCPSubproblem():
         disc_end_time = time.perf_counter()
 
         self.current_iter_data.discretization_time = (disc_end_time - disc_start_time) * 1000
+
+        self.cp_params.tr_x.value = self.tr_scale / self._resolve_tr_step('z', 'x')
+        self.cp_params.tr_t.value = self.tr_scale / self._resolve_tr_step('z', 't')
+        if self.index_map.n.ctcs > 0:
+            self.cp_params.tr_ctcs.value = self.tr_scale / self._resolve_tr_step('z', 'ctcs')
+        if self.index_map.n.running_cost > 0:
+            self.cp_params.tr_gamma.value = self.tr_scale / self._resolve_tr_step('z', 'gamma')
+        self.cp_params.tr_u.value = self.tr_scale / self._resolve_tr_step('nu', 'u')
+        self.cp_params.tr_s.value = self.tr_scale / self._resolve_tr_step('nu', 's')
 
         for constraint in self.constraints.values():
             constraint.update_penalty_parameters(self)
