@@ -4,7 +4,7 @@
       .runs_by_method: {method: [RunResult, ...]}   run 0 is the nominal case
         RunResult
           .iter_data_list: [Iterate]
-          .solver_iters                             {segment: per-iteration solver data}
+          .solver_iters                             {phase: per-iteration solver data}
           .final -> Iterate
             Iterate
               t_opt / x_opt / u_opt                 values at the nodes
@@ -85,7 +85,7 @@ class Iterate(_MappingShim):
 
 @dataclass(frozen=True)
 class RunResult(_MappingShim):
-    """One solve: its propagated iterates plus the per-segment solver data."""
+    """One solve: its propagated iterates plus the per-phase solver data."""
 
     iter_data_list: list[Iterate]
     solver_iters: Mapping[str, list]

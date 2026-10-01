@@ -6,14 +6,24 @@ import jax.numpy as jnp
 
 # SCP_METHOD
 
-def line_search(self, c1=1e-4, beta=0.5, max_iter=20, alpha_min=None):
-    segments = self.scp_trajectory.scp_segments
+def tighten_scp_trust_region(subproblems) -> None:
+    """Increase first-order retry weights, without changing configured step sizes."""
+    for subproblem in subproblems:
+        subproblem.tr_scale = min(subproblem.tr_scale * 10.0, 1.0e6)
 
-    if alpha_min is None:
-        alpha_min = float(getattr(self.method_config.flags, 'alpha_min_ls', 1e-7))
+
+def relax_scp_trust_region(subproblems) -> None:
+    """Return first-order retry weights towards their configured values."""
+    for subproblem in subproblems:
+        if subproblem.tr_scale > 1.0:
+            subproblem.tr_scale = max(subproblem.tr_scale * 0.7, 1.0)
+
+
+def line_search(subproblems, alpha_min=1e-7, c1=1e-4, beta=0.5, max_iter=20):
+    subproblems = list(subproblems)
 
     phi_0, dphi = 0.0, 0.0
-    for seg in segments.values():
+    for seg in subproblems:
         v, g = merit_grad_at_zero(seg)
         phi_0 += v
         dphi += g
@@ -22,7 +32,7 @@ def line_search(self, c1=1e-4, beta=0.5, max_iter=20, alpha_min=None):
 
     alpha = 1.0
     for _ in range(max_iter):
-        phi = sum(evaluate_merit_at_alpha(seg, alpha) for seg in segments.values())
+        phi = sum(evaluate_merit_at_alpha(seg, alpha) for seg in subproblems)
         if np.isfinite(phi) and phi <= phi_0 + c1 * alpha * slope:
             return alpha
         alpha *= beta
@@ -32,10 +42,10 @@ def line_search(self, c1=1e-4, beta=0.5, max_iter=20, alpha_min=None):
     return alpha_min
 
 
-def step_is_usable(self, max_step: float = 1e6) -> bool:
+def step_is_usable(subproblems, max_step: float = 1e6) -> bool:
     """Whether the step is real, since a solver at its iteration limit can return nonsense."""
-    for scp_segment in self.scp_trajectory.scp_segments.values():
-        for expr in (scp_segment.dz, scp_segment.dnu):
+    for scp_phase in subproblems:
+        for expr in (scp_phase.dz, scp_phase.dnu):
             value = expr.value
             if value is None:
                 return False
@@ -45,7 +55,7 @@ def step_is_usable(self, max_step: float = 1e6) -> bool:
     return True
 
 
-# SCP_SEGMENT
+# SCP_PHASE
 
 def create_cost_trust_region(self) -> None:
     if self.flags.discretize not in ("ms", "ps"):
@@ -147,9 +157,6 @@ def merit_grad_at_zero(self):
 
 # SCP_CONSTRAINT
 
-def compile_merit_penalty(self, scp_segment): pass
-
-
 def compile_merit_penalty_from_violation(self, violation):
     l1 = self.penalty_state.norm == "l1"
     if self.penalty_state.vb_type == "split":
@@ -211,10 +218,10 @@ def merit_value_and_grad_alpha(self, alpha, z_ref, dz, nu_ref, dnu, params):
 
 # SCP_CONSTRAINT_TYPES
 
-def accumulate_hessian_dynamics(self, scp_segment, H):
-    n_z = scp_segment.index_map.n.z
+def accumulate_hessian_dynamics(self, scp_phase, H):
+    n_z = scp_phase.index_map.n.z
 
-    if scp_segment.flags.discretize == "ps":
+    if scp_phase.flags.discretize == "ps":
         H[1:, :n_z, :n_z] += np.asarray(self.ps_H_z[0])
         H[1:, :n_z, n_z:] += np.asarray(self.ps_H_z[1])
         H[1:, n_z:, :n_z] += np.asarray(self.ps_H_nu[0])
@@ -228,15 +235,15 @@ def accumulate_hessian_dynamics(self, scp_segment, H):
     H[1:,  n_z:, n_z:] += np.asarray(self.H_nu_kp[2])
 
 
-def accumulate_hessian_nonconvex(self, scp_segment, H, constraints_attr):
+def accumulate_hessian_nonconvex(self, scp_phase, H, constraints_attr):
     """Shared by scp_nonconvex_inequality (constraints_attr='cp_ineq_constraints')
     and scp_nonconvex_equality (constraints_attr='cp_eq_constraints')."""
     if not hasattr(self, constraints_attr):
         return
-    n_z    = scp_segment.index_map.n.z
-    z      = jnp.asarray(scp_segment.current_iter_data.z_opt)
-    nu     = jnp.asarray(scp_segment.current_iter_data.nu_opt)
-    params = scp_segment.params
+    n_z    = scp_phase.index_map.n.z
+    z      = jnp.asarray(scp_phase.current_iter_data.z_opt)
+    nu     = jnp.asarray(scp_phase.current_iter_data.nu_opt)
+    params = scp_phase.params
     lam    = jnp.asarray(self.lagrangian_dual)
 
     H_z, H_nu = self.lagrangian_hessians(lam, z[self.nodes], nu[self.nodes], params)
@@ -247,10 +254,10 @@ def accumulate_hessian_nonconvex(self, scp_segment, H, constraints_attr):
         H[k, n_z:, n_z:] += np.asarray(H_nu[1][i])
 
 
-def compile_merit_penalty_scp_dynamics(self, scp_segment):
+def compile_merit_penalty_scp_dynamics(self, scp_phase):
     if self.penalty_state.W.size == 0:
         return
-    if scp_segment.flags.discretize == "ps":
+    if scp_phase.flags.discretize == "ps":
         D_jnp = jnp.asarray(self.ps_D)
         dyn_batched = self.dyn_fcn_batched
         H = self.ps_hp
@@ -266,13 +273,13 @@ def compile_merit_penalty_scp_dynamics(self, scp_segment):
         compile_merit_penalty_from_violation(self, violation)
         return
     propagate = self.propagate
-    ks        = jnp.arange(scp_segment.index_map.N.all - 1)
+    ks        = jnp.arange(scp_phase.index_map.N.all - 1)
     def violation(z, nu, params):
         return z[1:] - propagate(ks, z[:-1], nu[:-1], nu[1:], params)
     compile_merit_penalty_from_violation(self, violation)
 
 
-def compile_merit_penalty_scp_final_state(self, scp_segment):
+def compile_merit_penalty_scp_final_state(self, scp_phase):
     if self.penalty_state.W.size == 0:
         return
     idx = jnp.asarray(self.constraint.idx)
@@ -282,7 +289,7 @@ def compile_merit_penalty_scp_final_state(self, scp_segment):
     compile_merit_penalty_from_violation(self, violation)
 
 
-def compile_merit_penalty_scp_final_control(self, scp_segment):
+def compile_merit_penalty_scp_final_control(self, scp_phase):
     if self.penalty_state.W.size == 0:
         return
     idx = jnp.asarray(self.constraint.idx)
@@ -292,7 +299,7 @@ def compile_merit_penalty_scp_final_control(self, scp_segment):
     compile_merit_penalty_from_violation(self, violation)
 
 
-def compile_merit_penalty_scp_nonconvex_inequality(self, scp_segment):
+def compile_merit_penalty_scp_nonconvex_inequality(self, scp_phase):
     if self.penalty_state.W.size == 0:
         return
     fcn_b = self.fcn_batched
@@ -303,7 +310,7 @@ def compile_merit_penalty_scp_nonconvex_inequality(self, scp_segment):
     compile_merit_penalty_from_violation(self, violation)
 
 
-def compile_merit_penalty_scp_nonconvex_equality(self, scp_segment):
+def compile_merit_penalty_scp_nonconvex_equality(self, scp_phase):
     if self.penalty_state.W.size == 0:
         return
     fcn_b = self.fcn_batched
@@ -316,11 +323,8 @@ def compile_merit_penalty_scp_nonconvex_equality(self, scp_segment):
 
 # SCP_COST
 
-def merit_cost(self, scp_segment): return None
-
-
-def compile_merit_cost(self, scp_segment):
-    fn = self.merit_cost(scp_segment)
+def compile_merit_cost(self, scp_phase):
+    fn = self.merit_cost(scp_phase)
     if fn is None:
         return
     self._has_merit = True
@@ -345,32 +349,32 @@ def merit_cost_value_and_grad_alpha(self, alpha, z_ref, dz, nu_ref, dnu, params)
 
 # SCP_COST_TYPES
 
-def accumulate_hessian_nonconvex_terminal_cost(self, scp_segment, H, first_terminal_cost_fn):
-    if first_terminal_cost_fn(scp_segment) is not self.cost:
+def accumulate_hessian_nonconvex_terminal_cost(self, scp_phase, H, first_terminal_cost_fn):
+    if first_terminal_cost_fn(scp_phase) is not self.cost:
         return
-    z_opt  = scp_segment.current_iter_data.z_opt
-    nu_opt = scp_segment.current_iter_data.nu_opt
-    n_z    = scp_segment.index_map.n.z
+    z_opt  = scp_phase.current_iter_data.z_opt
+    nu_opt = scp_phase.current_iter_data.nu_opt
+    n_z    = scp_phase.index_map.n.z
 
-    H_cost_z, H_cost_nu, H_cost_znu = compute_nonconvex_terminal_cost_hessians(z_opt, nu_opt, scp_segment.segment, scp_segment)
+    H_cost_z, H_cost_nu, H_cost_znu = compute_nonconvex_terminal_cost_hessians(z_opt, nu_opt, scp_phase.phase, scp_phase)
     H[:, :n_z, :n_z] += H_cost_z
     H[:, n_z:, n_z:] += H_cost_nu
     H[:, :n_z, n_z:] += H_cost_znu
     H[:, n_z:, :n_z] += np.transpose(H_cost_znu, (0, 2, 1))
 
 
-def compute_nonconvex_terminal_cost_hessians(z, nu, segment, scp_segment):
-    N    = segment.index_map.N.all
-    n_z  = segment.index_map.n.z
-    n_nu = segment.index_map.n.nu
+def compute_nonconvex_terminal_cost_hessians(z, nu, phase, scp_phase):
+    N    = phase.index_map.N.all
+    n_z  = phase.index_map.n.z
+    n_nu = phase.index_map.n.nu
 
     H_cost_z   = np.zeros((N, n_z, n_z))
     H_cost_nu  = np.zeros((N, n_nu, n_nu))
     H_cost_znu = np.zeros((N, n_z, n_nu))
 
-    params = segment.params
-    nonconvex_costs = [c for c in segment.costs.values() if c.type == "nonconvex"]
-    terminal_costs  = [c for c in segment.costs.values() if c.type == "nonconvex_terminal"]
+    params = phase.params
+    nonconvex_costs = [c for c in phase.costs.values() if c.type == "nonconvex"]
+    terminal_costs  = [c for c in phase.costs.values() if c.type == "nonconvex_terminal"]
 
     if len(nonconvex_costs) + len(terminal_costs) == 0:
         return H_cost_z, H_cost_nu, H_cost_znu
@@ -402,7 +406,7 @@ def compute_nonconvex_terminal_cost_hessians(z, nu, segment, scp_segment):
     return H_cost_z, H_cost_nu, H_cost_znu
 
 
-def merit_cost_scp_nonconvex_running(self, scp_segment):
+def merit_cost_scp_nonconvex_running(self, scp_phase):
     w = self.cost.w
     fcn_batched = jax.jit(jax.vmap(jax.jit(self.cost.fcn_znu), in_axes=(0, 0, None)))
     def eval_fn(z, nu, params):
@@ -410,7 +414,7 @@ def merit_cost_scp_nonconvex_running(self, scp_segment):
     return eval_fn
 
 
-def merit_cost_scp_nonconvex_terminal(self, scp_segment):
+def merit_cost_scp_nonconvex_terminal(self, scp_phase):
     fcn_b = self.cost.fcn_batched
     nodes = jnp.asarray(self.cost.nodes)
     def eval_fn(z, nu, params):
@@ -418,7 +422,7 @@ def merit_cost_scp_nonconvex_terminal(self, scp_segment):
     return eval_fn
 
 
-def merit_cost_scp_nonconvex_minimax(self, scp_segment):
+def merit_cost_scp_nonconvex_minimax(self, scp_phase):
     w     = self.cost.w
     g_b   = self.g_batched
     nodes = jnp.asarray(self.nodes)
@@ -427,14 +431,14 @@ def merit_cost_scp_nonconvex_minimax(self, scp_segment):
     return eval_fn
 
 
-def merit_cost_scp_min_time(self, scp_segment):
-    dil_idx = jnp.array(scp_segment.index_map.indices.nu.dilation_factor)
+def merit_cost_scp_min_time(self, scp_phase):
+    dil_idx = jnp.array(scp_phase.index_map.indices.nu.dilation_factor)
     def eval_fn(z, nu, params):
         return jnp.sum(nu[:, dil_idx[0]])
     return eval_fn
 
 
-def merit_cost_scp_final_state(self, scp_segment):
+def merit_cost_scp_final_state(self, scp_phase):
     w   = self.cost.w
     idx = jnp.array(self.cost.idx)
     def eval_fn(z, nu, params):
@@ -442,7 +446,7 @@ def merit_cost_scp_final_state(self, scp_segment):
     return eval_fn
 
 
-def merit_cost_scp_final_control(self, scp_segment):
+def merit_cost_scp_final_control(self, scp_phase):
     w   = self.cost.w
     idx = jnp.array(self.cost.idx)
     def eval_fn(z, nu, params):
@@ -450,7 +454,7 @@ def merit_cost_scp_final_control(self, scp_segment):
     return eval_fn
 
 
-def merit_cost_scp_regularization(self, scp_segment):
+def merit_cost_scp_regularization(self, scp_phase):
     w         = self.cost.w
     norm_type = self.cost.norm_type
     is_nu     = self.cost.set == "control"
@@ -462,7 +466,7 @@ def merit_cost_scp_regularization(self, scp_segment):
     return eval_fn
 
 
-def merit_cost_scp_rate_regularization(self, scp_segment):
+def merit_cost_scp_rate_regularization(self, scp_phase):
     w         = self.cost.w
     norm_type = self.cost.norm_type
     is_nu     = self.cost.set == "control"

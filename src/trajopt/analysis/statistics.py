@@ -89,7 +89,7 @@ def extract_data(config: dict, data: dict) -> dict:
     """Extract key variables from each Monte Carlo run.
 
     Each run carries ``solver_iters`` (per-iteration algorithm data, keyed by
-    segment) alongside the propagated ``iter_data_list``.
+    phase) alongside the propagated ``iter_data_list``.
     """
     print("Extracting data from runs...")
     extracted: dict = {}
@@ -110,9 +110,9 @@ def extract_data(config: dict, data: dict) -> dict:
         }
 
         for run_data in method_data["runs"]:
-            segments = list(run_data.get("solver_iters", {}).values())
-            # every segment records the same solve and parse time
-            timed = segments[0] if segments else []
+            phases = list(run_data.get("solver_iters", {}).values())
+            # every phase records the same solve and parse time
+            timed = phases[0] if phases else []
             num_iters = max(len(timed) - 1, 1)
 
             time_solve = 0.0
@@ -123,7 +123,7 @@ def extract_data(config: dict, data: dict) -> dict:
                     continue
                 time_solve += float(it.get("solve_time", 0))
                 time_parse += float(it.get("parse_time", 0))
-            for iters in segments:
+            for iters in phases:
                 for it in iters:
                     if int(it.get("iter_num", 0)) == 0:
                         continue

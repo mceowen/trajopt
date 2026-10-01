@@ -1,4 +1,5 @@
 method_class: dev.scvx
+formulation_class: dev.simple
 
 inherit: autoscvx-term.yaml
 

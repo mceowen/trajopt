@@ -1,11 +1,11 @@
 # problem
 trajectory:
-  segments:
+  phases:
 
     # guided entry: guidance initiation to parachute deployment
     entry:
       num_nodes: 199
-      inherit: trajopt/examples/experiments/msrl/msrl_common_segment.yaml
+      inherit: trajopt/formulations/dev/phases/examples/experiments/msrl/msrl_common_phase.yaml
 
       fcns:
         nonlinear_aero: trajopt/missions/msrl.py:nonlinear_aero
@@ -154,7 +154,7 @@ trajectory:
 
     descent:
       num_nodes: 40
-      inherit: trajopt/examples/experiments/msrl/msrl_common_segment.yaml
+      inherit: trajopt/formulations/dev/phases/examples/experiments/msrl/msrl_common_phase.yaml
 
       fcns:
         nonlinear_aero: trajopt/missions/msrl.py:parachute_aero
@@ -162,11 +162,11 @@ trajectory:
       constraints:
         state_continuity:
           type: state_continuity
-          segment: entry
+          phase: entry
 
         time_continuity:
           type: time_continuity
-          segment: entry
+          phase: entry
 
         final_state:
           type: final_state
@@ -200,7 +200,7 @@ trajectory:
 
 # solution method
 method:
-  inherit: trajopt/methods/dev/scvx/configs/autoscvx-term.yaml
+  inherit: trajopt/methods/dev/scvx_phases/configs/autoscvx-term.yaml
 
   flags:
     equal_dt: 1

@@ -1,0 +1,13 @@
+method_class: dev.scvx_phases
+formulation_class: dev.phases
+
+inherit: autoscvx.yaml
+
+guess:
+  type: propagation
+
+penalty:
+  dynamics:
+    vb: none
+  final_state:
+    vb: standard

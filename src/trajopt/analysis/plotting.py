@@ -18,6 +18,15 @@ plt.rcParams.update({
     'path.simplify': True, 'path.simplify_threshold': 0.1,
 })
 
+def _scp_subproblems(method):
+    """A method's dict of per-piece SCP subproblems, whatever it calls the attribute."""
+    scp_trajectory = method.scp_trajectory
+    scp_phases = getattr(scp_trajectory, "scp_phases", None)
+    if scp_phases is not None:
+        return scp_phases
+    return scp_trajectory.scp_subproblems
+
+
 plot_options = AttrDict({
     'figsize':     (12, 3.5),
     'save_dpi':    300,
@@ -126,11 +135,26 @@ def _group_outputs(outputs, declared):
     return grouped
 
 
+def _phase_configs(trajectory_cfg):
+    """The per-phase config blocks, or [trajectory_cfg] itself under a flat (non-phaseed) formulation."""
+    if "phases" in trajectory_cfg:
+        return list(trajectory_cfg.phases.values())
+    return [trajectory_cfg]
+
+
+def _first_phase(traj_analyzer):
+    """The runtime first (or only) phase/trajectory object, whichever formulation is in play."""
+    trajectory = traj_analyzer.trajectory
+    if hasattr(trajectory, "phases"):
+        return next(iter(trajectory.phases.values()))
+    return trajectory
+
+
 def _output_configs(traj_analyzer):
-    """Merge the outputs: config blocks of every segment into one mapping."""
+    """Merge the outputs: config blocks of every phase into one mapping."""
     merged = {}
-    for segment_cfg in traj_analyzer.config.trajectory.segments.values():
-        merged.update(segment_cfg.get('outputs', {}))
+    for phase_cfg in _phase_configs(traj_analyzer.config.trajectory):
+        merged.update(phase_cfg.get('outputs', {}))
     return merged
 
 
@@ -143,8 +167,8 @@ def build_standalone(traj_analyzer, data):
     last_iter      = iters_all[-1]
     traj_configs   = _output_configs(traj_analyzer)
     traj_data      = _group_outputs(last_iter["outputs"], traj_configs)
-    first_segment  = next(iter(traj_analyzer.trajectory.segments.values()))
-    fcns           = first_segment.fcns
+    first_phase  = _first_phase(traj_analyzer)
+    fcns           = first_phase.fcns
 
     figs, axs = {}, {}
     for group_name, group_data in traj_data.items():
@@ -187,7 +211,7 @@ def build_standalone(traj_analyzer, data):
                     xlim, ylim = ax.get_xlim(), ax.get_ylim()
                     zlim = ax.get_zlim() if hasattr(ax, 'get_zlim') else None
 
-                _plot_overlays(ax, traj_cfg, dim, first_segment.params, fcns)
+                _plot_overlays(ax, traj_cfg, dim, first_phase.params, fcns)
 
                 if limits_opt_only:
                     ax.set_xlim(xlim)
@@ -248,8 +272,8 @@ def build_method_variation(traj_analyzer, data):
     traj_configs = _output_configs(traj_analyzer)
     ref_traj_data = _group_outputs(ref_last["outputs"], traj_configs)
 
-    first_segment = next(iter(traj_analyzer.trajectory.segments.values()))
-    fcns = first_segment.fcns
+    first_phase = _first_phase(traj_analyzer)
+    fcns = first_phase.fcns
 
     figs, axs = {}, {}
     for group_name, group_data in ref_traj_data.items():
@@ -329,7 +353,7 @@ def build_method_variation(traj_analyzer, data):
             if output.meta.type == "spatial":
                 traj_cfg = traj_configs.get(traj_name, output.meta)
                 dim = output.opt.shape[1]
-                _plot_overlays(ax, traj_cfg, dim, first_segment.params, fcns)
+                _plot_overlays(ax, traj_cfg, dim, first_phase.params, fcns)
 
                 if key in all_spatial_vals:
                     equal_aspect = bool(traj_cfg.get("equal_aspect", False))
@@ -548,7 +572,7 @@ def _padded_lim(lo, hi, margin=0.08):
 
 
 def _set_limits_from_data(ax, vals, margin=0.08, equal_aspect=False):
-    # an output missing from a segment is NaN over that stretch
+    # an output missing from a phase is NaN over that stretch
     ax.set_xlim(*_padded_lim(np.nanmin(vals[:, 0]), np.nanmax(vals[:, 0]), margin))
     ax.set_ylim(*_padded_lim(np.nanmin(vals[:, 1]), np.nanmax(vals[:, 1]), margin))
     if vals.shape[1] >= 3 and hasattr(ax, 'set_zlim'):
@@ -606,9 +630,9 @@ def _include_quiver_extents(all_vals, traj):
 
 
 def convergence_plots(traj_analyzer, save=True):
-    scp_segments = traj_analyzer.method.scp_trajectory.scp_segments
-    multi        = len(scp_segments) > 1
-    figs         = [_convergence_plot(seg, f"_{name}" if multi else "", save) for name, seg in scp_segments.items()]
+    scp_phases = _scp_subproblems(traj_analyzer.method)
+    multi        = len(scp_phases) > 1
+    figs         = [_convergence_plot(seg, f"_{name}" if multi else "", save) for name, seg in scp_phases.items()]
     return figs[0] if figs else None
 
 
@@ -666,9 +690,9 @@ def _convergence_plot(subprob, suffix, save=True):
 
 
 def convergence_weight_plots(traj_analyzer, save=True):
-    scp_segments = traj_analyzer.method.scp_trajectory.scp_segments
-    multi        = len(scp_segments) > 1
-    figs         = [_convergence_weight_plot(seg, f"_{name}" if multi else "", save) for name, seg in scp_segments.items()]
+    scp_phases = _scp_subproblems(traj_analyzer.method)
+    multi        = len(scp_phases) > 1
+    figs         = [_convergence_weight_plot(seg, f"_{name}" if multi else "", save) for name, seg in scp_phases.items()]
     return figs[0] if figs else None
 
 
@@ -748,9 +772,9 @@ def _convergence_weight_plot(subprob, suffix, save=True):
 
 
 def convergence_weight_mean_plots(traj_analyzer, save=True):
-    scp_segments = traj_analyzer.method.scp_trajectory.scp_segments
-    multi        = len(scp_segments) > 1
-    figs         = [_convergence_weight_mean_plot(seg, f"_{name}" if multi else "", save) for name, seg in scp_segments.items()]
+    scp_phases = _scp_subproblems(traj_analyzer.method)
+    multi        = len(scp_phases) > 1
+    figs         = [_convergence_weight_mean_plot(seg, f"_{name}" if multi else "", save) for name, seg in scp_phases.items()]
     return figs[0] if figs else None
 
 
@@ -830,9 +854,9 @@ def _convergence_weight_mean_plot(subprob, suffix, save=True):
 
 
 def convergence_vb_plots(traj_analyzer, save=True):
-    scp_segments = traj_analyzer.method.scp_trajectory.scp_segments
-    multi        = len(scp_segments) > 1
-    figs         = [_convergence_vb_plot(seg, f"_{name}" if multi else "", save) for name, seg in scp_segments.items()]
+    scp_phases = _scp_subproblems(traj_analyzer.method)
+    multi        = len(scp_phases) > 1
+    figs         = [_convergence_vb_plot(seg, f"_{name}" if multi else "", save) for name, seg in scp_phases.items()]
     return figs[0] if figs else None
 
 

@@ -1,10 +1,10 @@
 # TrajOpt
 
 <p align="center">
-  <img src="docs/segment_diagram.svg" alt="diagram" width="500"/>
+  <img src="docs/phase_diagram.svg" alt="diagram" width="500"/>
 </p>
 
-TrajOpt is a self-contained Python library for multi-segment trajectory optimization using Sequential Convex Programming (SCP). It is designed around reusable __models__, configurable __missions__, and modular __methods__, with built-in support for entry, descent, and landing (EDL) and other aerospace applications. This structure makes it straightforward to define new problems, implement new algorithms, and compare solution methods within a common software pipeline.
+TrajOpt is a self-contained Python library for multi-phase trajectory optimization using Sequential Convex Programming (SCP). It is designed around reusable __models__, configurable __missions__, and modular __methods__, with built-in support for entry, descent, and landing (EDL) and other aerospace applications. This structure makes it straightforward to define new problems, implement new algorithms, and compare solution methods within a common software pipeline.
 
 ## Features
 * __Configurable Missions__: Configuring missions using existing models is fast and efficient due to the config.yaml structure.
@@ -38,8 +38,8 @@ To include documentation dependencies:
 python -m pip install -e ".[dev,docs]"
 ```
 
-## Segments
-A trajectory __segment__ is defined by a set of (Costs, Constraints, Parameters, Functions):
+## Phases
+A trajectory __phase__ is defined by a set of (Costs, Constraints, Parameters, Functions):
 
 ```math
 \begin{aligned}
@@ -71,7 +71,7 @@ f_k(x_i,u_i,t_i,\mathrm{params}_i,\mathrm{fcns}_i)
 ```
 
 ## Trajectory
-The __trajectory__ optimal control problem (OCP) is defined by summing the cost contributions and enforcing the constraints from each __segment__:
+The __trajectory__ optimal control problem (OCP) is defined by summing the cost contributions and enforcing the constraints from each __phase__:
 
 ```math
 \begin{aligned}
@@ -133,7 +133,7 @@ where $h(z)$ collects the dynamics defects, boundary conditions, and nonconvex e
 
 ## Trajectory Analyzer
 
-The `TrajectoryAnalyzer` is the top-level entry point. It reads a mission `config.yaml`, builds the `Trajectory` (its segments, costs, and constraints) and the `Method` that solves it, and exposes a simple `solve → analyze → plot` workflow:
+The `TrajectoryAnalyzer` is the top-level entry point. It reads a mission `config.yaml`, builds the `Trajectory` (its phases, costs, and constraints) and the `Method` that solves it, and exposes a simple `solve → analyze → plot` workflow:
 
 ```python
 from trajopt.trajectory_analyzer import TrajectoryAnalyzer
@@ -163,7 +163,7 @@ J(z) + \tfrac{1}{2}p^\top W_h\, p + \tfrac{1}{2}q^\top W_g\, q + \lambda^\top p 
 \end{aligned}
 ```
 
-The quadratic weights $(W_h, W_g)$ and the dual (linear) weights $(\lambda,\mu)$ are __auto-tuned__ through primal–dual updates, which removes most of the manual penalty-weight tuning that SCP methods typically require. The `Method` assembles a single CVXPY subproblem from all segments and solves it repeatedly through the SCP loop.
+The quadratic weights $(W_h, W_g)$ and the dual (linear) weights $(\lambda,\mu)$ are __auto-tuned__ through primal–dual updates, which removes most of the manual penalty-weight tuning that SCP methods typically require. The `Method` assembles a single CVXPY subproblem from all phases and solves it repeatedly through the SCP loop.
 
 ## Sequential Convex Programming
 
@@ -190,7 +190,7 @@ Skye Mceowen, Carlos Morales, Pranav Ramasahayam
 
 ## Research Origins and Acknowledgements
 
-TrajOpt originated from Skye Mceowen's PhD thesis research under Dr. Behçet Açıkmeşe in the Autonomous Controls Laboratory at the University of Washington. The research focused on sequential convex trajectory optimization, with early MATLAB prototypes developed in [`entry_opt`](https://github.com/mceowen/entry_opt), [`scp_sandbox`](https://github.com/mceowen/scp_sandbox), and [`trajopt_toolkit`](https://github.com/mceowen/trajopt_toolkit). The current Python package was subsequently developed collaboratively by Skye Mceowen and Carlos Morales into a reusable framework for multi-segment trajectory optimization and algorithm design. The original thesis work focused primarily on first-order methods, while Carlos Morales' MS work has extended these approaches with second-order method development. The package and earlier prototypes form part of the software contributions of the PhD work. This work is being continued by Pranav Ramasahayam for multiphase EDL as Behçet's PhD student.
+TrajOpt originated from Skye Mceowen's PhD thesis research under Dr. Behçet Açıkmeşe in the Autonomous Controls Laboratory at the University of Washington. The research focused on sequential convex trajectory optimization, with early MATLAB prototypes developed in [`entry_opt`](https://github.com/mceowen/entry_opt), [`scp_sandbox`](https://github.com/mceowen/scp_sandbox), and [`trajopt_toolkit`](https://github.com/mceowen/trajopt_toolkit). The current Python package was subsequently developed collaboratively by Skye Mceowen and Carlos Morales into a reusable framework for multi-phase trajectory optimization and algorithm design. The original thesis work focused primarily on first-order methods, while Carlos Morales' MS work has extended these approaches with second-order method development. The package and earlier prototypes form part of the software contributions of the PhD work. This work is being continued by Pranav Ramasahayam for multiphase EDL as Behçet's PhD student.
 
 Additional contributors to the current Python package include Daniel J. Calderone and Samet Uzun. Earlier development and MATLAB prototypes also benefited from contributions by Jimmy Fowler, Edgerton Cook, Fabio Spada, Jason Zhou, Aman Tiwary, and Chris Sota.
 

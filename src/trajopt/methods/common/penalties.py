@@ -1,4 +1,4 @@
-"""Penalty-method building blocks for dev/scvx's constraint penalty machinery.
+"""Penalty-method building blocks for dev/scvx_phases's constraint penalty machinery.
 
 Groups a constraint's W/dual/vb state into one `Penalty` object -- a hybrid
 dataclass/dict (attribute *and* key access, like this codebase's other

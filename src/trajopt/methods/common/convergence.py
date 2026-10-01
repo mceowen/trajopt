@@ -2,19 +2,19 @@ import numpy as np
 from trajopt.utils import tools
 
 
-def check_convergence_tolerance(method_segment) -> None:
-    prev_iter_data    = method_segment.iter_data_list[-1]
-    current_iter_data = method_segment.current_iter_data
+def check_convergence_tolerance(method_phase) -> None:
+    prev_iter_data    = method_phase.iter_data_list[-1]
+    current_iter_data = method_phase.current_iter_data
 
-    index_map = method_segment.index_map
-    constraints = list(method_segment.constraints.values())
+    index_map = method_phase.index_map
+    constraints = list(method_phase.constraints.values())
 
     dstate    = current_iter_data.dz[:, index_map.indices.z.state]
     dcost     = current_iter_data.cost - prev_iter_data.cost
     abs_dz    = np.abs(dstate)
     abs_dcost = np.abs(dcost)
-    eps_z     = method_segment.eps_state
-    eps_dcost = method_segment.eps_cost
+    eps_z     = method_phase.eps_state
+    eps_dcost = method_phase.eps_cost
 
     bool_dz    = np.all(abs_dz <= eps_z)
     bool_dcost = np.all(abs_dcost <= eps_dcost)
@@ -26,7 +26,7 @@ def check_convergence_tolerance(method_segment) -> None:
     bool_cont    = all(cnstr.is_feasible for cnstr in constraints if "continuity" in cnstr.type)
 
     defect              = current_iter_data.get("defect", 0)
-    bool_ncvx_dyn_state = np.all(np.abs(defect) <= method_segment.eps_dyn)
+    bool_ncvx_dyn_state = np.all(np.abs(defect) <= method_phase.eps_dyn)
     bool_ncvx_ineq      = all(
         np.all(np.abs(h.g_nl) <= np.atleast_1d(h.penalty_state.eps))
         for h in constraints
@@ -44,7 +44,7 @@ def check_convergence_tolerance(method_segment) -> None:
     bool_opt2  = bool_dcost
     bool_feas2 = bool_term and bool_ncvx_ineq and bool_ncvx_eq and bool_ncvx_dyn_state and bool_cont
 
-    flag_conv = method_segment.flags.flag_conv
+    flag_conv = method_phase.flags.flag_conv
     if flag_conv == 0:
         bool_conv = (bool_opt1 and bool_feas1) or (bool_opt2 and bool_feas2)
     elif flag_conv == 1:
@@ -63,5 +63,5 @@ def check_convergence_tolerance(method_segment) -> None:
         nonconvex_equality   = max((cnstr.vb_ratio for cnstr in constraints if "nonconvex_equality" in cnstr.type), default=0.0),
         dynamics             = max((cnstr.vb_ratio for cnstr in constraints if cnstr.type == "dynamics"), default=0.0),
     )
-    current_iter_data.status    = method_segment.cp_subproblem_status
+    current_iter_data.status    = method_phase.cp_subproblem_status
     current_iter_data.converged = bool_conv
