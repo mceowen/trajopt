@@ -520,23 +520,13 @@ def final_time_interval_constraints_ps(constraint, subproblem):
 # ---------------------------------------------------------------------------
 
 def dynamics_compile_ps(constraint, subproblem):
-    N_col = subproblem.index_map.N.all - 1
-    H = int(getattr(subproblem.hyperparams.discretize, 'hp_segments', 1))
-
-    if H > 1:
-        _, etau, _, D_local = flipped_radau_hp_operator(N_col, H)
-        constraint.ps_D = D_local
-        constraint.ps_hp = H
-        constraint.ps_p = N_col // H
-    else:
-        _, etau, _, D_np = flipped_radau_differential_operator(N_col)
-        constraint.ps_D = D_np
-        constraint.ps_hp = 1
-        constraint.ps_p = N_col
-
-    constraint.ps_etau = etau
-    constraint.ps_tau_norm = (etau + 1.0) / 2.0
-    subproblem.ps_tau_norm = constraint.ps_tau_norm
+    mesh = subproblem.mesh
+    constraint.ps_D = mesh.differentiation
+    constraint.ps_hp = mesh.segments
+    constraint.ps_p = (len(mesh.tau) - 1) // mesh.segments
+    constraint.ps_etau = 2 * mesh.tau - 1
+    constraint.ps_tau_norm = mesh.tau
+    subproblem.ps_tau_norm = mesh.tau
     constraint.dyn_fcn_batched = jax.jit(jax.vmap(constraint.dyn_fcn, in_axes=(0, 0, None)))
 
     # only ps's per-node constraint linearization needs the dynamics Jacobians

@@ -1,21 +1,23 @@
 import time
 
+from trajopt.methods.common.scp.guess_lifecycle import GuessLifecycle
+
 import cvxpy as cp
 
 from trajopt.methods.common.scp.reporter_phases import SolveReporter
 from trajopt.methods.common.scp.trajectory import SCPTrajectory
 from trajopt.methods.common import trust_region
 
-class SCPMethod():
+class SCPMethod(GuessLifecycle):
     """SCP over a multi-phase trajectory.
     """
 
-    def __init__(self, method_config, trajectory) -> None:
+    def __init__(self, method_config, trajectory, *, initial_guess=None) -> None:
 
         self.method_config = method_config
 
         # create scp trajectory
-        self.scp_trajectory = SCPTrajectory(trajectory, self.method_config)
+        self.scp_trajectory = SCPTrajectory(trajectory, self.method_config, supplied_guess=initial_guess)
 
         # define the total cost and constraints from all phases for this method
         self.cp_cost        = sum(seg.cp_cost for seg in self.scp_trajectory.scp_phases.values())

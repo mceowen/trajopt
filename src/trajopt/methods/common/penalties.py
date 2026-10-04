@@ -28,7 +28,8 @@ class Penalties(AttrDict):
         self.cfg, self.nonnegative_dual = cfg, nonnegative_dual
         self.eps = np.atleast_1d(1e-4)
 
-        self.names = [name for name, spec in (cfg or {}).items() if hasattr(spec, 'items')]
+        self.names = [name for name, spec in (cfg or {}).items()
+                      if hasattr(spec, 'items') and 'init' in spec]
 
         for name in self.names:
             self[name] = np.zeros(shape)
@@ -43,6 +44,15 @@ class Penalties(AttrDict):
         if vb_type == "split":
             self.vb_p, self.vb_p_var = np.zeros(shape), None
             self.vb_m, self.vb_m_var = np.zeros(shape), None
+
+    def reset_values(self) -> None:
+        """Reset penalties and buffers, preserving CP references."""
+        for name in ['vb'] + self.names:
+            self[name] = np.zeros(self.shape)
+            if self.vb_type == 'split':
+                self[f'{name}_p'] = np.zeros(self.shape)
+                self[f'{name}_m'] = np.zeros(self.shape)
+        self.init_values()
 
     def init_values(self) -> None:
         if not (self.cfg and 'W' in self.names and self.cfg.W.penalty):

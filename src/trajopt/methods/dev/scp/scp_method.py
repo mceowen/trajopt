@@ -1,5 +1,8 @@
 import time
 
+from trajopt.methods.common.scp.guess_lifecycle import GuessLifecycle
+from trajopt.methods.common.initial_guess import phase_guesses
+
 import cvxpy as cp
 
 from trajopt.methods.common.scp.reporter import SolveReporter
@@ -7,15 +10,16 @@ from trajopt.methods.common import trust_region
 from trajopt.methods.common.scp.subproblem import Subproblem
 from trajopt.utils.tools import AttrDict
 
-class SCPMethod():
+class SCPMethod(GuessLifecycle):
     """SCP over a single flat trajectory -- one subproblem, no phase splitting.
     """
 
-    def __init__(self, method_config, trajectory) -> None:
+    def __init__(self, method_config, trajectory, *, initial_guess=None) -> None:
 
         self.method_config = method_config
 
-        self.subproblem = Subproblem(trajectory, self.method_config)
+        self.subproblem = Subproblem(trajectory, self.method_config,
+                                     initial_guess=phase_guesses(initial_guess, ['main']).get('main'))
 
         # one-entry dict so analysis/plotting can loop over it like the phases methods
         self.scp_trajectory = AttrDict(scp_subproblems=AttrDict(main=self.subproblem))
