@@ -1,0 +1,13 @@
+fcns:
+  trust_region:
+    penalty:        trajopt/methods/common/trust_region.py:create_cost_trust_region_hessian
+    create_params:  trajopt/methods/common/trust_region.py:create_tr_params_scalar
+    update_params:  trajopt/methods/common/trust_region.py:update_tr_params_scalar
+    evaluate_step:  trajopt/methods/common/trust_region.py:evaluate_step_merit
+    autotune: null
+    constraint: null
+
+hyperparams:
+  trust_region:
+    second_order: 1
+    min_eig_psd:  0.0   # eigenvalue floor for the trust-region Hessian square root

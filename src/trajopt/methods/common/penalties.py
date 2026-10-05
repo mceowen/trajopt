@@ -1,12 +1,4 @@
-"""Penalty-method building blocks for dev/scvx_phases's constraint penalty machinery.
-
-Groups a constraint's W/dual/vb state into one `Penalty` object -- a hybrid
-dataclass/dict (attribute *and* key access, like this codebase's other
-AttrDict-based config objects) -- so it can be passed around as a single
-argument, and factors the W/dual autotuning and penalty-cost math out of the
-constraint classes so it's reusable. Each function below takes the whole
-`Penalty` and extracts what it needs, including the standard-vs-split branch.
-"""
+"""Penalty-method building blocks: weight autotuning, penalty cost, cvxpy param plumbing."""
 
 import numpy as np
 import cvxpy as cp
@@ -14,53 +6,57 @@ import cvxpy as cp
 from trajopt.utils.tools import AttrDict
 
 
-class Penalty(AttrDict):
-    """A constraint's penalty state: W/dual weights, vb buffers, and their cvxpy plumbing."""
+def _param_name(name, suffix=""):
+    return f"{name}{suffix}_sqrt_param" if name == "W" else f"{name}{suffix}_param"
+
+
+def _groups(penalty):
+    return ("_p", "_m") if penalty.vb_type == "split" else ("",)
+
+
+_VB     = {"": "vb",     "_p": "vb_p",     "_m": "vb_m"}
+_VB_VAR = {"": "vb_var", "_p": "vb_p_var", "_m": "vb_m_var"}
+
+
+class Penalties(AttrDict):
+    """A constraint's penalty state: weights named by hyperparams.penalties, vb buffers, cvxpy plumbing."""
 
     def __init__(self, shape, vb_type: str = "standard", norm: str = "l2",
                  cfg=None, nonnegative_dual: bool = False) -> None:
         super().__init__()
-        self.shape            = shape
-        self.vb_type          = vb_type
-        self.norm             = norm
-        self.cfg              = cfg
-        self.nonnegative_dual = nonnegative_dual
-
+        self.shape, self.vb_type, self.norm = shape, vb_type, norm
+        self.cfg, self.nonnegative_dual = cfg, nonnegative_dual
         self.eps = np.atleast_1d(1e-4)
 
-        self.W      = np.zeros(shape)
-        self.dual   = np.zeros(shape)
-        self.W_p    = np.zeros(shape)
-        self.W_m    = np.zeros(shape)
-        self.dual_p = np.zeros(shape)
-        self.dual_m = np.zeros(shape)
+        self.names = [name for name, spec in (cfg or {}).items() if hasattr(spec, 'items')]
 
-        self.vb   = np.zeros(shape)
-        self.vb_p = np.zeros(shape)
-        self.vb_m = np.zeros(shape)
+        for name in self.names:
+            self[name] = np.zeros(shape)
+            self[_param_name(name)] = None
+            if vb_type == "split":
+                self[f"{name}_p"] = np.zeros(shape)
+                self[f"{name}_m"] = np.zeros(shape)
+                self[_param_name(name, "_p")] = None
+                self[_param_name(name, "_m")] = None
 
-        self.W_sqrt_param   = None
-        self.dual_param     = None
-        self.W_p_sqrt_param = None
-        self.W_m_sqrt_param = None
-        self.dual_p_param   = None
-        self.dual_m_param   = None
-
-        self.vb_var   = None
-        self.vb_p_var = None
-        self.vb_m_var = None
+        self.vb, self.vb_var = np.zeros(shape), None
+        if vb_type == "split":
+            self.vb_p, self.vb_p_var = np.zeros(shape), None
+            self.vb_m, self.vb_m_var = np.zeros(shape), None
 
     def init_values(self) -> None:
-        """Fill W/dual with their configured initial values."""
-        if not (self.cfg and hasattr(self.cfg, 'W') and self.cfg.W.penalty):
+        if not (self.cfg and 'W' in self.names and self.cfg.W.penalty):
             return
-        self.W    = np.full(self.shape, float(self.cfg.W.init))
-        self.dual = np.full(self.shape, float(self.cfg.dual.init))
-        if self.vb_type == "split":
-            self.W_p    = np.full(self.shape, float(self.cfg.W.init))
-            self.W_m    = np.full(self.shape, float(self.cfg.W.init))
-            self.dual_p = np.full(self.shape, float(self.cfg.dual.init))
-            self.dual_m = np.full(self.shape, float(self.cfg.dual.init))
+        for name in self.names:
+            init = float(self.cfg[name].init)
+            self[name] = np.full(self.shape, init)
+            if self.vb_type == "split":
+                self[f"{name}_p"] = np.full(self.shape, init)
+                self[f"{name}_m"] = np.full(self.shape, init)
+
+
+def noop(*args, **kwargs) -> None:
+    pass
 
 
 # =============================================================================
@@ -74,37 +70,32 @@ def _autotune_W(W, vb, eps, cfg):
     return np.maximum(Wh, cfg.eps_floor)
 
 
+def autotune_W(penalty: Penalties) -> None:
+    for g in _groups(penalty):
+        penalty[f"W{g}"] = _autotune_W(penalty[f"W{g}"], penalty[_VB[g]], penalty.eps, penalty.cfg)
+
+
 def _autotune_dual(dual, vb, cfg, nonnegative, W):
-    # 'al' (Augmented-Lagrangian style): step size is the current W, element-wise.
-    # otherwise: fixed step size cfg.dual.beta (the original autotune1-style update).
+    # style 'al' steps by the current W; else a fixed cfg.dual.beta
     step = W if getattr(cfg.dual, 'style', 'beta') == 'al' else cfg.dual.beta
     dual_new = step * vb + dual
-    if nonnegative:
-        dual_new = np.maximum(0, dual_new)
-    return dual_new
+    return np.maximum(0, dual_new) if nonnegative else dual_new
 
 
-def autotune_W(penalty: Penalty) -> None:
-    """Penalty-weight update; mutates penalty.W (and W_p/W_m under split) in place."""
-    if penalty.vb_type == "split":
-        penalty.W_p = _autotune_W(penalty.W_p, penalty.vb_p, penalty.eps, penalty.cfg)
-        penalty.W_m = _autotune_W(penalty.W_m, penalty.vb_m, penalty.eps, penalty.cfg)
-    else:
-        penalty.W = _autotune_W(penalty.W, penalty.vb, penalty.eps, penalty.cfg)
+def autotune_dual(penalty: Penalties) -> None:
+    for g in _groups(penalty):
+        penalty[f"dual{g}"] = _autotune_dual(penalty[f"dual{g}"], penalty[_VB[g]], penalty.cfg,
+                                              penalty.nonnegative_dual, penalty[f"W{g}"])
 
 
-def autotune_dual(penalty: Penalty) -> None:
-    """Dual-ascent update; mutates penalty.dual (and dual_p/dual_m under split) in place.
-
-    cfg.dual.style selects the step size: unset/'beta' (default, fixed cfg.dual.beta,
-    the original autotune1-style update) or 'al' (Augmented-Lagrangian style, where
-    the step size is the current W, element-wise).
-    """
-    if penalty.vb_type == "split":
-        penalty.dual_p = _autotune_dual(penalty.dual_p, penalty.vb_p, penalty.cfg, penalty.nonnegative_dual, penalty.W_p)
-        penalty.dual_m = _autotune_dual(penalty.dual_m, penalty.vb_m, penalty.cfg, penalty.nonnegative_dual, penalty.W_m)
-    else:
-        penalty.dual = _autotune_dual(penalty.dual, penalty.vb, penalty.cfg, penalty.nonnegative_dual, penalty.W)
+def autotune(constraint, scp_subproblem) -> None:
+    cfg = constraint.penalty
+    if cfg is None or not hasattr(cfg, 'W'):
+        return
+    if cfg.W.autotune:
+        autotune_W(constraint.penalties)
+    if cfg.dual.autotune:
+        autotune_dual(constraint.penalties)
 
 
 def l1_norm(W_param, vb_var):
@@ -113,91 +104,80 @@ def l1_norm(W_param, vb_var):
 
 
 def l2_norm(W_sqrt_param, vb_var):
-    """l2 penalty term: 0.5 * sum((sqrt(W) * vb)^2) == 0.5 * vb^T diag(W) vb.
-
-    W is stored as a vector (one weight per vb component), which *is* the
-    diagonal of the quadratic form's weight matrix -- squaring sqrt(W)*vb
-    elementwise and summing is diag(W) applied to vb, without materializing
-    the (mostly-zero) full matrix.
-    """
+    """l2 penalty term: 0.5 * sum((sqrt(W) * vb)^2) == 0.5 * vb^T diag(W) vb."""
     return 0.5 * cp.sum_squares(cp.multiply(W_sqrt_param, vb_var))
 
 
-def _w_cost_buffer(W_param, vb_var, norm):
-    if W_param is None:
+def _cost_term(param, vb_var, is_w, norm):
+    if param is None:
         return 0
-    return l1_norm(W_param, vb_var) if norm == "l1" else l2_norm(W_param, vb_var)
+    if is_w:
+        return l1_norm(param, vb_var) if norm == "l1" else l2_norm(param, vb_var)
+    return cp.sum(cp.multiply(param, vb_var))
 
 
-def _dual_cost_buffer(dual_param, vb_var):
-    if dual_param is None:
-        return 0
-    return cp.sum(cp.multiply(dual_param, vb_var))
+def penalty_cost(constraint, scp_subproblem) -> None:
+    penalty = constraint.penalties
+    for name in penalty.names:
+        is_w = name == "W"
+        for g in _groups(penalty):
+            param  = penalty.get(_param_name(name, g))
+            vb_var = penalty.get(_VB_VAR[g])
+            scp_subproblem.cp_cost += _cost_term(param, vb_var, is_w, penalty.norm)
 
 
-def w_penalty_cost(penalty: Penalty):
-    """Penalty-weight cost term(s), l1 or l2, summed across vb buffer(s)."""
-    if penalty.vb_type == "split":
-        return (_w_cost_buffer(penalty.W_p_sqrt_param, penalty.vb_p_var, penalty.norm)
-                + _w_cost_buffer(penalty.W_m_sqrt_param, penalty.vb_m_var, penalty.norm))
-    return _w_cost_buffer(penalty.W_sqrt_param, penalty.vb_var, penalty.norm)
+def _cost_value_term(weight, vb, is_w, norm):
+    if is_w:
+        return float(np.sum(weight * np.abs(vb))) if norm == "l1" else float(0.5 * np.sum(weight * vb ** 2))
+    return float(np.sum(weight * vb))
 
 
-def dual_penalty_cost(penalty: Penalty):
-    """Dual (linear) cost term(s), summed across vb buffer(s)."""
-    if penalty.vb_type == "split":
-        return (_dual_cost_buffer(penalty.dual_p_param, penalty.vb_p_var)
-                + _dual_cost_buffer(penalty.dual_m_param, penalty.vb_m_var))
-    return _dual_cost_buffer(penalty.dual_param, penalty.vb_var)
+def penalty_cost_value(penalty: Penalties) -> float:
+    """Numpy-evaluated penalty cost, off the solved values, for reporting."""
+    total = 0.0
+    for name in penalty.names:
+        is_w = name == "W"
+        for g in _groups(penalty):
+            total += _cost_value_term(penalty[f"{name}{g}"], penalty[_VB[g]], is_w, penalty.norm)
+    return total
 
 
-def _w_cost_value_buffer(W, vb, norm):
-    return float(np.sum(W * np.abs(vb))) if norm == "l1" else float(0.5 * np.sum(W * vb ** 2))
-
-
-def _dual_cost_value_buffer(dual, vb):
-    return float(np.sum(dual * vb))
-
-
-def penalty_cost_value(penalty: Penalty) -> float:
-    """Numpy-evaluated total penalty cost (W-term + dual-term) on the current W/dual/vb --
-    the same formula as w_penalty_cost/dual_penalty_cost, but off the solved numpy values
-    rather than the cvxpy parameters, for reporting once a step has been taken."""
-    if penalty.vb_type == "split":
-        return (_w_cost_value_buffer(penalty.W_p, penalty.vb_p, penalty.norm)
-                + _w_cost_value_buffer(penalty.W_m, penalty.vb_m, penalty.norm)
-                + _dual_cost_value_buffer(penalty.dual_p, penalty.vb_p)
-                + _dual_cost_value_buffer(penalty.dual_m, penalty.vb_m))
-    return (_w_cost_value_buffer(penalty.W, penalty.vb, penalty.norm)
-            + _dual_cost_value_buffer(penalty.dual, penalty.vb))
-
-
-def _push_values_buffer(W_sqrt_param, dual_param, W, dual, norm):
-    if W_sqrt_param is not None:
-        W_sqrt_param.value = W if norm == "l1" else np.sqrt(W)
-    if dual_param is not None:
-        dual_param.value = dual
-
-
-def push_penalty_values(penalty: Penalty) -> None:
-    """Push numpy W/dual onto their cvxpy Parameters (sqrt for l2, raw for l1)."""
-    if penalty.vb_type == "split":
-        _push_values_buffer(penalty.W_p_sqrt_param, penalty.dual_p_param, penalty.W_p, penalty.dual_p, penalty.norm)
-        _push_values_buffer(penalty.W_m_sqrt_param, penalty.dual_m_param, penalty.W_m, penalty.dual_m, penalty.norm)
-    else:
-        _push_values_buffer(penalty.W_sqrt_param, penalty.dual_param, penalty.W, penalty.dual, penalty.norm)
-
-
-def pull_vb(penalty: Penalty) -> None:
-    """Read the solved vb variable(s) back into penalty.vb (and vb_p/vb_m under split)."""
-    if penalty.vb_var is None:
+def create_params(constraint, scp_subproblem) -> None:
+    if constraint.shape is None:
         return
+    penalty = constraint.penalties
+    if penalty.vb_type == "none":
+        return
+    shape, cname = penalty.shape, constraint.name
+    for name in penalty.names:
+        is_w = name == "W"
+        for g in _groups(penalty):
+            cp_name = f"{name}{g}_{cname}" + ("_sqrt" if is_w else "")
+            penalty[_param_name(name, g)] = cp.Parameter(shape, nonneg=is_w, name=cp_name, value=np.zeros(shape))
+
+
+def push_penalty_values(penalty: Penalties) -> None:
+    for name in penalty.names:
+        is_w = name == "W"
+        for g in _groups(penalty):
+            param = penalty.get(_param_name(name, g))
+            if param is None:
+                continue
+            raw = penalty[f"{name}{g}"]
+            param.value = raw if (not is_w or penalty.norm == "l1") else np.sqrt(raw)
+
+
+def update_params(constraint, scp_subproblem) -> None:
+    push_penalty_values(constraint.penalties)
+
+
+def pull_vb(penalty: Penalties) -> None:
+    for g in _groups(penalty):
+        var = penalty.get(_VB_VAR[g])
+        if var is not None:
+            penalty[_VB[g]] = np.array(var.value)
     if penalty.vb_type == "split":
-        penalty.vb_p = np.array(penalty.vb_p_var.value)
-        penalty.vb_m = np.array(penalty.vb_m_var.value)
-        penalty.vb   = penalty.vb_p - penalty.vb_m
-    else:
-        penalty.vb = np.array(penalty.vb_var.value)
+        penalty.vb = penalty.vb_p - penalty.vb_m
 
 
 # =============================================================================
@@ -242,3 +222,16 @@ def autotune_dual_b(obj, lagrangian_dual=None):
             obj.dual = np.maximum(0.0, lagrangian_dual)
         else:
             obj.dual = lagrangian_dual.copy()
+
+
+def sqp_autotune(constraint, scp_subproblem) -> None:
+    cfg = constraint.penalty
+    if cfg is None or not hasattr(cfg, 'W'):
+        return
+    iter_num = scp_subproblem.current_iter_data.iter_num
+    chk      = scp_subproblem.current_iter_data.get("chk", None)
+    settled  = chk is not None and float(chk.dz) < 1.0
+    if cfg.W.autotune:
+        autotune_W_b(constraint.penalties, iter_num, settled)
+    if cfg.dual.autotune:
+        autotune_dual_b(constraint.penalties, getattr(constraint, 'lagrangian_dual', None))

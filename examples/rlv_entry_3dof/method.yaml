@@ -1,0 +1,32 @@
+inherit: trajopt/methods/dev/scp/configs/sqp/scvx2.yaml
+#inherit: trajopt/methods/dev/scp/configs/scvx/autoscvx-term.yaml
+
+fcns:
+  initial_guess:
+    default:
+      guess: trajopt/methods/common/initial_guess.py:straight_line_initial_guess
+      # guess: trajopt/methods/common/initial_guess.py:nonlinear_initial_guess
+
+hyperparams:
+  convergence:
+    iter_max: 100
+
+  initial_guess:
+    default:
+      t_start: 0.0
+      t_stop:  1000.0
+      x_start: ["${params.planet.r + 79248.0}", 0.0, 0.0, 7802.88, -1.0, 90.0]
+      x_stop:  ["${params.planet.r + 24384.0}", 10.0, 10.0, 762.0, -5.0, -90.0]
+      u_start: [0.0, 0.0]
+      u_stop:  [0.0, 0.0]
+      # t_start: 0.0
+      # t_stop: 1000.0
+      # u_start: [0.0, 15.0]
+      # u_stop:  [0.0, 15.0]
+
+solver_opts:
+  solver: QOCO
+
+
+# analysis
+

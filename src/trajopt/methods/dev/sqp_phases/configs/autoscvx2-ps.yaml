@@ -1,9 +1,0 @@
-method_class: dev.sqp_phases
-formulation_class: dev.phases
-
-inherit: autoscvx2.yaml
-
-flags:
-  equal_dt: 0
-  discretize: ps
-  hp_segments: 10

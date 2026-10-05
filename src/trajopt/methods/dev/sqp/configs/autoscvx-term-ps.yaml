@@ -1,8 +1,0 @@
-method_class: dev.sqp
-formulation_class: dev.simple
-
-inherit: autoscvx-term.yaml
-
-flags:
-  equal_dt: 0
-  discretize: ps

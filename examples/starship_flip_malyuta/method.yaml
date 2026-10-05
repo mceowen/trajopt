@@ -1,0 +1,30 @@
+type: SCP
+inherit: trajopt/methods/dev/scp_phases/configs/sqp/autoscvx2.yaml
+
+hyperparams:
+  convergence:
+    iter_max: 100
+
+  initial_guess:
+    three_engine_phase:
+      t_start: 0.0
+      t_stop: 5.0
+      x_start: [100.0, 600.0, 0, "${-params.vterm}", "${np.deg2rad(90.0)}", 0.0]
+      x_stop: [0, 0, 0, -0.1, 0, 0]
+      u_start: [500000, 0]
+      u_stop: [500000, 0]
+    single_engine_phase:
+      t_start: 5.0
+      t_stop: 20.0
+      x_start: [0, 0, 0, -0.1, 0, 0]
+      x_stop: [0, 0, 0, -0.1, 0, 0]
+      u_start: [500000, 0]
+      u_stop: [500000, 0]
+
+fcns:
+  initial_guess:
+    default:
+      guess: trajopt/methods/common/initial_guess.py:straight_line_initial_guess
+
+solver_opts:
+  solver: PIQP

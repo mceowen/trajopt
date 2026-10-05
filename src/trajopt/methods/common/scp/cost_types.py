@@ -3,6 +3,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from trajopt.methods.common.scp.cost import SCPCost
+from trajopt.methods.common.trust_region import first_nonconvex_terminal_cost
 
 
 class scp_nonconvex_running(SCPCost):
@@ -22,7 +23,7 @@ class scp_nonconvex_running(SCPCost):
 
 class scp_nonconvex_terminal(SCPCost):
     def create_cvxpy_cost(self, scp_subproblem):
-        if _first_nonconvex_terminal_cost(scp_subproblem) is not self.cost:
+        if first_nonconvex_terminal_cost(scp_subproblem) is not self.cost:
             return
         scp_subproblem.cp_cost += (
             cp.sum(scp_subproblem.cp_params.cost0)
@@ -31,7 +32,7 @@ class scp_nonconvex_terminal(SCPCost):
         )
 
     def update_cvxpy_parameters(self, scp_subproblem):
-        if _first_nonconvex_terminal_cost(scp_subproblem) is not self.cost:
+        if first_nonconvex_terminal_cost(scp_subproblem) is not self.cost:
             return
         z_opt  = scp_subproblem.current_iter_data.z_opt
         nu_opt = scp_subproblem.current_iter_data.nu_opt
@@ -124,7 +125,16 @@ class scp_convex_running(SCPCost):
 class scp_min_time(SCPCost):
     def create_cvxpy_cost(self, scp_subproblem):
         if scp_subproblem.free_final_time:
-            scp_subproblem.cp_cost += cp.sum(scp_subproblem.t_ref[-1] + scp_subproblem.dt[-1])
+            scp_subproblem.fcns.cost.min_time(scp_subproblem)
+
+
+def min_time_final_node(scp_subproblem):
+    scp_subproblem.cp_cost += cp.sum(scp_subproblem.t_ref[-1] + scp_subproblem.dt[-1])
+
+
+def min_time_all_nodes(scp_subproblem):
+    s = scp_subproblem.t_ref[:, 0] + scp_subproblem.dt[:, 0]
+    scp_subproblem.cp_cost += cp.sum(s)
 
 class scp_min_norm_terminal(SCPCost):
     def create_cvxpy_cost(self, scp_subproblem):
@@ -171,12 +181,6 @@ class scp_rate_regularization(SCPCost):
             scp_subproblem.cp_cost += self.cost.w * cp.sum_squares(delta)
         elif self.cost.norm_type == "l1":
             scp_subproblem.cp_cost += self.cost.w * cp.norm1(delta)
-
-def _first_nonconvex_terminal_cost(scp_subproblem):
-    for scp_cost in scp_subproblem.costs.values():
-        if isinstance(scp_cost, scp_nonconvex_terminal):
-            return scp_cost.cost
-    return None
 
 
 def compute_nonconvex_terminal_costs(z, nu, phase, scp_subproblem):

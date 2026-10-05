@@ -1,0 +1,41 @@
+method_class: dev.scp
+formulation_class: dev.simple
+
+inherit:
+  - trajopt/methods/common/configs/default.yaml
+  - trajopt/methods/common/configs/discretize/multiple_shooting.yaml
+  - trajopt/methods/common/configs/convexify/standard.yaml
+  - trajopt/methods/common/configs/convergence/standard.yaml
+  - trajopt/methods/common/configs/cost/standard.yaml
+  - trajopt/methods/common/configs/penalties/proxlin.yaml
+  - trajopt/methods/common/configs/initial_guess/propagation.yaml
+  - trajopt/methods/common/configs/troubleshoot/adjust_lm.yaml
+
+fcns:
+  trust_region:
+    penalty:       trajopt/methods/common/trust_region.py:create_cost_trust_region_scalar
+    create_params: trajopt/methods/common/trust_region.py:create_tr_params_scalar
+    update_params: trajopt/methods/common/trust_region.py:update_tr_params_scalar
+    evaluate_step: trajopt/methods/common/trust_region.py:evaluate_step_merit
+    autotune: null
+    constraint: null
+  convergence:
+    init_tolerances: trajopt/methods/common/convergence.py:init_tolerances_from_dynamics
+  cost:
+    min_time: trajopt/methods/common/scp/cost_types.py:min_time_all_nodes
+  penalties:
+    autotune: trajopt/methods/common/penalties.py:sqp_autotune
+
+hyperparams:
+  discretize:
+    equal_dt:   1
+  convergence:
+    eps_state:  [0.0001]
+  trust_region:
+    second_order: 0
+    tr_step:
+      z: 1.0
+      nu: 1.0
+
+solver_opts:
+  solver: QOCO

@@ -1,0 +1,8 @@
+inherit:
+  - trajopt/methods/common/configs/convexify/standard.yaml
+
+fcns:
+  convexify:
+    compile_affine: trajopt/methods/common/convexify.py:compile_affine_second_order
+    update_current_iter_data_affine_inequality: trajopt/methods/common/convexify.py:update_current_iter_data_affine_inequality_second_order
+    update_current_iter_data_affine_equality: trajopt/methods/common/convexify.py:update_current_iter_data_affine_equality_second_order

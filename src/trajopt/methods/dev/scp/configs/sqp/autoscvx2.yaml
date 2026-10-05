@@ -1,0 +1,8 @@
+method_class: dev.scp
+formulation_class: dev.simple
+
+inherit:
+  - autoscvx.yaml
+  - trajopt/methods/common/configs/trust_region/second_order.yaml
+  - trajopt/methods/common/configs/convexify/second_order.yaml
+  - trajopt/methods/common/configs/discretize/second_order_ms.yaml

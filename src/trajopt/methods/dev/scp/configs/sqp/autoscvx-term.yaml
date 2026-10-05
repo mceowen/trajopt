@@ -1,0 +1,11 @@
+method_class: dev.scp
+formulation_class: dev.simple
+
+inherit: autoscvx.yaml
+
+hyperparams:
+  penalties:
+    dynamics:
+      vb: 'none'
+    initial_state:
+      vb: 'none'

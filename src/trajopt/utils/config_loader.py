@@ -33,7 +33,7 @@ def load_trajopt_config(config_path: str) -> AttrDict:
 # METHOD CLASS RESOLUTION
 # =============================================================================
 
-DEFAULT_METHOD_CLASS      = "dev.scvx_phases"
+DEFAULT_METHOD_CLASS      = "dev.scp_phases"
 DEFAULT_FORMULATION_CLASS = "dev.phases"
 
 
@@ -84,8 +84,17 @@ def load_yaml(path_str: str) -> AttrDict:
 # INHERITANCE
 # =============================================================================
 
+def _resolve_inherit_path(raw: str, _source: str) -> str:
+    """A single 'inherit' entry resolved to an absolute file path."""
+    if raw.startswith("trajopt/"):
+        parts = raw.lstrip("/").split("/")
+        return str(importlib.resources.files(".".join(parts[:-1])).joinpath(parts[-1]))
+    source_dir = Path(_source).resolve().parent if _source != "unknown" else Path.cwd()
+    return str((source_dir / raw).resolve())
+
+
 def _resolve_inheritance(d: Any, _source: str = "unknown") -> Any:
-    """Recursively resolve 'inherit' keys, merging parent configs in."""
+    """Recursively resolve 'inherit' keys (a path or list of paths, later wins), merging parent configs in."""
     if not isinstance(d, dict):
         return d
 
@@ -93,17 +102,16 @@ def _resolve_inheritance(d: Any, _source: str = "unknown") -> Any:
 
     if "inherit" in d:
         raw = d["inherit"]
-        if raw.startswith("trajopt/"):
-            parts = raw.lstrip("/").split("/")
-            parent_path = str(importlib.resources.files(".".join(parts[:-1])).joinpath(parts[-1]))
-        else:
-            source_dir  = Path(_source).resolve().parent if _source != "unknown" else Path.cwd()
-            parent_path = str((source_dir / raw).resolve())
-        try:
-            parent = _resolve_inheritance(load_yaml(parent_path), _source=parent_path)
-            d = deep_merge(parent, d)
-        except Exception as e:
-            raise type(e)(f"error resolving 'inherit: {raw}' (from '{_source}'): {e}") from None
+        paths = raw if isinstance(raw, list) else [raw]
+        merged: dict = {}
+        for path in paths:
+            parent_path = _resolve_inherit_path(path, _source)
+            try:
+                parent = _resolve_inheritance(load_yaml(parent_path), _source=parent_path)
+                merged = deep_merge(merged, parent)
+            except Exception as e:
+                raise type(e)(f"error resolving 'inherit: {path}' (from '{_source}'): {e}") from None
+        d = deep_merge(merged, d)
         d.pop("inherit", None)
 
     return recursive_attrdict(d)
@@ -225,7 +233,19 @@ def _eval_values(obj: Any, ctx: dict, phase_params: dict, key: str | None = None
 
         result = AttrDict({})
         local  = dict(ctx)
-        for k, v in obj.items():
+
+        remaining = obj
+        if "trajectory" in obj and "method" in obj:
+            # root config: eval trajectory first so method: can also reference ${params.x}
+            result["trajectory"] = _eval_values(obj["trajectory"], local, phase_params, key="trajectory")
+            merged_params: dict = {}
+            for p in phase_params.values():
+                merged_params = deep_merge(merged_params, p)
+            if merged_params:
+                _bind_params(local, merged_params)
+            remaining = {k: v for k, v in obj.items() if k != "trajectory"}
+
+        for k, v in remaining.items():
             result[k] = _eval_values(v, local, phase_params, key=k)
             bare = result[k]
             if not isinstance(bare, dict):

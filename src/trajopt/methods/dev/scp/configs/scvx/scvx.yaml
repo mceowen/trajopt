@@ -1,0 +1,26 @@
+method_class: dev.scp
+formulation_class: dev.simple
+
+inherit:
+  - trajopt/methods/common/configs/default.yaml
+  - trajopt/methods/common/configs/discretize/multiple_shooting.yaml
+  - trajopt/methods/common/configs/convexify/standard.yaml
+  - trajopt/methods/common/configs/trust_region/proximal.yaml
+  - trajopt/methods/common/configs/convergence/standard.yaml
+  - trajopt/methods/common/configs/cost/standard.yaml
+  - trajopt/methods/common/configs/penalties/proxlin.yaml
+  - trajopt/methods/common/configs/initial_guess/straight_line.yaml
+  - trajopt/methods/common/configs/troubleshoot/adjust_trust_region.yaml
+
+hyperparams:
+  discretize:
+    equal_dt:    1
+  convergence:
+    eps_state:   [0.0001]
+  trust_region:
+    tr_step:
+      z:  1.0
+      nu: 1.0
+
+solver_opts:
+  solver: QOCO

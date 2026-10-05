@@ -1,0 +1,23 @@
+fcns:
+  penalties:
+    penalty:       trajopt/methods/common/penalties.py:penalty_cost
+    autotune:      trajopt/methods/common/penalties.py:autotune
+    create_params: trajopt/methods/common/penalties.py:create_params
+    update_params: trajopt/methods/common/penalties.py:update_params
+
+    sqp_autotune:  trajopt/methods/common/penalties.py:sqp_autotune
+
+hyperparams:
+  penalties:
+    default:
+      W:
+        penalty: True
+        autotune: True
+        init: 1.0
+      dual:
+        penalty: True
+        autotune: True
+        init: 0.0
+        beta: 1.0
+      vb: standard
+      eps: [0.0001]

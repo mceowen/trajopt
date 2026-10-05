@@ -5,19 +5,27 @@ import numpy as np
 import cvxpy as cp
 
 from trajopt.methods.common import initial_guess
-from trajopt.methods.common import convergence
-from trajopt.methods.common import penalties
 import trajopt.methods.common.scp.constraint_types as scp_constraint_type_module
 import trajopt.methods.common.scp.cost_types as scp_cost_type_module
-from trajopt.utils.tools import AttrDict, recursive_attrdict, expand_to_array_if_scalar
+from trajopt.utils.tools import AttrDict, recursive_attrdict, resolve_function_from_string
 
-class SCPSubproblem():
+
+def _resolve_fcns_tree(node):
+    # resolves 'path.py:func' leaves to callables at any nesting depth, e.g. default/<phase_name>
+    if isinstance(node, str):
+        return resolve_function_from_string(node)
+    if node is None:
+        return None
+    return AttrDict({name: _resolve_fcns_tree(value) for name, value in node.items()})
+
+
+class Subproblem():
     """The convex subproblem for one formulation object (a Phase or a whole flat Trajectory).
 
     Holds everything formulation-agnostic: cvxpy variables/parameters/constraints/cost,
-    the trust region, and the SCP step. A formulation that splits a trajectory into
-    multiple phases (e.g. dev.phases) subclasses this to add whatever links one
-    subproblem to another -- see SCPPhase's boundary/continuity check.
+    the trust region, the constraint penalties, and the SCP step. A formulation that splits
+    a trajectory into multiple phases (e.g. dev.phases) subclasses this to add whatever
+    links one subproblem to another -- see SCPPhase's boundary/continuity check.
 
     ``constraint_type_module``/``cost_type_module`` resolve each constraint's/cost's
     ``scp_<type>`` class.
@@ -27,26 +35,40 @@ class SCPSubproblem():
     cost_type_module       = scp_cost_type_module
 
     def __init__(self, formulation_obj, method_config: AttrDict) -> None:
-        self.name          = formulation_obj.name
-        # named "phase" (not e.g. "formulation_obj") for a uniform back-reference --
-        # shared code (analysis.py) reaches params/nondim/outputs through this uniformly
-        self.phase       = formulation_obj
-        self.method_config = method_config
 
+        self.name           = formulation_obj.name
+        self.phase          = formulation_obj  # analysis.py reaches params/nondim/outputs through this
+        self.method_config  = method_config
         self.index_map      = formulation_obj.index_map
         self.nondim         = formulation_obj.nondim
         self.params         = formulation_obj.params
-        self.flags          = method_config.flags
-        self.penalty_config = method_config.penalty
 
-        # dictionary of scp-constraints for this subproblem
+        # hyperparams/fcns are {<module>: {<name>: <value>}}, mirroring a trajectory's fcns:/params:
+        method_hyperparams = method_config.get('hyperparams', AttrDict())
+        method_fcns        = method_config.get('fcns', AttrDict())
+
+        self.hyperparams = AttrDict()
+        self.fcns        = AttrDict()
+        for module_name in set(method_hyperparams) | set(method_fcns):
+            self.hyperparams[module_name] = method_hyperparams.get(module_name, AttrDict())
+            self.fcns[module_name] = _resolve_fcns_tree(method_fcns.get(module_name, AttrDict()))
+
+        self._trust_region_penalty_fcn = self.fcns.trust_region.penalty
+        self._convergence_check_fcn    = self.fcns.convergence.check
+
+        # troubleshooting is opt-in: unset unless a config wires fcns.troubleshoot.*
+        troubleshoot_fcns = self.fcns.get('troubleshoot', AttrDict())
+        self._troubleshoot_on_error_fcn = troubleshoot_fcns.get('on_error')
+        self._troubleshoot_on_step_fcn  = troubleshoot_fcns.get('on_step')
+
+        # Dictionary of constraints for this subproblem
         self.constraints = AttrDict()
         for cnstr_name, constraint in formulation_obj.constraints.items():
             scp_class_name = f"scp_{constraint.type}"
             constraintClass = getattr(self.constraint_type_module, scp_class_name)
             self.constraints[cnstr_name] = constraintClass(constraint, self)
 
-        # dictionary of scp cost types for this subproblem
+        # Dictionary of cost types for this subproblem
         self.costs = AttrDict()
         for cost_name, cost in formulation_obj.costs.items():
             scp_class_name = f"scp_{cost.type}"
@@ -73,6 +95,25 @@ class SCPSubproblem():
         """This subproblem's constraint of the given type, or None."""
         return next((c.constraint for c in self.constraints.values() if c.type == cnstr_type), None)
 
+    def penalty_snapshot(self) -> AttrDict:
+        """Per-constraint penalty state, keyed by field then constraint name.
+
+        Field names come from each constraint's own hyperparams.penalties block
+        (Penalties.names), not an assumed list -- a constraint penalized through
+        some other named weight is picked up automatically.
+        """
+        snapshot = AttrDict()
+        for constraint in self.constraints.values():
+            if constraint.shape is None:
+                continue
+            p = constraint.penalties
+            fields = ["vb"] + list(p.names)
+            if p.vb_type == "split":
+                fields += [f"{name}_p" for name in p.names] + [f"{name}_m" for name in p.names]
+            for field in fields:
+                snapshot.setdefault(field, AttrDict())[constraint.name] = getattr(p, field)
+        return snapshot
+
     def derive_free_final_time(self) -> bool:
         """False only when initial_time and a fixed final_time pin both ends."""
         initial = self.find_constraint("initial_time")
@@ -94,22 +135,20 @@ class SCPSubproblem():
         return True
 
     def initialize(self) -> None:
-        formulation_obj = self.phase
-
-        self.initial_guess = AttrDict()
+        formulation_obj     = self.phase
+        self.initial_guess  = AttrDict()
 
         # the guess supplies whichever end the constraints do not give
-        cfg_guess             = formulation_obj.guess
         initial_time_cnstr    = self.find_constraint("initial_time")
         final_time_cnstr      = self.find_constraint("final_time")
 
         t_start_nd            = (initial_time_cnstr.value if initial_time_cnstr is not None
-                                 else getattr(cfg_guess, 't_start', 0.0) / self.nondim.time_scale)
+                                 else initial_guess.guess_field(formulation_obj, self, 't_start', 0.0) / self.nondim.time_scale)
 
         if not self.free_final_time:
             t_stop_nd = final_time_cnstr.fixed_value
         else:
-            t_stop_nd = cfg_guess.t_stop / self.nondim.time_scale
+            t_stop_nd = initial_guess.guess_field(formulation_obj, self, 't_stop') / self.nondim.time_scale
 
         self.Ts_init          = t_stop_nd - t_start_nd
         t_init                = np.linspace(t_start_nd, t_stop_nd, self.index_map.N.all)
@@ -122,14 +161,12 @@ class SCPSubproblem():
             constraint.init_penalty(self)
 
         dyn = next((c for c in self.constraints.values() if c.type == "dynamics"), None)
-        self.eps_dyn   = dyn.penalty_state.eps.copy() if dyn is not None else np.full(self.index_map.n.z, 1e-4)
+        self.eps_dyn   = dyn.penalties.eps.copy() if dyn is not None else np.full(self.index_map.n.z, 1e-4)
         self.eps_dyn[self.index_map.indices.z.running_cost] = np.inf
 
-        self.eps_state = expand_to_array_if_scalar(getattr(self.flags, 'eps_state', 1e-4), self.index_map.n.state)
-        self.eps_cost  = np.atleast_1d(float(getattr(self.penalty_config, 'eps_cost', 1e-4)))
-        self.w_cost    = float(getattr(self.penalty_config, 'w_cost', 1.0))
+        self.fcns.convergence.init_tolerances(self)
 
-        initial_guess.set_initial_guess(formulation_obj, self)
+        self.fcns.initial_guess.set(formulation_obj, self)
 
         self.iter_data_list = []
 
@@ -140,13 +177,8 @@ class SCPSubproblem():
             "t_start": float(self.initial_guess.t[0]) * self.nondim.time_scale,
             "t_final": float(self.initial_guess.t[-1]) * self.nondim.time_scale,
             "cost": 0.0,
-            "vb":     AttrDict({c.name: c.penalty_state.vb     for c in self.constraints.values() if c.shape is not None}),
-            "W":      AttrDict({c.name: c.penalty_state.W      for c in self.constraints.values() if c.shape is not None}),
-            "dual":   AttrDict({c.name: c.penalty_state.dual   for c in self.constraints.values() if c.shape is not None}),
-            "W_p":    AttrDict({c.name: c.penalty_state.W_p    for c in self.constraints.values() if c.penalty_state.vb_type == "split"}),
-            "W_m":    AttrDict({c.name: c.penalty_state.W_m    for c in self.constraints.values() if c.penalty_state.vb_type == "split"}),
-            "dual_p": AttrDict({c.name: c.penalty_state.dual_p for c in self.constraints.values() if c.penalty_state.vb_type == "split"}),
-            "dual_m": AttrDict({c.name: c.penalty_state.dual_m for c in self.constraints.values() if c.penalty_state.vb_type == "split"}),
+            "penalty_cost": 0.0,
+            **self.penalty_snapshot(),
         })
 
         self.iter_data_list.append(copy.deepcopy(self.current_iter_data))
@@ -161,24 +193,13 @@ class SCPSubproblem():
 
         self.x_ref, self.t_ref, self.beta_ref, self.u_ref, self.s_ref = self.index_map.unpack_znu(self.cp_params.z_ref, self.cp_params.nu_ref)
 
-        # Configured step sizes stay fixed; tr_scale adapts the weights on retries.
-        self.cp_params.tr_x = cp.Parameter(nonneg=True, name="tr_x", value=1 / self._resolve_tr_step('z', 'x'))
-        self.cp_params.tr_t = cp.Parameter(nonneg=True, name="tr_t", value=1 / self._resolve_tr_step('z', 't'))
-        if self.index_map.n.ctcs > 0:
-            self.cp_params.tr_ctcs = cp.Parameter(nonneg=True, name="tr_ctcs", value=1 / self._resolve_tr_step('z', 'ctcs'))
-        if self.index_map.n.running_cost > 0:
-            self.cp_params.tr_gamma = cp.Parameter(nonneg=True, name="tr_gamma", value=1 / self._resolve_tr_step('z', 'gamma'))
-        self.cp_params.tr_u = cp.Parameter(nonneg=True, name="tr_u", value=1 / self._resolve_tr_step('nu', 'u'))
-        self.cp_params.tr_s = cp.Parameter(nonneg=True, name="tr_s", value=1 / self._resolve_tr_step('nu', 's'))
+        self.fcns.trust_region.create_params(self)
 
         self.cp_params.dcostdx = cp.Parameter((N, n_z),  name="dcostdx")
         self.cp_params.dcostdu = cp.Parameter((N, n_nu), name="dcostdu")
         self.cp_params.cost0   = cp.Parameter((N,),      name="cost0")
 
-        if self.flags.discretize == "ps":
-            self.cp_params.tau          = cp.Parameter((N,), name="tau")
-            self.cp_params.tau.value    = self.ps_tau_norm
-            self.cp_params.ps_t_offset  = cp.Parameter((N,), name="ps_t_offset", value=np.zeros(N))
+        self.fcns.discretize.create_time_params(self)
 
         for constraint in self.constraints.values():
             constraint.create_penalty_parameters(self)
@@ -228,71 +249,16 @@ class SCPSubproblem():
         for cost in self.costs.values():
             cost.create_cvxpy_cost(self)
 
-        self.create_cost_trust_region()
+        self._trust_region_penalty_fcn(self)
 
         for constraint in self.constraints.values():
             constraint.add_penalty_cost(self)
 
     def create_free_final_time_constraints(self) -> None:
-        N = self.index_map.N.all
-
         if self._anchor_start_time():
             self.cp_constraints.append(self.dt[0, 0] == 0)
 
-        if self.flags.discretize == "ps":
-            tau = self.cp_params.tau
-            for k in range(1, N - 1):
-                self.cp_constraints.append(self.dt[k, 0] == self.cp_params.ps_t_offset[k] + tau[k] * self.dt[N - 1, 0])
-
-            for k in range(N - 1):
-                self.cp_constraints.append(0.0 <= self.s_ref[k, 0] + self.ds[k, 0])
-                s_k  = self.s_ref[k, 0] + self.ds[k, 0]
-                s_kp = self.s_ref[k + 1, 0] + self.ds[k + 1, 0]
-                self.cp_constraints.append(s_k == s_kp)
-
-            self.cp_constraints.append(self.t_ref[N - 1, 0] + self.dt[N - 1, 0] >= 0.0)
-            self.cp_constraints.append(0.0 <= self.s_ref[N - 1, 0] + self.ds[N - 1, 0])
-            return
-
-        for k in range(N - 1):
-            t_0 = self.t_ref[0, 0] + self.dt[0, 0]
-            t_1 = self.t_ref[1, 0] + self.dt[1, 0]
-
-            t_k = self.t_ref[k, 0] + self.dt[k, 0]
-            t_kp = self.t_ref[k+1, 0] + self.dt[k+1, 0]
-
-            s_k = self.s_ref[k, 0] + self.ds[k, 0]
-            s_kp = self.s_ref[k+1, 0] + self.ds[k+1, 0]
-
-            self.cp_constraints.append(t_k >= 0)
-            # a negative dilation puts NaNs in downstream nonlinear terms (e.g. aero)
-            self.cp_constraints.append(0.0 <= s_k)
-
-            if hasattr(self.flags, "equal_dt") and bool(self.flags.equal_dt):
-                interval_k = t_kp - t_k
-                interval_0 = t_1 - t_0
-                self.cp_constraints.append(interval_k == interval_0)
-
-            if hasattr(self.flags, "zoh_dilation") and bool(self.flags.zoh_dilation):
-                self.cp_constraints.append(s_k == s_kp)
-
-        self.cp_constraints.append(0.0 <= self.s_ref[N - 1, 0] + self.ds[N - 1, 0])
-
-    def create_cost_trust_region(self) -> None:
-        if self.flags.discretize not in ("ms", "ps"):
-            return
-        idx_z  = self.index_map.indices.z
-        idx_nu = self.index_map.indices.nu
-
-        self.cp_cost += self.cp_params.tr_x * cp.sum_squares(self.dz[:, idx_z.state])
-        self.cp_cost += self.cp_params.tr_t * cp.sum_squares(self.dz[:, idx_z.time])
-        if self.index_map.n.ctcs > 0:
-            self.cp_cost += self.cp_params.tr_ctcs * cp.sum_squares(self.dz[:, idx_z.ctcs])
-        if self.index_map.n.running_cost > 0:
-            self.cp_cost += self.cp_params.tr_gamma * cp.sum_squares(self.dz[:, idx_z.running_cost])
-
-        self.cp_cost += self.cp_params.tr_u * cp.sum_squares(self.dnu[:, idx_nu.control])
-        self.cp_cost += self.cp_params.tr_s * cp.sum_squares(self.dnu[:, idx_nu.dilation_factor])
+        self.fcns.discretize.create_time_constraints(self)
 
     def update_cvxpy_parameters(self) -> None:
         z_opt  = self.current_iter_data.z_opt
@@ -303,10 +269,7 @@ class SCPSubproblem():
 
         self.x_ref, self.t_ref, self.beta_ref, self.u_ref, self.s_ref = self.index_map.unpack_znu(z_opt, nu_opt)
 
-        if self.flags.discretize == "ps":
-            t_ref_vals = z_opt[:, self.index_map.indices.z.time].flatten()
-            t0, tf = t_ref_vals[0], t_ref_vals[-1]
-            self.cp_params.ps_t_offset.value = t0 + self.ps_tau_norm * (tf - t0) - t_ref_vals
+        self.fcns.discretize.update_time_params(self)
 
         disc_start_time = time.perf_counter()
 
@@ -320,48 +283,25 @@ class SCPSubproblem():
 
         self.current_iter_data.discretization_time = (disc_end_time - disc_start_time) * 1000
 
-        self.cp_params.tr_x.value = self.tr_scale / self._resolve_tr_step('z', 'x')
-        self.cp_params.tr_t.value = self.tr_scale / self._resolve_tr_step('z', 't')
-        if self.index_map.n.ctcs > 0:
-            self.cp_params.tr_ctcs.value = self.tr_scale / self._resolve_tr_step('z', 'ctcs')
-        if self.index_map.n.running_cost > 0:
-            self.cp_params.tr_gamma.value = self.tr_scale / self._resolve_tr_step('z', 'gamma')
-        self.cp_params.tr_u.value = self.tr_scale / self._resolve_tr_step('nu', 'u')
-        self.cp_params.tr_s.value = self.tr_scale / self._resolve_tr_step('nu', 's')
+        self.fcns.trust_region.update_params(self)
 
         for constraint in self.constraints.values():
             constraint.update_penalty_parameters(self)
-
-    def _resolve_tr_step(self, group: str, key: str) -> float:
-        """Trust-region step size for one z/nu component.
-
-        penalty.tr_step.<group> is a scalar (uniform across the group) or a
-        mapping with a 'default' key plus named component overrides --
-        same convention as a constraint's eps.
-        """
-        tr_step_cfg = getattr(self.penalty_config, 'tr_step', None)
-        raw = getattr(tr_step_cfg, group, None) if tr_step_cfg is not None else None
-        if raw is None:
-            return 1.0
-        if not hasattr(raw, 'items'):
-            return float(raw)
-        entries = dict(raw)
-        default = entries.pop('default', 1.0)
-        return float(entries.get(key, default))
 
     def read_solution(self) -> None:
         self._dz_new  = self.dz.value
         self._dnu_new = self.dnu.value
 
-    def apply_step(self) -> None:
+    def apply_step(self, alpha: float = 1.0) -> None:
         dz_new  = self._dz_new
         dnu_new = self._dnu_new
 
-        self.current_iter_data.dz  = dz_new
-        self.current_iter_data.dnu = dnu_new
+        self.current_iter_data.dz    = alpha * dz_new
+        self.current_iter_data.dnu   = alpha * dnu_new
+        self.current_iter_data.alpha = alpha
 
-        z_new  = self.current_iter_data.z_opt  + dz_new
-        nu_new = self.current_iter_data.nu_opt + dnu_new
+        z_new  = self.current_iter_data.z_opt  + alpha * dz_new
+        nu_new = self.current_iter_data.nu_opt + alpha * dnu_new
 
         self.current_iter_data.z_opt  = z_new
         self.current_iter_data.nu_opt = nu_new
@@ -378,33 +318,46 @@ class SCPSubproblem():
         self.current_iter_data.beta_opt = beta_opt_new
         self.current_iter_data.u_opt    = u_opt_new
         self.current_iter_data.s_opt    = s_opt_new
-        self.current_iter_data.cost     = self.cp_cost.value / self.w_cost
 
         for constraint in self.constraints.values():
             constraint.read_vb(self)
 
-        self.current_iter_data.penalty_cost = sum(
-            penalties.penalty_cost_value(c.penalty_state) for c in self.constraints.values()
-        )
+        self.current_iter_data.cost, self.current_iter_data.penalty_cost = self.fcns.trust_region.evaluate_step(self)
 
         for constraint in self.constraints.values():
             constraint.update_current_iter_data(self)
 
         self.current_iter_data.iter_num += 1
 
-        self.current_iter_data.vb     = AttrDict({c.name: c.penalty_state.vb     for c in self.constraints.values() if c.shape is not None})
-        self.current_iter_data.W      = AttrDict({c.name: c.penalty_state.W      for c in self.constraints.values() if c.shape is not None})
-        self.current_iter_data.dual   = AttrDict({c.name: c.penalty_state.dual   for c in self.constraints.values() if c.shape is not None})
-        self.current_iter_data.W_p    = AttrDict({c.name: c.penalty_state.W_p    for c in self.constraints.values() if c.penalty_state.vb_type == "split"})
-        self.current_iter_data.W_m    = AttrDict({c.name: c.penalty_state.W_m    for c in self.constraints.values() if c.penalty_state.vb_type == "split"})
-        self.current_iter_data.dual_p = AttrDict({c.name: c.penalty_state.dual_p for c in self.constraints.values() if c.penalty_state.vb_type == "split"})
-        self.current_iter_data.dual_m = AttrDict({c.name: c.penalty_state.dual_m for c in self.constraints.values() if c.penalty_state.vb_type == "split"})
+        self.current_iter_data.update(self.penalty_snapshot())
 
-        convergence.check_convergence_tolerance(self)
+        self._convergence_check_fcn(self)
+
+        self.update_hyperparams()
 
     def record_iter_data(self) -> None:
         self.iter_data_list.append(copy.deepcopy(self.current_iter_data))
 
+    def update_hyperparams(self, alpha: float = 1.0) -> None:
+        """Post-step autotuning: trust region first (if configured), then constraint penalties."""
+        self.update_trust_region()
+        self.update_constraint_penalties(alpha)
+
+    def update_trust_region(self) -> None:
+        autotune = self.fcns.trust_region.get('autotune')
+        if autotune is not None:
+            autotune(self)
+
     def update_constraint_penalties(self, alpha: float = 1.0) -> None:
         for constraint in self.constraints.values():
             constraint.update_constraint_penalties(self, alpha)
+
+    def troubleshoot_step(self) -> tuple[bool, str | None]:
+        if self._troubleshoot_on_step_fcn is None:
+            return True, None
+        return self._troubleshoot_on_step_fcn([self])
+
+    def troubleshoot(self, exc=None) -> str:
+        if self._troubleshoot_on_error_fcn is None:
+            raise (exc if exc is not None else RuntimeError("solve failed with no troubleshooting configured"))
+        return self._troubleshoot_on_error_fcn([self], exc)

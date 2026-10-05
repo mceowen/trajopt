@@ -1,0 +1,4 @@
+fcns:
+  troubleshoot:
+    on_error: trajopt/methods/common/troubleshoot.py:tighten_on_error
+    on_step:  trajopt/methods/common/troubleshoot.py:adjust_on_step

@@ -4,7 +4,6 @@ import jax
 import numpy as np
 
 from trajopt.analysis.results import Iterate, MissionResult, RunResult
-from trajopt.methods.common import integrators, pseudospectral
 from trajopt.utils import tools
 from trajopt.utils.tools import AttrDict
 
@@ -45,15 +44,15 @@ def analyze_phase(subprob, config):
     iters    = subprob.iter_data_list if config.analysis.compute_iters else [subprob.iter_data_list[-1]]
     dynamics = next(c for c in phase.constraints.values() if c.type == "dynamics").fcn_znu
 
-    discretize = subprob.flags.get("discretize", "ms")
+    discretize = subprob.hyperparams.discretize.get("mode", "ms")
     propagate_from_nodes_flag = config.analysis.get("propagate_from_nodes", False)
 
-    H = int(getattr(subprob.flags, 'hp_segments', 1))
+    H = int(getattr(subprob.hyperparams.discretize, 'hp_segments', 1))
 
     if propagate_from_nodes_flag:
-        node_solver = integrators.make_node_propagation_solver(dynamics, params, n_steps=50)
+        node_solver = subprob.fcns.discretize.make_node_propagation_solver(dynamics, params, n_steps=50)
     else:
-        traj_solver = integrators.make_trajectory_solver(
+        traj_solver = subprob.fcns.discretize.make_trajectory_solver(
             dynamics, params, n_steps=500, discretize=discretize, hp_segments=H,
         )
 
@@ -68,19 +67,19 @@ def analyze_phase(subprob, config):
         N = z_opt.shape[0]
         if discretize == "ps":
             if H > 1:
-                _, etau, _, _ = pseudospectral.flipped_radau_hp_operator(N - 1, H)
+                _, etau, _, _ = subprob.fcns.discretize.hp_operator(N - 1, H)
             else:
-                _, etau, _, _ = pseudospectral.flipped_radau_differential_operator(N - 1)
+                _, etau, _, _ = subprob.fcns.discretize.differential_operator(N - 1)
             tau_nodes = (etau + 1.0) / 2.0
         else:
             tau_nodes = np.linspace(0.0, 1.0, N)
 
         if propagate_from_nodes_flag:
-            _, z_nl, nu_nl = integrators.propagate_from_nodes(
+            _, z_nl, nu_nl = subprob.fcns.discretize.propagate_from_nodes(
                 z_opt, tau_nodes, nu_opt, dynamics, params, _solver=node_solver,
             )
         else:
-            _, z_nl, nu_nl = integrators.propagate_trajectory(
+            _, z_nl, nu_nl = subprob.fcns.discretize.propagate_trajectory(
                 z_opt, tau_nodes, nu_opt, dynamics, params, _solver=traj_solver,
             )
 
@@ -258,14 +257,16 @@ def run_method_variation(traj):
           methods:
             autoscvx-ms: {}
             autoscvx-ps-h10:
-              flags:
-                discretize: ps
-                equal_dt: 0
-                hp_segments: 10
-                line_search: 1
-              penalty:
-                initial_state:
-                  vb: 'none'
+              hyperparams:
+                discretize:
+                  mode: ps
+                  equal_dt: 0
+                  hp_segments: 10
+                trust_region:
+                  line_search: 1
+                penalties:
+                  initial_state:
+                    vb: 'none'
     """
     from trajopt.trajectory_analyzer import TrajectoryAnalyzer
 

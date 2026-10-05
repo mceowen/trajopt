@@ -1,0 +1,75 @@
+num_nodes: 20
+inherit: trajopt/models/configs/quadrotor_3dof.yaml
+
+fcns:
+  thrust_norm:      trajopt/models/quadrotor_3dof.py:thrust_norm
+  obstacle:         trajopt/models/quadrotor_3dof.py:obstacle
+  max_thrust_cone:  trajopt/models/quadrotor_3dof.py:max_thrust_cone
+  xz:               trajopt/models/quadrotor_3dof.py:xz
+  yz:               trajopt/models/quadrotor_3dof.py:yz
+  one:              trajopt/models/quadrotor_3dof.py:one
+  u_squared:        trajopt/models/quadrotor_3dof.py:u_squared
+
+params:
+  planet:
+    inherit: trajopt/missions/configs/planets/earth.yaml
+  vehicle:
+    inherit: trajopt/missions/configs/vehicles/quadrotor.yaml
+  obstacle:
+    radius: 4.0
+
+constraints:
+  dynamics:
+    type: dynamics
+    fcn: fcns.dynamics
+    eps:
+      default: 0.001
+      #x:  0.01
+      #y:  0.01
+      #z:  0.01
+      #vx: 0.01
+      #vy: 0.01
+      #vz: 0.01
+
+  initial_state:
+    type: initial_state
+    value: [0.0, 0.0, 5.0, 0.0, 0.5, 0.0]
+
+  final_state:
+    type: final_state
+    value: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
+    eps: 0.01
+
+  max_thrust:
+    type: convex_inequality
+    fcn: fcns.max_thrust_cone
+
+  min_thrust:
+    type: nonconvex_inequality
+    fcn: fcns.thrust_norm
+    lower: "${params.vehicle.T_min}"
+
+  obstacle:
+    type: nonconvex_inequality
+    fcn: fcns.obstacle
+    pos: [5.5, 4.5]   # x, y (extends infinitely in z)
+    lower: "${params.obstacle.radius}"
+    scale: "${[params.obstacle.radius]}"
+    eps: 0.0004
+
+  final_time:
+    type: final_time
+    lower: 1.0
+    upper: 20.0
+
+costs:
+  min_time:
+    type: min_time
+
+  # min_control_effort:
+  #   type: nonconvex_running
+  #   fcn: fcns.u_squared
+
+  # u_start: [0, 0, 1]
+  # u_stop: [0, 0, 1]
+

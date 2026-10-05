@@ -1,9 +1,7 @@
 import cvxpy as cp
 import jax
-import jax.numpy as jnp
 import numpy as np
 
-from trajopt.methods.common import pseudospectral
 from trajopt.methods.common.scp.constraint import SCPConstraint
 
 #jax.config.update("jax_compilation_cache_dir", "/absolute/path/to/jax_cache")
@@ -16,225 +14,31 @@ from trajopt.methods.common.scp.constraint import SCPConstraint
 
 class scp_dynamics(SCPConstraint):
     def compile(self, scp_subproblem):
-        dyn_fcn = jax.jit(self.constraint.fcn_znu)
-
-        df_dz  = jax.jit(jax.jacfwd(self.constraint.fcn_znu, argnums=0))
-        df_dnu = jax.jit(jax.jacfwd(self.constraint.fcn_znu, argnums=1))
-        self.lin_dyn = lambda z, nu, params: (dyn_fcn(z, nu, params), df_dz(z, nu, params), df_dnu(z, nu, params))
-
-        if scp_subproblem.flags.discretize == "ps":
-            N_col = scp_subproblem.index_map.N.all - 1
-            H = int(getattr(scp_subproblem.flags, 'hp_segments', 1))
-
-            if H > 1:
-                _, etau, _, D_local = pseudospectral.flipped_radau_hp_operator(N_col, H)
-                self.ps_D = D_local
-                self.ps_hp = H
-                self.ps_p = N_col // H
-            else:
-                _, etau, _, D_np = pseudospectral.flipped_radau_differential_operator(N_col)
-                self.ps_D = D_np
-                self.ps_hp = 1
-                self.ps_p = N_col
-
-            self.ps_etau = etau
-            self.ps_tau_norm = (etau + 1.0) / 2.0
-            scp_subproblem.ps_tau_norm = self.ps_tau_norm
-            self.dyn_fcn_batched = jax.jit(jax.vmap(dyn_fcn, in_axes=(0, 0, None)))
-            return
-
-        N_grid    = scp_subproblem.index_map.N.all
-        nsub      = int(getattr(scp_subproblem.flags, 'nsub', 10))
-        delta_tau = 1.0 / (N_grid - 1)
-        dt_rk4    = delta_tau / nsub
-
-        def f_dot(k, tau, z, nu_k, nu_kp, params):
-            tau_k  = k / (N_grid - 1)
-            tau_kp = (k + 1) / (N_grid - 1)
-            a      = (tau_kp - tau) / (tau_kp - tau_k)
-            b      = (tau - tau_k)  / (tau_kp - tau_k)
-            nu     = a * nu_k + b * nu_kp
-            return dyn_fcn(z, nu, params)
-
-        def rk4_step(carry, tau):
-            z, k, nu_k, nu_kp, params = carry
-            k1 = f_dot(k, tau,            z,                   nu_k, nu_kp, params)
-            k2 = f_dot(k, tau + dt_rk4/2, z + (dt_rk4/2) * k1, nu_k, nu_kp, params)
-            k3 = f_dot(k, tau + dt_rk4/2, z + (dt_rk4/2) * k2, nu_k, nu_kp, params)
-            k4 = f_dot(k, tau + dt_rk4,   z +     dt_rk4 * k3, nu_k, nu_kp, params)
-            z_next = z + (dt_rk4 / 6) * (k1 + 2*k2 + 2*k3 + k4)
-            return (z_next, k, nu_k, nu_kp, params), None
-
-        def propagate_k(k, z_k, nu_k, nu_kp, params):
-            tau_k = k / (N_grid - 1)
-            taus  = tau_k + jnp.arange(nsub) * dt_rk4
-            carry_init = (z_k, k, nu_k, nu_kp, params)
-            (z_kp, _, _, _, _), _ = jax.lax.scan(rk4_step, carry_init, taus)
-            return z_kp
-
-        prop_jacobians_k = jax.jacfwd(propagate_k, argnums=(1, 2, 3))
-
-        self.propagate           = jax.jit(jax.vmap(propagate_k,      in_axes=(0, 0, 0, 0, None)))
-        self.propagate_jacobians = jax.jit(jax.vmap(prop_jacobians_k, in_axes=(0, 0, 0, 0, None)))
+        self.dyn_fcn = jax.jit(self.constraint.fcn_znu)
+        scp_subproblem.fcns.discretize.dynamics_compile(self, scp_subproblem)
 
     def init_penalty(self, scp_subproblem):
         N   = scp_subproblem.index_map.N.all
         n_z = scp_subproblem.index_map.n.z
         self._alloc_penalty(scp_subproblem, (N - 1, n_z))
+        self.lagrangian_dual = np.zeros((N - 1, n_z))
 
     def create_cvxpy_parameters(self, scp_subproblem):
-        N, n_z, n_nu = scp_subproblem.index_map.N.all, scp_subproblem.index_map.n.z, scp_subproblem.index_map.n.nu
-
-        if scp_subproblem.flags.discretize == "ms":
-            scp_subproblem.cp_params.Ak  = cp.Parameter((N - 1, n_z, n_z),  name="Ak")
-            scp_subproblem.cp_params.Bk  = cp.Parameter((N - 1, n_z, n_nu), name="Bk")
-            scp_subproblem.cp_params.Bkp = cp.Parameter((N - 1, n_z, n_nu), name="Bkp")
-            scp_subproblem.cp_params.z_m = cp.Parameter((N, n_z), name="z_minus")
-
-        if scp_subproblem.flags.discretize == "ps":
-            N_col = N - 1
-            scp_subproblem.cp_params.ps_f_ref = cp.Parameter((N_col, n_z),       name="ps_f_ref")
-            scp_subproblem.cp_params.ps_Ac    = cp.Parameter((N_col, n_z, n_z),  name="ps_Ac")
-            scp_subproblem.cp_params.ps_Bc    = cp.Parameter((N_col, n_z, n_nu), name="ps_Bc")
+        scp_subproblem.fcns.discretize.dynamics_create_cvxpy_parameters(self, scp_subproblem)
 
     def create_cvxpy_constraints(self, scp_subproblem):
-        N = scp_subproblem.index_map.N.all
-
-        if scp_subproblem.flags.discretize == "ps":
-            self._build_ps_dyn_constraints(scp_subproblem)
-
-        if scp_subproblem.flags.discretize == "ms":
-            vb_dyn = self.penalty_state.vb_var
-            scp_subproblem.cp_dyn_constraints = []
-
-            for k in range(N - 1):
-                dz_k   = scp_subproblem.dz[k]
-                dnu_k  = scp_subproblem.dnu[k]
-                dnu_kp = scp_subproblem.dnu[k + 1]
-
-                Ak  = scp_subproblem.cp_params.Ak[k]
-                Bk  = scp_subproblem.cp_params.Bk[k]
-                Bkp = scp_subproblem.cp_params.Bkp[k]
-
-                rhs = Ak @ dz_k + Bk @ dnu_k + Bkp @ dnu_kp 
-
-                z_ref_prop_kp = scp_subproblem.cp_params.z_m[k + 1]
-                lhs = scp_subproblem.dz[k + 1] + scp_subproblem.cp_params.z_ref[k + 1]
-                rhs_full = z_ref_prop_kp + rhs + (vb_dyn[k] if vb_dyn is not None else 0)
-
-                cnst = (lhs == rhs_full)
-                scp_subproblem.cp_dyn_constraints.append(cnst)
-                scp_subproblem.cp_constraints.append(cnst)
+        scp_subproblem.fcns.discretize.dynamics_create_cvxpy_constraints(self, scp_subproblem)
 
     def update_cvxpy_parameters(self, scp_subproblem):
-        z_opt  = scp_subproblem.current_iter_data.z_opt
-        nu_opt = scp_subproblem.current_iter_data.nu_opt
-
-        if scp_subproblem.flags.discretize == "ms":
-            Ak, Bk, Bkp, z_minus = self._compute_linsys_discrete(z_opt, nu_opt, scp_subproblem)
-
-            scp_subproblem.cp_params.Ak.value  = Ak
-            scp_subproblem.cp_params.Bk.value  = Bk
-            scp_subproblem.cp_params.Bkp.value = Bkp
-            scp_subproblem.cp_params.z_m.value = z_minus
-
-        if scp_subproblem.flags.discretize == "ps":
-            f_ref_col, Ac_col, Bc_col = self._compute_ps_dynamics_and_jacobians(z_opt, nu_opt, scp_subproblem)
-
-            scp_subproblem.cp_params.ps_f_ref.value = f_ref_col
-            scp_subproblem.cp_params.ps_Ac.value    = Ac_col
-            scp_subproblem.cp_params.ps_Bc.value    = Bc_col
+        scp_subproblem.fcns.discretize.dynamics_update_cvxpy_parameters(self, scp_subproblem)
 
     def update_current_iter_data(self, scp_subproblem):
-        z_opt  = scp_subproblem.current_iter_data.z_opt
-        nu_opt = scp_subproblem.current_iter_data.nu_opt
+        scp_subproblem.fcns.discretize.dynamics_update_current_iter_data(self, scp_subproblem)
 
-        if scp_subproblem.flags.discretize == "ps":
-            z_jnp  = jnp.asarray(z_opt)
-            nu_jnp = jnp.asarray(nu_opt)
-            D_jnp  = jnp.asarray(self.ps_D)
-            H = self.ps_hp
-            p = self.ps_p
-
-            lhs_parts = []
-            for h in range(H):
-                col_start = h * p
-                z_h = z_jnp[col_start:col_start + p + 1, :]
-                lhs_parts.append(2.0 * D_jnp @ z_h)
-            lhs = jnp.concatenate(lhs_parts, axis=0)
-
-            f_vals = self.dyn_fcn_batched(z_jnp[1:], nu_jnp[1:], scp_subproblem.params)
-            scp_subproblem.current_iter_data.defect = np.asarray(lhs - f_vals)
-
-        if scp_subproblem.flags.discretize == "ms":
-            ks         = jnp.arange(scp_subproblem.index_map.N.all - 1)
-            z_ref_ks   = jnp.asarray(z_opt[:-1])
-            nu_ref_ks  = jnp.asarray(nu_opt[:-1])
-            nu_ref_kps = jnp.asarray(nu_opt[1:])
-            z_minus    = np.asarray(self.propagate(ks, z_ref_ks, nu_ref_ks, nu_ref_kps, scp_subproblem.params))
-            scp_subproblem.current_iter_data.defect = z_opt[1:] - z_minus
-
-    def _compute_linsys_discrete(self, z_ref_np, nu_ref_np, scp_subproblem):
-        subproblem = scp_subproblem
-        z_ref_ks   = jnp.asarray(z_ref_np[:-1])
-        nu_ref_ks  = jnp.asarray(nu_ref_np[:-1])
-        nu_ref_kps = jnp.asarray(nu_ref_np[1:])
-        params     = subproblem.params
-
-        ks = jnp.arange(subproblem.index_map.N.all - 1)
-
-        z_minus              = self.propagate(ks, z_ref_ks, nu_ref_ks, nu_ref_kps, params)
-        A_jax, B_jax, Bp_jax = self.propagate_jacobians(ks, z_ref_ks, nu_ref_ks, nu_ref_kps, params)
-
-        z_ref_0 = z_ref_ks[[0], :]
-        return np.asarray(A_jax), np.asarray(B_jax), np.asarray(Bp_jax), np.asarray(jnp.vstack([z_ref_0, z_minus]))
-
-    def _build_ps_dyn_constraints(self, scp_subproblem):
-        N_col = scp_subproblem.index_map.N.all - 1
-        vb_dyn = self.penalty_state.vb_var
-        H = self.ps_hp
-        p = self.ps_p
-        D = self.ps_D
-
-        scp_subproblem.cp_dyn_constraints = []
-
-        Z = scp_subproblem.cp_params.z_ref + scp_subproblem.dz
-
-        for h in range(H):
-            col_start = h * p
-            Z_h = Z[col_start:col_start + p + 1, :]
-            lhs_h = 2.0 * (D @ Z_h)
-
-            for j in range(p):
-                k = h * p + j
-                rhs_k = (scp_subproblem.cp_params.ps_f_ref[k]
-                         + scp_subproblem.cp_params.ps_Ac[k] @ scp_subproblem.dz[k + 1]
-                         + scp_subproblem.cp_params.ps_Bc[k] @ scp_subproblem.dnu[k + 1]
-                         + (vb_dyn[k] if vb_dyn is not None else 0))
-                cnst = (lhs_h[j] == rhs_k)
-                scp_subproblem.cp_dyn_constraints.append(cnst)
-                scp_subproblem.cp_constraints.append(cnst)
-
-    def _compute_ps_dynamics_and_jacobians(self, z_ref, nu_ref, scp_subproblem):
-        subproblem = scp_subproblem
-        N_col   = subproblem.index_map.N.all - 1
-        n_z     = subproblem.index_map.n.z
-        n_nu    = subproblem.index_map.n.nu
-        params  = subproblem.params
-
-        f_ref_col = np.zeros((N_col, n_z))
-        Ac_col    = np.zeros((N_col, n_z, n_z))
-        Bc_col    = np.zeros((N_col, n_z, n_nu))
-
-        for k in range(N_col):
-            z_k  = np.asarray(z_ref[k + 1])
-            nu_k = np.asarray(nu_ref[k + 1])
-            fc_k, Ac_k, Bc_k = self.lin_dyn(z_k, nu_k, params)
-            f_ref_col[k, :] = np.asarray(fc_k)
-            Ac_col[k, :, :] = np.asarray(Ac_k)
-            Bc_col[k, :, :] = np.asarray(Bc_k)
-
-        return f_ref_col, Ac_col, Bc_col
+        if hasattr(scp_subproblem, 'cp_dyn_constraints') and scp_subproblem.cp_dyn_constraints:
+            alpha = scp_subproblem.current_iter_data.get("alpha", 1.0)
+            lam = np.array([c.dual_value for c in scp_subproblem.cp_dyn_constraints])
+            self.lagrangian_dual = (1.0 - alpha) * self.lagrangian_dual + alpha * lam
 
 # ---------------------------------------------------------------------------
 # initial state
@@ -247,8 +51,8 @@ class scp_initial_state(SCPConstraint):
     def create_cvxpy_constraints(self, scp_subproblem):
         idx  = self.constraint.idx
         expr = scp_subproblem.dz[0, idx] + scp_subproblem.cp_params.z_ref[0, idx]
-        if self.penalty_state.vb_var is not None:
-            expr = expr - self.penalty_state.vb_var[0, :]
+        if self.penalties.vb_var is not None:
+            expr = expr - self.penalties.vb_var[0, :]
         scp_subproblem.cp_constraints.append(expr == self.constraint.value)
 
 # ---------------------------------------------------------------------------
@@ -262,8 +66,8 @@ class scp_final_state(SCPConstraint):
     def create_cvxpy_constraints(self, scp_subproblem):
         idx  = self.constraint.idx
         expr = scp_subproblem.dz[-1, idx] + scp_subproblem.cp_params.z_ref[-1, idx]
-        if self.penalty_state.vb_var is not None:
-            expr = expr - self.penalty_state.vb_var[0, :]
+        if self.penalties.vb_var is not None:
+            expr = expr - self.penalties.vb_var[0, :]
         scp_subproblem.cp_constraints.append(expr == self.constraint.value)
 
 
@@ -278,8 +82,8 @@ class scp_initial_control(SCPConstraint):
     def create_cvxpy_constraints(self, scp_subproblem):
         idx  = self.constraint.idx
         expr = scp_subproblem.dnu[0, idx] + scp_subproblem.cp_params.nu_ref[0, idx]
-        if self.penalty_state.vb_var is not None:
-            expr = expr - self.penalty_state.vb_var[0, :]
+        if self.penalties.vb_var is not None:
+            expr = expr - self.penalties.vb_var[0, :]
         scp_subproblem.cp_constraints.append(expr == self.constraint.value)
 
 # ---------------------------------------------------------------------------
@@ -293,8 +97,8 @@ class scp_final_control(SCPConstraint):
     def create_cvxpy_constraints(self, scp_subproblem):
         idx  = self.constraint.idx
         expr = scp_subproblem.dnu[-1, idx] + scp_subproblem.cp_params.nu_ref[-1, idx]
-        if self.penalty_state.vb_var is not None:
-            expr = expr - self.penalty_state.vb_var[0, :]
+        if self.penalties.vb_var is not None:
+            expr = expr - self.penalties.vb_var[0, :]
         scp_subproblem.cp_constraints.append(expr == self.constraint.value)
 
 
@@ -304,78 +108,28 @@ class scp_final_control(SCPConstraint):
 
 class scp_nonconvex_inequality(SCPConstraint):
     nonnegative_dual = True
+    cp_ineq_constraints = None
 
     def compile(self, scp_subproblem):
-        fcn = self.constraint.fcn_znu
-        g      = jax.jit(fcn)
-        dg_dz  = jax.jit(jax.jacfwd(fcn, argnums=0))
-        dg_dnu = jax.jit(jax.jacfwd(fcn, argnums=1))
-        g_batched      = jax.jit(jax.vmap(g,      in_axes=(0, 0, None)))
-        dg_dz_batched  = jax.jit(jax.vmap(dg_dz,  in_axes=(0, 0, None)))
-        dg_dnu_batched = jax.jit(jax.vmap(dg_dnu, in_axes=(0, 0, None)))
-
-        self.fcn_batched = g_batched
-
-        def g_aff_batched(z, nu, params, g=g_batched, dz=dg_dz_batched, dnu=dg_dnu_batched):
-            return g(z, nu, params), dz(z, nu, params), dnu(z, nu, params)
-        self.g_aff_batched = g_aff_batched
-
+        scp_subproblem.fcns.convexify.compile_affine(self, scp_subproblem)
 
     def init_penalty(self, scp_subproblem):
         self.nodes = np.arange(scp_subproblem.index_map.N.all)
         dim = self.constraint.dimension
         self._alloc_penalty(scp_subproblem, (len(self.nodes), dim))
+        self.lagrangian_dual = np.zeros((len(self.nodes), dim))
 
     def create_cvxpy_parameters(self, scp_subproblem):
-        if self.shape is None:
-            return
-        n_z  = scp_subproblem.index_map.n.z
-        n_nu = scp_subproblem.index_map.n.nu
-        dim  = self.constraint.dimension
-        nn   = len(self.nodes)
-        self.dgdz_param  = cp.Parameter((nn, dim, n_z),  name=f"dgdz_{self.name}")
-        self.dgdnu_param = cp.Parameter((nn, dim, n_nu), name=f"dgdnu_{self.name}")
-        self.g0_param    = cp.Parameter((nn, dim),       name=f"g0_{self.name}")
+        scp_subproblem.fcns.convexify.create_cvxpy_parameters_affine(self, scp_subproblem)
 
     def create_cvxpy_constraints(self, scp_subproblem):
-        if self.shape is None:
-            return
-        vb = self.penalty_state.vb_var
-        self.cp_ineq_constraints = []
-        for i, k in enumerate(self.nodes):
-            g_lin = (
-                self.dgdz_param[i] @ scp_subproblem.dz[k, :]
-                + self.dgdnu_param[i] @ scp_subproblem.dnu[k, :]
-                + self.g0_param[i]
-            )
-            cnst = (g_lin - vb[i] <= 0) if vb is not None else (g_lin <= 0)
-            self.cp_ineq_constraints.append(cnst)
-            scp_subproblem.cp_constraints.append(cnst)
-            if vb is not None:
-                scp_subproblem.cp_constraints.append(vb[i] >= 0)
+        scp_subproblem.fcns.convexify.create_cvxpy_constraints_affine_inequality(self, scp_subproblem)
 
     def update_cvxpy_parameters(self, scp_subproblem):
-        if not hasattr(self, 'g0_param'):
-            return
-        z      = jnp.asarray(scp_subproblem.current_iter_data.z_opt)
-        nu     = jnp.asarray(scp_subproblem.current_iter_data.nu_opt)
-        params = scp_subproblem.params
-        g, dgdz, dgdnu = self.g_aff_batched(z[self.nodes], nu[self.nodes], params)
-        g    = np.asarray(g)
-        dgdz = np.asarray(dgdz)
-        dgdnu = np.asarray(dgdnu)
-
-        self.g0_param.value    = g
-        self.dgdz_param.value  = dgdz
-        self.dgdnu_param.value = dgdnu
+        scp_subproblem.fcns.convexify.update_cvxpy_parameters_affine(self, scp_subproblem)
 
     def update_current_iter_data(self, scp_subproblem):
-        if not hasattr(self, 'cp_ineq_constraints'):
-            return
-        z      = jnp.asarray(scp_subproblem.current_iter_data.z_opt)
-        nu     = jnp.asarray(scp_subproblem.current_iter_data.nu_opt)
-        params = scp_subproblem.params
-        self.g_nl = np.asarray(self.fcn_batched(z[self.nodes], nu[self.nodes], params))
+        scp_subproblem.fcns.convexify.update_current_iter_data_affine_inequality(self, scp_subproblem)
 
 
 class scp_initial_nonconvex_inequality(scp_nonconvex_inequality):
@@ -383,6 +137,7 @@ class scp_initial_nonconvex_inequality(scp_nonconvex_inequality):
         self.nodes = np.array([0])
         dim = self.constraint.dimension
         self._alloc_penalty(scp_subproblem, (len(self.nodes), dim))
+        self.lagrangian_dual = np.zeros((len(self.nodes), dim))
 
 
 class scp_final_nonconvex_inequality(scp_nonconvex_inequality):
@@ -390,92 +145,7 @@ class scp_final_nonconvex_inequality(scp_nonconvex_inequality):
         self.nodes = np.array([scp_subproblem.index_map.N.all - 1])
         dim = self.constraint.dimension
         self._alloc_penalty(scp_subproblem, (len(self.nodes), dim))
-
-
-# ---------------------------------------------------------------------------
-# nonconvex equality
-# ---------------------------------------------------------------------------
-
-class scp_nonconvex_equality(SCPConstraint):
-
-    def compile(self, scp_subproblem):
-        fcn = self.constraint.fcn_znu
-        g      = jax.jit(fcn)
-        dg_dz  = jax.jit(jax.jacfwd(fcn, argnums=0))
-        dg_dnu = jax.jit(jax.jacfwd(fcn, argnums=1))
-        g_batched      = jax.jit(jax.vmap(g,      in_axes=(0, 0, None)))
-        dg_dz_batched  = jax.jit(jax.vmap(dg_dz,  in_axes=(0, 0, None)))
-        dg_dnu_batched = jax.jit(jax.vmap(dg_dnu, in_axes=(0, 0, None)))
-
-        self.fcn_batched = g_batched
-
-        def g_aff_batched(z, nu, params, g=g_batched, dz=dg_dz_batched, dnu=dg_dnu_batched):
-            return g(z, nu, params), dz(z, nu, params), dnu(z, nu, params)
-        self.g_aff_batched = g_aff_batched
-
-    def init_penalty(self, scp_subproblem):
-        self.nodes = np.arange(scp_subproblem.index_map.N.all)
-        dim = self.constraint.dimension
-        self._alloc_penalty(scp_subproblem, (len(self.nodes), dim))
-
-    def create_cvxpy_parameters(self, scp_subproblem):
-        if self.shape is None:
-            return
-        n_z  = scp_subproblem.index_map.n.z
-        n_nu = scp_subproblem.index_map.n.nu
-        dim  = self.constraint.dimension
-        nn   = len(self.nodes)
-        self.dgdz_param  = cp.Parameter((nn, dim, n_z),  name=f"dgdz_{self.name}")
-        self.dgdnu_param = cp.Parameter((nn, dim, n_nu), name=f"dgdnu_{self.name}")
-        self.g0_param    = cp.Parameter((nn, dim),       name=f"g0_{self.name}")
-
-    def create_cvxpy_constraints(self, scp_subproblem):
-        if self.shape is None:
-            return
-        vb = self.penalty_state.vb_var
-        self.cp_eq_constraints = []
-        for i, k in enumerate(self.nodes):
-            g_lin = (
-                self.dgdz_param[i] @ scp_subproblem.dz[k, :]
-                + self.dgdnu_param[i] @ scp_subproblem.dnu[k, :]
-                + self.g0_param[i]
-            )
-            cnst = (g_lin - vb[i] == 0) if vb is not None else (g_lin == 0)
-            self.cp_eq_constraints.append(cnst)
-            scp_subproblem.cp_constraints.append(cnst)
-
-    def update_cvxpy_parameters(self, scp_subproblem):
-        if not hasattr(self, 'g0_param'):
-            return
-        z      = jnp.asarray(scp_subproblem.current_iter_data.z_opt)
-        nu     = jnp.asarray(scp_subproblem.current_iter_data.nu_opt)
-        params = scp_subproblem.params
-        g, dgdz, dgdnu = self.g_aff_batched(z[self.nodes], nu[self.nodes], params)
-        self.g0_param.value    = np.asarray(g)
-        self.dgdz_param.value  = np.asarray(dgdz)
-        self.dgdnu_param.value = np.asarray(dgdnu)
-
-    def update_current_iter_data(self, scp_subproblem):
-        if not hasattr(self, 'cp_eq_constraints'):
-            return
-        z      = jnp.asarray(scp_subproblem.current_iter_data.z_opt)
-        nu     = jnp.asarray(scp_subproblem.current_iter_data.nu_opt)
-        params = scp_subproblem.params
-        self.g_nl = np.asarray(self.fcn_batched(z[self.nodes], nu[self.nodes], params))
-
-
-class scp_initial_nonconvex_equality(scp_nonconvex_equality):
-    def init_penalty(self, scp_subproblem):
-        self.nodes = np.array([0])
-        dim = self.constraint.dimension
-        self._alloc_penalty(scp_subproblem, (len(self.nodes), dim))
-
-
-class scp_final_nonconvex_equality(scp_nonconvex_equality):
-    def init_penalty(self, scp_subproblem):
-        self.nodes = np.array([scp_subproblem.index_map.N.all - 1])
-        dim = self.constraint.dimension
-        self._alloc_penalty(scp_subproblem, (len(self.nodes), dim))
+        self.lagrangian_dual = np.zeros((len(self.nodes), dim))
 
 
 class scp_ctcs_nonconvex_inequality(SCPConstraint):
@@ -489,6 +159,50 @@ class scp_ctcs_nonconvex_inequality(SCPConstraint):
 
         beta_f = scp_subproblem.cp_params.z_ref[-1, idx_beta] + scp_subproblem.dz[-1, idx_beta]
         scp_subproblem.cp_constraints.append(beta_f <= 0)
+
+# ---------------------------------------------------------------------------
+# nonconvex equality
+# ---------------------------------------------------------------------------
+
+class scp_nonconvex_equality(SCPConstraint):
+    cp_eq_constraints = None
+
+    def compile(self, scp_subproblem):
+        scp_subproblem.fcns.convexify.compile_affine(self, scp_subproblem)
+
+    def init_penalty(self, scp_subproblem):
+        self.nodes = np.arange(scp_subproblem.index_map.N.all)
+        dim = self.constraint.dimension
+        self._alloc_penalty(scp_subproblem, (len(self.nodes), dim))
+        self.lagrangian_dual = np.zeros((len(self.nodes), dim))
+
+    def create_cvxpy_parameters(self, scp_subproblem):
+        scp_subproblem.fcns.convexify.create_cvxpy_parameters_affine(self, scp_subproblem)
+
+    def create_cvxpy_constraints(self, scp_subproblem):
+        scp_subproblem.fcns.convexify.create_cvxpy_constraints_affine_equality(self, scp_subproblem)
+
+    def update_cvxpy_parameters(self, scp_subproblem):
+        scp_subproblem.fcns.convexify.update_cvxpy_parameters_affine(self, scp_subproblem)
+
+    def update_current_iter_data(self, scp_subproblem):
+        scp_subproblem.fcns.convexify.update_current_iter_data_affine_equality(self, scp_subproblem)
+
+
+class scp_initial_nonconvex_equality(scp_nonconvex_equality):
+    def init_penalty(self, scp_subproblem):
+        self.nodes = np.array([0])
+        dim = self.constraint.dimension
+        self._alloc_penalty(scp_subproblem, (len(self.nodes), dim))
+        self.lagrangian_dual = np.zeros((len(self.nodes), dim))
+
+
+class scp_final_nonconvex_equality(scp_nonconvex_equality):
+    def init_penalty(self, scp_subproblem):
+        self.nodes = np.array([scp_subproblem.index_map.N.all - 1])
+        dim = self.constraint.dimension
+        self._alloc_penalty(scp_subproblem, (len(self.nodes), dim))
+        self.lagrangian_dual = np.zeros((len(self.nodes), dim))
 
 
 # ---------------------------------------------------------------------------
@@ -510,8 +224,8 @@ class scp_full_continuity(SCPConstraint):
         self.create_penalty_parameters(sub)
         self.create_penalty_variables(sub)
 
-        if self.penalty_state.vb_var is not None:
-            sub.cp_constraints.append(residual - self.penalty_state.vb_var[0, :] == 0)
+        if self.penalties.vb_var is not None:
+            sub.cp_constraints.append(residual - self.penalties.vb_var[0, :] == 0)
             self.add_penalty_cost(sub)
         else:
             sub.cp_constraints.append(residual == 0)
@@ -705,16 +419,7 @@ class scp_final_time(SCPConstraint):
         if not scp_subproblem.free_final_time:
             return
 
-        N = scp_subproblem.index_map.N.all
-
-        # pseudospectral node spacing comes from the collocation scheme instead
-        if scp_subproblem.flags.discretize != "ps":
-            for k in range(N - 1):
-                t_k          = scp_subproblem.t_ref[k, 0] + scp_subproblem.dt[k, 0]
-                t_kp         = scp_subproblem.t_ref[k + 1, 0] + scp_subproblem.dt[k + 1, 0]
-                t_interval_k = t_kp - t_k
-                scp_subproblem.cp_constraints.append(t_interval_k <= scp_subproblem.cp_params.dt_max)
-                scp_subproblem.cp_constraints.append(t_interval_k >= scp_subproblem.cp_params.dt_min)
+        scp_subproblem.fcns.discretize.final_time_interval_constraints(self, scp_subproblem)
 
         scp_subproblem.cp_constraints.append(scp_subproblem.cp_params.T_min <= scp_subproblem.t_ref[-1, 0] + scp_subproblem.dt[-1, 0])
         scp_subproblem.cp_constraints.append(scp_subproblem.t_ref[-1, 0] + scp_subproblem.dt[-1, 0] <= scp_subproblem.cp_params.T_max)
