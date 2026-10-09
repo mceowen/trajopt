@@ -93,11 +93,13 @@ class SCPMethod(GuessLifecycle):
             self.update_cvxpy_parameters()
             try:
                 self.cp_subproblem.solve(warm_start=False, **self.method_config.solver_opts)
+                if self.cp_subproblem.status == cp.USER_LIMIT:
+                    raise cp.error.SolverError("Convex subproblem reached the solver iteration limit")
             except cp.error.SolverError as exc:
                 self.reporter.message(f"  {self.scp_trajectory.troubleshoot(exc)}")
                 continue
 
-            if self.cp_subproblem.status not in {"optimal", "optimal_inaccurate", "user_limit"}:
+            if self.cp_subproblem.status not in {"optimal", "optimal_inaccurate"}:
                 reason = f"Terminated from non-optimal convex subproblem! Status: {self.cp_subproblem.status}"
                 break
 
