@@ -5,6 +5,7 @@ import numpy as np
 import cvxpy as cp
 
 from trajopt.methods.common import initial_guess
+from trajopt.methods.common.mesh import make_mesh
 import trajopt.methods.common.scp.constraint_types as scp_constraint_type_module
 import trajopt.methods.common.scp.cost_types as scp_cost_type_module
 from trajopt.utils.tools import AttrDict, recursive_attrdict, resolve_function_from_string
@@ -34,7 +35,7 @@ class Subproblem():
     constraint_type_module = scp_constraint_type_module
     cost_type_module       = scp_cost_type_module
 
-    def __init__(self, formulation_obj, method_config: AttrDict) -> None:
+    def __init__(self, formulation_obj, method_config: AttrDict, *, initial_guess=None, previous_guess=None) -> None:
 
         self.name           = formulation_obj.name
         self.phase          = formulation_obj  # analysis.py reaches params/nondim/outputs through this
@@ -77,7 +78,11 @@ class Subproblem():
 
         self.free_final_time = self.derive_free_final_time()
 
+        self.mesh = make_mesh(self.index_map.N.all, self.hyperparams.discretize, self.fcns.discretize)
+        self._supplied_guess = initial_guess
+        self._previous_guess = previous_guess
         self.initialize()
+        del self._supplied_guess, self._previous_guess
 
         self.cp_params            = AttrDict()
         self.cp_vars              = AttrDict()
@@ -138,24 +143,6 @@ class Subproblem():
         formulation_obj     = self.phase
         self.initial_guess  = AttrDict()
 
-        # the guess supplies whichever end the constraints do not give
-        initial_time_cnstr    = self.find_constraint("initial_time")
-        final_time_cnstr      = self.find_constraint("final_time")
-
-        t_start_nd            = (initial_time_cnstr.value if initial_time_cnstr is not None
-                                 else initial_guess.guess_field(formulation_obj, self, 't_start', 0.0) / self.nondim.time_scale)
-
-        if not self.free_final_time:
-            t_stop_nd = final_time_cnstr.fixed_value
-        else:
-            t_stop_nd = initial_guess.guess_field(formulation_obj, self, 't_stop') / self.nondim.time_scale
-
-        self.Ts_init          = t_stop_nd - t_start_nd
-        t_init                = np.linspace(t_start_nd, t_stop_nd, self.index_map.N.all)
-        dt_init               = np.diff(t_init)
-        self.initial_guess.t  = t_init
-        self.initial_guess.dt = dt_init
-
         for constraint in self.constraints.values():
             constraint.compile(self)
             constraint.init_penalty(self)
@@ -168,6 +155,9 @@ class Subproblem():
 
         self.fcns.initial_guess.set(formulation_obj, self)
 
+        self._reset_iter_data()
+
+    def _reset_iter_data(self):
         self.iter_data_list = []
 
         self.current_iter_data = recursive_attrdict({
@@ -182,6 +172,30 @@ class Subproblem():
         })
 
         self.iter_data_list.append(copy.deepcopy(self.current_iter_data))
+
+    def install_initial_guess(self, prepared):
+        """Reset numerical state, preserving compiled kernels and the CVXPY problem."""
+        self.initial_guess = prepared
+        self.Ts_init = prepared.t[-1] - prepared.t[0]
+        self.cost_init = self.cost_type_module.compute_nonconvex_terminal_costs(
+            prepared.z, prepared.nu, self.phase, self)
+        for constraint in self.constraints.values():
+            constraint.penalties.reset_values()
+            if hasattr(constraint, 'lagrangian_dual'):
+                constraint.lagrangian_dual.fill(0.)
+        if hasattr(self, 'lm_mu'):
+            self.lm_mu = float(getattr(self.hyperparams.trust_region, 'lm_mu_init', 1e-8)) if self.lm_adapt else 0.
+        self.tr_scale = 1.0
+        self.cp_subproblem_status = None
+        self._dz_new = self._dnu_new = None
+        self._reset_iter_data()
+
+    def prepare_guess(self, supplied=None, previous=None):
+        scratch = copy.copy(self)
+        scratch.initial_guess = AttrDict()
+        scratch._supplied_guess, scratch._previous_guess = supplied, previous
+        scratch.fcns.initial_guess.set(scratch.phase, scratch)
+        return scratch.initial_guess
 
     def create_cvxpy_parameters(self) -> None:
         N       = self.index_map.N.all

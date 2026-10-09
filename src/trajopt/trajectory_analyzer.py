@@ -25,7 +25,7 @@ class _Tee:
 
 class TrajectoryAnalyzer():
 
-    def __init__(self, config_path, method_overrides=None) -> None:
+    def __init__(self, config_path, method_overrides=None, *, initial_guess=None) -> None:
 
         self._start_console_log()
 
@@ -38,7 +38,8 @@ class TrajectoryAnalyzer():
         Trajectory = config_loader.resolve_formulation_trajectory_class(self.config.method)
         self.trajectory = Trajectory(self.config.trajectory)
         SCPMethod = config_loader.resolve_scp_method_class(self.config.method)
-        self.method = SCPMethod(self.config.method, self.trajectory)
+        self.method = SCPMethod(self.config.method, self.trajectory,
+                                **({"initial_guess": initial_guess} if initial_guess is not None else {}))
         self._solved = False
 
     def _start_console_log(self, path=None):
@@ -61,6 +62,20 @@ class TrajectoryAnalyzer():
     def solve(self):
         self.method.solve()
         self._solved = True
+
+    def export_guess(self):
+        """Export per-phase guesses without analysis."""
+        return self.method.export_guess()
+
+    def reset(self, *, initial_guess=None):
+        """Restart SCP from a Guess or phase mapping, resetting penalties and history.
+
+        Omitted phases use configured providers. Mesh or model changes require
+        reconfigure(); reset retains the compiled problem.
+        """
+        self.method.reset(initial_guess=initial_guess)
+        self._solved = False
+        self.__dict__.pop('results', None)
 
     def analyze(self):
         analysis_cfg = self.config.get("analysis", {})

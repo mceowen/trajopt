@@ -65,14 +65,7 @@ def analyze_phase(subprob, config):
         nu_opt = np.asarray(iter_data.nu_opt)
 
         N = z_opt.shape[0]
-        if discretize == "ps":
-            if H > 1:
-                _, etau, _, _ = subprob.fcns.discretize.hp_operator(N - 1, H)
-            else:
-                _, etau, _, _ = subprob.fcns.discretize.differential_operator(N - 1)
-            tau_nodes = (etau + 1.0) / 2.0
-        else:
-            tau_nodes = np.linspace(0.0, 1.0, N)
+        tau_nodes = subprob.mesh.tau
 
         if propagate_from_nodes_flag:
             _, z_nl, nu_nl = subprob.fcns.discretize.propagate_from_nodes(
