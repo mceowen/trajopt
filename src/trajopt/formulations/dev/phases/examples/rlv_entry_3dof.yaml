@@ -1,17 +1,54 @@
 method:
-  inherit: trajopt/methods/dev/sqp_phases/configs/autoscvx2.yaml
+  inherit: trajopt/methods/dev/scp_phases/configs/scvx/autoscvx-term.yaml
 
-  conv:
-    iter_max: 100
+  hyperparams:
+    convergence:
+      iter_max: 1000
+      # Same physical step tolerances as the flat RLV example.
+      eps_state: [1.0e-6, 1.0e-5, 1.0e-5, 1.0e-6, 9.0e-5, 1.0e-5]
+
+    trust_region:
+      tr_step:
+        z:
+          default: 2.0
+        nu:
+          default: 0.1
+          u: 0.1
+          s: 1.0
+
+    penalties:
+      dynamics:
+        eps:
+          default: 1.0e-4
+          r: 1.0e-5
+          v: 1.0e-5
+          gamma: 9.0e-4
+      final_state:
+        eps:
+          default: 1.0e-5
+          r: 1.0e-6
+          v: 1.0e-6
+          gamma: 9.0e-5
 
   solver_opts:
-    solver: QOCO
+    solver: CLARABEL
 
 trajectory:
   phases:
     entry:
       num_nodes: 150
       inherit: trajopt/models/configs/reentry_3dof.yaml
+
+      # Match the first-order scaling in examples/rlv_entry_3dof/config.yaml.
+      state.r.scale: 100000.0
+      state.theta.scale: 90.0
+      state.phi.scale: 90.0
+      state.v.scale: 10000.0
+      state.gamma.scale: 10.0
+      state.psi.scale: 90.0
+      control.bank.scale: 360.0
+      control.aoa.scale: 30.0
+      time.scale: 1000.0
 
       fcns:
         nonlinear_aero: trajopt/missions/rlv_entry.py:nonlinear_aero
@@ -46,7 +83,7 @@ trajectory:
           lower: [-90.0, -90]
           upper: [1.0, 90]
 
-        # # uncomment this to solve with max heat rate constraint!
+        # Uncomment to solve with max heat rate constraint
         # max_heat_rate:
         #   type: nonconvex_inequality
         #   fcn: fcns.heat_rate
@@ -56,16 +93,14 @@ trajectory:
         max_crossrange:
           type: final_state
           idx: [2]
-          w: -1
+          w: -90.0  # Preserve the objective in degrees after scaling latitude.
 
       guess:
-        type: straight_line
+        type: propagation
         t_start: 0.0
-        t_stop:  1000.0
-        x_start: ["${params.planet.r + 79248.0}", 0.0, 0.0, 7802.88, -1.0,  90.0]
-        x_stop:  ["${params.planet.r + 24384.0}" , 10,  10,   762.0, -5.0, -90.0]
-        u_start: [0.0, 0.0]
-        u_stop:  [0.0, 0.0]
+        t_stop: 1000.0
+        u_start: [-30.0, 15.0]
+        u_stop:  [-30.0, 15.0]
 
 analysis:
   type: standalone

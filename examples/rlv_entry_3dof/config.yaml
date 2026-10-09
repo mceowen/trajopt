@@ -1,8 +1,71 @@
 # problem
 trajectory:
   inherit: problem.yaml
+
+  # Diagonal preconditioning for the first-order proximal cost.
+  # Keep physical tolerances fixed below when changing these scales.
+  state.r.scale: 100000.0
+  state.theta.scale: 90.0
+  state.phi.scale: 90.0
+  state.v.scale: 10000.0
+  state.gamma.scale: 10.0
+  state.psi.scale: 90.0
+  control.bank.scale: 360.0
+  control.aoa.scale: 30.0
+  time.scale: 1000.0
+
+  costs:
+    max_crossrange:
+      w: -90.0  # Preserve the objective in degrees after scaling latitude.
+
+  guess:
+    type: propagation
+    t_start: 0.0
+    t_stop: 1000.0
+    # Generic constant controls; no optimized reference trajectory is needed.
+    u_start: [-30.0, 15.0]
+    u_stop:  [-30.0, 15.0]
+
+
+# solution method
 method:
-  inherit: method.yaml
+  inherit: trajopt/methods/dev/scp/configs/scvx/autoscvx-term.yaml
+
+  hyperparams:
+    convergence:
+      iter_max: 1000
+      # Physical step tolerances: 0.1 m, 0.0009 deg, 0.0009 deg,
+      # 0.01 m/s, 0.0009 deg, 0.0009 deg.
+      eps_state: [1.0e-6, 1.0e-5, 1.0e-5, 1.0e-6, 9.0e-5, 1.0e-5]
+
+    trust_region:
+      tr_step:
+        z:
+          default: 2.0
+        nu:
+          default: 0.1
+          u: 0.1
+          s: 1.0
+
+    penalties:
+      dynamics:
+        eps:
+          default: 1.0e-4
+          r: 1.0e-5
+          v: 1.0e-5
+          gamma: 9.0e-4
+      final_state:
+        eps:
+          default: 1.0e-5
+          r: 1.0e-6
+          v: 1.0e-6
+          gamma: 9.0e-5
+
+  solver_opts:
+    solver: CLARABEL
+
+
+# analysis
 analysis:
   type: standalone
   compute_iters: false
