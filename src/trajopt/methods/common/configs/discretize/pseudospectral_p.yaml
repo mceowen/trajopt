@@ -1,0 +1,26 @@
+fcns:
+  discretize:
+    propagate_rk4: trajopt/methods/common/discretize.py:propagate_rk4
+    make_node_propagation_solver: trajopt/methods/common/discretize.py:make_node_propagation_solver
+    make_trajectory_solver: trajopt/methods/common/discretize.py:make_trajectory_solver
+    propagate_from_nodes: trajopt/methods/common/discretize.py:propagate_from_nodes
+    propagate_trajectory: trajopt/methods/common/discretize.py:propagate_trajectory
+    differential_operator: trajopt/methods/common/discretize.py:flipped_radau_differential_operator
+    hp_operator: trajopt/methods/common/discretize.py:flipped_radau_hp_operator
+
+    create_time_params: trajopt/methods/common/discretize.py:create_time_params_ps
+    update_time_params: trajopt/methods/common/discretize.py:update_time_params_ps
+    create_time_constraints: trajopt/methods/common/discretize.py:create_time_constraints_ps
+    final_time_interval_constraints: trajopt/methods/common/discretize.py:final_time_interval_constraints_ps
+
+    dynamics_compile: trajopt/methods/common/discretize.py:dynamics_compile_ps
+    dynamics_create_cvxpy_parameters: trajopt/methods/common/discretize.py:dynamics_create_cvxpy_parameters_ps
+    dynamics_create_cvxpy_constraints: trajopt/methods/common/discretize.py:dynamics_create_cvxpy_constraints_ps
+    dynamics_update_cvxpy_parameters: trajopt/methods/common/discretize.py:dynamics_update_cvxpy_parameters_ps
+    dynamics_update_current_iter_data: trajopt/methods/common/discretize.py:dynamics_update_current_iter_data_ps
+
+hyperparams:
+  discretize:
+    mode: ps
+    equal_dt: 0
+    hp_segments: 1

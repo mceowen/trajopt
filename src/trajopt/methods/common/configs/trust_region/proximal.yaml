@@ -1,0 +1,17 @@
+fcns:
+  trust_region:
+    penalty:        trajopt/methods/common/trust_region.py:create_cost_trust_region_component
+    create_params:  trajopt/methods/common/trust_region.py:create_tr_params_component
+    update_params:  trajopt/methods/common/trust_region.py:update_tr_params_component
+    evaluate_step:  trajopt/methods/common/trust_region.py:evaluate_step_linearized
+    autotune: null
+    constraint: null
+
+hyperparams:
+  trust_region:
+    second_order:       0
+    line_search:        0        # off lets the penalty autotune run away
+    alpha_min_ls:       0        # smallest line-search step
+    tr_step:
+      z: 0.5
+      nu: 0.1

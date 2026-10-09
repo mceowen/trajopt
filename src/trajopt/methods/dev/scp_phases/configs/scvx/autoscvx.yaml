@@ -1,0 +1,22 @@
+method_class: dev.scp_phases
+formulation_class: dev.phases
+
+inherit:
+  - trajopt/methods/common/configs/default.yaml
+  - trajopt/methods/common/configs/discretize/multiple_shooting.yaml
+  - trajopt/methods/common/configs/convexify/standard.yaml
+  - trajopt/methods/common/configs/trust_region/proximal.yaml
+  - trajopt/methods/common/configs/convergence/standard.yaml
+  - trajopt/methods/common/configs/cost/standard.yaml
+  - trajopt/methods/common/configs/penalties/autoscvx_std.yaml
+  - trajopt/methods/common/configs/initial_guess/straight_line.yaml
+  - trajopt/methods/common/configs/troubleshoot/adjust_trust_region.yaml
+
+hyperparams:
+  flags:
+    alpha_min_ls: 1.0e-7   # smallest line-search step
+  discretize:
+    equal_dt:     1
+
+solver_opts:
+  solver: CLARABEL

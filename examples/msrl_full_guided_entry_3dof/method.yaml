@@ -1,0 +1,47 @@
+inherit: trajopt/methods/dev/scp_phases/configs/scvx/autoscvx-term.yaml
+
+hyperparams:
+  flags:
+    zoh_dilation: 1
+  discretize:
+    equal_dt: 1
+
+  convergence:
+    iter_max: 400
+    # nondimensional step gate, wider on gamma and psi
+    eps_state: [1.0e-4, 1.0e-4, 1.0e-4, 1.0e-4, 1.0e-3, 1.0e-3]
+
+  penalties:
+    default:
+      fac_target: 0.001
+
+    # only buffered constraints read eps
+    final_state:
+      eps: [1.0e-4]
+    nonconvex_inequality:
+      eps: [1.0e-4]
+    final_nonconvex_equality:
+      # needs buffer on terminal constraint to maintain feasibility
+      vb: standard
+      eps: [1.0e-4]
+
+  trust_region:
+    tr_step:
+      z:
+        default: 25.0
+      nu:
+        default: 2.0
+
+  initial_guess:
+    default:
+      t_start: 0.0
+      t_stop: 250.0
+      u_start: [120.0, 0.0]
+      u_stop: [0, 0.0]
+
+solver_opts:
+  solver: CLARABEL
+
+
+# analysis
+

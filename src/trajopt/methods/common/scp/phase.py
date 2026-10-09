@@ -1,7 +1,7 @@
-from trajopt.methods.common.scp.subproblem import SCPSubproblem
+from trajopt.methods.common.scp.subproblem import Subproblem
 
 
-class SCPPhase(SCPSubproblem):
+class SCPPhase(Subproblem):
     """One phase's SCP subproblem, extended with a boundary-condition check that only
     applies when several phases are chained together (see build_cross_phase on
     the continuity constraint types for the other half of that link)."""
@@ -20,4 +20,4 @@ class SCPPhase(SCPSubproblem):
 
     def _anchor_start_time(self) -> bool:
         # the ps mesh is built around a fixed node 0
-        return self.flags.discretize == "ps" or not self.inherits_start_epoch()
+        return self.hyperparams.discretize.mode == "ps" or not self.inherits_start_epoch()

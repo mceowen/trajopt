@@ -1,0 +1,21 @@
+method_class: dev.scp
+formulation_class: dev.simple
+
+inherit:
+  - scvx.yaml
+  - trajopt/methods/common/configs/trust_region/second_order.yaml
+  - trajopt/methods/common/configs/convexify/second_order.yaml
+  - trajopt/methods/common/configs/discretize/second_order_ms.yaml
+
+hyperparams:
+  discretize:
+    nsub: 3
+  trust_region:
+    lm_adapt:      0
+    line_search:   1
+    alpha_min_ls:  1.0e-7   # smallest line-search step
+    min_eig_psd:   1.0e-6   # eigenvalue floor for the trust-region Hessian square root
+  penalties:
+    default:
+      dual:
+        autotune: True

@@ -647,7 +647,7 @@ def _convergence_plot(subprob, suffix, save=True):
     costs   = [it.cost for it in iters]
 
     eps_by_name = {
-        sc.name: np.atleast_1d(sc.penalty_state.eps)
+        sc.name: np.atleast_1d(sc.penalties.eps)
         for sc in subprob.constraints.values()
         if sc.shape is not None
     }
@@ -872,7 +872,7 @@ def _convergence_vb_plot(subprob, suffix, save=True):
         return
 
     eps_by_name = {
-        sc.name: np.atleast_1d(sc.penalty_state.eps)
+        sc.name: np.atleast_1d(sc.penalties.eps)
         for sc in subprob.constraints.values()
         if sc.shape is not None
     }

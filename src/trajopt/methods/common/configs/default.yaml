@@ -1,0 +1,6 @@
+hyperparams:
+  flags:
+    zoh_dilation:       1
+    ignore_dpp:         0
+  discretize:
+    equal_dt:           0

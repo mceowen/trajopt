@@ -1,0 +1,24 @@
+# autoscvx2 leaves the terminal buffer open here
+inherit: trajopt/methods/dev/scp/configs/scvx/autoscvx-term.yaml
+
+fcns:
+  initial_guess:
+    default:
+      guess: trajopt/methods/common/initial_guess.py:straight_line_initial_guess
+
+hyperparams:
+  initial_guess:
+    default:
+      t_start: 0.0
+      t_stop: 1.0
+      x_start: [2.0, 4, 4, 0, 0, -2, 2, 1.0, 0, 0, 0, 0, 0, 0]
+      x_stop: [1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0]
+      u_start: [2.0, 0, 0]
+      u_stop: [2.0, 0, 0]
+
+solver_opts:
+  solver: CLARABEL
+
+
+# analysis
+

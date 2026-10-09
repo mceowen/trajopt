@@ -1,0 +1,10 @@
+method_class: dev.scp_phases
+formulation_class: dev.phases
+
+inherit:
+  - autoscvx.yaml
+  - trajopt/methods/common/configs/discretize/pseudospectral_hp.yaml
+
+# penalty:
+#   initial_state:
+#     vb: 'none'

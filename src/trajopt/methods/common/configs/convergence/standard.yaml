@@ -1,0 +1,10 @@
+fcns:
+  convergence:
+    check:           trajopt/methods/common/convergence.py:check_convergence_tolerance
+    init_tolerances: trajopt/methods/common/convergence.py:init_tolerances
+
+hyperparams:
+  convergence:
+    iter_max: 300
+    flag_conv: 1
+    eps_state: [0.01]

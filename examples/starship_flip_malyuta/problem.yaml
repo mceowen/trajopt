@@ -1,0 +1,32 @@
+phases:
+  three_engine_phase:
+    num_nodes: 10
+    inherit: common_phase.yaml
+
+    constraints:
+      initial_state:
+        type: initial_state
+        value: [100.0, 600.0, 0, "${-params.vterm}", "${np.deg2rad(90.0)}", 0.0]
+
+      control_limits:
+        type: control_limits
+        lower: ["${3 * 880000}", "${np.deg2rad(-10)}"]
+        upper: [6000000, "${np.deg2rad(10)}"]
+        
+      final_time:
+        type: final_time
+        value: 5.0
+
+  single_engine_phase:
+    num_nodes: 20
+    inherit: common_phase.yaml
+
+    constraints:
+      continuity:
+        type: state_continuity
+        phase: three_engine_phase
+
+      final_state:
+        type: final_state
+        value: [0, 0, 0, -0.1, 0, 0]
+

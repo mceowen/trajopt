@@ -1,0 +1,16 @@
+inherit: trajopt/methods/dev/scp/configs/scvx/autoscvx-term.yaml
+
+hyperparams:
+  initial_guess:
+    default:
+      t_start: 0.0
+      t_stop: 100.0
+      u_start: [0.0, 0.0]
+      u_stop: [0.0, 0.0]
+
+solver_opts:
+  solver: CLARABEL
+
+
+# analysis
+

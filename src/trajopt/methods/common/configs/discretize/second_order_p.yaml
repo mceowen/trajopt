@@ -1,0 +1,8 @@
+inherit:
+  - trajopt/methods/common/configs/discretize/pseudospectral_p.yaml
+
+fcns:
+  discretize:
+    dynamics_compile: trajopt/methods/common/discretize.py:dynamics_compile_second_order_ps
+    dynamics_create_cvxpy_parameters: trajopt/methods/common/discretize.py:dynamics_create_cvxpy_parameters_second_order_ps
+    dynamics_update_cvxpy_parameters: trajopt/methods/common/discretize.py:dynamics_update_cvxpy_parameters_second_order_ps

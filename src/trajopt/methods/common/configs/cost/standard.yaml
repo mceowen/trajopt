@@ -1,0 +1,3 @@
+fcns:
+  cost:
+    min_time: trajopt/methods/common/scp/cost_types.py:min_time_final_node

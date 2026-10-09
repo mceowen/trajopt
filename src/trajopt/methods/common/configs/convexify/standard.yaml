@@ -1,0 +1,9 @@
+fcns:
+  convexify:
+    compile_affine: trajopt/methods/common/convexify.py:compile_affine
+    create_cvxpy_parameters_affine: trajopt/methods/common/convexify.py:create_cvxpy_parameters_affine
+    create_cvxpy_constraints_affine_inequality: trajopt/methods/common/convexify.py:create_cvxpy_constraints_affine_inequality
+    create_cvxpy_constraints_affine_equality: trajopt/methods/common/convexify.py:create_cvxpy_constraints_affine_equality
+    update_cvxpy_parameters_affine: trajopt/methods/common/convexify.py:update_cvxpy_parameters_affine
+    update_current_iter_data_affine_inequality: trajopt/methods/common/convexify.py:update_current_iter_data_affine_inequality
+    update_current_iter_data_affine_equality: trajopt/methods/common/convexify.py:update_current_iter_data_affine_equality

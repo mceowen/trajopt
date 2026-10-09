@@ -1,0 +1,26 @@
+inherit: trajopt/methods/dev/scp/configs/scvx/autoscvx.yaml
+
+hyperparams:
+  discretize:
+    equal_dt: 1
+  convergence:
+    flag_conv: 1
+    eps_cost: 1
+
+  initial_guess:
+    default:
+      t_start: 0.0
+      t_stop: 4.0
+      x_start: [-0.25, 0, "${np.deg2rad(90)}"]
+      x_stop: [0.25, 1.0, "${np.deg2rad(90)}"]
+      u_start: [0.1, 0]
+      u_stop: [0.1, 0]
+
+conv:
+  eps_state:  0.01
+  eps_dyn:    0.00001
+  eps_defect: 1.0
+
+solver_opts:
+  solver: CLARABEL
+

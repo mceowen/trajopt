@@ -17,7 +17,7 @@ class SCPConstraint():
         self.name          = constraint.name
         self.penalty       = None
         self.shape         = None
-        self.penalty_state = penalties.Penalty(shape=(0,), nonnegative_dual=self.nonnegative_dual)
+        self.penalties = penalties.Penalties(shape=(0,), nonnegative_dual=self.nonnegative_dual)
 
     def compile(self, scp_subproblem): pass
 
@@ -103,8 +103,8 @@ class SCPConstraint():
 
     def _alloc_penalty(self, scp_subproblem, shape):
         # a penalty.<type> block only names the keys it changes
-        default  = scp_subproblem.penalty_config.get('default')
-        override = scp_subproblem.penalty_config.get(self.type)
+        default  = scp_subproblem.hyperparams.penalties.get('default')
+        override = scp_subproblem.hyperparams.penalties.get(self.type)
         if override is None:
             self.penalty = default
         elif default is None:
@@ -117,30 +117,18 @@ class SCPConstraint():
         # under l1 the parameters named W_sqrt carry W itself
         norm       = getattr(self.penalty, 'norm', 'l2') if self.penalty else 'l2'
 
-        self.penalty_state = penalties.Penalty(
+        self.penalties = penalties.Penalties(
             shape=shape, vb_type=vb_type, norm=norm,
             cfg=self.penalty, nonnegative_dual=self.nonnegative_dual,
         )
-        self.penalty_state.eps = self._resolve_eps(scp_subproblem, shape)
-        self.penalty_state.init_values()
+        self.penalties.eps = self._resolve_eps(scp_subproblem, shape)
+        self.penalties.init_values()
 
     def create_penalty_parameters(self, scp_subproblem):
-        p = self.penalty_state
-        if self.shape is None:
-            return
-        if p.vb_type == "none":
-            return
-        if p.vb_type == "split":
-            p.W_p_sqrt_param = cp.Parameter(self.shape, nonneg=True, name=f"W_p_{self.name}_sqrt", value=np.zeros(self.shape))
-            p.W_m_sqrt_param = cp.Parameter(self.shape, nonneg=True, name=f"W_m_{self.name}_sqrt", value=np.zeros(self.shape))
-            p.dual_p_param   = cp.Parameter(self.shape, name=f"dual_p_{self.name}", value=np.zeros(self.shape))
-            p.dual_m_param   = cp.Parameter(self.shape, name=f"dual_m_{self.name}", value=np.zeros(self.shape))
-        else:
-            p.W_sqrt_param   = cp.Parameter(self.shape, nonneg=True, name=f"W_{self.name}_sqrt", value=np.zeros(self.shape))
-            p.dual_param     = cp.Parameter(self.shape, name=f"dual_{self.name}", value=np.zeros(self.shape))
+        scp_subproblem.fcns.penalties.create_params(self, scp_subproblem)
 
     def create_penalty_variables(self, scp_subproblem):
-        p = self.penalty_state
+        p = self.penalties
         if self.shape is None:
             return
         if p.vb_type == "none":
@@ -153,37 +141,25 @@ class SCPConstraint():
             p.vb_var = cp.Variable(self.shape, name=f"vb_{self.name}_{scp_subproblem.name}")
 
     def add_penalty_cost(self, scp_subproblem):
-        scp_subproblem.cp_cost += penalties.w_penalty_cost(self.penalty_state)
-        scp_subproblem.cp_cost += penalties.dual_penalty_cost(self.penalty_state)
+        scp_subproblem.fcns.penalties.penalty(self, scp_subproblem)
 
     def update_penalty_parameters(self, scp_subproblem):
-        penalties.push_penalty_values(self.penalty_state)
+        scp_subproblem.fcns.penalties.update_params(self, scp_subproblem)
 
     def read_vb(self, scp_subproblem):
-        penalties.pull_vb(self.penalty_state)
+        penalties.pull_vb(self.penalties)
 
     def update_constraint_penalties(self, scp_subproblem, alpha=1.0):
-        if self.penalty is None:
-            return
-        if not hasattr(self.penalty, 'W'):
-            return
-
-        # autotune W (penalty weight update)
-        if self.penalty.W.autotune:
-            penalties.autotune_W(self.penalty_state)
-
-        # autotune dual (dual ascent update, autotune1 style)
-        if self.penalty.dual.autotune:
-            penalties.autotune_dual(self.penalty_state)
+        scp_subproblem.fcns.penalties.autotune(self, scp_subproblem)
 
     @property
     def vb_ratio(self):
-        if self.penalty_state.vb.size == 0:
+        if self.penalties.vb.size == 0:
             return 0.0
-        return float(np.max(np.abs(self.penalty_state.vb) / self.penalty_state.eps))
+        return float(np.max(np.abs(self.penalties.vb) / self.penalties.eps))
 
     @property
     def is_feasible(self):
-        if self.penalty_state.vb.size == 0:
+        if self.penalties.vb.size == 0:
             return True
-        return bool(np.all(np.abs(self.penalty_state.vb) <= self.penalty_state.eps))
+        return bool(np.all(np.abs(self.penalties.vb) <= self.penalties.eps))

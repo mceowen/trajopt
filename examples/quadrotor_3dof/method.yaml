@@ -1,0 +1,40 @@
+# OPTION A: autoscvx-term (pair with propagation guess)
+inherit: trajopt/methods/dev/scp/configs/scvx/autoscvx-term.yaml
+# OPTION B: autoscvx, standard (pair with straight_line guess)
+#inherit: trajopt/methods/dev/scp_phases/configs/scvx/autoscvx.yaml
+
+hyperparams:
+  convergence:
+    flag_conv: 0
+    eps_cost: 0.01
+
+  penalties:
+    default:
+      fac_target: 0.001
+
+  trust_region:
+    tr_step:
+      z:
+        default: 0.5
+        t: 10.0
+      nu:
+        default: 0.5
+
+  initial_guess:
+    default:
+      # OPTION A: propagation (pair with method OPTION A above)
+      t_start: 0.0
+      t_stop: 7.0
+      x_start: [0.0, 0.0, 5.0, 0.0, 0.5, 0.0]
+      u_start: [0.08, 0.08, "${params.planet.g * params.vehicle.mass}"]
+      u_stop:  [0.08, 0.08, "${params.planet.g * params.vehicle.mass}"]
+
+      # OPTION B: straight_line (pair with method OPTION B above)
+      # t_start: 0.0
+      # t_stop: 10.0
+      # x_start: [0.0, 0.0, 5.0, 0.0, 0.5, 0.0]
+      # x_stop: [10.0, 10.0, 0.5, 0.0, 0.0, 0.0]
+
+solver_opts:
+  solver: CLARABEL
+
