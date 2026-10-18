@@ -1,0 +1,8 @@
+inherit: autoscvx-rev1.yaml
+
+hyperparams:
+  penalties:
+    dynamics:
+      vb: 'none'
+    initial_state:
+      vb: 'none'

@@ -1,0 +1,11 @@
+# Augmented Lagrangian: a fixed quadratic weight W, paired with the usual autotuned dual.
+
+inherit:
+  - trajopt/methods/common/configs/penalties/autoscvx_std.yaml
+
+hyperparams:
+  penalties:
+    default:
+      W:
+        autotune: False
+        init: 10000.0

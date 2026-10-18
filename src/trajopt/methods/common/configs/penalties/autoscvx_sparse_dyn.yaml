@@ -1,0 +1,24 @@
+# Dynamics state components get split into vb_p/vb_m and summed per node into one scalar each
+# (v_plus/v_minus), promoting sparsity. Everything else stays regular AutoSCvx.
+
+inherit:
+  - trajopt/methods/common/configs/penalties/autoscvx_std.yaml
+
+hyperparams:
+  penalties:
+    dynamics:
+      indices:
+        state:
+          vb: sparse
+        default:
+          vb: standard
+
+fcns:
+  penalties:
+    # only dynamics gets the sparse treatment; everything else keeps 'default'
+    dynamics:
+      penalty:       trajopt/methods/common/penalties.py:penalty_cost_sparse
+      autotune:      trajopt/methods/common/penalties.py:autotune_sparse
+      create_params: trajopt/methods/common/penalties.py:create_params_sparse
+      update_params: trajopt/methods/common/penalties.py:update_params_sparse
+      constraints:   trajopt/methods/common/penalties.py:constraints_sparse

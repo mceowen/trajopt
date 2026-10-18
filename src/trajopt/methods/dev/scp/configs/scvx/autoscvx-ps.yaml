@@ -1,6 +1,0 @@
-method_class: dev.scp
-formulation_class: dev.simple
-
-inherit:
-  - autoscvx.yaml
-  - trajopt/methods/common/configs/discretize/pseudospectral_hp.yaml

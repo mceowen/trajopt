@@ -1,0 +1,44 @@
+fcns:
+  trust_region:
+    penalty:       trajopt/methods/common/trust_region.py:create_cost_trust_region_scalar
+    create_params: trajopt/methods/common/trust_region.py:create_tr_params_scalar
+    update_params: trajopt/methods/common/trust_region.py:update_tr_params_scalar
+    evaluate_step: trajopt/methods/common/trust_region.py:evaluate_step_merit
+    reset:         trajopt/methods/common/trust_region.py:reset_scalar_trust_region_state
+    autotune: null
+    constraint: null
+    # merit.default picks the weight/norm scheme for the line search; merit.<type>.violation
+    # builds the nonlinear residual itself. _std is safe for every flavor (no-op for prox-linear).
+    merit:
+      default:
+        compile: trajopt/methods/common/trust_region.py:compile_merit_std
+        eval:    trajopt/methods/common/trust_region.py:evaluate_merit_std
+        grad:    trajopt/methods/common/trust_region.py:merit_value_and_grad_alpha_std
+      dynamics:
+        violation: trajopt/methods/common/trust_region.py:merit_violation_dynamics
+      final_state:
+        violation: trajopt/methods/common/trust_region.py:merit_violation_final
+      final_control:
+        violation: trajopt/methods/common/trust_region.py:merit_violation_final
+      nonconvex_inequality:
+        violation: trajopt/methods/common/trust_region.py:merit_violation_nonconvex
+      initial_nonconvex_inequality:
+        violation: trajopt/methods/common/trust_region.py:merit_violation_nonconvex
+      final_nonconvex_inequality:
+        violation: trajopt/methods/common/trust_region.py:merit_violation_nonconvex
+      nonconvex_equality:
+        violation: trajopt/methods/common/trust_region.py:merit_violation_nonconvex
+      initial_nonconvex_equality:
+        violation: trajopt/methods/common/trust_region.py:merit_violation_nonconvex
+      final_nonconvex_equality:
+        violation: trajopt/methods/common/trust_region.py:merit_violation_nonconvex
+    # merit counterpart of each named cost type, for the same line search
+    merit_cost:
+      nonconvex_running:   trajopt/methods/common/trust_region.py:merit_cost_scp_nonconvex_running
+      nonconvex_terminal:  trajopt/methods/common/trust_region.py:merit_cost_scp_nonconvex_terminal
+      nonconvex_minimax:   trajopt/methods/common/trust_region.py:merit_cost_scp_nonconvex_minimax
+      min_time:            trajopt/methods/common/trust_region.py:merit_cost_scp_min_time
+      final_state:         trajopt/methods/common/trust_region.py:merit_cost_scp_final
+      final_control:       trajopt/methods/common/trust_region.py:merit_cost_scp_final
+      regularization:      trajopt/methods/common/trust_region.py:merit_cost_scp_regularization
+      rate_regularization: trajopt/methods/common/trust_region.py:merit_cost_scp_rate_regularization

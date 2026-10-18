@@ -1,6 +1,0 @@
-inherit:
-  - trajopt/methods/common/configs/discretize/second_order_p.yaml
-
-hyperparams:
-  discretize:
-    hp_segments: 10

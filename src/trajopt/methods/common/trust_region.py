@@ -6,7 +6,10 @@ import jax.numpy as jnp
 from trajopt.methods.common import penalties
 
 
-# refactor scvx
+# =============================================================================
+# FIRST ORDER -- component-based trust region (one scalar weight per z/nu
+# component group). Trusts the convex subproblem's own reported cost/penalty for the step.
+# =============================================================================
 
 def resolve_tr_step(hyperparams, group: str, key: str) -> float:
     # tr_step.<group> is a scalar, or a mapping with a 'default' plus named overrides
@@ -44,23 +47,6 @@ def update_tr_params_component(self) -> None:
     self.cp_params.tr_s.value = resolve_tr_param(self, 'nu', 's')
 
 
-def create_tr_params_scalar(self) -> None:
-    """One cvxpy Parameter each for z and nu, plus the LM state and compiled merit functions sqp's trust region needs."""
-    self.cp_params.tr_z  = cp.Parameter(nonneg=True, name="tr_z",  value=resolve_tr_param(self, 'z', 'z'))
-    self.cp_params.tr_nu = cp.Parameter(nonneg=True, name="tr_nu", value=resolve_tr_param(self, 'nu', 'nu'))
-
-    self.lm_adapt = bool(int(getattr(self.hyperparams.trust_region, 'lm_adapt', 1)))
-    self.lm_mu    = float(getattr(self.hyperparams.trust_region, 'lm_mu_init', 1e-8)) if self.lm_adapt else 0.0
-
-    compile_merit(self)
-
-
-def update_tr_params_scalar(self) -> None:
-    self.cp_params.tr_z.value  = resolve_tr_param(self, 'z', 'z')
-    self.cp_params.tr_nu.value = resolve_tr_param(self, 'nu', 'nu')
-    update_lagrangian_hessian(self)
-
-
 def create_cost_trust_region_component(self) -> None:
     # separate scalar weight per z/nu component group, from trust_region.tr_step
     if self.hyperparams.discretize.mode not in ("ms", "ps"):
@@ -79,25 +65,17 @@ def create_cost_trust_region_component(self) -> None:
     self.cp_cost += self.cp_params.tr_s * cp.sum_squares(self.dnu[:, idx_nu.dilation_factor])
 
 
-def create_cost_trust_region_hessian(self) -> None:
-    # Hessian-weighted quadratic penalty; cp_params.L is set each iteration by update_lagrangian_hessian
-    if self.hyperparams.discretize.mode not in ("ms", "ps"):
-        return
-    for k in range(self.index_map.N.all):
-        w_k = cp.hstack([self.dz[k], self.dnu[k]])
-        self.cp_cost += 0.5 * cp.sum_squares(self.cp_params.L[k] @ w_k)
+def evaluate_step_linearized(self) -> tuple[float, float]:
+    """Trust the convex subproblem's own reported cost (first-order style)."""
+    cost = self.cp_cost.value / self.w_cost
+    penalty_cost = sum(penalties.penalty_cost_value(c.penalties) for c in self.constraints.values())
+    return cost, penalty_cost
 
 
-def create_cost_trust_region_scalar(self) -> None:
-    """Penalize the step with a single scalar weight each on z and nu (tr_z/tr_nu)."""
-    if self.hyperparams.discretize.mode not in ("ms", "ps"):
-        return
-    for k in range(self.index_map.N.all):
-        self.cp_cost += 0.5 * self.cp_params.tr_z * cp.sum_squares(self.dz[k])
-        self.cp_cost += 0.5 * self.cp_params.tr_nu * cp.sum_squares(self.dnu[k])
-
-
-# SCP_METHOD
+# =============================================================================
+# SCP -- trust-region retry/relax and line-search machinery shared by the top-level solve
+# loop regardless of first-order/second-order.
+# =============================================================================
 
 def tighten_scp_trust_region(subproblems) -> None:
     """Increase first-order retry weights, without changing configured step sizes."""
@@ -127,8 +105,8 @@ def line_search(subproblems, alpha_min=1e-7, c1=1e-4, beta=0.5, max_iter=20):
     subproblems = list(subproblems)
 
     phi_0, dphi = 0.0, 0.0
-    for seg in subproblems:
-        v, g = merit_grad_at_zero(seg)
+    for phase in subproblems:
+        v, g = merit_grad_at_zero(phase)
         phi_0 += v
         dphi += g
 
@@ -136,7 +114,7 @@ def line_search(subproblems, alpha_min=1e-7, c1=1e-4, beta=0.5, max_iter=20):
 
     alpha = 1.0
     for _ in range(max_iter):
-        phi = sum(evaluate_merit_at_alpha(seg, alpha) for seg in subproblems)
+        phi = sum(evaluate_merit_at_alpha(phase, alpha) for phase in subproblems)
         if np.isfinite(phi) and phi <= phi_0 + c1 * alpha * slope:
             return alpha
         alpha *= beta
@@ -169,7 +147,56 @@ def update_scp_trust_region(subproblems) -> bool:
     return True
 
 
-# SCP_PHASE / SUBPROBLEM
+# =============================================================================
+# SECOND ORDER -- scalar trust region (one weight each for z/nu, optionally Hessian-weighted), re-
+# evaluating the true nonlinear cost/penalty via a merit-function line search.
+# =============================================================================
+
+def create_tr_params_scalar(self) -> None:
+    """One cvxpy Parameter each for z and nu, plus LM state and compiled merit functions."""
+    self.cp_params.tr_z  = cp.Parameter(nonneg=True, name="tr_z",  value=resolve_tr_param(self, 'z', 'z'))
+    self.cp_params.tr_nu = cp.Parameter(nonneg=True, name="tr_nu", value=resolve_tr_param(self, 'nu', 'nu'))
+
+    self.lm_adapt = bool(int(getattr(self.hyperparams.trust_region, 'lm_adapt', 1)))
+    self.lm_mu    = float(getattr(self.hyperparams.trust_region, 'lm_mu_init', 1e-8)) if self.lm_adapt else 0.0
+
+    compile_merit(self)
+
+
+def update_tr_params_scalar(self) -> None:
+    self.cp_params.tr_z.value  = resolve_tr_param(self, 'z', 'z')
+    self.cp_params.tr_nu.value = resolve_tr_param(self, 'nu', 'nu')
+    update_lagrangian_hessian(self)
+
+
+def reset_scalar_trust_region_state(self) -> None:
+    """Reset LM damping and each constraint's accumulated Lagrangian dual on a fresh initial
+    guess. No-op if create_tr_params_scalar hasn't run yet."""
+    if not hasattr(self, 'lm_mu'):
+        return
+    self.lm_mu = float(getattr(self.hyperparams.trust_region, 'lm_mu_init', 1e-8)) if self.lm_adapt else 0.0
+    for constraint in self.constraints.values():
+        if hasattr(constraint, 'lagrangian_dual'):
+            constraint.lagrangian_dual.fill(0.)
+
+
+def create_cost_trust_region_hessian(self) -> None:
+    # Hessian-weighted quadratic penalty; cp_params.L is set each iteration by update_lagrangian_hessian
+    if self.hyperparams.discretize.mode not in ("ms", "ps"):
+        return
+    for k in range(self.index_map.N.all):
+        w_k = cp.hstack([self.dz[k], self.dnu[k]])
+        self.cp_cost += 0.5 * cp.sum_squares(self.cp_params.L[k] @ w_k)
+
+
+def create_cost_trust_region_scalar(self) -> None:
+    """Penalize the step with a single scalar weight each on z and nu (tr_z/tr_nu)."""
+    if self.hyperparams.discretize.mode not in ("ms", "ps"):
+        return
+    for k in range(self.index_map.N.all):
+        self.cp_cost += 0.5 * self.cp_params.tr_z * cp.sum_squares(self.dz[k])
+        self.cp_cost += 0.5 * self.cp_params.tr_nu * cp.sum_squares(self.dnu[k])
+
 
 def update_lagrangian_hessian(self) -> None:
     if self.hyperparams.discretize.mode not in ("ms", "ps"):
@@ -230,19 +257,12 @@ def compile_merit(self) -> None:
         compile_merit_penalty(constraint, self)
 
 
-def evaluate_step_linearized(self) -> tuple[float, float]:
-    """Trust the convex subproblem's own reported cost (scvx style)."""
-    cost = self.cp_cost.value / self.w_cost
-    penalty_cost = sum(penalties.penalty_cost_value(c.penalties) for c in self.constraints.values())
-    return cost, penalty_cost
-
-
 def evaluate_step_merit(self) -> tuple[float, float]:
-    """Re-evaluate the true nonlinear cost/penalty at the stepped point (sqp style)."""
+    """Re-evaluate the true nonlinear cost/penalty at the stepped point (second-order style)."""
     z   = jnp.asarray(self.current_iter_data.z_opt)
     nu  = jnp.asarray(self.current_iter_data.nu_opt)
     cost = sum(evaluate_merit_cost(c, z, nu, self.params) for c in self.costs.values())
-    penalty_cost = sum(evaluate_merit(c, z, nu, self.params) for c in self.constraints.values())
+    penalty_cost = sum(c.merit_fcns.eval(c, z, nu, self.params) for c in self.constraints.values())
     return cost, penalty_cost
 
 
@@ -251,7 +271,7 @@ def evaluate_merit_at_alpha(self, alpha):
     nu = jnp.asarray(self.current_iter_data.nu_opt) + alpha * jnp.asarray(self._dnu_new)
     phi = sum(evaluate_merit_cost(c, z, nu, self.params) for c in self.costs.values())
     for c in self.constraints.values():
-        phi += evaluate_merit(c, z, nu, self.params)
+        phi += c.merit_fcns.eval(c, z, nu, self.params)
     return phi
 
 
@@ -266,51 +286,52 @@ def merit_grad_at_zero(self):
         phi += v
         dphi += g
     for c in self.constraints.values():
-        v, g = merit_value_and_grad_alpha(c, 0.0, z_ref, dz, nu_ref, dnu, self.params)
+        v, g = c.merit_fcns.grad(c, 0.0, z_ref, dz, nu_ref, dnu, self.params)
         phi += v
         dphi += g
     return phi, dphi
 
 
-# SCP_CONSTRAINT
+# SCP_CONSTRAINT -- a constraint's merit_fcns (fcns.trust_region.merit.<type>) resolves
+# {violation, compile, eval, grad}. compile/eval/grad pick the weight/norm scheme: _std matches
+# the autotuned-W/dual penalty cost, _proxlin matches the static-w/l1/no-dual cost.
 
-def compile_merit_penalty_from_violation(self, violation):
-    l1 = self.penalties.norm == "l1"
-    if self.penalties.vb_type == "split":
-        if self.penalties.W_p.size == 0:
-            return
+def _has_quad_weight(self) -> bool:
+    """Whether this constraint has a non-empty quadratic weight to build a merit term from.
+    Proxlin-style constraints have none at all (a flat w, not an autotuned W), and some
+    constraint types simply aren't present for a given problem (shape (0, ...))."""
+    return 'W' in self.penalties and self.penalties.W.size > 0
+
+
+def compile_merit_std(self, violation):
+    if not _has_quad_weight(self):
+        return
+    norm_fn_jax = penalties.norm_jax[self.penalties.norm]
+    if self.penalties.vb_type in ("split", "sparse"):
         def merit_eval(z, nu, W_p, W_m, dual_p, dual_m, params):
             viol = violation(z, nu, params)
             viol_p = jnp.maximum(viol, 0.0)
             viol_m = jnp.maximum(-viol, 0.0)
-            linear = jnp.sum(dual_p * viol_p) + jnp.sum(dual_m * viol_m)
-            if l1:
-                return linear + jnp.sum(W_p * viol_p) + jnp.sum(W_m * viol_m)
-            return (linear
-                    + 0.5 * jnp.sum(W_p * viol_p ** 2)
-                    + 0.5 * jnp.sum(W_m * viol_m ** 2))
+            linear = penalties.linear_term_jax(dual_p, viol_p) + penalties.linear_term_jax(dual_m, viol_m)
+            return linear + norm_fn_jax(W_p, viol_p) + norm_fn_jax(W_m, viol_m)
         def merit_line(alpha, z_ref, dz, nu_ref, dnu, W_p, W_m, dual_p, dual_m, params):
             return merit_eval(z_ref + alpha * dz, nu_ref + alpha * dnu, W_p, W_m, dual_p, dual_m, params)
         self._merit_eval = jax.jit(merit_eval)
         self._merit_vg   = jax.jit(jax.value_and_grad(merit_line, argnums=0))
     else:
-        if self.penalties.W.size == 0:
-            return
         def merit_eval(z, nu, W, dual, params):
             viol = violation(z, nu, params)
-            if l1:
-                return jnp.sum(dual * viol) + jnp.sum(W * jnp.abs(viol))
-            return jnp.sum(dual * viol) + 0.5 * jnp.sum(W * viol ** 2)
+            return penalties.linear_term_jax(dual, viol) + norm_fn_jax(W, viol)
         def merit_line(alpha, z_ref, dz, nu_ref, dnu, W, dual, params):
             return merit_eval(z_ref + alpha * dz, nu_ref + alpha * dnu, W, dual, params)
         self._merit_eval = jax.jit(merit_eval)
         self._merit_vg   = jax.jit(jax.value_and_grad(merit_line, argnums=0))
 
 
-def evaluate_merit(self, z, nu, params):
+def evaluate_merit_std(self, z, nu, params):
     if not hasattr(self, '_merit_eval'):
         return 0.0
-    if self.penalties.vb_type == "split":
+    if self.penalties.vb_type in ("split", "sparse"):
         return float(self._merit_eval(
             z, nu,
             jnp.asarray(self.penalties.W_p), jnp.asarray(self.penalties.W_m),
@@ -319,10 +340,10 @@ def evaluate_merit(self, z, nu, params):
     return float(self._merit_eval(z, nu, jnp.asarray(self.penalties.W), jnp.asarray(self.penalties.dual), params))
 
 
-def merit_value_and_grad_alpha(self, alpha, z_ref, dz, nu_ref, dnu, params):
+def merit_value_and_grad_alpha_std(self, alpha, z_ref, dz, nu_ref, dnu, params):
     if not hasattr(self, '_merit_vg'):
         return 0.0, 0.0
-    if self.penalties.vb_type == "split":
+    if self.penalties.vb_type in ("split", "sparse"):
         v, g = self._merit_vg(
             alpha, z_ref, dz, nu_ref, dnu,
             jnp.asarray(self.penalties.W_p), jnp.asarray(self.penalties.W_m),
@@ -330,6 +351,41 @@ def merit_value_and_grad_alpha(self, alpha, z_ref, dz, nu_ref, dnu, params):
             params)
     else:
         v, g = self._merit_vg(alpha, z_ref, dz, nu_ref, dnu, jnp.asarray(self.penalties.W), jnp.asarray(self.penalties.dual), params)
+    return float(v), float(g)
+
+
+def _has_static_weight(self) -> bool:
+    """Whether this constraint has a static prox-linear weight. Checked off the config, not
+    the cvxpy Parameter, since that param isn't created yet at this point."""
+    cfg = self.penalties.cfg
+    return cfg is not None and hasattr(cfg, 'w')
+
+
+def compile_merit_proxlin(self, violation):
+    """Static weight w plus whatever dual autotune_dual_b has accumulated (zero unless
+    dual.autotune is on) -- matches main's dual*viol + w*|viol| for the fixed-weight case."""
+    if not _has_static_weight(self):
+        return
+    w = float(self.penalties.cfg.w)
+    def merit_eval(z, nu, dual, params):
+        viol = violation(z, nu, params)
+        return penalties.linear_term_jax(dual, viol) + penalties.l1_reg_jax(w, viol)
+    def merit_line(alpha, z_ref, dz, nu_ref, dnu, dual, params):
+        return merit_eval(z_ref + alpha * dz, nu_ref + alpha * dnu, dual, params)
+    self._merit_eval = jax.jit(merit_eval)
+    self._merit_vg   = jax.jit(jax.value_and_grad(merit_line, argnums=0))
+
+
+def evaluate_merit_proxlin(self, z, nu, params):
+    if not hasattr(self, '_merit_eval'):
+        return 0.0
+    return float(self._merit_eval(z, nu, jnp.asarray(self.penalties.dual), params))
+
+
+def merit_value_and_grad_alpha_proxlin(self, alpha, z_ref, dz, nu_ref, dnu, params):
+    if not hasattr(self, '_merit_vg'):
+        return 0.0, 0.0
+    v, g = self._merit_vg(alpha, z_ref, dz, nu_ref, dnu, jnp.asarray(self.penalties.dual), params)
     return float(v), float(g)
 
 
@@ -371,9 +427,12 @@ def accumulate_hessian_nonconvex(self, scp_phase, H, constraints_attr):
         H[k, n_z:, n_z:] += np.asarray(H_nu[1][i])
 
 
-def compile_merit_penalty_scp_dynamics(self, scp_phase):
-    if self.penalties.W.size == 0:
-        return
+_INEQUALITY_TYPES = ('nonconvex_inequality', 'initial_nonconvex_inequality', 'final_nonconvex_inequality')
+_EQUALITY_TYPES   = ('nonconvex_equality', 'initial_nonconvex_equality', 'final_nonconvex_equality')
+
+
+def merit_violation_dynamics(self, scp_phase):
+    """The dynamics residual: different per discretization mode (ps vs ms)."""
     if scp_phase.hyperparams.discretize.mode == "ps":
         D_jnp = jnp.asarray(self.ps_D)
         dyn_batched = self.dyn_fcn_batched
@@ -387,63 +446,40 @@ def compile_merit_penalty_scp_dynamics(self, scp_phase):
                 z_h = jax.lax.dynamic_slice(z, (col_start, 0), (p + 1, z.shape[1]))
                 defects.append(2.0 * D_jnp @ z_h)
             return jnp.concatenate(defects, axis=0) - f_col
-        compile_merit_penalty_from_violation(self, violation)
-        return
+        return violation
     propagate = self.propagate
     ks        = jnp.arange(scp_phase.index_map.N.all - 1)
     def violation(z, nu, params):
         return z[1:] - propagate(ks, z[:-1], nu[:-1], nu[1:], params)
-    compile_merit_penalty_from_violation(self, violation)
+    return violation
 
 
-def compile_merit_penalty_scp_final_state(self, scp_phase):
-    if self.penalties.W.size == 0:
-        return
-    idx = jnp.asarray(self.constraint.idx)
-    val = jnp.asarray(self.constraint.value)
+def merit_violation_final(self, scp_phase):
+    """final_state/final_control's residual: identical formula, differing only in z vs nu."""
+    idx   = jnp.asarray(self.constraint.idx)
+    val   = jnp.asarray(self.constraint.value)
+    is_nu = self.type == 'final_control'
     def violation(z, nu, params):
-        return (z[-1, idx] - val).reshape(1, -1)
-    compile_merit_penalty_from_violation(self, violation)
+        traj = nu if is_nu else z
+        return (traj[-1, idx] - val).reshape(1, -1)
+    return violation
 
 
-def compile_merit_penalty_scp_final_control(self, scp_phase):
-    if self.penalties.W.size == 0:
-        return
-    idx = jnp.asarray(self.constraint.idx)
-    val = jnp.asarray(self.constraint.value)
-    def violation(z, nu, params):
-        return (nu[-1, idx] - val).reshape(1, -1)
-    compile_merit_penalty_from_violation(self, violation)
-
-
-def compile_merit_penalty_scp_nonconvex_inequality(self, scp_phase):
-    if self.penalties.W.size == 0:
-        return
+def merit_violation_nonconvex(self, scp_phase):
+    """nonconvex_inequality/nonconvex_equality's residual: identical formula, differing only in
+    whether the raw constraint function gets clamped to its positive part."""
     fcn_b = self.fcn_batched
     nodes = jnp.asarray(self.nodes)
     dim   = self.constraint.dimension
+    clamp = self.type in _INEQUALITY_TYPES
     def violation(z, nu, params):
-        return jnp.maximum(0.0, fcn_b(z[nodes], nu[nodes], params)).reshape(-1, dim)
-    compile_merit_penalty_from_violation(self, violation)
-
-
-def compile_merit_penalty_scp_nonconvex_equality(self, scp_phase):
-    if self.penalties.W.size == 0:
-        return
-    fcn_b = self.fcn_batched
-    nodes = jnp.asarray(self.nodes)
-    dim   = self.constraint.dimension
-    def violation(z, nu, params):
-        return fcn_b(z[nodes], nu[nodes], params).reshape(-1, dim)
-    compile_merit_penalty_from_violation(self, violation)
-
-
-_INEQUALITY_TYPES = ('nonconvex_inequality', 'initial_nonconvex_inequality', 'final_nonconvex_inequality')
-_EQUALITY_TYPES   = ('nonconvex_equality', 'initial_nonconvex_equality', 'final_nonconvex_equality')
+        raw = fcn_b(z[nodes], nu[nodes], params)
+        return (jnp.maximum(0.0, raw) if clamp else raw).reshape(-1, dim)
+    return violation
 
 
 def accumulate_hessian_constraint(constraint, scp_phase, H) -> None:
-    """Used by sqp's second-order trust region: which constraint types contribute to H, and how."""
+    """Used by the second-order trust region: which constraint types contribute to H, and how."""
     if constraint.type == 'dynamics':
         accumulate_hessian_dynamics(constraint, scp_phase, H)
     elif constraint.type in _INEQUALITY_TYPES:
@@ -453,23 +489,21 @@ def accumulate_hessian_constraint(constraint, scp_phase, H) -> None:
 
 
 def compile_merit_penalty(constraint, scp_phase) -> None:
-    """Used by sqp's line-search merit: which constraint types contribute, and how."""
-    if constraint.type == 'dynamics':
-        compile_merit_penalty_scp_dynamics(constraint, scp_phase)
-    elif constraint.type == 'final_state':
-        compile_merit_penalty_scp_final_state(constraint, scp_phase)
-    elif constraint.type == 'final_control':
-        compile_merit_penalty_scp_final_control(constraint, scp_phase)
-    elif constraint.type in _INEQUALITY_TYPES:
-        compile_merit_penalty_scp_nonconvex_inequality(constraint, scp_phase)
-    elif constraint.type in _EQUALITY_TYPES:
-        compile_merit_penalty_scp_nonconvex_equality(constraint, scp_phase)
+    """No per-type dispatch here: constraint.merit_fcns already has the violation/compile
+    functions for this constraint's type."""
+    if constraint.merit_fcns is None:
+        return
+    violation_fn = constraint.merit_fcns.get('violation')
+    if violation_fn is None:
+        return
+    violation = violation_fn(constraint, scp_phase)
+    constraint.merit_fcns.compile(constraint, violation)
 
 
 # SCP_COST
 
 def compile_merit_cost(self, scp_phase):
-    build_fn = _MERIT_COST_FNS.get(self.type)
+    build_fn = scp_phase.fcns.trust_region.merit_cost.get(self.type)
     if build_fn is None:
         return
     fn = build_fn(self, scp_phase)
@@ -591,61 +625,40 @@ def merit_cost_scp_min_time(self, scp_phase):
     return eval_fn
 
 
-def merit_cost_scp_final_state(self, scp_phase):
-    w   = self.cost.w
-    idx = jnp.array(self.cost.idx)
+def merit_cost_scp_final(self, scp_phase):
+    """final_state/final_control's cost: identical formula, differing only in z vs nu."""
+    w     = self.cost.w
+    idx   = jnp.array(self.cost.idx)
+    is_nu = self.type == 'final_control'
     def eval_fn(z, nu, params):
-        return w * jnp.sum(z[-1, idx])
-    return eval_fn
-
-
-def merit_cost_scp_final_control(self, scp_phase):
-    w   = self.cost.w
-    idx = jnp.array(self.cost.idx)
-    def eval_fn(z, nu, params):
-        return w * jnp.sum(nu[-1, idx])
+        traj = nu if is_nu else z
+        return w * jnp.sum(traj[-1, idx])
     return eval_fn
 
 
 def merit_cost_scp_regularization(self, scp_phase):
-    w         = self.cost.w
-    norm_type = self.cost.norm_type
-    is_nu     = self.cost.set == "control"
+    w       = self.cost.w
+    norm_fn = penalties.reg_norm_jax[self.cost.norm_type]
+    is_nu   = self.cost.set == "control"
     def eval_fn(z, nu, params):
         traj = nu if is_nu else z
-        if norm_type == "l2":
-            return w * jnp.sum(traj ** 2)
-        return w * jnp.sum(jnp.abs(traj))
+        return norm_fn(w, traj)
     return eval_fn
 
 
 def merit_cost_scp_rate_regularization(self, scp_phase):
-    w         = self.cost.w
-    norm_type = self.cost.norm_type
-    is_nu     = self.cost.set == "control"
-    idx       = jnp.asarray(self.cost.idx)
+    w       = self.cost.w
+    norm_fn = penalties.reg_norm_jax[self.cost.norm_type]
+    is_nu   = self.cost.set == "control"
+    idx     = jnp.asarray(self.cost.idx)
     def eval_fn(z, nu, params):
         traj  = nu if is_nu else z
         delta = traj[1:, idx] - traj[:-1, idx]
-        if norm_type == "l2":
-            return w * jnp.sum(delta ** 2)
-        return w * jnp.sum(jnp.abs(delta))
+        return norm_fn(w, delta)
     return eval_fn
 
 
-_MERIT_COST_FNS = {
-    'nonconvex_running':   merit_cost_scp_nonconvex_running,
-    'nonconvex_terminal':  merit_cost_scp_nonconvex_terminal,
-    'nonconvex_minimax':   merit_cost_scp_nonconvex_minimax,
-    'min_time':            merit_cost_scp_min_time,
-    'final_state':         merit_cost_scp_final_state,
-    'final_control':       merit_cost_scp_final_control,
-    'regularization':      merit_cost_scp_regularization,
-    'rate_regularization': merit_cost_scp_rate_regularization,
-}
-
-
 def accumulate_hessian_cost(cost, scp_phase, H) -> None:
-    """Used by sqp's second-order trust region: only the first nonconvex-terminal cost contributes."""
+    """Used by the second-order trust region: only the first nonconvex-terminal cost contributes."""
     if cost.type == 'nonconvex_terminal':
         accumulate_hessian_nonconvex_terminal_cost(cost, scp_phase, H, first_nonconvex_terminal_cost)

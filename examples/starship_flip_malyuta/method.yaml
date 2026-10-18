@@ -1,5 +1,5 @@
 type: SCP
-inherit: trajopt/methods/dev/scp_phases/configs/sqp/autoscvx2.yaml
+inherit: trajopt/methods/dev/scp_phases/configs/second_order/autosqp.yaml
 
 hyperparams:
   convergence:

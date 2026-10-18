@@ -1,0 +1,10 @@
+inherit:
+  - autoscvx.yaml
+  - trajopt/methods/common/configs/initial_guess/propagation.yaml
+
+hyperparams:
+  penalties:
+    dynamics:
+      vb: none
+    final_state:
+      vb: standard

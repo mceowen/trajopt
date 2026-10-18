@@ -219,8 +219,8 @@ def _eval_values(obj: Any, ctx: dict, phase_params: dict, key: str | None = None
         if "phases" in obj and isinstance(obj.phases, dict):
             result = AttrDict(dict(obj))
             result.phases = AttrDict({
-                name: _eval_phase(seg, name, phase_params)
-                for name, seg in obj.phases.items()
+                name: _eval_phase(phase, name, phase_params)
+                for name, phase in obj.phases.items()
             })
             for key, val in obj.items():
                 if key == "phases":

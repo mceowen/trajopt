@@ -60,7 +60,7 @@ _BASE_COLUMNS = [
     _Column("penalty", "Penalty",     14, "g"),
 ]
 
-_SEG_COLUMN = _Column("seg", "Phase", 12, "str")
+_PHASE_COLUMN = _Column("phase", "Phase", 12, "str")
 
 
 class SolveReporter:
@@ -68,7 +68,7 @@ class SolveReporter:
 
     def __init__(self, *, multi=False, quiet=False):
         self.quiet = quiet
-        self.columns = ([_SEG_COLUMN] + _BASE_COLUMNS) if multi else list(_BASE_COLUMNS)
+        self.columns = ([_PHASE_COLUMN] + _BASE_COLUMNS) if multi else list(_BASE_COLUMNS)
 
     def _header_line(self):
         return _SEP.join(col.format_header() for col in self.columns)
@@ -127,7 +127,7 @@ class SolveReporter:
     def _extract(iter_data, phase_name):
         chk = iter_data.chk
         return {
-            "seg":     phase_name,
+            "phase":   phase_name,
             "iter":    int(getattr(iter_data, "iter_num")),
             "disc":    float(getattr(iter_data, "discretization_time")),
             "solve":   float(getattr(iter_data, "solve_time")),

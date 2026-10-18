@@ -1,0 +1,3 @@
+inherit:
+  - autoscvx.yaml
+  - trajopt/methods/common/configs/discretize/pseudospectral_hp.yaml

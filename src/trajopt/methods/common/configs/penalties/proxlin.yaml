@@ -1,18 +1,17 @@
 fcns:
   penalties:
-    penalty:       trajopt/methods/common/penalties.py:penalty_cost
-    autotune:      trajopt/methods/common/penalties.py:autotune
-    create_params: trajopt/methods/common/penalties.py:create_params
-    update_params: trajopt/methods/common/penalties.py:update_params
+    default:
+      # static l1 weight w; dual is off unless a config turns on dual.autotune
+      penalty:       trajopt/methods/common/penalties.py:penalty_cost_proxlin
+      autotune:      null
+      create_params: trajopt/methods/common/penalties.py:create_params_proxlin
+      update_params: trajopt/methods/common/penalties.py:update_params_proxlin
+      # merit is configured in trust_region/scalar.yaml, not here
 
 hyperparams:
   penalties:
     default:
-      norm: l1
-      W:
-        penalty: True
-        autotune: False
-        init: 1000.0
+      w: 1000.0
       dual:
         autotune: False
         init: 0.0

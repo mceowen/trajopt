@@ -1,0 +1,25 @@
+# Like autoscvx_sparse.yaml, but one scalar penalty/weight per constraint instead of one
+# per node.
+
+inherit:
+  - trajopt/methods/common/configs/penalties/autoscvx_std.yaml
+
+hyperparams:
+  penalties:
+    dynamics:
+      vb: sparse
+    nonconvex_equality:
+      vb: sparse
+    nonconvex_inequality:
+      vb: sparse
+    final_nonconvex_inequality:
+      vb: sparse
+
+fcns:
+  penalties:
+    default:
+      penalty:       trajopt/methods/common/penalties.py:penalty_cost_sparse
+      autotune:      trajopt/methods/common/penalties.py:autotune_sparse
+      create_params: trajopt/methods/common/penalties.py:create_params_sparse
+      update_params: trajopt/methods/common/penalties.py:update_params_sparse
+      constraints:   trajopt/methods/common/penalties.py:constraints_sparse_scalar

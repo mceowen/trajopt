@@ -15,9 +15,14 @@ class SCPConstraint():
         self.constraint    = constraint
         self.type          = constraint.type
         self.name          = constraint.name
-        self.penalty       = None
         self.shape         = None
-        self.penalties = penalties.Penalties(shape=(0,), nonnegative_dual=self.nonnegative_dual)
+        self.penalties = penalties.alloc_penalty(shape=(0,), nonnegative_dual=self.nonnegative_dual)
+        # a fcns.penalties.<type> block only names the slots it overrides from 'default'
+        self.fcns = scp_subproblem.fcns.penalties.get('default')
+        # likewise for fcns.trust_region.merit.<type> -- stays None for methods that never set
+        # it (e.g. scvx, which never calls into merit)
+        merit = scp_subproblem.fcns.trust_region.get('merit')
+        self.merit_fcns = merit.get('default') if merit is not None else None
 
     def compile(self, scp_subproblem): pass
 
@@ -71,7 +76,8 @@ class SCPConstraint():
         """
         raw = getattr(self.constraint, 'eps', None)
         if raw is None:
-            raw = getattr(self.penalty, 'eps', None) if self.penalty else None
+            cfg = self.penalties.cfg
+            raw = getattr(cfg, 'eps', None) if cfg else None
         if raw is None:
             raw = 1e-4
 
@@ -106,34 +112,55 @@ class SCPConstraint():
         default  = scp_subproblem.hyperparams.penalties.get('default')
         override = scp_subproblem.hyperparams.penalties.get(self.type)
         if override is None:
-            self.penalty = default
+            cfg = default
         elif default is None:
-            self.penalty = override
+            cfg = override
         else:
-            self.penalty = deep_merge(default, override)
+            cfg = deep_merge(default, override)
+
+        # likewise, fcns.penalties.<type> only names the functions it overrides from 'default'
+        fcns_override = scp_subproblem.fcns.penalties.get(self.type)
+        if fcns_override is not None:
+            self.fcns = deep_merge(self.fcns, fcns_override) if self.fcns is not None else fcns_override
+
+        merit = scp_subproblem.fcns.trust_region.get('merit')
+        merit_override = merit.get(self.type) if merit is not None else None
+        if merit_override is not None:
+            self.merit_fcns = deep_merge(self.merit_fcns, merit_override) if self.merit_fcns is not None else merit_override
 
         self.shape = shape
-        vb_type    = getattr(self.penalty, 'vb', 'standard') if self.penalty else 'standard'
+        vb_type    = getattr(cfg, 'vb', 'standard') if cfg else 'standard'
         # under l1 the parameters named W_sqrt carry W itself
-        norm       = getattr(self.penalty, 'norm', 'l2') if self.penalty else 'l2'
+        norm       = getattr(cfg, 'norm', 'l2') if cfg else 'l2'
 
-        self.penalties = penalties.Penalties(
+        indices_map = getattr(cfg, 'indices', None) if cfg else None
+        if indices_map is not None:
+            # indices: {state: {vb: sparse}, default: {vb: standard}, ...}
+            self.penalties = penalties.alloc_penalty_parts(
+                scp_subproblem, shape, indices_map, norm, cfg, self.nonnegative_dual,
+            )
+            return
+
+        self.penalties = penalties.alloc_penalty(
             shape=shape, vb_type=vb_type, norm=norm,
-            cfg=self.penalty, nonnegative_dual=self.nonnegative_dual,
+            cfg=cfg, nonnegative_dual=self.nonnegative_dual,
         )
         self.penalties.eps = self._resolve_eps(scp_subproblem, shape)
-        self.penalties.init_values()
+        penalties.init_penalty_values(self.penalties)
 
     def create_penalty_parameters(self, scp_subproblem):
-        scp_subproblem.fcns.penalties.create_params(self, scp_subproblem)
+        self.fcns.create_params(self, scp_subproblem)
 
     def create_penalty_variables(self, scp_subproblem):
         p = self.penalties
         if self.shape is None:
             return
+        if p.get('parts') is not None:
+            penalties.create_penalty_part_variables(p, scp_subproblem, self.name)
+            return
         if p.vb_type == "none":
             return
-        if p.vb_type == "split":
+        if p.vb_type in ("split", "sparse"):
             p.vb_p_var = cp.Variable(self.shape, nonneg=True, name=f"vb_p_{self.name}_{scp_subproblem.name}")
             p.vb_m_var = cp.Variable(self.shape, nonneg=True, name=f"vb_m_{self.name}_{scp_subproblem.name}")
             p.vb_var   = p.vb_p_var - p.vb_m_var
@@ -141,16 +168,18 @@ class SCPConstraint():
             p.vb_var = cp.Variable(self.shape, name=f"vb_{self.name}_{scp_subproblem.name}")
 
     def add_penalty_cost(self, scp_subproblem):
-        scp_subproblem.fcns.penalties.penalty(self, scp_subproblem)
+        self.fcns.penalty(self, scp_subproblem)
 
     def update_penalty_parameters(self, scp_subproblem):
-        scp_subproblem.fcns.penalties.update_params(self, scp_subproblem)
+        self.fcns.update_params(self, scp_subproblem)
 
     def read_vb(self, scp_subproblem):
         penalties.pull_vb(self.penalties)
 
-    def update_constraint_penalties(self, scp_subproblem, alpha=1.0):
-        scp_subproblem.fcns.penalties.autotune(self, scp_subproblem)
+    def update_constraint_penalties(self, scp_subproblem):
+        autotune = self.fcns.get('autotune')
+        if autotune is not None:
+            autotune(self, scp_subproblem)
 
     @property
     def vb_ratio(self):

@@ -1,0 +1,6 @@
+method_class: stable.scp_phases
+formulation_class: dev.phases
+
+inherit:
+  - trajopt/methods/stable/configs/second_order/scvx2.yaml
+  - trajopt/methods/common/configs/initial_guess/propagation.yaml

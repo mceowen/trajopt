@@ -1,0 +1,5 @@
+method_class: stable.scp_phases
+formulation_class: dev.phases
+
+inherit:
+  - trajopt/methods/stable/configs/first_order/autoscvx-term-ps.yaml

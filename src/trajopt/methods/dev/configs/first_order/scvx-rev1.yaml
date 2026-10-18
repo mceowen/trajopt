@@ -1,0 +1,41 @@
+inherit:
+  - trajopt/methods/common/configs/default.yaml
+  - trajopt/methods/common/configs/discretize/multiple_shooting.yaml
+  - trajopt/methods/common/configs/convexify/standard.yaml
+  - trajopt/methods/common/configs/convergence/standard.yaml
+  - trajopt/methods/common/configs/cost/standard.yaml
+  - trajopt/methods/common/configs/penalties/proxlin.yaml
+  - trajopt/methods/common/configs/initial_guess/propagation.yaml
+  - trajopt/methods/common/configs/troubleshoot/adjust_lm.yaml
+  - trajopt/methods/common/configs/trust_region/scalar.yaml
+
+fcns:
+  convergence:
+    init_tolerances: trajopt/methods/common/convergence.py:init_tolerances_from_dynamics
+  cost:
+    min_time: trajopt/methods/common/scp/cost_types.py:min_time_all_nodes
+  penalties:
+    default:
+      autotune: trajopt/methods/common/penalties.py:sqp_autotune
+  trust_region:
+    merit:
+      default:
+        compile: trajopt/methods/common/trust_region.py:compile_merit_proxlin
+        eval:    trajopt/methods/common/trust_region.py:evaluate_merit_proxlin
+        grad:    trajopt/methods/common/trust_region.py:merit_value_and_grad_alpha_proxlin
+
+hyperparams:
+  discretize:
+    equal_dt:   1
+  convergence:
+    eps_state:  [0.0001]
+  trust_region:
+    second_order: 0
+    line_search:   1
+    alpha_min_ls:  1.0e-7   # smallest line-search step
+    tr_step:
+      z: 1.0
+      nu: 1.0
+
+solver_opts:
+  solver: QOCO

@@ -1,0 +1,5 @@
+method_class: stable.scp
+formulation_class: dev.simple
+
+inherit:
+  - trajopt/methods/stable/configs/first_order/autoscvx-sparse-scalar-dyn.yaml

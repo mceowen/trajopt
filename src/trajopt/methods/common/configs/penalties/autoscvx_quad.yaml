@@ -1,0 +1,16 @@
+# Same as autoscvx_std.yaml, but dual stays zeroed out -- quadratic weight only.
+
+inherit:
+  - trajopt/methods/common/configs/penalties/autoscvx_std.yaml
+
+hyperparams:
+  penalties:
+    default:
+      dual:
+        autotune: False
+        init: 0.0
+
+fcns:
+  penalties:
+    default:
+      autotune: trajopt/methods/common/penalties.py:autotune_quad_only

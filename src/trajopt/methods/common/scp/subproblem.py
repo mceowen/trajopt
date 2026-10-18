@@ -5,6 +5,7 @@ import numpy as np
 import cvxpy as cp
 
 from trajopt.methods.common import initial_guess
+from trajopt.methods.common import penalties
 from trajopt.methods.common.mesh import make_mesh
 import trajopt.methods.common.scp.constraint_types as scp_constraint_type_module
 import trajopt.methods.common.scp.cost_types as scp_cost_type_module
@@ -111,13 +112,21 @@ class Subproblem():
         for constraint in self.constraints.values():
             if constraint.shape is None:
                 continue
-            p = constraint.penalties
-            fields = ["vb"] + list(p.names)
-            if p.vb_type == "split":
-                fields += [f"{name}_p" for name in p.names] + [f"{name}_m" for name in p.names]
-            for field in fields:
-                snapshot.setdefault(field, AttrDict())[constraint.name] = getattr(p, field)
+            parts = constraint.penalties.get('parts')
+            if parts is not None:
+                for name, p in parts.items():
+                    self._snapshot_penalty(snapshot, f"{constraint.name}_{name}", p)
+            else:
+                self._snapshot_penalty(snapshot, constraint.name, constraint.penalties)
         return snapshot
+
+    @staticmethod
+    def _snapshot_penalty(snapshot, cname, p) -> None:
+        fields = ["vb"] + list(p.names)
+        if p.vb_type in ("split", "sparse"):
+            fields += [f"{name}_p" for name in p.names] + [f"{name}_m" for name in p.names]
+        for field in fields:
+            snapshot.setdefault(field, AttrDict())[cname] = getattr(p, field)
 
     def derive_free_final_time(self) -> bool:
         """False only when initial_time and a fixed final_time pin both ends."""
@@ -180,11 +189,10 @@ class Subproblem():
         self.cost_init = self.cost_type_module.compute_nonconvex_terminal_costs(
             prepared.z, prepared.nu, self.phase, self)
         for constraint in self.constraints.values():
-            constraint.penalties.reset_values()
-            if hasattr(constraint, 'lagrangian_dual'):
-                constraint.lagrangian_dual.fill(0.)
-        if hasattr(self, 'lm_mu'):
-            self.lm_mu = float(getattr(self.hyperparams.trust_region, 'lm_mu_init', 1e-8)) if self.lm_adapt else 0.
+            penalties.reset_penalty_values(constraint.penalties)
+        reset = self.fcns.trust_region.get('reset')
+        if reset is not None:
+            reset(self)
         self.tr_scale = 1.0
         self.cp_subproblem_status = None
         self._dz_new = self._dnu_new = None
@@ -255,6 +263,9 @@ class Subproblem():
     def create_cvxpy_constraints(self) -> None:
         for constraint in self.constraints.values():
             constraint.create_cvxpy_constraints(self)
+            extra_constraint_fcn = constraint.fcns.get('constraints') if constraint.fcns else None
+            if extra_constraint_fcn is not None:
+                extra_constraint_fcn(constraint, self)
 
         if self.free_final_time:
             self.create_free_final_time_constraints()
@@ -352,19 +363,19 @@ class Subproblem():
     def record_iter_data(self) -> None:
         self.iter_data_list.append(copy.deepcopy(self.current_iter_data))
 
-    def update_hyperparams(self, alpha: float = 1.0) -> None:
+    def update_hyperparams(self) -> None:
         """Post-step autotuning: trust region first (if configured), then constraint penalties."""
         self.update_trust_region()
-        self.update_constraint_penalties(alpha)
+        self.update_constraint_penalties()
 
     def update_trust_region(self) -> None:
         autotune = self.fcns.trust_region.get('autotune')
         if autotune is not None:
             autotune(self)
 
-    def update_constraint_penalties(self, alpha: float = 1.0) -> None:
+    def update_constraint_penalties(self) -> None:
         for constraint in self.constraints.values():
-            constraint.update_constraint_penalties(self, alpha)
+            constraint.update_constraint_penalties(self)
 
     def troubleshoot_step(self) -> tuple[bool, str | None]:
         if self._troubleshoot_on_step_fcn is None:
