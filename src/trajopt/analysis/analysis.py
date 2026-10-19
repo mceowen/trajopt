@@ -47,13 +47,11 @@ def analyze_phase(subprob, config):
     discretize = subprob.hyperparams.discretize.get("mode", "ms")
     propagate_from_nodes_flag = config.analysis.get("propagate_from_nodes", False)
 
-    H = int(getattr(subprob.hyperparams.discretize, 'hp_segments', 1))
-
     if propagate_from_nodes_flag:
         node_solver = subprob.fcns.discretize.make_node_propagation_solver(dynamics, params, n_steps=50)
     else:
         traj_solver = subprob.fcns.discretize.make_trajectory_solver(
-            dynamics, params, n_steps=500, discretize=discretize, hp_segments=H,
+            dynamics, params, n_steps=500, discretize=discretize,
         )
 
     z_init = subprob.initial_guess.z_dense
@@ -249,12 +247,11 @@ def run_method_variation(traj):
           type: method_variation
           methods:
             autoscvx-ms: {}
-            autoscvx-ps-h10:
+            autoscvx-ps:
               hyperparams:
                 discretize:
                   mode: ps
                   equal_dt: 0
-                  hp_segments: 10
                 trust_region:
                   line_search: 1
                 penalties:

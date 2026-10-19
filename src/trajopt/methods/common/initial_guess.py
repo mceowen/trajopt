@@ -98,7 +98,7 @@ class Guess:
     @classmethod
     def from_file(cls, path, *, state_columns, control_columns, time_column=0,
                   delimiter=None, skiprows=0, tau_column=None, dilation_column=None,
-                  interpolation='linear', segments=1):
+                  interpolation='linear'):
         """Load dimensional samples using zero-based columns in model order.
 
         Defaults: commas for .csv, whitespace otherwise. Use skiprows for headers.
@@ -133,15 +133,15 @@ class Guess:
             t=data[:, t_idx[0]], x=data[:, x_idx], u=data[:, u_idx],
             tau=None if tau_idx is None else data[:, tau_idx[0]],
             s=None if s_idx is None else data[:, s_idx[0]],
-            interpolation=interpolation, segments=segments,
+            interpolation=interpolation,
         )
 
     @classmethod
     def from_samples(cls, *, t, x, u, tau=None, s=None, aux=None,
-                     interpolation='linear', segments=1):
+                     interpolation='linear'):
         """Interpolate copied samples; tau defaults to normalized physical time.
 
-        Polynomial segments share endpoints and have equal order. Non-affine
+        Polynomial interpolation uses one global polynomial. Non-affine
         time maps require s=dt/dtau. Omitted aux is reconstructed on import.
         """
         t = np.asarray(t, dtype=float)
@@ -155,19 +155,13 @@ class Guess:
         values = _samples(GuessSamples(t, x, u, s, aux), len(tau))
         if interpolation not in ('linear', 'polynomial'):
             raise ValueError("interpolation must be 'linear' or 'polynomial'")
-        if not isinstance(segments, (int, np.integer)) or segments < 1 or (len(tau)-1) % segments:
-            raise ValueError("segments must divide the number of sample intervals")
-        if interpolation == 'linear' and segments != 1:
-            raise ValueError("segments is only used for polynomial interpolation")
-        p = (len(tau)-1) // segments
         fields = {}
         for name in ('t', 'x', 'u', 's', 'aux'):
             a = getattr(values, name)
             if a is None:
                 fields[name] = None
             elif interpolation == 'polynomial':
-                fields[name] = [BarycentricInterpolator(tau[h*p:h*p+p+1], a[h*p:h*p+p+1], axis=0)
-                                for h in range(segments)]
+                fields[name] = BarycentricInterpolator(tau, a, axis=0)
             else:
                 fields[name] = a
 
@@ -184,13 +178,7 @@ class Guess:
                     else:
                         result[name] = np.zeros((len(q), 0))
                 else:
-                    a = getattr(values, name)
-                    out = np.empty((len(q),) + a.shape[1:])
-                    interval = np.clip(np.searchsorted(tau[::p], q, side='right')-1, 0, segments-1)
-                    for h, polynomial in enumerate(source):
-                        mask = interval == h
-                        out[mask] = polynomial(q[mask])
-                    result[name] = out
+                    result[name] = source(q)
             return GuessSamples(**result)
         return cls(evaluate, tau)
 
@@ -463,8 +451,7 @@ def export_guess(method_phase, *, include_aux=True):
     mesh = method_phase.mesh
     return Guess.from_samples(t=values.t, x=values.x, u=values.u, s=values.s,
                               aux=values.aux if include_aux else None,
-                              tau=mesh.tau, interpolation='polynomial' if mesh.discretize == 'ps' else 'linear',
-                              segments=mesh.segments)
+                              tau=mesh.tau, interpolation='polynomial' if mesh.discretize == 'ps' else 'linear')
 
 
 def phase_guesses(supplied, names):

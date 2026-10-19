@@ -6,7 +6,6 @@ fcns:
     propagate_from_nodes: trajopt/methods/common/discretize.py:propagate_from_nodes
     propagate_trajectory: trajopt/methods/common/discretize.py:propagate_trajectory
     differential_operator: trajopt/methods/common/discretize.py:flipped_radau_differential_operator
-    hp_operator: trajopt/methods/common/discretize.py:flipped_radau_hp_operator
 
     create_time_params: trajopt/methods/common/discretize.py:create_time_params_ps
     update_time_params: trajopt/methods/common/discretize.py:update_time_params_ps
@@ -23,4 +22,3 @@ hyperparams:
   discretize:
     mode: ps
     equal_dt: 0
-    hp_segments: 1

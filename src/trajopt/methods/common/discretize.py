@@ -10,9 +10,8 @@ import scipy as sp
 # SHARED
 # =============================================================================
 
-def make_trajectory_solver(dynamics, params, n_steps, discretize="ms", hp_segments=1):
-    """JIT-compiled RK4 solver for the full trajectory; discretize picks FOH ("ms") or Lagrange ("ps") control interpolation."""
-    H = hp_segments
+def make_trajectory_solver(dynamics, params, n_steps, discretize="ms"):
+    """JIT-compiled RK4 solver for the full trajectory; controls use FOH for both "ms" and "ps" (Lagrange for "ps" is commented out)."""
     use_ps = (discretize == "ps")
 
     if use_ps:
@@ -21,32 +20,24 @@ def make_trajectory_solver(dynamics, params, n_steps, discretize="ms", hp_segmen
             dt   = (tau_f - tau0) / n_steps
             taus = jnp.linspace(tau0, tau_f, n_steps + 1)
             N_nodes = tau_ref.shape[0]
-            p = (N_nodes - 1) // H
 
-            boundaries = jnp.zeros(H + 1)
-            bary_weights = jnp.zeros((H, p + 1))
-            for h in range(H):
-                nodes_h = jax.lax.dynamic_slice(tau_ref, (h * p,), (p + 1,))
-                boundaries = boundaries.at[h].set(nodes_h[0])
-                diffs_h = nodes_h[:, None] - nodes_h[None, :]
-                diffs_h = diffs_h + jnp.eye(p + 1)
-                bary_weights = bary_weights.at[h].set(1.0 / jnp.prod(diffs_h, axis=1))
-            boundaries = boundaries.at[H].set(tau_ref[-1] + 1e-14)
+            # Lagrange control interpolation, replaced by FOH below
+            # diffs = tau_ref[:, None] - tau_ref[None, :]
+            # diffs = diffs + jnp.eye(N_nodes)
+            # bary_weights = 1.0 / jnp.prod(diffs, axis=1)
+            #
+            # def nu_interp(z, tau):
+            #     d = tau - tau_ref
+            #     exact = jnp.argmin(jnp.abs(d))
+            #     is_exact = jnp.abs(d[exact]) < 1e-14
+            #     w_over_d = bary_weights / (d + 1e-300)
+            #     interp_val = jnp.sum(w_over_d[:, None] * nu_ref, axis=0) / jnp.sum(w_over_d)
+            #     return jnp.where(is_exact, nu_ref[exact], interp_val)
 
             def nu_interp(z, tau):
-                h = jnp.clip(jnp.searchsorted(boundaries, tau, side='right') - 1, 0, H - 1).astype(jnp.int32)
-                start = (h * p).astype(jnp.int32)
-                zero = jnp.int32(0)
-                nodes_h = jax.lax.dynamic_slice(tau_ref, (start,), (p + 1,))
-                nu_h = jax.lax.dynamic_slice(nu_ref, (start, zero), (p + 1, nu_ref.shape[1]))
-                w_h = bary_weights[h]
-
-                d = tau - nodes_h
-                exact = jnp.argmin(jnp.abs(d))
-                is_exact = jnp.abs(d[exact]) < 1e-14
-                w_over_d = w_h / (d + 1e-300)
-                interp_val = jnp.sum(w_over_d[:, None] * nu_h, axis=0) / jnp.sum(w_over_d)
-                return jnp.where(is_exact, nu_h[exact], interp_val)
+                k = jnp.clip(jnp.searchsorted(tau_ref, tau, side='right') - 1, 0, N_nodes - 2)
+                a = (tau - tau_ref[k]) / (tau_ref[k + 1] - tau_ref[k])
+                return (1 - a) * nu_ref[k] + a * nu_ref[k + 1]
 
             def step(z, tau):
                 nu = nu_interp(z, tau)
@@ -92,11 +83,10 @@ def make_trajectory_solver(dynamics, params, n_steps, discretize="ms", hp_segmen
 
 
 def propagate_trajectory(z_nodes, tau_nodes, nu_nodes, dynamics, params,
-                         discretize="ms", n_steps=500, hp_segments=1, _solver=None):
+                         discretize="ms", n_steps=500, _solver=None):
     """Propagate the full trajectory from its initial condition using interpolated controls."""
     if _solver is None:
-        _solver = make_trajectory_solver(dynamics, params, n_steps,
-                                         discretize=discretize, hp_segments=hp_segments)
+        _solver = make_trajectory_solver(dynamics, params, n_steps, discretize=discretize)
 
     taus, z_traj, nu_traj = _solver(
         jnp.asarray(z_nodes[0]),
@@ -524,8 +514,7 @@ def final_time_interval_constraints_ps(constraint, subproblem):
 def dynamics_compile_ps(constraint, subproblem):
     mesh = subproblem.mesh
     constraint.ps_D = mesh.differentiation
-    constraint.ps_hp = mesh.segments
-    constraint.ps_p = (len(mesh.tau) - 1) // mesh.segments
+    constraint.ps_Dinv = np.linalg.inv(2.0 * mesh.differentiation[:, 1:])
     constraint.ps_etau = 2 * mesh.tau - 1
     constraint.ps_tau_norm = mesh.tau
     subproblem.ps_tau_norm = mesh.tau
@@ -549,28 +538,21 @@ def dynamics_create_cvxpy_parameters_ps(constraint, subproblem):
 def dynamics_create_cvxpy_constraints_ps(constraint, subproblem):
     N_col  = subproblem.index_map.N.all - 1
     vb_dyn = constraint.penalties.vb_var
-    H = constraint.ps_hp
-    p = constraint.ps_p
     D = constraint.ps_D
 
     subproblem.cp_dyn_constraints = []
 
     Z = subproblem.cp_params.z_ref + subproblem.dz
+    lhs = 2.0 * (D @ Z)
 
-    for h in range(H):
-        col_start = h * p
-        Z_h = Z[col_start:col_start + p + 1, :]
-        lhs_h = 2.0 * (D @ Z_h)
-
-        for j in range(p):
-            k = h * p + j
-            rhs_k = (subproblem.cp_params.ps_f_ref[k]
-                     + subproblem.cp_params.ps_Ac[k] @ subproblem.dz[k + 1]
-                     + subproblem.cp_params.ps_Bc[k] @ subproblem.dnu[k + 1]
-                     + (vb_dyn[k] if vb_dyn is not None else 0))
-            cnst = (lhs_h[j] == rhs_k)
-            subproblem.cp_dyn_constraints.append(cnst)
-            subproblem.cp_constraints.append(cnst)
+    for k in range(N_col):
+        rhs_k = (subproblem.cp_params.ps_f_ref[k]
+                 + subproblem.cp_params.ps_Ac[k] @ subproblem.dz[k + 1]
+                 + subproblem.cp_params.ps_Bc[k] @ subproblem.dnu[k + 1]
+                 + (vb_dyn[k] if vb_dyn is not None else 0))
+        cnst = (lhs[k] == rhs_k)
+        subproblem.cp_dyn_constraints.append(cnst)
+        subproblem.cp_constraints.append(cnst)
 
 
 def dynamics_update_cvxpy_parameters_ps(constraint, subproblem):
@@ -604,18 +586,11 @@ def dynamics_update_current_iter_data_ps(constraint, subproblem):
     z_jnp  = jnp.asarray(z_opt)
     nu_jnp = jnp.asarray(nu_opt)
     D_jnp  = jnp.asarray(constraint.ps_D)
-    H = constraint.ps_hp
-    p = constraint.ps_p
 
-    lhs_parts = []
-    for h in range(H):
-        col_start = h * p
-        z_h = z_jnp[col_start:col_start + p + 1, :]
-        lhs_parts.append(2.0 * D_jnp @ z_h)
-    lhs = jnp.concatenate(lhs_parts, axis=0)
+    lhs = 2.0 * D_jnp @ z_jnp
 
     f_vals = constraint.dyn_fcn_batched(z_jnp[1:], nu_jnp[1:], subproblem.params)
-    subproblem.current_iter_data.defect = np.asarray(lhs - f_vals)
+    subproblem.current_iter_data.defect = constraint.ps_Dinv @ np.asarray(lhs - f_vals)
 
 
 # ---------------------------------------------------------------------------
@@ -912,42 +887,6 @@ def flipped_radau_differential_operator(N: int) -> tuple[np.ndarray, np.ndarray,
     #D = D_compare
 
     return tau, etau, w, D
-
-
-# ---------------------------------------------------------------------
-# hp composite differential operator
-# ---------------------------------------------------------------------
-
-def flipped_radau_hp_operator(N_col: int, H: int):
-    """hp-composite fLGR nodes/weights; returns one local D block (scaled by H) the caller applies per interval."""
-    if N_col % H != 0:
-        raise ValueError(f"N_col={N_col} must be divisible by H={H}")
-
-    p = N_col // H
-    N_total = N_col + 1
-
-    tau_local, etau_local, w_local, D_local = flipped_radau_differential_operator(p)
-
-    etau_global = np.zeros(N_total)
-    tau_global  = np.zeros(N_col)
-    w_global    = np.zeros(N_col)
-
-    for h in range(H):
-        tau_start = -1.0 + 2.0 * h / H
-        delta = 2.0 / H
-
-        local_to_global = lambda tau_l, ts=tau_start, d=delta: ts + (tau_l + 1.0) * (d / 2.0)
-
-        row_start = h * p
-        col_start = h * p
-
-        etau_global[col_start] = local_to_global(-1.0)
-        for j in range(p):
-            etau_global[col_start + 1 + j] = local_to_global(tau_local[j])
-            tau_global[row_start + j] = local_to_global(tau_local[j])
-            w_global[row_start + j] = w_local[j] * (delta / 2.0)
-
-    return tau_global, etau_global, w_global, H * D_local
 
 
 # ---------------------------------------------------------------------
