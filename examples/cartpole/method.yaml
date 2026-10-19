@@ -1,4 +1,4 @@
-inherit: trajopt/methods/stable/scp/configs/first_order/autoscvx-term.yaml
+inherit: trajopt/methods/stable/scp/configs/first_order/autoscvx.yaml
 
 hyperparams:
   flags:

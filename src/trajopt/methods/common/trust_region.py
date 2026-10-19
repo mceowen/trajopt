@@ -20,8 +20,8 @@ def resolve_tr_step(hyperparams, group: str, key: str) -> float:
 
 
 def resolve_tr_param(self, group: str, key: str) -> float:
-    """Configured step size, rescaled by tr_scale (only != 1.0 after a tightening retry)."""
-    return self.tr_scale / resolve_tr_step(self.hyperparams, group, key)
+    """Configured step size, rescaled by s_mult (equivalent to the old tr_scale at s_mult = 1/tr_scale)."""
+    return 1.0 / (self.s_mult * resolve_tr_step(self.hyperparams, group, key))
 
 
 def create_tr_params_component(self) -> None:
@@ -73,21 +73,90 @@ def evaluate_step_linearized(self) -> tuple[float, float]:
 
 
 # =============================================================================
+# ADAPTIVE (RATIO-TEST) FIRST ORDER -- component trust region plus a compiled merit for a
+# predicted-vs-actual ratio test. Own copies of the component builders, not the ones above.
+# =============================================================================
+
+def create_tr_params_adaptive(self) -> None:
+    """Component params plus a compiled merit. Raises if any constraint ends up without one
+    (parts/sparse buffers, or a penalty scheme with no matching merit.default override)."""
+    for constraint in self.constraints.values():
+        p = constraint.penalties
+        if p.get('parts') is not None or p.vb_type == 'sparse':
+            raise ValueError(
+                f"adaptive trust region doesn't support constraint {constraint.name!r} yet "
+                "(parts and sparse buffers aren't covered by its merit)"
+            )
+    create_tr_params_component(self)
+    compile_merit(self)
+    for constraint in self.constraints.values():
+        p = constraint.penalties
+        if constraint.shape is None or p.vb_type == 'none':
+            continue
+        if not hasattr(constraint, '_merit_eval'):
+            raise ValueError(
+                f"adaptive trust region: constraint {constraint.name!r} has no working merit "
+                "(its fcns.trust_region.merit.default may need an override matching its penalty scheme)"
+            )
+
+
+def create_cost_trust_region_adaptive(self) -> None:
+    """Same terms as create_cost_trust_region_component, but keeps a cp_tr_cost handle on them."""
+    if self.hyperparams.discretize.mode not in ("ms", "ps"):
+        return
+    idx_z  = self.index_map.indices.z
+    idx_nu = self.index_map.indices.nu
+
+    tr  = self.cp_params.tr_x * cp.sum_squares(self.dz[:, idx_z.state])
+    tr += self.cp_params.tr_t * cp.sum_squares(self.dz[:, idx_z.time])
+    if self.index_map.n.ctcs > 0:
+        tr += self.cp_params.tr_ctcs * cp.sum_squares(self.dz[:, idx_z.ctcs])
+    if self.index_map.n.running_cost > 0:
+        tr += self.cp_params.tr_gamma * cp.sum_squares(self.dz[:, idx_z.running_cost])
+
+    tr += self.cp_params.tr_u * cp.sum_squares(self.dnu[:, idx_nu.control])
+    tr += self.cp_params.tr_s * cp.sum_squares(self.dnu[:, idx_nu.dilation_factor])
+
+    self.cp_tr_cost = tr
+    self.cp_cost   += tr
+
+
+# =============================================================================
 # SCP -- trust-region retry/relax and line-search machinery shared by the top-level solve
 # loop regardless of first-order/second-order.
 # =============================================================================
 
 def tighten_scp_trust_region(subproblems) -> None:
-    """Increase first-order retry weights, without changing configured step sizes."""
+    """Shrink the trust region on a retry (was tr_scale *= 10, cap 1e6)."""
     for subproblem in subproblems:
-        subproblem.tr_scale = min(subproblem.tr_scale * 10.0, 1.0e6)
+        subproblem.s_mult = max(subproblem.s_mult / 10.0, 1.0e-6)
 
 
 def relax_scp_trust_region(subproblems) -> None:
-    """Return first-order retry weights towards their configured values."""
+    """Return the trust region towards its configured size (was tr_scale *= 0.7 toward 1)."""
     for subproblem in subproblems:
-        if subproblem.tr_scale > 1.0:
-            subproblem.tr_scale = max(subproblem.tr_scale * 0.7, 1.0)
+        if subproblem.s_mult < 1.0:
+            subproblem.s_mult = min(subproblem.s_mult / 0.7, 1.0)
+
+
+def scale_s(subproblems, factor: float) -> None:
+    """Scale s_mult by factor, clamped to hyperparams.trust_region.adaptive.s_mult_{min,max}."""
+    for subproblem in subproblems:
+        a = subproblem.hyperparams.trust_region.adaptive
+        subproblem.s_mult = float(np.clip(subproblem.s_mult * factor, float(a.s_mult_min), float(a.s_mult_max)))
+
+
+def predicted_and_actual_decrease(subproblems) -> tuple[float, float]:
+    """ΔJ (actual decrease) and ΔL (predicted decrease), summed over phases."""
+    subproblems = list(subproblems)
+    dJ = dL = 0.0
+    for sp in subproblems:
+        J0 = float(evaluate_merit_at_alpha(sp, 0.0))
+        J1 = float(evaluate_merit_at_alpha(sp, 1.0))
+        L1 = float(sp.cp_cost.value - sp.cp_tr_cost.value)
+        dJ += J0 - J1
+        dL += J0 - L1
+    return dJ, dL
 
 
 def select_step_size(subproblems) -> float:

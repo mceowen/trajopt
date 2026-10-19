@@ -1,5 +1,5 @@
 # autoscvx2 leaves the terminal buffer open here
-inherit: trajopt/methods/stable/scp/configs/first_order/autoscvx-term.yaml
+inherit: trajopt/methods/stable/scp/configs/first_order/autoscvx.yaml
 
 fcns:
   initial_guess:

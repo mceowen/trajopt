@@ -41,7 +41,8 @@ class SCPMethod(GuessLifecycle):
     def update_cvxpy_parameters(self) -> None:
         self.subproblem.update_cvxpy_parameters()
 
-    def update_current_iter_data(self) -> None:
+    def read_solution(self) -> None:
+        """Cache the solved step before troubleshoot_step, which may need it to accept/reject."""
         parse_time = self.cp_subproblem.compilation_time * 1000.0
         solve_time = self.cp_subproblem.solver_stats.solve_time * 1000.0
 
@@ -49,6 +50,7 @@ class SCPMethod(GuessLifecycle):
         self.subproblem.current_iter_data.solve_time = solve_time
         self.subproblem.read_solution()
 
+    def update_current_iter_data(self) -> None:
         alpha = trust_region.select_step_size([self.subproblem])
 
         self.subproblem.cp_subproblem_status = self.cp_subproblem.status
@@ -74,10 +76,13 @@ class SCPMethod(GuessLifecycle):
         self.reporter.header()
 
         max_iter = int(self.method_config.hyperparams.convergence.iter_max)
+        adaptive_cfg = self.method_config.hyperparams.trust_region.get('adaptive')
+        max_rejects = int(adaptive_cfg.max_rejects) if adaptive_cfg is not None else None
 
         total_discretization_ms = 0.0
         total_solve_ms = 0.0
         reason = None
+        consecutive_rejects = 0
 
         for i in range(max_iter + 1):
             self.update_cvxpy_parameters()
@@ -94,10 +99,16 @@ class SCPMethod(GuessLifecycle):
                 reason = f"Terminated from non-optimal convex subproblem! Status: {self.cp_subproblem.status}"
                 break
 
+            self.read_solution()
             usable, message = self.subproblem.troubleshoot_step()
             if not usable:
+                consecutive_rejects += 1
                 self.reporter.message(f"  {message}")
+                if max_rejects is not None and consecutive_rejects >= max_rejects:
+                    reason = f"Terminated: {consecutive_rejects} consecutive trust-region rejects"
+                    break
                 continue
+            consecutive_rejects = 0
 
             self.update_current_iter_data()
             self.display_status()

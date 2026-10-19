@@ -90,7 +90,7 @@ class Subproblem():
         self.cp_constraints       = []
         self.cp_cost              = 0
         self.cp_subproblem_status = None
-        self.tr_scale             = 1.0
+        self.s_mult               = 1.0
 
         self.create_cvxpy_parameters()
         self.create_cvxpy_variables()
@@ -193,7 +193,7 @@ class Subproblem():
         reset = self.fcns.trust_region.get('reset')
         if reset is not None:
             reset(self)
-        self.tr_scale = 1.0
+        self.s_mult = 1.0
         self.cp_subproblem_status = None
         self._dz_new = self._dnu_new = None
         self._reset_iter_data()
