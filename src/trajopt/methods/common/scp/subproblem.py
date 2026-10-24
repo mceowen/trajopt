@@ -79,7 +79,7 @@ class Subproblem():
 
         self.free_final_time = self.derive_free_final_time()
 
-        self.mesh = make_mesh(self.index_map.N.all, self.hyperparams.discretize, self.fcns.discretize)
+        self.mesh = make_mesh(self.index_map.N.all, self.hyperparams.discretize, self.fcns.discretize, segments=formulation_obj.hp_segments)
         self._supplied_guess = initial_guess
         self._previous_guess = previous_guess
         self.initialize()

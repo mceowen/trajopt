@@ -10,56 +10,42 @@ import scipy as sp
 # SHARED
 # =============================================================================
 
-def make_trajectory_solver(dynamics, params, n_steps, discretize="ms", hp_segments=1):
-    """JIT-compiled RK4 solver for the full trajectory; discretize picks FOH ("ms") or Lagrange ("ps") control interpolation."""
-    H = hp_segments
+def make_trajectory_solver(dynamics, params, n_steps, discretize="ms",
+                           segments=1, control_interpolation="lagrange", dilation_idx=None):
+    """JIT-compiled RK4 solver for the full trajectory; "ms" uses FOH controls,
+    "ps" uses interpolate_control_ps (lagrange or FOH) on each hp segment."""
     use_ps = (discretize == "ps")
 
     if use_ps:
+        # number of time steps for each hp segment
+        n_seg_steps = max(n_steps // segments, 1)
+
         @jax.jit
         def solve(z0, tau0, tau_f, tau_ref, nu_ref):
-            dt   = (tau_f - tau0) / n_steps
-            taus = jnp.linspace(tau0, tau_f, n_steps + 1)
-            N_nodes = tau_ref.shape[0]
-            p = (N_nodes - 1) // H
+            nu_interp = interpolate_control_ps(tau_ref, nu_ref, segments, dilation_idx, control_interpolation)
+            knots = jnp.linspace(tau0, tau_f, segments + 1)
 
-            boundaries = jnp.zeros(H + 1)
-            bary_weights = jnp.zeros((H, p + 1))
-            for h in range(H):
-                nodes_h = jax.lax.dynamic_slice(tau_ref, (h * p,), (p + 1,))
-                boundaries = boundaries.at[h].set(nodes_h[0])
-                diffs_h = nodes_h[:, None] - nodes_h[None, :]
-                diffs_h = diffs_h + jnp.eye(p + 1)
-                bary_weights = bary_weights.at[h].set(1.0 / jnp.prod(diffs_h, axis=1))
-            boundaries = boundaries.at[H].set(tau_ref[-1] + 1e-14)
+            def segment(z_h, h):
+                dt   = (knots[h + 1] - knots[h]) / n_seg_steps
+                taus = knots[h] + dt * jnp.arange(n_seg_steps)
 
-            def nu_interp(z, tau):
-                h = jnp.clip(jnp.searchsorted(boundaries, tau, side='right') - 1, 0, H - 1).astype(jnp.int32)
-                start = (h * p).astype(jnp.int32)
-                zero = jnp.int32(0)
-                nodes_h = jax.lax.dynamic_slice(tau_ref, (start,), (p + 1,))
-                nu_h = jax.lax.dynamic_slice(nu_ref, (start, zero), (p + 1, nu_ref.shape[1]))
-                w_h = bary_weights[h]
+                # h is passed explicitly, so the step ending on a knot still uses this segment's dilation
+                def step(z, tau):
+                    nu = nu_interp(tau, h)
+                    k1 = dynamics(z,               nu,                        params)
+                    k2 = dynamics(z + (dt/2) * k1, nu_interp(tau + dt / 2, h), params)
+                    k3 = dynamics(z + (dt/2) * k2, nu_interp(tau + dt / 2, h), params)
+                    k4 = dynamics(z + dt * k3,     nu_interp(tau + dt, h),     params)
+                    z_next = z + (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
+                    return z_next, (z, nu)
 
-                d = tau - nodes_h
-                exact = jnp.argmin(jnp.abs(d))
-                is_exact = jnp.abs(d[exact]) < 1e-14
-                w_over_d = w_h / (d + 1e-300)
-                interp_val = jnp.sum(w_over_d[:, None] * nu_h, axis=0) / jnp.sum(w_over_d)
-                return jnp.where(is_exact, nu_h[exact], interp_val)
+                z_next_h, (z_traj, nu_traj) = jax.lax.scan(step, z_h, taus)
+                return z_next_h, (taus, z_traj, nu_traj)
 
-            def step(z, tau):
-                nu = nu_interp(z, tau)
-                k1 = dynamics(z,               nu,                                        params)
-                k2 = dynamics(z + (dt/2) * k1, nu_interp(z + (dt/2) * k1, tau + dt / 2), params)
-                k3 = dynamics(z + (dt/2) * k2, nu_interp(z + (dt/2) * k2, tau + dt / 2), params)
-                k4 = dynamics(z + dt * k3,     nu_interp(z + dt * k3,     tau + dt),      params)
-                z_next = z + (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
-                return z_next, (z, nu)
-
-            z_f, (z_traj, nu_traj) = jax.lax.scan(step, z0, taus[:-1])
-            z_traj  = jnp.concatenate([z_traj,  z_f[None]])
-            nu_traj = jnp.concatenate([nu_traj, nu_interp(z_f, taus[-1])[None]])
+            z_f, (taus, z_traj, nu_traj) = jax.lax.scan(segment, z0, jnp.arange(segments))
+            taus    = jnp.concatenate([taus.reshape(-1), tau_f[None]])
+            z_traj  = jnp.concatenate([z_traj.reshape(-1, z0.shape[0]), z_f[None]])
+            nu_traj = jnp.concatenate([nu_traj.reshape(-1, nu_ref.shape[1]), nu_interp(tau_f, segments - 1)[None]])
             return taus, z_traj, nu_traj
 
     else:
@@ -92,11 +78,12 @@ def make_trajectory_solver(dynamics, params, n_steps, discretize="ms", hp_segmen
 
 
 def propagate_trajectory(z_nodes, tau_nodes, nu_nodes, dynamics, params,
-                         discretize="ms", n_steps=500, hp_segments=1, _solver=None):
+                         discretize="ms", n_steps=500, _solver=None,
+                         segments=1, control_interpolation="lagrange", dilation_idx=None):
     """Propagate the full trajectory from its initial condition using interpolated controls."""
     if _solver is None:
-        _solver = make_trajectory_solver(dynamics, params, n_steps,
-                                         discretize=discretize, hp_segments=hp_segments)
+        _solver = make_trajectory_solver(dynamics, params, n_steps, discretize=discretize, segments=segments,
+                                         control_interpolation=control_interpolation, dilation_idx=dilation_idx)
 
     taus, z_traj, nu_traj = _solver(
         jnp.asarray(z_nodes[0]),
@@ -133,17 +120,24 @@ def _make_rk4_solver(nu_fn, dynamics, params, n_steps):
     return solve
 
 
-def make_node_propagation_solver(dynamics, params, n_steps):
+def make_node_propagation_solver(dynamics, params, n_steps, discretize="ms",
+                                 segments=1, control_interpolation="lagrange", dilation_idx=None):
+    use_ps = (discretize == "ps")
+
     @jax.jit
-    def solve(z0, tau0, tau_f, tau_ref, nu_ref):
+    def solve(z0, tau0, tau_f, tau_ref, nu_ref, h=0):
         dt   = (tau_f - tau0) / n_steps
         taus = jnp.linspace(tau0, tau_f, n_steps + 1)
         N_nodes = tau_ref.shape[0]
 
-        def nu_interp(z, tau):
-            k = jnp.clip(jnp.searchsorted(tau_ref, tau, side='right') - 1, 0, N_nodes - 2)
-            a = (tau - tau_ref[k]) / (tau_ref[k + 1] - tau_ref[k])
-            return (1 - a) * nu_ref[k] + a * nu_ref[k + 1]
+        if use_ps:
+            nu_interp_ps = interpolate_control_ps(tau_ref, nu_ref, segments, dilation_idx, control_interpolation)
+            nu_interp = lambda z, tau: nu_interp_ps(tau, h)
+        else:
+            def nu_interp(z, tau):
+                k = jnp.clip(jnp.searchsorted(tau_ref, tau, side='right') - 1, 0, N_nodes - 2)
+                a = (tau - tau_ref[k]) / (tau_ref[k + 1] - tau_ref[k])
+                return (1 - a) * nu_ref[k] + a * nu_ref[k + 1]
 
         def step(z, tau):
             nu = nu_interp(z, tau)
@@ -173,25 +167,31 @@ def propagate_rk4(z0, tau0, tau_f, nu_fn, dynamics, params, n_steps=1000):
 
 
 def propagate_from_nodes(z_nodes, tau_nodes, nu_nodes, dynamics, params,
-                         n_dense_per_seg=50, _solver=None):
-    """Propagate node-by-node (restarts from each node, shows defects)."""
+                         n_dense_per_seg=50, _solver=None, discretize="ms",
+                         segments=1, control_interpolation="lagrange", dilation_idx=None):
+    """Propagate node-by-node (restarts from each node, shows defects); "ps" restarts from each hp segment knot."""
     N   = z_nodes.shape[0]
     n_z = z_nodes.shape[1]
 
     if _solver is None:
-        _solver = make_node_propagation_solver(dynamics, params, n_dense_per_seg)
+        _solver = make_node_propagation_solver(dynamics, params, n_dense_per_seg, discretize=discretize, segments=segments,
+                                               control_interpolation=control_interpolation, dilation_idx=dilation_idx)
 
     tau_ref = jnp.asarray(tau_nodes)
     nu_ref  = jnp.asarray(nu_nodes)
 
+    # restart stride: every node for ms, every segment for ps (collocation nodes are not shooting nodes)
+    stride = (N - 1) // segments if discretize == "ps" else 1
+
     phases = []
-    for k in range(N - 1):
+    for k in range(0, N - 1, stride):
         taus_k, z_k, nu_k = _solver(
             jnp.asarray(z_nodes[k]),
             jnp.asarray(float(tau_nodes[k])),
-            jnp.asarray(float(tau_nodes[k + 1])),
+            jnp.asarray(float(tau_nodes[k + stride])),
             tau_ref,
             nu_ref,
+            k // stride,
         )
         phases.append((np.asarray(taus_k), np.asarray(z_k), np.asarray(nu_k)))
 
@@ -205,7 +205,7 @@ def propagate_from_nodes(z_nodes, tau_nodes, nu_nodes, dynamics, params,
         flat_tau.append(tau_k)
         flat_z.append(z_k)
         flat_nu.append(nu_k)
-        if k < N - 2:
+        if k < len(phases) - 1:
             flat_tau.append(nan_tau)
             flat_z.append(nan_z)
             flat_nu.append(nan_nu)
@@ -475,46 +475,54 @@ def make_lagrangian_rk4_propagator(dyn_fcn, N_grid, nsub):
 # =============================================================================
 
 # ---------------------------------------------------------------------------
-# time representation (subproblem-level: cp_params.tau/ps_t_offset, dt/ds constraints)
+# time representation (subproblem-level: dt/ds constraints; time is affine per segment through the dynamics)
 # ---------------------------------------------------------------------------
 
 def create_time_params_ps(subproblem):
-    N = subproblem.index_map.N.all
-    subproblem.cp_params.tau = cp.Parameter((N,), name="tau")
-    subproblem.cp_params.tau.value = subproblem.ps_tau_norm
-    subproblem.cp_params.ps_t_offset = cp.Parameter((N,), name="ps_t_offset", value=np.zeros(N))
+    pass
 
 
 def update_time_params_ps(subproblem):
-    z_opt = subproblem.current_iter_data.z_opt
-    t_ref_vals = z_opt[:, subproblem.index_map.indices.z.time].flatten()
-    t0, tf = t_ref_vals[0], t_ref_vals[-1]
-    subproblem.cp_params.ps_t_offset.value = t0 + subproblem.ps_tau_norm * (tf - t0) - t_ref_vals
+    pass
 
 
 def create_time_constraints_ps(subproblem):
     N = subproblem.index_map.N.all
-    tau = subproblem.cp_params.tau
-
-    for k in range(1, N - 1):
-        subproblem.cp_constraints.append(
-            subproblem.dt[k, 0] == (subproblem.cp_params.ps_t_offset[k]
-                                    + subproblem.dt[0, 0]
-                                    + tau[k] * (subproblem.dt[N - 1, 0] - subproblem.dt[0, 0]))
-        )
+    H = subproblem.mesh.segments
+    p = (N - 1) // H
 
     for k in range(N - 1):
-        subproblem.cp_constraints.append(0.0 <= subproblem.s_ref[k, 0] + subproblem.ds[k, 0])
         s_k  = subproblem.s_ref[k, 0] + subproblem.ds[k, 0]
         s_kp = subproblem.s_ref[k + 1, 0] + subproblem.ds[k + 1, 0]
-        subproblem.cp_constraints.append(s_k == s_kp)
+
+        subproblem.cp_constraints.append(0.0 <= s_k)
+
+        # apply consecutive dilations equality when: p method (H=1), inside the h segments, zoh_dilation = 1
+        if k == 0 or k % p or (hasattr(subproblem.hyperparams.flags, "zoh_dilation") and bool(subproblem.hyperparams.flags.zoh_dilation)):
+            subproblem.cp_constraints.append(s_k == s_kp)
+
+    if hasattr(subproblem.hyperparams.discretize, "equal_dt") and bool(subproblem.hyperparams.discretize.equal_dt):
+        # equal H segments widths
+        width_0 = (subproblem.t_ref[p, 0] + subproblem.dt[p, 0]) - (subproblem.t_ref[0, 0] + subproblem.dt[0, 0])
+        for h in range(1, H):
+            t_h  = subproblem.t_ref[h * p, 0] + subproblem.dt[h * p, 0]
+            t_hp = subproblem.t_ref[(h + 1) * p, 0] + subproblem.dt[(h + 1) * p, 0]
+            subproblem.cp_constraints.append(t_hp - t_h == width_0)
 
     subproblem.cp_constraints.append(subproblem.t_ref[N - 1, 0] + subproblem.dt[N - 1, 0] >= 0.0)
     subproblem.cp_constraints.append(0.0 <= subproblem.s_ref[N - 1, 0] + subproblem.ds[N - 1, 0])
 
 
 def final_time_interval_constraints_ps(constraint, subproblem):
-    pass  # pseudospectral node spacing comes from the collocation scheme instead
+    # segment widths treated like the ms node intervals
+    N = subproblem.index_map.N.all
+    H = subproblem.mesh.segments
+    p = (N - 1) // H
+    for h in range(H):
+        t_h  = subproblem.t_ref[h * p, 0] + subproblem.dt[h * p, 0]
+        t_hp = subproblem.t_ref[(h + 1) * p, 0] + subproblem.dt[(h + 1) * p, 0]
+        subproblem.cp_constraints.append(t_hp - t_h <= subproblem.cp_params.T_max / H)
+        subproblem.cp_constraints.append(t_hp - t_h >= subproblem.cp_params.T_min / H)
 
 
 # ---------------------------------------------------------------------------
@@ -524,11 +532,9 @@ def final_time_interval_constraints_ps(constraint, subproblem):
 def dynamics_compile_ps(constraint, subproblem):
     mesh = subproblem.mesh
     constraint.ps_D = mesh.differentiation
-    constraint.ps_hp = mesh.segments
-    constraint.ps_p = (len(mesh.tau) - 1) // mesh.segments
-    constraint.ps_etau = 2 * mesh.tau - 1
-    constraint.ps_tau_norm = mesh.tau
-    subproblem.ps_tau_norm = mesh.tau
+    # map the ps defects from derivatives to states (now comparable with ms)
+    p = (len(mesh.tau) - 1) // mesh.segments
+    constraint.ps_Dinv = sp.linalg.block_diag(*[np.linalg.inv(2.0 * mesh.differentiation[:p, 1:p + 1])] * mesh.segments)
     constraint.dyn_fcn_batched = jax.jit(jax.vmap(constraint.dyn_fcn, in_axes=(0, 0, None)))
 
     # only ps's per-node constraint linearization needs the dynamics Jacobians
@@ -549,28 +555,21 @@ def dynamics_create_cvxpy_parameters_ps(constraint, subproblem):
 def dynamics_create_cvxpy_constraints_ps(constraint, subproblem):
     N_col  = subproblem.index_map.N.all - 1
     vb_dyn = constraint.penalties.vb_var
-    H = constraint.ps_hp
-    p = constraint.ps_p
     D = constraint.ps_D
 
     subproblem.cp_dyn_constraints = []
 
     Z = subproblem.cp_params.z_ref + subproblem.dz
+    lhs = 2.0 * (D @ Z)
 
-    for h in range(H):
-        col_start = h * p
-        Z_h = Z[col_start:col_start + p + 1, :]
-        lhs_h = 2.0 * (D @ Z_h)
-
-        for j in range(p):
-            k = h * p + j
-            rhs_k = (subproblem.cp_params.ps_f_ref[k]
-                     + subproblem.cp_params.ps_Ac[k] @ subproblem.dz[k + 1]
-                     + subproblem.cp_params.ps_Bc[k] @ subproblem.dnu[k + 1]
-                     + (vb_dyn[k] if vb_dyn is not None else 0))
-            cnst = (lhs_h[j] == rhs_k)
-            subproblem.cp_dyn_constraints.append(cnst)
-            subproblem.cp_constraints.append(cnst)
+    for k in range(N_col):
+        rhs_k = (subproblem.cp_params.ps_f_ref[k]
+                 + subproblem.cp_params.ps_Ac[k] @ subproblem.dz[k + 1]
+                 + subproblem.cp_params.ps_Bc[k] @ subproblem.dnu[k + 1]
+                 + (vb_dyn[k] if vb_dyn is not None else 0))
+        cnst = (lhs[k] == rhs_k)
+        subproblem.cp_dyn_constraints.append(cnst)
+        subproblem.cp_constraints.append(cnst)
 
 
 def dynamics_update_cvxpy_parameters_ps(constraint, subproblem):
@@ -604,18 +603,11 @@ def dynamics_update_current_iter_data_ps(constraint, subproblem):
     z_jnp  = jnp.asarray(z_opt)
     nu_jnp = jnp.asarray(nu_opt)
     D_jnp  = jnp.asarray(constraint.ps_D)
-    H = constraint.ps_hp
-    p = constraint.ps_p
 
-    lhs_parts = []
-    for h in range(H):
-        col_start = h * p
-        z_h = z_jnp[col_start:col_start + p + 1, :]
-        lhs_parts.append(2.0 * D_jnp @ z_h)
-    lhs = jnp.concatenate(lhs_parts, axis=0)
+    lhs = 2.0 * D_jnp @ z_jnp
 
     f_vals = constraint.dyn_fcn_batched(z_jnp[1:], nu_jnp[1:], subproblem.params)
-    subproblem.current_iter_data.defect = np.asarray(lhs - f_vals)
+    subproblem.current_iter_data.defect = constraint.ps_Dinv @ np.asarray(lhs - f_vals)
 
 
 # ---------------------------------------------------------------------------
@@ -659,25 +651,36 @@ def dynamics_update_cvxpy_parameters_second_order_ps(constraint, subproblem):
 # control interpolation
 # ---------------------------------------------------------------------------
 
-def interpolate_control_lagrange(tau_nodes, nu_nodes):
-    """Returns a JAX nu(z, tau) interpolator, built once from barycentric Lagrange weights."""
+def interpolate_control_ps(tau_nodes, nu_nodes, segments, dilation_idx, kind="lagrange"):
+    """Returns a nu(tau, h) interpolator on hp segment h: controls are Lagrange on the segment's
+    collocation nodes ("lagrange") or linear between nodes ("foh"), while dilation is constant per segment."""
     tau_ref = jnp.asarray(tau_nodes)
     nu_ref  = jnp.asarray(nu_nodes)
     N_nodes = tau_ref.shape[0]
+    p       = (N_nodes - 1) // segments
 
-    diffs = tau_ref[:, None] - tau_ref[None, :]
-    diffs = diffs + jnp.eye(N_nodes)
+    # equal order segments, so they share the barycentric weights
+    tau_loc = tau_ref[1:p + 1]
+    diffs   = tau_loc[:, None] - tau_loc[None, :] + jnp.eye(p)
     bary_weights = 1.0 / jnp.prod(diffs, axis=1)
 
-    def nu_interp(z, tau):
-        d = tau - tau_ref
-        exact = jnp.argmin(jnp.abs(d))
-        is_exact = jnp.abs(d[exact]) < 1e-14
+    def nu_interp(tau, h):
+        if kind == "foh":
+            k  = jnp.clip(jnp.searchsorted(tau_ref, tau, side='right') - 1, 0, N_nodes - 2)
+            a  = (tau - tau_ref[k]) / (tau_ref[k + 1] - tau_ref[k])
+            nu = (1 - a) * nu_ref[k] + a * nu_ref[k + 1]
+        else:
+            # controls only the segment's collocation nodes, start node belongs to the previous segment
+            nodes = jax.lax.dynamic_slice(tau_ref, (h * p + 1,), (p,))
+            vals  = jax.lax.dynamic_slice(nu_ref, (h * p + 1, 0), (p, nu_ref.shape[1]))
+            d     = tau - nodes
+            exact = jnp.argmin(jnp.abs(d))
+            w_over_d = bary_weights / (d + 1e-300)
+            interp_val = jnp.sum(w_over_d[:, None] * vals, axis=0) / jnp.sum(w_over_d)
+            nu = jnp.where(jnp.abs(d[exact]) < 1e-14, vals[exact], interp_val)
 
-        w_over_d = bary_weights / (d + 1e-300)
-        interp_val = jnp.sum(w_over_d[:, None] * nu_ref, axis=0) / jnp.sum(w_over_d)
-
-        return jnp.where(is_exact, nu_ref[exact], interp_val)
+        # the transcription holds the dilation constant on each segment's collocation nodes
+        return nu.at[dilation_idx].set(nu_ref[h * p + 1, dilation_idx])
 
     return nu_interp
 
@@ -737,23 +740,23 @@ def compute_legendre(N: int, x: np.ndarray, use_spartan: bool = USE_SPARTAN) -> 
 # ---------------------------------------------------------------------
 # Flipped Legendre-Radau polynomial
 # ---------------------------------------------------------------------
-def flipped_radau_polynomial(N: int, tau: np.ndarray, use_spartan: bool = USE_SPARTAN) -> np.ndarray:
-    """Evaluate the flipped Legendre-Radau polynomial R_n(tau) = P_n(tau) - P_{n-1}(tau)."""
-    tau     = np.asarray(tau, dtype=float)
+# def flipped_radau_polynomial(N: int, tau: np.ndarray, use_spartan: bool = USE_SPARTAN) -> np.ndarray:
+#     """Evaluate the flipped Legendre-Radau polynomial R_n(tau) = P_n(tau) - P_{n-1}(tau)."""
+#     tau     = np.asarray(tau, dtype=float)
 
-    Ln, _   = compute_legendre(N, tau, use_spartan=use_spartan)
-    Lnm1, _ = compute_legendre(N - 1, tau, use_spartan=use_spartan)
+#     Ln, _   = compute_legendre(N, tau, use_spartan=use_spartan)
+#     Lnm1, _ = compute_legendre(N - 1, tau, use_spartan=use_spartan)
 
-    return Ln - Lnm1
+#     return Ln - Lnm1
 
 
-def flipped_radau_polynomial_derivative(N: int, tau: np.ndarray) -> np.ndarray:
-    """Derivative of the flipped Legendre-Radau polynomial."""
-    tau         = np.asarray(tau, dtype=float)
-    _, dLn      = compute_legendre(N, tau, use_spartan=USE_SPARTAN)
-    _, dLnm1    = compute_legendre(N - 1, tau, use_spartan=USE_SPARTAN)
+# def flipped_radau_polynomial_derivative(N: int, tau: np.ndarray) -> np.ndarray:
+#     """Derivative of the flipped Legendre-Radau polynomial."""
+#     tau         = np.asarray(tau, dtype=float)
+#     _, dLn      = compute_legendre(N, tau, use_spartan=USE_SPARTAN)
+#     _, dLnm1    = compute_legendre(N - 1, tau, use_spartan=USE_SPARTAN)
 
-    return dLn - dLnm1
+#     return dLn - dLnm1
 
 
 # ---------------------------------------------------------------------
@@ -876,40 +879,11 @@ def differentiation_matrix(etau: np.ndarray) -> tuple[np.ndarray, np.ndarray, np
 
     return D, D_full, D2
 
-def differentiation_matrix_compare(full_nodes: np.ndarray) -> np.ndarray:
-    """Compute the fLGR differentiation matrix via an alternative barycentric form."""
-    x = np.asarray(full_nodes, dtype=float)
-    m = len(x)
-
-    # Pairwise differences: dX[i,j] = x_i - x_j
-    dX = x[:, None] - x[None, :]
-
-    # Barycentric weights:
-    #   lambda_i = 1 / prod_{j != i} (x_i - x_j)
-    dX_no_diag = dX + np.eye(m)
-    lam = 1.0 / np.prod(dX_no_diag, axis=1)
-
-    # Off-diagonal entries:
-    #   D_ij = lambda_j / (lambda_i * (x_i - x_j)),  i != j
-    D_full = np.outer(1.0 / lam, lam) / dX_no_diag
-
-    # Fix diagonal entries so each row sums to zero
-    np.fill_diagonal(D_full, 0.0)
-    np.fill_diagonal(D_full, -np.sum(D_full, axis=1))
-
-    # fLGR: remove the first row, keep all columns
-    D = D_full[1:, :]
-
-    return D
-
 
 def flipped_radau_differential_operator(N: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Returns (tau, etau, w, D): fLGR nodes, full node set, quadrature weights, and differential operator."""
     tau, etau, w    = flipped_radau_nodes_and_weights(N)
     D, _, _         = differentiation_matrix(etau)
-
-    #D_compare       = differentiation_matrix_compare(etau)
-    #D = D_compare
 
     return tau, etau, w, D
 
@@ -918,36 +892,25 @@ def flipped_radau_differential_operator(N: int) -> tuple[np.ndarray, np.ndarray,
 # hp composite differential operator
 # ---------------------------------------------------------------------
 
-def flipped_radau_hp_operator(N_col: int, H: int):
-    """hp-composite fLGR nodes/weights; returns one local D block (scaled by H) the caller applies per interval."""
+def flipped_radau_hp_operator(N_col: int, H: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """hp-composite fLGR on H segments of equal order; output D is the global (N_col, N_col+1) staircase of local blocks."""
     if N_col % H != 0:
         raise ValueError(f"N_col={N_col} must be divisible by H={H}")
+    if H == 1:
+        return flipped_radau_differential_operator(N_col)
 
     p = N_col // H
-    N_total = N_col + 1
+    _, etau_local, w_local, D_local = flipped_radau_differential_operator(p)
 
-    tau_local, etau_local, w_local, D_local = flipped_radau_differential_operator(p)
+    # segment h spans [-1 + 2h/H, -1 + 2(h+1)/H], consecutive segments share their final-to-initial node
+    etau = np.concatenate([[-1.0]] + [-1.0 + (2.0 * h + etau_local[1:] + 1.0) / H for h in range(H)])
+    w    = np.tile(w_local, H) / H
 
-    etau_global = np.zeros(N_total)
-    tau_global  = np.zeros(N_col)
-    w_global    = np.zeros(N_col)
-
+    D = np.zeros((N_col, N_col + 1))
     for h in range(H):
-        tau_start = -1.0 + 2.0 * h / H
-        delta = 2.0 / H
+        D[h * p:(h + 1) * p, h * p:(h + 1) * p + 1] = H * D_local
 
-        local_to_global = lambda tau_l, ts=tau_start, d=delta: ts + (tau_l + 1.0) * (d / 2.0)
-
-        row_start = h * p
-        col_start = h * p
-
-        etau_global[col_start] = local_to_global(-1.0)
-        for j in range(p):
-            etau_global[col_start + 1 + j] = local_to_global(tau_local[j])
-            tau_global[row_start + j] = local_to_global(tau_local[j])
-            w_global[row_start + j] = w_local[j] * (delta / 2.0)
-
-    return tau_global, etau_global, w_global, H * D_local
+    return etau[1:], etau, w, D
 
 
 # ---------------------------------------------------------------------

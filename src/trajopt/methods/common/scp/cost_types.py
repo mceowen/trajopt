@@ -116,11 +116,14 @@ class scp_convex_running(SCPCost):
     def create_cvxpy_cost(self, scp_subproblem):
         idx_state = scp_subproblem.index_map.indices.z.state
         idx_ctrl  = scp_subproblem.index_map.indices.nu.control
-        for k in range(scp_subproblem.index_map.N.all):
-            if k in self.cost.nodes:
+        N = scp_subproblem.index_map.N.all
+        mesh_w = scp_subproblem.mesh.weights
+        node_w = np.ones(N) if mesh_w is None else np.concatenate(([0.], N * mesh_w))
+        for k in range(N):
+            if k in self.cost.nodes and node_w[k] != 0:
                 x_k = scp_subproblem.cp_params.z_ref[k, idx_state] + scp_subproblem.dz[k, idx_state]
                 u_k = scp_subproblem.cp_params.nu_ref[k, idx_ctrl] + scp_subproblem.dnu[k, idx_ctrl]
-                scp_subproblem.cp_cost += self.cost.w * self.cost.fcn_dim(x_k, u_k, 0, scp_subproblem.params)
+                scp_subproblem.cp_cost += node_w[k] * self.cost.w * self.cost.fcn_dim(x_k, u_k, 0, scp_subproblem.params)
 
 class scp_min_time(SCPCost):
     def create_cvxpy_cost(self, scp_subproblem):

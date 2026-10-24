@@ -141,8 +141,9 @@ class Guess:
                      interpolation='linear', segments=1):
         """Interpolate copied samples; tau defaults to normalized physical time.
 
-        Polynomial segments share endpoints and have equal order. Non-affine
-        time maps require s=dt/dtau. Omitted aux is reconstructed on import.
+        Polynomial interpolation uses one polynomial per segment
+        for t, x and aux. u stays linear and s is constant per segment.
+        Non-affine time maps require s=dt/dtau. Omitted aux is reconstructed on import.
         """
         t = np.asarray(t, dtype=float)
         if t.ndim == 2 and t.shape[1] == 1:
@@ -159,34 +160,44 @@ class Guess:
             raise ValueError("segments must divide the number of sample intervals")
         if interpolation == 'linear' and segments != 1:
             raise ValueError("segments is only used for polynomial interpolation")
-        p = (len(tau)-1) // segments
+        p = (len(tau)-1) // segments # assumes equal order H segments
+        kinds = dict.fromkeys(('t', 'x', 'u', 's', 'aux'), interpolation)
+        if interpolation == 'polynomial':
+            kinds.update(u='linear', s='segment')
         fields = {}
-        for name in ('t', 'x', 'u', 's', 'aux'):
+        for name, kind in kinds.items():
             a = getattr(values, name)
             if a is None:
                 fields[name] = None
-            elif interpolation == 'polynomial':
+            elif kind == 'polynomial':
                 fields[name] = [BarycentricInterpolator(tau[h*p:h*p+p+1], a[h*p:h*p+p+1], axis=0)
                                 for h in range(segments)]
+            elif kind == 'segment': # only for dilation s (each knot's dilation belongs to the segment it closes, so we start from 1)
+                fields[name] = a[1 : : p]
             else:
                 fields[name] = a
 
         def evaluate(q):
             result = {}
+            # store segment index for the current point, and the segment index for the segment it closes (only differ if the point is at the h>h+1 interface)
+            interval = np.clip(np.searchsorted(tau[ : : p], q, side='right')-1, 0, segments-1)
+            closing = np.clip(np.searchsorted(tau[ : : p], q, side='left')-1, 0, segments-1)
             for name, source in fields.items():
                 if source is None:
                     result[name] = None
-                elif interpolation == 'linear':
+                elif kinds[name] == 'linear':
                     if source.ndim == 1:
                         result[name] = np.interp(q, tau, source)
                     elif source.shape[1]:
                         result[name] = np.column_stack([np.interp(q, tau, col) for col in source.T])
                     else:
                         result[name] = np.zeros((len(q), 0))
+                elif kinds[name] == 'segment':
+                    result[name] = source[closing] # s for the query's segment (again, knot's dilation belong to the closed segment)
                 else:
                     a = getattr(values, name)
                     out = np.empty((len(q),) + a.shape[1:])
-                    interval = np.clip(np.searchsorted(tau[::p], q, side='right')-1, 0, segments-1)
+                    # enumerate the built barycentric interpolators, only evaluate the polynomial for the current h segment
                     for h, polynomial in enumerate(source):
                         mask = interval == h
                         out[mask] = polynomial(q[mask])

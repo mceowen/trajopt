@@ -1,0 +1,10 @@
+inherit: ms.yaml
+
+trajectory:
+  num_nodes: 41
+  hp_segments: 10
+method:
+  inherit: trajopt/methods/common/configs/discretize/pseudospectral_p.yaml
+  hyperparams:
+    flags:
+      zoh_dilation: 1

@@ -47,14 +47,19 @@ def analyze_phase(subprob, config):
     discretize = subprob.hyperparams.discretize.get("mode", "ms")
     propagate_from_nodes_flag = config.analysis.get("propagate_from_nodes", False)
 
-    H = int(getattr(subprob.hyperparams.discretize, 'hp_segments', 1))
+    # ps only: controls between collocation nodes are reconstructed with "lagrange" or "foh"
+    # ms always uses foh either way
+    mesh_opts = AttrDict({
+        "discretize":            discretize,
+        "segments":              subprob.mesh.segments,
+        "control_interpolation": config.analysis.get("control_interpolation", "lagrange"),
+        "dilation_idx":          idx.nu.dilation_factor,
+    })
 
     if propagate_from_nodes_flag:
-        node_solver = subprob.fcns.discretize.make_node_propagation_solver(dynamics, params, n_steps=50)
+        node_solver = subprob.fcns.discretize.make_node_propagation_solver(dynamics, params, n_steps=50, **mesh_opts)
     else:
-        traj_solver = subprob.fcns.discretize.make_trajectory_solver(
-            dynamics, params, n_steps=500, discretize=discretize, hp_segments=H,
-        )
+        traj_solver = subprob.fcns.discretize.make_trajectory_solver(dynamics, params, n_steps=500, **mesh_opts)
 
     z_init = subprob.initial_guess.z_dense
     nu_init = subprob.initial_guess.nu_dense
@@ -70,6 +75,7 @@ def analyze_phase(subprob, config):
         if propagate_from_nodes_flag:
             _, z_nl, nu_nl = subprob.fcns.discretize.propagate_from_nodes(
                 z_opt, tau_nodes, nu_opt, dynamics, params, _solver=node_solver,
+                discretize=mesh_opts.discretize, segments=mesh_opts.segments,
             )
         else:
             _, z_nl, nu_nl = subprob.fcns.discretize.propagate_trajectory(
@@ -249,12 +255,11 @@ def run_method_variation(traj):
           type: method_variation
           methods:
             autoscvx-ms: {}
-            autoscvx-ps-h10:
+            autoscvx-ps:
               hyperparams:
                 discretize:
                   mode: ps
                   equal_dt: 0
-                  hp_segments: 10
                 trust_region:
                   line_search: 1
                 penalties:

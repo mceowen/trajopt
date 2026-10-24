@@ -6,7 +6,6 @@ fcns:
     propagate_from_nodes: trajopt/methods/common/discretize.py:propagate_from_nodes
     propagate_trajectory: trajopt/methods/common/discretize.py:propagate_trajectory
     differential_operator: null
-    hp_operator: null
 
     create_time_params: trajopt/methods/common/discretize.py:create_time_params_ms
     update_time_params: trajopt/methods/common/discretize.py:update_time_params_ms
