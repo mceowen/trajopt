@@ -1,0 +1,3 @@
+inherit:
+  - autoscvx-rev1-term.yaml
+  - trajopt/methods/common/configs/discretize/pseudospectral_p.yaml

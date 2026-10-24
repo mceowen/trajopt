@@ -1,5 +1,4 @@
-type: SCP
-inherit: trajopt/methods/dev/scp_phases/configs/second_order/autosqp.yaml
+inherit: trajopt/methods/configs/dev/sqp/autosqp.yaml
 
 hyperparams:
   convergence:
@@ -24,7 +23,7 @@ hyperparams:
 fcns:
   initial_guess:
     default:
-      guess: trajopt/methods/common/initial_guess.py:straight_line_initial_guess
+      guess: trajopt/methods/initial_guess/providers.py:straight_line
 
 solver_opts:
   solver: PIQP

@@ -4,8 +4,6 @@ from pathlib import Path
 import jax
 
 from trajopt.flows import AlgorithmFlow
-import numpy as np
-import matplotlib.pyplot as plt
 
 
 def main():
@@ -14,15 +12,8 @@ def main():
     for name, stage in result.stages.items():
         print(f"{name}: {stage.status}, {stage.iterations} iterations, "
               f"{stage.timings['total_s']:.2f} s — {stage.reason}")
-    return result
+    return 0 if result.converged else 1
 
 
 if __name__ == "__main__":
-    result = main()
-    print("converged.")
-
-    sol = result.stages["p_method"].trajectory["main"]
-    nt = len(sol.native_tau)
-    b = np.ones(nt)
-    t = sol.native_tau
-    plt.scatter(t, b)
+    raise SystemExit(main())

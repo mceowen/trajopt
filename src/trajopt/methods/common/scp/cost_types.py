@@ -36,7 +36,7 @@ class scp_nonconvex_terminal(SCPCost):
             return
         z_opt  = scp_subproblem.current_iter_data.z_opt
         nu_opt = scp_subproblem.current_iter_data.nu_opt
-        cost, dcostdx, dcostdu = compute_nonconvex_terminal_costs(z_opt, nu_opt, scp_subproblem.phase, scp_subproblem)
+        cost, dcostdx, dcostdu = compute_nonconvex_terminal_costs(z_opt, nu_opt, scp_subproblem.problem, scp_subproblem)
         scp_subproblem.cp_params.dcostdx.value = dcostdx.squeeze(axis=1)
         scp_subproblem.cp_params.dcostdu.value = dcostdu.squeeze(axis=1)
         scp_subproblem.cp_params.cost0.value   = cost.squeeze(axis=1)

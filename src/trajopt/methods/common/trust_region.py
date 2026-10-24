@@ -20,7 +20,7 @@ def resolve_tr_step(hyperparams, group: str, key: str) -> float:
 
 
 def resolve_tr_param(self, group: str, key: str) -> float:
-    """Configured step size, rescaled by s_mult (equivalent to the old tr_scale at s_mult = 1/tr_scale)."""
+    """Quadratic weight for the configured step size and current multiplier."""
     return 1.0 / (self.s_mult * resolve_tr_step(self.hyperparams, group, key))
 
 
@@ -78,8 +78,11 @@ def evaluate_step_linearized(self) -> tuple[float, float]:
 # =============================================================================
 
 def create_tr_params_adaptive(self) -> None:
-    """Component params plus a compiled merit. Raises if any constraint ends up without one
-    (parts/sparse buffers, or a penalty scheme with no matching merit.default override)."""
+    """Create component trust region parameters and compile the merit function.
+
+    Raise ``ValueError`` for penalty parts, sparse buffers, or penalties
+    without a matching merit function.
+    """
     for constraint in self.constraints.values():
         p = constraint.penalties
         if p.get('parts') is not None or p.vb_type == 'sparse':
@@ -101,7 +104,7 @@ def create_tr_params_adaptive(self) -> None:
 
 
 def create_cost_trust_region_adaptive(self) -> None:
-    """Same terms as create_cost_trust_region_component, but keeps a cp_tr_cost handle on them."""
+    """Add the component trust region cost and store it in ``cp_tr_cost``."""
     if self.hyperparams.discretize.mode not in ("ms", "ps"):
         return
     idx_z  = self.index_map.indices.z
@@ -127,27 +130,27 @@ def create_cost_trust_region_adaptive(self) -> None:
 # =============================================================================
 
 def tighten_scp_trust_region(subproblems) -> None:
-    """Shrink the trust region on a retry (was tr_scale *= 10, cap 1e6)."""
+    """Shrink the trust region on a retry."""
     for subproblem in subproblems:
         subproblem.s_mult = max(subproblem.s_mult / 10.0, 1.0e-6)
 
 
 def relax_scp_trust_region(subproblems) -> None:
-    """Return the trust region towards its configured size (was tr_scale *= 0.7 toward 1)."""
+    """Return the trust region towards its configured size."""
     for subproblem in subproblems:
         if subproblem.s_mult < 1.0:
             subproblem.s_mult = min(subproblem.s_mult / 0.7, 1.0)
 
 
 def scale_s(subproblems, factor: float) -> None:
-    """Scale s_mult by factor, clamped to hyperparams.trust_region.adaptive.s_mult_{min,max}."""
+    """Multiply ``s_mult`` by ``factor`` and apply the configured adaptive limits."""
     for subproblem in subproblems:
         a = subproblem.hyperparams.trust_region.adaptive
         subproblem.s_mult = float(np.clip(subproblem.s_mult * factor, float(a.s_mult_min), float(a.s_mult_max)))
 
 
 def predicted_and_actual_decrease(subproblems) -> tuple[float, float]:
-    """ΔJ (actual decrease) and ΔL (predicted decrease), summed over phases."""
+    """Return actual and predicted merit decreases, summed over segments."""
     subproblems = list(subproblems)
     dJ = dL = 0.0
     for sp in subproblems:
@@ -157,17 +160,6 @@ def predicted_and_actual_decrease(subproblems) -> tuple[float, float]:
         dJ += J0 - J1
         dL += J0 - L1
     return dJ, dL
-
-
-def select_step_size(subproblems) -> float:
-    """Choose a shared step size using the first phase's trust-region settings."""
-    subproblems = list(subproblems)
-    params = subproblems[0].hyperparams.trust_region
-    if not getattr(params, 'line_search', True):
-        return 1.0
-    return line_search(
-        subproblems, alpha_min=float(getattr(params, 'alpha_min_ls', 1e-7)),
-    )
 
 
 def line_search(subproblems, alpha_min=1e-7, c1=1e-4, beta=0.5, max_iter=20):
@@ -206,16 +198,6 @@ def step_is_usable(subproblems, max_step: float = 1e6) -> bool:
     return True
 
 
-def update_scp_trust_region(subproblems) -> bool:
-    # tighten and ask for a retry if the step is unusable, else relax back towards target
-    subproblems = list(subproblems)
-    if not step_is_usable(subproblems):
-        tighten_scp_trust_region(subproblems)
-        return False
-    relax_scp_trust_region(subproblems)
-    return True
-
-
 # =============================================================================
 # SECOND ORDER -- scalar trust region (one weight each for z/nu, optionally Hessian-weighted), re-
 # evaluating the true nonlinear cost/penalty via a merit-function line search.
@@ -239,8 +221,10 @@ def update_tr_params_scalar(self) -> None:
 
 
 def reset_scalar_trust_region_state(self) -> None:
-    """Reset LM damping and each constraint's accumulated Lagrangian dual on a fresh initial
-    guess. No-op if create_tr_params_scalar hasn't run yet."""
+    """Reset LM damping and accumulated Lagrangian duals for a new initial guess.
+
+    If ``create_tr_params_scalar`` has not run, leave the state unchanged.
+    """
     if not hasattr(self, 'lm_mu'):
         return
     self.lm_mu = float(getattr(self.hyperparams.trust_region, 'lm_mu_init', 1e-8)) if self.lm_adapt else 0.0
@@ -277,7 +261,7 @@ def update_lagrangian_hessian(self) -> None:
     n_z  = self.index_map.n.z
     n_nu = self.index_map.n.nu
 
-    iteration = len(self.iter_data_list)
+    iteration = int(self.current_iter_data.iter_num) + 1
 
     if iteration == 0:
         H = np.tile(np.eye(n_z + n_nu), (N, 1, 1))
@@ -366,9 +350,7 @@ def merit_grad_at_zero(self):
 # the autotuned-W/dual penalty cost, _proxlin matches the static-w/l1/no-dual cost.
 
 def _has_quad_weight(self) -> bool:
-    """Whether this constraint has a non-empty quadratic weight to build a merit term from.
-    Proxlin-style constraints have none at all (a flat w, not an autotuned W), and some
-    constraint types simply aren't present for a given problem (shape (0, ...))."""
+    """Return whether the constraint has a nonempty quadratic weight array."""
     return 'W' in self.penalties and self.penalties.W.size > 0
 
 
@@ -424,15 +406,20 @@ def merit_value_and_grad_alpha_std(self, alpha, z_ref, dz, nu_ref, dnu, params):
 
 
 def _has_static_weight(self) -> bool:
-    """Whether this constraint has a static prox-linear weight. Checked off the config, not
-    the cvxpy Parameter, since that param isn't created yet at this point."""
+    """Return whether the configuration defines a static prox-linear weight.
+
+    The CVXPY parameter does not yet exist when this check runs.
+    """
     cfg = self.penalties.cfg
     return cfg is not None and hasattr(cfg, 'w')
 
 
 def compile_merit_proxlin(self, violation):
-    """Static weight w plus whatever dual autotune_dual_b has accumulated (zero unless
-    dual.autotune is on) -- matches main's dual*viol + w*|viol| for the fixed-weight case."""
+    """Compile the merit function with static weight ``w`` and accumulated duals.
+
+    The penalty is ``sum(dual * viol + w * abs(viol))``. The dual term remains
+    zero unless ``dual.autotune`` is set.
+    """
     if not _has_static_weight(self):
         return
     w = float(self.penalties.cfg.w)
@@ -501,7 +488,7 @@ _EQUALITY_TYPES   = ('nonconvex_equality', 'initial_nonconvex_equality', 'final_
 
 
 def merit_violation_dynamics(self, scp_phase):
-    """The dynamics residual: different per discretization mode (ps vs ms)."""
+    """Build the dynamics residual function for pseudospectral or multiple shooting discretization."""
     if scp_phase.hyperparams.discretize.mode == "ps":
         D_jnp = jnp.asarray(self.ps_D)
         dyn_batched = self.dyn_fcn_batched
@@ -517,7 +504,7 @@ def merit_violation_dynamics(self, scp_phase):
 
 
 def merit_violation_final(self, scp_phase):
-    """final_state/final_control's residual: identical formula, differing only in z vs nu."""
+    """Build the final state or final control residual function."""
     idx   = jnp.asarray(self.constraint.idx)
     val   = jnp.asarray(self.constraint.value)
     is_nu = self.type == 'final_control'
@@ -528,8 +515,11 @@ def merit_violation_final(self, scp_phase):
 
 
 def merit_violation_nonconvex(self, scp_phase):
-    """nonconvex_inequality/nonconvex_equality's residual: identical formula, differing only in
-    whether the raw constraint function gets clamped to its positive part."""
+    """Build the nonconvex constraint residual function.
+
+    For inequalities, replace negative residuals with zero. For equalities,
+    retain the signed residuals.
+    """
     fcn_b = self.fcn_batched
     nodes = jnp.asarray(self.nodes)
     dim   = self.constraint.dimension
@@ -580,11 +570,11 @@ def compile_merit_cost(self, scp_phase):
 
 
 def _compile_cvxpy_merit_cost(self, scp_phase, fn):
-    """Evaluate CP-aware cost callbacks and their directional subgradients.
+    """Build CVXPY cost evaluators and directional subgradient evaluators.
 
-    These variables are private to merit evaluation; backend trial/reference
-    variables are never assigned or read here. Convex callbacks can use CVXPY
-    atoms that cannot be traced by JAX.
+    Merit evaluation uses separate CVXPY variables from the solver's trial and
+    reference variables. Cost callbacks can use CVXPY atoms that JAX cannot
+    trace.
     """
     z = cp.Variable(scp_phase.initial_guess.z.shape)
     nu = cp.Variable(scp_phase.initial_guess.nu.shape)
@@ -628,7 +618,7 @@ def merit_cost_value_and_grad_alpha(self, alpha, z_ref, dz, nu_ref, dnu, params)
 # SCP_COST_TYPES
 
 def merit_cost_scp_convex(self, scp_phase):
-    """Match the normalized nodal callbacks and weights used by the CP recipe."""
+    """Build a convex cost evaluator with the recipe's normalized inputs and node weights."""
     idx = scp_phase.index_map.indices
     cost = self.cost
     nodes = np.atleast_1d(cost.nodes)
@@ -671,7 +661,7 @@ def accumulate_hessian_nonconvex_terminal_cost(self, scp_phase, H, first_termina
     nu_opt = scp_phase.current_iter_data.nu_opt
     n_z    = scp_phase.index_map.n.z
 
-    H_cost_z, H_cost_nu, H_cost_znu = compute_nonconvex_terminal_cost_hessians(z_opt, nu_opt, scp_phase.phase, scp_phase)
+    H_cost_z, H_cost_nu, H_cost_znu = compute_nonconvex_terminal_cost_hessians(z_opt, nu_opt, scp_phase.problem, scp_phase)
     H[:, :n_z, :n_z] += H_cost_z
     H[:, n_z:, n_z:] += H_cost_nu
     H[:, :n_z, n_z:] += H_cost_znu
@@ -722,7 +712,7 @@ def compute_nonconvex_terminal_cost_hessians(z, nu, phase, scp_phase):
 
 
 def merit_cost_scp_nonconvex_running(self, scp_phase):
-    """Match the objective on the augmented trajectory; dynamics integrate the cost."""
+    """Build a running cost evaluator using the final augmented cost state."""
     indices = scp_phase.index_map.indices.z.running_cost
     gamma = self.cost.gamma_idx
     if gamma is None or not len(indices):
@@ -752,7 +742,7 @@ def merit_cost_scp_nonconvex_minimax(self, scp_phase):
 
 
 def merit_cost_scp_min_time(self, scp_phase):
-    """Use the same normalized time coordinates as the configured convex recipe."""
+    """Build a minimum time cost evaluator using the recipe's normalized time coordinates."""
     if not scp_phase.free_final_time:
         return lambda z, nu, params: jnp.asarray(0.)
     from trajopt.methods.common.scp.cost_types import min_time_all_nodes, min_time_final_node
@@ -770,7 +760,7 @@ def merit_cost_scp_min_time(self, scp_phase):
 
 
 def merit_cost_scp_final(self, scp_phase):
-    """final_state/final_control's cost: identical formula, differing only in z vs nu."""
+    """Build the weighted final state or final control cost evaluator."""
     w     = self.cost.w
     idx   = jnp.array(self.cost.idx)
     is_nu = self.type == 'final_control'

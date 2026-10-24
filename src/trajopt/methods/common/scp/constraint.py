@@ -26,8 +26,6 @@ class SCPConstraint():
 
     def compile(self, scp_subproblem): pass
 
-    def build_cross_phase(self, scp_subproblems): pass
-
     def create_cvxpy_parameters(self, scp_subproblem): pass
     def create_cvxpy_variables(self, scp_subproblem): pass
     def create_cvxpy_constraints(self, scp_subproblem): pass

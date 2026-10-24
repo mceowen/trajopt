@@ -3,7 +3,7 @@ phases:
   # guided entry: guidance initiation to parachute deployment
   entry:
     num_nodes: 199
-    inherit: trajopt/formulations/dev/phases/examples/experiments/msrl/msrl_common_phase.yaml
+    inherit: trajopt/missions/configs/msrl_common_phase.yaml
 
     fcns:
       nonlinear_aero: trajopt/missions/msrl.py:nonlinear_aero
@@ -144,7 +144,7 @@ phases:
 
   descent:
     num_nodes: 40
-    inherit: trajopt/formulations/dev/phases/examples/experiments/msrl/msrl_common_phase.yaml
+    inherit: trajopt/missions/configs/msrl_common_phase.yaml
 
     fcns:
       nonlinear_aero: trajopt/missions/msrl.py:parachute_aero
@@ -183,7 +183,7 @@ phases:
   # powered descent: backshell separation to the terminal descent handoff
   pdg:
     num_nodes: 233
-    inherit: trajopt/formulations/dev/phases/examples/experiments/msrl/msrl_common_phase.yaml
+    inherit: trajopt/missions/configs/msrl_common_phase.yaml
 
     fcns:
       nonlinear_aero: trajopt/missions/msrl.py:lander_aero

@@ -1,4 +1,3 @@
-import importlib
 import importlib.resources
 import importlib.util
 import re
@@ -28,39 +27,6 @@ def load_trajopt_config(config_path: str) -> AttrDict:
         return _eval_values(config, {"np": np}, phase_params={})
     except Exception as e:
         raise type(e)(f"error evaluating expressions in '{config_path}': {e}") from None
-
-# =============================================================================
-# METHOD CLASS RESOLUTION
-# =============================================================================
-
-DEFAULT_METHOD_CLASS      = "dev.scp_phases"
-DEFAULT_FORMULATION_CLASS = "dev.phases"
-
-
-def resolve_scp_method_class(method_config: AttrDict):
-    """The ``Method`` class exported by the ``trajopt.methods.<method_class>`` package."""
-    method_class = method_config.get("method_class", DEFAULT_METHOD_CLASS)
-    return _import_package_attr("trajopt.methods", method_class, "Method")
-
-
-def resolve_formulation_trajectory_class(method_config: AttrDict):
-    """The ``Trajectory`` class exported by the ``trajopt.formulations.<formulation_class>`` package."""
-    formulation_class = method_config.get("formulation_class", DEFAULT_FORMULATION_CLASS)
-    return _import_package_attr("trajopt.formulations", formulation_class, "Trajectory")
-
-
-def _import_package_attr(root: str, name: str, attr: str):
-    target = f"{root}.{name}"
-    try:
-        package = importlib.import_module(target)
-    except ModuleNotFoundError as e:
-        # only the package itself being absent means a bad name; anything else is a real import error
-        if e.name is None or not (target == e.name or target.startswith(e.name + ".")):
-            raise
-        raise ValueError(f"unknown class '{name}': no package {target}") from None
-    if not hasattr(package, attr):
-        raise ValueError(f"package {root}.{name} does not export '{attr}' from its __init__.py")
-    return getattr(package, attr)
 
 # =============================================================================
 # YAML LOADING

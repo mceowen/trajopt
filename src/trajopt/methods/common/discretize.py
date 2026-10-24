@@ -397,24 +397,6 @@ def dynamics_update_cvxpy_parameters_second_order_ms(constraint, subproblem):
 
 
 # ---------------------------------------------------------------------------
-# control interpolation
-# ---------------------------------------------------------------------------
-
-def interpolate_control_foh(tau_nodes, nu_nodes):
-    """Returns a JAX nu(z, tau) interpolator, linear between nodes."""
-    tau_ref = jnp.asarray(tau_nodes)
-    nu_ref  = jnp.asarray(nu_nodes)
-    N_nodes = tau_ref.shape[0]
-
-    def nu_interp(z, tau):
-        k = jnp.clip(jnp.searchsorted(tau_ref, tau, side='right') - 1, 0, N_nodes - 2)
-        a = (tau - tau_ref[k]) / (tau_ref[k + 1] - tau_ref[k])
-        return (1 - a) * nu_ref[k] + a * nu_ref[k + 1]
-
-    return nu_interp
-
-
-# ---------------------------------------------------------------------------
 # RK4 propagation over one node interval, FOH-interpolating control in between
 # ---------------------------------------------------------------------------
 
@@ -929,31 +911,3 @@ def flipped_radau_hp_operator(N_col: int, H: int) -> tuple[np.ndarray, np.ndarra
         D[h * p:(h + 1) * p, h * p:(h + 1) * p + 1] = H * D_local
 
     return etau[1:], etau, w, D
-
-
-# ---------------------------------------------------------------------
-# Lagrange interpolation (Eq. 9, CEAS2017)
-# ---------------------------------------------------------------------
-
-def lagrange_basis(eval_points: np.ndarray, nodes: np.ndarray) -> np.ndarray:
-    """Compute Lagrange basis polynomials P_i(t) evaluated at eval_points."""
-    t = np.asarray(eval_points, dtype=float)
-    ti = np.asarray(nodes, dtype=float)
-
-    m_eval = len(t)
-    n_nodes = len(ti)
-
-    P = np.ones((m_eval, n_nodes))
-
-    for i in range(n_nodes):
-        for k in range(n_nodes):
-            if k != i:
-                P[:, i] *= (t - ti[k]) / (ti[i] - ti[k])
-
-    return P
-
-
-def lagrange_interpolate(eval_points: np.ndarray, nodes: np.ndarray, values: np.ndarray) -> np.ndarray:
-    """Evaluate interpolating polynomial."""
-    P = lagrange_basis(eval_points, nodes)
-    return P @ values

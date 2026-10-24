@@ -19,7 +19,6 @@ trajectory:
       w: -90.0  # Preserve the objective in degrees after scaling latitude.
 
   guess:
-    type: propagation
     t_start: 0.0
     t_stop: 1000.0
     # Generic constant controls; no optimized reference trajectory is needed.
@@ -29,7 +28,7 @@ trajectory:
 
 # solution method
 method:
-  inherit: trajopt/methods/stable/scp/configs/first_order/autoscvx-term.yaml
+  inherit: trajopt/methods/configs/stable/scp/autoscvx-term.yaml
 
   hyperparams:
     convergence:

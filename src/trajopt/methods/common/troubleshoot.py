@@ -23,7 +23,7 @@ def adjust_on_step(subproblems) -> tuple[bool, str | None]:
 
 
 def adapt_trust_region_on_step(subproblems) -> tuple[bool, str | None]:
-    """Ratio test between the nonlinear and linearized decrease."""
+    """Accept or reject the step using the actual to predicted decrease ratio."""
     subproblems = list(subproblems)
     cfg = subproblems[0].hyperparams.trust_region.adaptive
     if not trust_region.step_is_usable(subproblems):

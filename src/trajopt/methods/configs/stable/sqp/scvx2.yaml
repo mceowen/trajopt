@@ -1,0 +1,28 @@
+inherit:
+  - trajopt/methods/configs/stable/scp/scvx.yaml
+  - trajopt/methods/common/configs/trust_region/scalar.yaml
+  - trajopt/methods/common/configs/trust_region/second_order.yaml
+  - trajopt/methods/common/configs/convexify/second_order.yaml
+  - trajopt/methods/common/configs/discretize/second_order_ms.yaml
+  - trajopt/methods/common/configs/troubleshoot/adjust_lm.yaml
+
+hyperparams:
+  discretize:
+    nsub: 3
+  trust_region:
+    lm_adapt:     0
+    min_eig_psd:  1.0e-6   # eigenvalue floor for the trust-region Hessian square root
+    line_search:  1
+    alpha_min_ls: 1.0e-7   # smallest line-search step
+    tr_step:
+      z: 1.0
+      nu: 1.0
+
+# scalar.yaml (below, needed for the second-order scheme) resets merit to _std; override back.
+fcns:
+  trust_region:
+    merit:
+      default:
+        compile: trajopt/methods/common/trust_region.py:compile_merit_proxlin
+        eval:    trajopt/methods/common/trust_region.py:evaluate_merit_proxlin
+        grad:    trajopt/methods/common/trust_region.py:merit_value_and_grad_alpha_proxlin

@@ -1,5 +1,7 @@
+import copy
+
 from trajopt.formulations.common.index_map import IndexMap
-from trajopt.nondim import Nondim
+from trajopt.formulations.common.nondim import Nondim
 import trajopt.formulations.common.constraint_types as constraint_type_module
 import trajopt.formulations.common.cost_types as cost_type_module
 import trajopt.outputs.output_types as output_type_module
@@ -7,20 +9,16 @@ from trajopt.utils.tools import AttrDict, resolve_function_from_string
 
 
 class Problem:
-    """One single-phase OCP building block: a set of constraints/costs over one node grid.
-
-    This is what a plain trajectory *is* (dev.simple.trajectory.Trajectory subclasses it
-    directly), and what each phase of a multi-phase trajectory *is* (dev.phases.phase.Phase
-    subclasses it, one instance per phase). A wrapper that chains several of these together
-    -- dev.phases.trajectory.Trajectory today, a future dev.agents wrapper over multiple
-    vehicles -- holds a collection of Problems rather than reimplementing this setup.
-    """
+    """A physical trajectory segment with its variables, constraints, costs, and outputs."""
 
     #: console label used when announcing this problem's configuration; subclasses override
     _KIND = "problem"
 
     def __init__(self, problem_config: AttrDict, name: str | None = None) -> None:
 
+        # Preserve resolved inputs before construction annotates physical configs.
+        # Public ProblemSpec snapshots these values without retaining live objects.
+        self.config = copy.deepcopy(problem_config)
         self.name      = name if name is not None else problem_config.get("name", "main")
         self.num_nodes = problem_config.num_nodes
         # default number of hp segments to 1

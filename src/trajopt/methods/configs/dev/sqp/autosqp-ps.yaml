@@ -1,0 +1,3 @@
+inherit:
+  - autosqp.yaml
+  - trajopt/methods/common/configs/discretize/second_order_p.yaml

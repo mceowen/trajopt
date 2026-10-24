@@ -1,4 +1,4 @@
-"""Sequential solves connected by the existing initial-guess interface."""
+"""Sequential solves connected by owned physical trajectories."""
 import copy
 from collections.abc import Mapping
 from pathlib import Path
@@ -7,8 +7,12 @@ from time import perf_counter
 import numpy as np
 
 from trajopt.flows.results import FlowResult, StageResult
-from trajopt.flows.transfer import phase_layouts, transfer_guesses
+from trajopt.flows.transfer import transfer_guesses
+from trajopt.methods.trajectory_conversion import segment_layout
+from trajopt.methods.scp import SCPDriver
+from trajopt.formulations.specs import normalize
 from trajopt.utils import config_loader
+from trajopt.outputs.results import SolveResult
 
 
 class AlgorithmFlow:
@@ -62,6 +66,8 @@ class AlgorithmFlow:
         for spec, path, resolved in self._stages:
             stage = self._solve_stage(spec, path, resolved, result.stages, verbose)
             result.stages[stage.name] = stage
+            if stage.status != 'failed' and stage.output is not None and stage.output.usable:
+                result.selected_stage = stage.name
             permitted = stage.converged or (
                 stage.status == 'not_converged' and spec.get('allow_nonconverged', False))
             if not permitted:
@@ -79,12 +85,12 @@ class AlgorithmFlow:
                             seed_from=None if seed is None else seed['from'])
         stage.timings = dict(preparation_s=0., transfer_s=0., solve_s=0., export_s=0.)
         started = perf_counter()
+        method = None
         try:
             before = perf_counter()
-            trajectory_class = config_loader.resolve_formulation_trajectory_class(config.method)
-            trajectory = trajectory_class(config.trajectory)
-            stage.layouts = phase_layouts(trajectory, config.trajectory)
-            method_class = config_loader.resolve_scp_method_class(config.method)
+            problem, method_plan = normalize(config)
+            stage.layouts = {name: segment_layout(physical)
+                             for name, physical in problem.build_segments().items()}
             stage.timings['preparation_s'] = perf_counter() - before
 
             before = perf_counter()
@@ -94,36 +100,37 @@ class AlgorithmFlow:
             stage.timings['transfer_s'] = perf_counter() - before
 
             before = perf_counter()
-            method = method_class(config.method, trajectory,
-                                  **({} if guess is None else {'initial_guess': guess}))
+            method = SCPDriver(problem=problem, method=method_plan, initial_guess=guess)
             stage.timings['preparation_s'] += perf_counter() - before
             before = perf_counter()
             try:
-                method.solve(verbose=verbose)
+                output = method.solve(verbose=verbose)
             finally:
                 stage.timings['solve_s'] = perf_counter() - before
-            stage.solver_status = method.cp_subproblem.status
-            subproblems = method._guess_subproblems()
-            stage.iterations = max(p.current_iter_data.iter_num for p in subproblems.values())
-
-            before = perf_counter()
-            stage.trajectory = method.export_guess(include_aux=False)
+            if not isinstance(output, SolveResult):
+                raise TypeError('A solve stage must return SolveResult')
+            self._record_output(stage, output)
             for name, guess in stage.trajectory.items():
-                samples = guess.sample(subproblems[name].mesh.tau)
+                samples = guess.sample(guess.native_tau)
                 if (np.any(np.diff(samples.t) <= 0) or
                         (samples.s is not None and np.any(samples.s <= 0))):
                     raise ValueError(f"Phase '{name}' has an unusable time map")
-            stage.timings['export_s'] = perf_counter() - before
-
-            if method._converged:
-                stage.status = 'converged'
-                stage.reason = 'Convergence criteria satisfied'
-            elif stage.iterations > 0 and stage.solver_status in {'optimal', 'optimal_inaccurate'}:
-                stage.status = 'not_converged'
-                stage.reason = 'Solve stopped before convergence; an accepted trajectory is available'
-            else:
-                stage.reason = f'Solve failed: {stage.solver_status}; accepted iterations: {stage.iterations}'
+            stage.execution_status = 'completed'
         except Exception as exc:
+            output = getattr(method, 'result', None)
+            if isinstance(output, SolveResult):
+                self._record_output(stage, output)
+            stage.status = 'failed'
             stage.reason = f'{type(exc).__name__}: {exc}'
         stage.timings['total_s'] = perf_counter() - started
         return stage
+
+    @staticmethod
+    def _record_output(stage, output):
+        stage.output = output
+        stage.status = output.status
+        stage.reason = output.reason
+        stage.solver_status = output.solver_status
+        stage.iterations = output.iterations
+        stage.trajectory = {} if output.trajectory is None else output.trajectory
+        stage.layouts = {name: data.layout for name, data in stage.trajectory.items()}

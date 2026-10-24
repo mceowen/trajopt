@@ -17,12 +17,12 @@ def _param_name(name, suffix=""):
 
 
 def _is_split(vb_type):
-    """"sparse" is a split buffer (vb_p/vb_m) that also gets summed into a per-node aggregate."""
+    """Return whether the buffer uses separate positive and negative parts."""
     return vb_type in ("split", "sparse")
 
 
 def _suffixes(penalty):
-    """Which vb field suffixes this penalty has: ("_p", "_m") if split/sparse, else just ("",)."""
+    """Return ``('_p', '_m')`` for split or sparse buffers, or ``('',)`` otherwise."""
     return ("_p", "_m") if _is_split(penalty.vb_type) else ("",)
 
 
@@ -59,6 +59,7 @@ def reset_penalty_values(p) -> None:
     if parts is not None:
         for part in parts.values():
             reset_penalty_values(part)
+        p.vb = np.zeros(p.shape)
         return
     for name in ['vb'] + p.names:
         p[name] = np.zeros(p.shape)
@@ -66,6 +67,41 @@ def reset_penalty_values(p) -> None:
             p[f'{name}_p'] = np.zeros(p.shape)
             p[f'{name}_m'] = np.zeros(p.shape)
     init_penalty_values(p)
+    if p.get('v_penalties') is not None:
+        reset_penalty_values(p.v_penalties)
+
+
+def capture_penalty_state(p):
+    """Copy numerical state, including nested penalty parts and sparse aggregates."""
+    state = {key: value.copy() for key, value in p.items() if isinstance(value, np.ndarray)}
+    if p.get('parts') is not None:
+        state['parts'] = {name: capture_penalty_state(part) for name, part in p.parts.items()}
+    if p.get('v_penalties') is not None:
+        state['v_penalties'] = capture_penalty_state(p.v_penalties)
+    return state
+
+
+def install_penalty_state(p, state):
+    """Restore numerical values without replacing CVXPY objects or configuration."""
+    for key, value in state.items():
+        if key == 'parts':
+            for name, part in value.items():
+                install_penalty_state(p.parts[name], part)
+        elif key == 'v_penalties':
+            install_penalty_state(p.v_penalties, value)
+        else:
+            p[key] = np.array(value, copy=True)
+
+
+def penalty_descriptor(p):
+    """Copy the metadata needed to interpret penalty buffer histories."""
+    data = dict(eps=np.array(p.eps, copy=True), vb_type=p.vb_type)
+    if p.get('parts') is not None:
+        data['parts'] = {name: penalty_descriptor(part) for name, part in p.parts.items()}
+        data['part_indices'] = {name: np.array(idx, copy=True) for name, idx in p.part_indices.items()}
+    if p.get('v_penalties') is not None:
+        data['v_penalties'] = penalty_descriptor(p.v_penalties)
+    return data
 
 
 def init_penalty_values(p) -> None:
@@ -103,14 +139,18 @@ def _resolve_part_indices(index_map, indices_map, n_cols):
 
 
 def alloc_penalty_parts(scp_subproblem, shape, indices_map, norm, cfg, nonnegative_dual, *, eps) -> AttrDict:
-    """Splits one constraint's buffer into named parts by z-component indices, each its own
-    plain penalty dict with its own vb_type. vb_var recombines them column-wise."""
+    """Split a constraint buffer into named parts by component indices in ``z``.
+
+    Each part has a penalty dictionary and a ``vb_type``. The combined
+    ``vb_var`` uses the original column order.
+    """
     N, n_cols = shape
     part_indices, vb_type_by_part = _resolve_part_indices(scp_subproblem.index_map, indices_map, n_cols)
 
     gp = AttrDict()
     gp.shape, gp.nonnegative_dual = shape, nonnegative_dual
     gp.vb_type = "parts"
+    gp.vb = np.zeros(shape)
     gp.vb_var = None
     gp.vb_p_var = None
     gp.parts = AttrDict()
@@ -126,7 +166,7 @@ def alloc_penalty_parts(scp_subproblem, shape, indices_map, norm, cfg, nonnegati
 
 
 def _place_columns(parts, part_indices, shape):
-    """Recombine disjoint per-part column blocks back into one (N, n_cols) expression."""
+    """Place each part's columns in a combined ``(N, n_cols)`` expression."""
     N, n_cols = shape
     result = cp.Constant(np.zeros((N, n_cols)))
     for name, idx in part_indices.items():
@@ -173,7 +213,7 @@ def l2_norm(W_sqrt_param, vb_var):
 
 
 def linear_term(param, vb_var):
-    """Dual/Lagrange-multiplier term: param * vb, no abs/square."""
+    """Return the linear penalty term ``sum(param * vb_var)``."""
     return cp.sum(cp.multiply(param, vb_var))
 
 
@@ -194,12 +234,12 @@ norm_jax = {"l1": l1_norm_jax, "l2": l2_norm_jax}
 
 
 def l1_reg_jax(w, traj):
-    """Flat scalar weight, no dual -- for plain SCP cost regularization, not constraint penalties."""
+    """Return the regularization cost ``w * sum(abs(traj))``."""
     return w * jnp.sum(jnp.abs(traj))
 
 
 def l2_reg_jax(w, traj):
-    """Same as l1_reg_jax but l2, and no 0.5 factor."""
+    """Return the regularization cost ``w * sum(traj ** 2)``."""
     return w * jnp.sum(traj ** 2)
 
 
@@ -268,7 +308,7 @@ def penalty_cost_value(penalty) -> float:
 # =============================================================================
 
 def autotune_quad(penalty) -> None:
-    """Autotune the quadratic weight (hyperparams.penalties.<type>.W), if W.autotune is set."""
+    """If ``W.autotune`` is set, update the quadratic penalty weight."""
     cfg = penalty.cfg
     if not (cfg and cfg.W.autotune):
         return
@@ -282,8 +322,11 @@ def autotune_quad(penalty) -> None:
 
 
 def autotune_dual(penalty) -> None:
-    """Autotune the dual weight, if dual.autotune is set. tr_step is a fixed step size, or
-    'al' to step by the current quadratic weight instead."""
+    """If ``dual.autotune`` is set, update the dual weight.
+
+    ``tr_step`` sets a fixed step size. If ``tr_step`` is ``'al'``, use the
+    current quadratic weight as the step size.
+    """
     cfg = penalty.cfg
     if not (cfg and cfg.dual.autotune):
         return
@@ -301,12 +344,12 @@ def autotune_std(constraint, scp_subproblem) -> None:
 
 
 def autotune_quad_only(constraint, scp_subproblem) -> None:
-    """Just the quadratic weight; dual stays zeroed out."""
+    """Update the quadratic weight without changing the dual weight."""
     autotune_quad(constraint.penalties)
 
 
 def autotune_dual_only(constraint, scp_subproblem) -> None:
-    """Just the dual; quadratic weight stays zeroed out."""
+    """Update the dual weight without changing the quadratic weight."""
     autotune_dual(constraint.penalties)
 
 
@@ -361,7 +404,7 @@ def update_params_std(constraint, scp_subproblem) -> None:
 # =============================================================================
 
 def _parts_or_self(constraint):
-    """The named parts to act on, or just the constraint's own penalty if it isn't split."""
+    """Return the named penalty parts, or the complete penalty as a single item."""
     parts = constraint.penalties.get('parts')
     return parts.values() if parts is not None else [constraint.penalties]
 
@@ -385,7 +428,10 @@ def penalty_cost_sparse(constraint, scp_subproblem) -> None:
 
 
 def create_params_sparse(constraint, scp_subproblem) -> None:
-    """v_plus/v_minus's are created alongside it later, in constraints_sparse."""
+    """Create penalty parameters for each buffer part.
+
+    ``constraints_sparse`` creates the aggregate buffers and their parameters.
+    """
     if constraint.shape is None:
         return
     parts = constraint.penalties.get('parts')
@@ -405,8 +451,10 @@ def update_params_sparse(constraint, scp_subproblem) -> None:
 
 
 def constraints_sparse(constraint, scp_subproblem) -> None:
-    """Sums each sparse part's split buffer into one scalar per node (v_plus/v_minus),
-    penalized by its own W/dual."""
+    """Sum each sparse part's positive and negative buffers across columns.
+
+    Each sum has one value per node and its own quadratic and dual weights.
+    """
     parts = constraint.penalties.get('parts')
     if parts is not None:
         for name, p in parts.items():
@@ -437,8 +485,10 @@ def _create_sparse_aggregate(p, scp_subproblem, cname) -> None:
 
 
 def constraints_sparse_scalar(constraint, scp_subproblem) -> None:
-    """Like constraints_sparse, but one scalar v_plus/v_minus for the whole buffer, summed
-    across time too, instead of one pair per node."""
+    """Sum each sparse part's positive and negative buffers across columns and nodes.
+
+    Each part has one pair of scalar sums with separate penalty weights.
+    """
     parts = constraint.penalties.get('parts')
     if parts is not None:
         for name, p in parts.items():
@@ -496,8 +546,11 @@ def update_params_proxlin(constraint, scp_subproblem) -> None:
 # =============================================================================
 
 def _rho_b(penalty, exp, iter_num, settled) -> float:
-    """Freeze-schedule weight for the experimental W update: ramps from 1 down to 0 over
-    exp.freeze_iters, falling back to exp.rho_stall once frozen but still infeasible and settled."""
+    """Return the scheduled weight for the experimental quadratic update.
+
+    The weight decreases from one to zero over ``exp.freeze_iters`` iterations.
+    After that, use ``exp.rho_stall`` if the iterate is settled but infeasible.
+    """
     rho = max(0.0, 1.0 - iter_num / exp.freeze_iters)
     is_feasible = bool(np.all(np.abs(penalty.vb) <= penalty.eps))
     if rho == 0.0 and settled and not is_feasible:
@@ -506,15 +559,19 @@ def _rho_b(penalty, exp, iter_num, settled) -> float:
 
 
 def _autotune_W_b_split(W, vb, eps, rho, exp):
-    """Split-buffer (vb_p/vb_m) experimental W update: blend towards the ratio target by rho,
-    clipped to exp.split.clip."""
+    """Move the split buffer's weight toward its ratio target by ``rho``.
+
+    Limit the result to ``exp.split.clip``.
+    """
     Wh = W * vb / (exp.split.eps_scale * eps)
     return np.clip(W + rho * (Wh - W), exp.split.clip[0], exp.split.clip[1])
 
 
 def _autotune_W_b_standard(W, vb, eps, rho, exp):
-    """Standard-buffer experimental W update: damp the ratio-based exponent by rho, clipped to
-    exp.standard.clip."""
+    """Scale the standard buffer's weight by the residual ratio raised to a damped exponent.
+
+    ``rho`` scales the exponent. Limit the result to ``exp.standard.clip``.
+    """
     damp = exp.standard.damp_scale * rho
     ratio = np.abs(vb) / (exp.standard.eps_scale * eps)
     Wh = W * np.power(ratio, damp)
@@ -522,8 +579,10 @@ def _autotune_W_b_standard(W, vb, eps, rho, exp):
 
 
 def autotune_W_b(penalty, iter_num, settled=False) -> None:
-    """Autotune the quadratic weight via the experimental split/standard update, if W.autotune
-    is set. Checks hasattr since this can be called with a cfg that has no W (prox-linear)."""
+    """If ``W.autotune`` is set, apply the experimental quadratic weight update.
+
+    Select the update for the buffer type. Skip configurations without ``W``.
+    """
     cfg = penalty.cfg
     if not (cfg and hasattr(cfg, 'W') and cfg.W.autotune):
         return
@@ -537,8 +596,11 @@ def autotune_W_b(penalty, iter_num, settled=False) -> None:
 
 
 def autotune_dual_b(penalty, lagrangian_dual=None) -> None:
-    """Autotune the dual weight, if dual.autotune is set. Split buffers step by a fixed
-    dual_step; non-split tracks the constraint's accumulated Lagrangian dual."""
+    """If ``dual.autotune`` is set, apply the experimental dual update.
+
+    Split buffers use the fixed ``dual_step``. Other buffers use the
+    constraint's accumulated Lagrangian dual, if supplied.
+    """
     cfg = penalty.cfg
     if not (cfg and hasattr(cfg, 'dual') and cfg.dual.autotune):
         return
@@ -551,7 +613,7 @@ def autotune_dual_b(penalty, lagrangian_dual=None) -> None:
 
 
 def sqp_autotune(constraint, scp_subproblem) -> None:
-    """SQP's experimental autotune: the "_b" weight update plus a matching dual update."""
+    """Apply the experimental quadratic and dual weight updates for SQP."""
     iter_num = scp_subproblem.current_iter_data.iter_num
     chk      = scp_subproblem.current_iter_data.get("chk", None)
     settled  = chk is not None and float(chk.dz) < 1.0
@@ -560,10 +622,11 @@ def sqp_autotune(constraint, scp_subproblem) -> None:
 
 
 def penalty_cost_sqp(constraint, scp_subproblem) -> None:
-    """Prox-linear cost plus the dual term sqp_autotune accumulates (zero unless dual.autotune
-    is on) -- matches compile_merit_proxlin's dual*viol + w*|viol| so SQP's subproblem and its
-    trust-region merit stay consistent. Standard prox-linear (penalty_cost_proxlin) is
-    unaffected: it has no dual term, on purpose."""
+    """Add the prox-linear penalty and accumulated dual term to the SQP cost.
+
+    These terms match ``compile_merit_proxlin``. The dual term remains zero
+    unless ``dual.autotune`` is set. ``penalty_cost_proxlin`` omits the dual term.
+    """
     p = constraint.penalties
     if p.get('w_param') is None or p.vb_var is None:
         return

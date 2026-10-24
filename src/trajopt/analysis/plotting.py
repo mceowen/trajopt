@@ -18,13 +18,11 @@ plt.rcParams.update({
     'path.simplify': True, 'path.simplify_threshold': 0.1,
 })
 
-def _scp_subproblems(method):
-    """A method's dict of per-piece SCP subproblems, whatever it calls the attribute."""
-    scp_trajectory = method.scp_trajectory
-    scp_phases = getattr(scp_trajectory, "scp_phases", None)
-    if scp_phases is not None:
-        return scp_phases
-    return scp_trajectory.scp_subproblems
+def _result_segments(result):
+    from trajopt.outputs.results import SolveResult
+    if not isinstance(result, SolveResult):
+        raise TypeError("Convergence plotting requires a SolveResult")
+    return result.segment_data
 
 
 plot_options = AttrDict({
@@ -88,37 +86,92 @@ def show_figures(figs=None):
     plt.show()
 
 
-def plot(traj_analyzer, data, *, save=True, show=False, save_dir=None, format="pdf"):
-    """Build the standalone figures and return them as {group_name: Figure}."""
-    figs = build_standalone(traj_analyzer, data)
+def plot_result(result, evaluation=None, *, analysis_config=None, save=False,
+                show=False, save_dir=None, format="pdf"):
+    """Plot the named segments and available diagnostics from a solve result."""
+    from trajopt.analysis.validation import EvaluationResult, evaluate
+    from trajopt.outputs.results import SolveResult
 
+    if not isinstance(result, SolveResult):
+        raise TypeError("plot_result requires a SolveResult")
+    if evaluation is not None and not isinstance(evaluation, EvaluationResult):
+        raise TypeError("evaluation must be an EvaluationResult")
+    analysis_config = AttrDict((evaluation.protocol if evaluation is not None else {})
+                              if analysis_config is None else analysis_config)
+    evaluation = evaluation if evaluation is not None else evaluate(result, analysis_config)
+    if evaluation.solve_result is not result:
+        raise ValueError("Evaluation must belong to the supplied solve result")
+    figures = {}
+    multi = len(evaluation.segments) > 1
+    for name, segment in evaluation.segments.items():
+        spec = result.problem.segments[name]
+        for key, figure in _build_segment(
+                spec.build(), spec.config.get("outputs", {}), segment.iterates, analysis_config).items():
+            figures[f"{name}_{key}" if multi else key] = figure
+    figures.update(_diagnostic_figures(result, analysis_config))
+    return _finish_figures(figures, save, show, save_dir or os.path.join("plots", "standalone"), format)
+
+
+def _diagnostic_figures(result, options):
+    figures = {}
+    for option, function, key in (
+        ("show_convergence", convergence_plots, "convergence"),
+        ("show_weights", convergence_weight_plots, "convergence_weights"),
+        ("show_weights", convergence_weight_mean_plots, "convergence_weights_mean"),
+        ("show_vb", convergence_vb_plots, "convergence_vb"),
+    ):
+        if options.get(option, False):
+            value = function(result, save=False)
+            if value is not None:
+                figures.update(value if isinstance(value, dict) else {key: value})
+    return figures
+
+
+def plot_experiment(experiment, *, case=None, analysis_config=None, save=False,
+                    show=False, save_dir=None, format="pdf"):
+    """Compare variants for the selected case. Use the nominal case by default."""
+    from trajopt.analysis.validation import evaluate
+    from trajopt.analysis.experiments import ExperimentResult
+
+    if not isinstance(experiment, ExperimentResult):
+        raise TypeError("plot_experiment requires an ExperimentResult")
+    case = experiment.primary_run().case if case is None else case
+    runs = {run.variant: run for run in experiment.runs if run.case == case}
+    if not runs:
+        raise ValueError(f"Unknown experiment case {case!r}")
+    if analysis_config is None:
+        analysis_config = next(iter(runs.values())).config.get("analysis", {})
+    evaluations = {name: (run.evaluation if run.evaluation is not None else
+                         evaluate(run.solve_result, analysis_config))
+                   for name, run in runs.items() if run.solve_result is not None}
+    names = dict.fromkeys(name for report in evaluations.values() for name in report.segments)
+    figures = {}
+    for name in names:
+        selected = {variant: report.segments[name].iterates
+                    for variant, report in evaluations.items() if name in report.segments
+                    and report.segments[name].iterates}
+        if not selected:
+            continue
+        result = evaluations[next(iter(selected))].solve_result
+        spec = result.problem.segments[name]
+        problem, outputs = spec.build(), spec.config.get("outputs", {})
+        segment_figures = (_build_segment(problem, outputs, next(iter(selected.values())), analysis_config)
+                           if len(selected) == 1 else _build_comparison(problem, outputs, selected))
+        for key, figure in segment_figures.items():
+            figures[f"{name}_{key}" if len(names)>1 else key] = figure
+    for variant, run in runs.items():
+        if run.solve_result is not None:
+            for key, figure in _diagnostic_figures(run.solve_result, analysis_config).items():
+                figures[f"{variant}_{key}" if len(runs)>1 else key] = figure
+    return _finish_figures(figures, save, show, save_dir or os.path.join("plots", "experiment"), format)
+
+
+def _finish_figures(figures, save, show, directory, format):
     if save:
-        save_figures(figs, save_dir or os.path.join("plots", "standalone"), format=format)
-
-    analysis_cfg = traj_analyzer.config.get("analysis", {})
-    if analysis_cfg.get('show_convergence', False):
-        conv = convergence_plots(traj_analyzer, save=save)
-        if conv is not None:
-            figs['convergence'] = conv
-
-    if analysis_cfg.get('show_weights', False):
-        weights = convergence_weight_plots(traj_analyzer, save=save)
-        if weights is not None:
-            figs['convergence_weights'] = weights
-
-        weights_mean = convergence_weight_mean_plots(traj_analyzer, save=save)
-        if weights_mean is not None:
-            figs['convergence_weights_mean'] = weights_mean
-
-    if analysis_cfg.get('show_vb', False):
-        vb = convergence_vb_plots(traj_analyzer, save=save)
-        if vb is not None:
-            figs['convergence_vb'] = vb
-
+        save_figures(figures, directory, format=format)
     if show:
-        show_figures(figs)
-
-    return figs
+        show_figures(figures)
+    return figures
 
 
 #: figure name used when a declared output does not name a group
@@ -135,39 +188,14 @@ def _group_outputs(outputs, declared):
     return grouped
 
 
-def _phase_configs(trajectory_cfg):
-    """The per-phase config blocks, or [trajectory_cfg] itself under a flat (non-phaseed) formulation."""
-    if "phases" in trajectory_cfg:
-        return list(trajectory_cfg.phases.values())
-    return [trajectory_cfg]
-
-
-def _first_phase(traj_analyzer):
-    """The runtime first (or only) phase/trajectory object, whichever formulation is in play."""
-    trajectory = traj_analyzer.trajectory
-    if hasattr(trajectory, "phases"):
-        return next(iter(trajectory.phases.values()))
-    return trajectory
-
-
-def _output_configs(traj_analyzer):
-    """Merge the outputs: config blocks of every phase into one mapping."""
-    merged = {}
-    for phase_cfg in _phase_configs(traj_analyzer.config.trajectory):
-        merged.update(phase_cfg.get('outputs', {}))
-    return merged
-
-
-def build_standalone(traj_analyzer, data):
+def _build_segment(problem, traj_configs, iters_all, analysis_cfg):
     """Construct the standalone trajectory figures."""
-    analysis_cfg = traj_analyzer.config.get("analysis", {})
     show_iters = analysis_cfg.get("show_iters", False)
-    method         = list(data.keys())[0]
-    iters_all      = data[method]["runs"][0]["iter_data_list"]
+    if not iters_all:
+        return {}
     last_iter      = iters_all[-1]
-    traj_configs   = _output_configs(traj_analyzer)
-    traj_data      = _group_outputs(last_iter["outputs"], traj_configs)
-    first_phase  = _first_phase(traj_analyzer)
+    traj_data      = _group_outputs(last_iter.outputs, traj_configs)
+    first_phase = problem
     fcns           = first_phase.fcns
 
     figs, axs = {}, {}
@@ -235,7 +263,7 @@ def build_standalone(traj_analyzer, data):
                 if traj_cfg.get("ylim") is not None:
                     ax.set_ylim(traj_cfg["ylim"])
             else:
-                t = last_iter["t_opt"]
+                t = last_iter.t_opt
                 _set_time_series_limits(ax, t[:vals.shape[0]], vals,
                                         limits=output.limits or {})
                 if trigger_time is not None:
@@ -251,28 +279,22 @@ def build_standalone(traj_analyzer, data):
     return figs
 
 
-def plot_method_variation(traj_analyzer, data, *, save=True, show=False, save_dir=None, format="pdf"):
-    """Build the method-comparison figures and return them as {group_name: Figure}."""
-    figs = build_method_variation(traj_analyzer, data)
-
-    if save:
-        save_figures(figs, save_dir or os.path.join("plots", "method_variation"), format=format)
-
-    if show:
-        show_figures(figs)
-
-    return figs
-
-
-def build_method_variation(traj_analyzer, data):
+def _build_comparison(problem, traj_configs, iterates):
     """Overlay the trajectories of several methods on shared axes."""
-    methods = list(data.keys())
+    methods = list(iterates)
+    if not methods:
+        return {}
+    ref_last = iterates[methods[0]][-1]
+    ref_traj_data = _group_outputs(ref_last.outputs, traj_configs)
+    for history in iterates.values():
+        for group in ref_traj_data.values():
+            for name, reference in group.items():
+                output = history[-1].outputs.get(name)
+                if (output is None or output.opt.shape[1:] != reference.opt.shape[1:]
+                        or output.meta.units != reference.meta.units):
+                    raise ValueError(f"Cannot compare output {name!r} with incompatible channels or units")
 
-    ref_last = data[methods[0]]["runs"][0]["iter_data_list"][-1]
-    traj_configs = _output_configs(traj_analyzer)
-    ref_traj_data = _group_outputs(ref_last["outputs"], traj_configs)
-
-    first_phase = _first_phase(traj_analyzer)
+    first_phase = problem
     fcns = first_phase.fcns
 
     figs, axs = {}, {}
@@ -302,8 +324,8 @@ def build_method_variation(traj_analyzer, data):
     for m_idx, method_name in enumerate(methods):
         color = colors[m_idx]
         mp = _method_pens(color)
-        m_last = data[method_name]["runs"][0]["iter_data_list"][-1]
-        m_traj_data = _group_outputs(m_last["outputs"], traj_configs)
+        m_last = iterates[method_name][-1]
+        m_traj_data = _group_outputs(m_last.outputs, traj_configs)
 
         for group_name, group_data in m_traj_data.items():
             for i, (traj_name, output) in enumerate(group_data.items()):
@@ -326,8 +348,8 @@ def build_method_variation(traj_analyzer, data):
                     prev = all_spatial_vals.get(key)
                     all_spatial_vals[key] = np.vstack([prev, combined]) if prev is not None else combined
                 else:
-                    t_nl = m_last["t_nl"]
-                    t_opt = m_last["t_opt"]
+                    t_nl = m_last.t_nl
+                    t_opt = m_last.t_opt
                     nl_v = output.nl_prop.squeeze()
                     opt_v = output.opt.squeeze()
                     _draw(ax, t_nl,  nl_v,  mp.nl)
@@ -429,7 +451,7 @@ def _plot_spatial(ax, traj, iters_to_show, last_iter):
     name = traj.meta.name
     n    = len(iters_to_show)
     for i, it in enumerate(iters_to_show):
-        t = it["outputs"].get(name)
+        t = it.outputs.get(name)
         if t is None: continue
 
         coords = unpack(t.nl_prop)
@@ -452,22 +474,24 @@ def _plot_time_series(ax, traj, iters_to_show, last_iter):
     name = traj.meta.name
     n    = len(iters_to_show)
     for i, it in enumerate(iters_to_show):
-        t = it["outputs"].get(name)
+        t = it.outputs.get(name)
         if t is None: continue
 
-        _draw(ax, it["t_nl"],  t.nl_prop.squeeze(), pens.itr_nl,  n_iters=n, i=i)
-        _draw(ax, it["t_opt"], t.opt.squeeze(),     pens.itr_opt, n_iters=n, i=i)
+        _draw(ax, it.t_nl,  t.nl_prop.squeeze(), pens.itr_nl,  n_iters=n, i=i)
+        _draw(ax, it.t_opt, t.opt.squeeze(),     pens.itr_opt, n_iters=n, i=i)
 
-    _draw(ax, last_iter["t_init_nl"], traj.init_guess.squeeze(), pens.init)
-    _draw(ax, last_iter["t_nl"],      traj.nl_prop.squeeze(),    pens.nl)
-    _draw(ax, last_iter["t_opt"],     traj.opt.squeeze(),        pens.opt)
+    _draw(ax, last_iter.t_init_nl, traj.init_guess.squeeze(), pens.init)
+    _draw(ax, last_iter.t_nl,      traj.nl_prop.squeeze(),    pens.nl)
+    _draw(ax, last_iter.t_opt,     traj.opt.squeeze(),        pens.opt)
 
     limits = traj.limits or {}
     upper = limits.get("upper")
     lower = limits.get("lower")
-    for val in filter(None, [upper, lower]):
+    for val in (upper, lower):
+        if val is None:
+            continue
         if isinstance(val, np.ndarray):
-            t = last_iter["t_nl"]
+            t = last_iter.t_nl
             ax.plot(t[:len(val)], val, color='k', ls='--', lw=1, alpha=0.5)
         else:
             ax.axhline(val, color='k', ls='--', lw=1, alpha=0.5)
@@ -629,34 +653,65 @@ def _include_quiver_extents(all_vals, traj):
     return all_vals
 
 
-def convergence_plots(traj_analyzer, save=True):
-    scp_phases = _scp_subproblems(traj_analyzer.method)
-    multi        = len(scp_phases) > 1
-    figs         = [_convergence_plot(phase, f"_{name}" if multi else "", save) for name, phase in scp_phases.items()]
-    return figs[0] if figs else None
+def convergence_plots(result, save=True):
+    return _convergence_figures(result, _convergence_plot, "convergence", save)
+
+
+def _convergence_figures(source, renderer, prefix, save):
+    segments = _result_segments(source)
+    result = source
+    if (renderer is not _convergence_plot and result.iterations > 1
+            and result.method.config.get("history", "scalars") != "full"):
+        warnings.warn("Only the final penalty snapshot was retained; use method.history='full' "
+                      "for per-iteration penalty or buffer plots", stacklevel=2)
+    multi = len(segments) > 1
+    figures = {}
+    for name, segment in segments.items():
+        suffix = f"_{name}" if multi else ""
+        figure = renderer(segment, suffix, save)
+        if figure is not None:
+            figures[prefix + suffix] = figure
+    return figures if multi else next(iter(figures.values()), None)
+
+
+def _penalty_tolerances(subprob):
+    """Match saved buffer names to their tolerances, including named penalty parts."""
+    tolerances = {}
+
+    def collect(name, penalty):
+        parts = penalty.get("parts")
+        if parts is not None:
+            for part_name, part in parts.items():
+                collect(f"{name}_{part_name}", part)
+        else:
+            tolerances[name] = np.atleast_1d(penalty.eps)
+
+    for constraint in subprob.constraints.values():
+        if constraint.shape is not None:
+            collect(constraint.name, constraint.penalties)
+    return tolerances
 
 
 def _convergence_plot(subprob, suffix, save=True):
-    iters   = subprob.iter_data_list[1:]
+    scalar = subprob.get("scalar_history", ())
+    history = (subprob.iter_data_list if len(subprob.iter_data_list) >= len(scalar) + 1
+               else scalar)
+    iters = [it for it in history
+             if it.get("iter_num", 0) > 0]
     if not iters:
         return None
-    k       = np.arange(1, len(iters) + 1)
+    k       = np.array([it.iter_num for it in iters])
     dz      = [it.chk.dz for it in iters]
     dcost   = [it.chk.dcost for it in iters]
-    alphas  = [it.get("alpha", 1.0) for it in iters]
     costs   = [it.cost for it in iters]
 
-    eps_by_name = {
-        sc.name: np.atleast_1d(sc.penalties.eps)
-        for sc in subprob.constraints.values()
-        if sc.shape is not None
-    }
+    eps_by_name = _penalty_tolerances(subprob)
     vb_types  = list(iters[0].vb.keys()) if hasattr(iters[0], 'vb') and iters[0].vb else []
 
     vb_series = {}
     for ct in vb_types:
         eps_ct = eps_by_name.get(ct, np.atleast_1d(1.0))
-        vb_series[ct] = [float(np.max(np.abs(it.vb[ct]) / eps_ct)) for it in iters]
+        vb_series[ct] = [float(np.max(np.abs(it.vb[ct]) / eps_ct, initial=0.)) for it in iters]
 
     grid  = _create_grid(2)
     fig   = plt.figure(figsize=(14, 4.5))
@@ -689,11 +744,8 @@ def _convergence_plot(subprob, suffix, save=True):
     return fig
 
 
-def convergence_weight_plots(traj_analyzer, save=True):
-    scp_phases = _scp_subproblems(traj_analyzer.method)
-    multi        = len(scp_phases) > 1
-    figs         = [_convergence_weight_plot(phase, f"_{name}" if multi else "", save) for name, phase in scp_phases.items()]
-    return figs[0] if figs else None
+def convergence_weight_plots(result, save=True):
+    return _convergence_figures(result, _convergence_weight_plot, "convergence_weights", save)
 
 
 def _convergence_weight_plot(subprob, suffix, save=True):
@@ -709,7 +761,7 @@ def _convergence_weight_plot(subprob, suffix, save=True):
     if not has_W and not has_dual and not has_split:
         return
 
-    k = np.arange(1, len(iters) + 1)
+    k = np.array([it.iter_num for it in iters])
     fig, axes = plt.subplots(1, 2, figsize=(14, 4.5))
 
     all_types = list(iters[0].W.keys()) if has_W else list(iters[0].dual.keys())
@@ -771,11 +823,8 @@ def _convergence_weight_plot(subprob, suffix, save=True):
     return fig
 
 
-def convergence_weight_mean_plots(traj_analyzer, save=True):
-    scp_phases = _scp_subproblems(traj_analyzer.method)
-    multi        = len(scp_phases) > 1
-    figs         = [_convergence_weight_mean_plot(phase, f"_{name}" if multi else "", save) for name, phase in scp_phases.items()]
-    return figs[0] if figs else None
+def convergence_weight_mean_plots(result, save=True):
+    return _convergence_figures(result, _convergence_weight_mean_plot, "convergence_weights_mean", save)
 
 
 def _convergence_weight_mean_plot(subprob, suffix, save=True):
@@ -790,7 +839,7 @@ def _convergence_weight_mean_plot(subprob, suffix, save=True):
     if not has_W and not has_dual and not has_split:
         return
 
-    k = np.arange(1, len(iters) + 1)
+    k = np.array([it.iter_num for it in iters])
     fig, axes = plt.subplots(1, 2, figsize=(14, 4.5))
 
     if has_split:
@@ -853,11 +902,8 @@ def _convergence_weight_mean_plot(subprob, suffix, save=True):
     return fig
 
 
-def convergence_vb_plots(traj_analyzer, save=True):
-    scp_phases = _scp_subproblems(traj_analyzer.method)
-    multi        = len(scp_phases) > 1
-    figs         = [_convergence_vb_plot(phase, f"_{name}" if multi else "", save) for name, phase in scp_phases.items()]
-    return figs[0] if figs else None
+def convergence_vb_plots(result, save=True):
+    return _convergence_figures(result, _convergence_vb_plot, "convergence_vb", save)
 
 
 def _convergence_vb_plot(subprob, suffix, save=True):
@@ -871,18 +917,14 @@ def _convergence_vb_plot(subprob, suffix, save=True):
     if not has_vb and not has_split:
         return
 
-    eps_by_name = {
-        sc.name: np.atleast_1d(sc.penalties.eps)
-        for sc in subprob.constraints.values()
-        if sc.shape is not None
-    }
+    eps_by_name = _penalty_tolerances(subprob)
 
-    k = np.arange(1, len(iters) + 1)
+    k = np.array([it.iter_num for it in iters])
     fig, ax = plt.subplots(1, 1, figsize=(7, 4.5))
 
     def _series(vb_key, ct):
         eps_ct = eps_by_name.get(ct, np.atleast_1d(1.0))
-        return [float(np.max(np.abs(getattr(it, vb_key)[ct]) / eps_ct)) for it in iters]
+        return [float(np.max(np.abs(getattr(it, vb_key)[ct]) / eps_ct, initial=0.)) for it in iters]
 
     if has_split:
         for ct in iters[0].vb_p.keys():
@@ -921,7 +963,7 @@ def _find_trigger_time(group_data, last_iter):
         threshold = float(tl["threshold"])
         direction = tl.get("direction", "below")
         vals = output.opt.squeeze()
-        t = last_iter["t_opt"][:len(vals)]
+        t = last_iter.t_opt[:len(vals)]
         if direction == "below":
             crossed = np.where(vals[:-1] >= threshold, vals[1:] < threshold, False)
         else:

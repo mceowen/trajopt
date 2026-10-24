@@ -176,7 +176,7 @@ def resolve_function_from_string(fcn_string: str, fcns: "AttrDict | None" = None
     try:
         if file_path.is_relative_to(package_root):
             # Reuse package modules so configured providers and direct imports
-            # share class identities (for example, initial_guess.Guess).
+            # share class identities.
             parts = file_path.relative_to(package_root).with_suffix("").parts
             if parts[-1] == "__init__":
                 parts = parts[:-1]

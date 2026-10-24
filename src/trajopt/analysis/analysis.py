@@ -1,65 +1,43 @@
-import copy
-
 import jax
 import numpy as np
 
-from trajopt.analysis.results import Iterate, MissionResult, RunResult
-from trajopt.utils import tools
+from collections.abc import Mapping
 from trajopt.utils.tools import AttrDict
 
 jax.config.update("jax_enable_x64", True)
 
-def perform_analysis(traj) -> RunResult:
-    """Propagate every phase's iterates and merge them into one mission trajectory."""
-    scp_trajectory = traj.method.scp_trajectory
-    scp_phases = getattr(scp_trajectory, "scp_phases", None)
-    if scp_phases is None:
-        scp_phases = scp_trajectory.scp_subproblems
-    phases = [analyze_phase(subprob, traj.config) for subprob in scp_phases.values()]
-
-    if len(phases) == 1:
-        iter_mappings = phases[0]
-    else:
-        n_iters       = min(len(phase) for phase in phases)
-        iter_mappings = []
-        for i in range(n_iters):
-            per_phase = [phase[i] for phase in phases]
-            pad_missing_outputs(per_phase)
-            iter_mappings.append(concat(per_phase))
-
-    solver_iters = {name: subprob.iter_data_list for name, subprob in scp_phases.items()}
-
-    iter_data_list = [Iterate.from_mapping(m) for m in iter_mappings]
-    return RunResult(iter_data_list=iter_data_list, solver_iters=solver_iters)
-
-
-def analyze_phase(subprob, config):
+def analyze_segment(subprob, config):
     """Propagate each iterate and evaluate the phase's outputs."""
-    phase    = subprob.phase
+    phase    = subprob.problem
     params     = phase.params
     nondim     = phase.nondim
     idx        = phase.index_map.indices
     time_scale = nondim.time_scale
 
-    iters    = subprob.iter_data_list if config.analysis.compute_iters else [subprob.iter_data_list[-1]]
+    analysis_config = config.get("analysis", {})
+    if not subprob.iter_data_list:
+        return []
+    iters = subprob.iter_data_list if analysis_config.get("compute_iters", False) else [subprob.iter_data_list[-1]]
     dynamics = next(c for c in phase.constraints.values() if c.type == "dynamics").fcn_znu
 
-    discretize = subprob.hyperparams.discretize.get("mode", "ms")
-    propagate_from_nodes_flag = config.analysis.get("propagate_from_nodes", False)
+    discretize = subprob.mesh.discretize
+    propagate_from_nodes_flag = analysis_config.get("propagate_from_nodes", False)
 
     # ps only: controls between collocation nodes are reconstructed with "lagrange" or "foh"
     # ms always uses foh either way
     mesh_opts = AttrDict({
         "discretize":            discretize,
         "segments":              subprob.mesh.segments,
-        "control_interpolation": config.analysis.get("control_interpolation", "lagrange"),
+        "control_interpolation": analysis_config.get("control_interpolation", "lagrange"),
         "dilation_idx":          idx.nu.dilation_factor,
     })
 
     if propagate_from_nodes_flag:
-        node_solver = subprob.fcns.discretize.make_node_propagation_solver(dynamics, params, n_steps=50, **mesh_opts)
+        node_solver = subprob.fcns.discretize.make_node_propagation_solver(
+            dynamics, params, n_steps=int(analysis_config.get("node_steps", 50)), **mesh_opts)
     else:
-        traj_solver = subprob.fcns.discretize.make_trajectory_solver(dynamics, params, n_steps=500, **mesh_opts)
+        traj_solver = subprob.fcns.discretize.make_trajectory_solver(
+            dynamics, params, n_steps=int(analysis_config.get("trajectory_steps", 500)), **mesh_opts)
 
     z_init = subprob.initial_guess.z_dense
     nu_init = subprob.initial_guess.nu_dense
@@ -69,7 +47,6 @@ def analyze_phase(subprob, config):
         z_opt  = np.asarray(iter_data.z_opt)
         nu_opt = np.asarray(iter_data.nu_opt)
 
-        N = z_opt.shape[0]
         tau_nodes = subprob.mesh.tau
 
         if propagate_from_nodes_flag:
@@ -179,151 +156,27 @@ def auto_outputs(phase, **representations):
     return outputs
 
 
-#: each value array and the time grid whose length it matches
-_REPRESENTATIONS = (("opt", "t_opt"), ("nl_prop", "t_nl"), ("init_guess", "t_init_nl"))
-
-
-def pad_missing_outputs(per_phase):
-    """Fill the outputs a phase is missing with NaN, in place."""
-    template = {}
-    for phase_data in per_phase:
-        for name, output in phase_data.outputs.items():
-            template.setdefault(name, output)
-
-    for phase_data in per_phase:
-        for name, output in template.items():
-            if name in phase_data.outputs:
-                continue
-            phase_data.outputs[name] = AttrDict({
-                key: np.full((len(phase_data[t_key]), output[key].shape[1]), np.nan)
-                for key, t_key in _REPRESENTATIONS
-            } | {
-                "limits":  _nan_like(output.limits, len(phase_data.t_nl)),
-                "quivers": [
-                    {**q, "dirs": np.full_like(q["dirs"], np.nan),
-                     "origins": None if q.get("origins") is None else np.full_like(q["origins"], np.nan)}
-                    for q in (output.quivers or [])
-                ],
-                "meta": output.meta,
-            })
-
-
-def _nan_like(limits, n):
-    """Replace any per-node limit array with NaN, keeping scalar limits as they are."""
-    if not limits:
-        return limits
-    return {
-        k: (np.full(n, np.nan) if isinstance(v, np.ndarray) else v)
-        for k, v in limits.items()
-    }
-
-
 def concat(items):
-    """Join each phase's values end to end. Arrays that cannot be stacked keep the first phase's."""
+    """Join compatible sequential segment values without discarding arrays."""
+    if not items:
+        raise ValueError("Select at least one segment value to concatenate")
     head = items[0]
 
     if isinstance(head, np.ndarray):
         if all(isinstance(x, np.ndarray) and x.shape[1:] == head.shape[1:] for x in items):
             return np.concatenate(items, axis=0)
-        return head
+        raise ValueError("Cannot merge segment arrays with different channel dimensions")
 
-    if isinstance(head, dict):
-        return AttrDict({k: concat([x[k] for x in items]) for k in head if all(k in x for x in items)})
+    if isinstance(head, Mapping):
+        if any(not isinstance(x, Mapping) or x.keys() != head.keys() for x in items):
+            raise ValueError("Segment values have different field identities")
+        return AttrDict({k: concat([x[k] for x in items]) for k in head})
 
-    if isinstance(head, list):
-        if all(isinstance(x, list) and len(x) == len(head) for x in items):
+    if isinstance(head, (list, tuple)):
+        if all(isinstance(x, (list, tuple)) and len(x) == len(head) for x in items):
             return [concat([x[i] for x in items]) for i in range(len(head))]
-        return head
+        raise ValueError("Segment values have different sequence lengths")
 
+    if any(x != head for x in items):
+        raise ValueError("Segment values have different non-array metadata")
     return head
-
-
-def run_standalone_analysis(traj) -> MissionResult:
-    """Analyze a single solve and wrap it in the MissionResult schema."""
-    method_name = traj.config.method.get("name", "method1")
-    if not getattr(traj, "_solved", False):
-        traj.solve()
-    return MissionResult(runs_by_method={method_name: [perform_analysis(traj)]})
-
-
-def run_method_variation(traj):
-    """Compare different methods on the same mission.
-
-    Expected config schema::
-
-        analysis:
-          type: method_variation
-          methods:
-            autoscvx-ms: {}
-            autoscvx-ps:
-              hyperparams:
-                discretize:
-                  mode: ps
-                  equal_dt: 0
-                trust_region:
-                  line_search: 1
-                penalties:
-                  initial_state:
-                    vb: 'none'
-    """
-    from trajopt.trajectory_analyzer import TrajectoryAnalyzer
-
-    methods_cfg = traj.config.analysis.methods
-    config_path = traj.config_path
-
-    runs_by_method = {}
-    for method_name, overrides in methods_cfg.items():
-        print(f"\n{'='*60}")
-        print(f"  Solving: {method_name}")
-        print(f"{'='*60}\n")
-
-        method_traj = TrajectoryAnalyzer(config_path, method_overrides=dict(overrides) if overrides else None)
-        method_traj.solve()
-        runs_by_method[method_name] = [perform_analysis(method_traj)]
-
-    return MissionResult(runs_by_method=runs_by_method)
-
-
-def run_mc_analysis(traj):
-    """Monte Carlo analysis driven entirely by the config (the single source of truth).
-
-    Each run perturbs the values listed under ``config.variations.samples`` (each key
-    is a dot-path into the config), updates the config, and re-solves. Run 0 is the
-    nominal (unperturbed) case.
-
-    Expected config schema::
-
-        variations:
-          seed: 42
-          num:  10
-          samples:
-            phases.entry.params.vehicle.bc: {type: normal, mu: 0.0, sigma: 10.0}
-            phases.entry.constraints.initial_state.value: {type: uniform, lb: [...], ub: [...]}
-    """
-    nominal_config = traj.config
-    var_cfg        = nominal_config.variations
-    method_name    = nominal_config.method.get("name", "method1")
-    num            = int(var_cfg.get("num", 0))
-
-    np.random.seed(var_cfg.get("seed", 0))
-
-    runs = []
-    for i in range(num + 1):
-        config = copy.deepcopy(nominal_config)
-        for path, spec in (var_cfg.get("samples", {}) if i > 0 else {}).items():
-            if spec["type"] == "uniform":
-                delta = np.random.uniform(spec["lb"], spec["ub"])
-            elif spec["type"] == "normal":
-                delta = np.random.normal(spec["mu"], spec["sigma"])
-            else:
-                raise ValueError(f"unknown variation type: {spec['type']!r}")
-            tools.set_from_path(config, path, tools.get_from_path(config, path) + delta)
-
-        traj.config = config
-        traj.solve()
-        runs.append(perform_analysis(traj))
-        if i > 0:
-            print(f"=== {method_name} | run {i} / {num} ===")
-
-    traj.config = nominal_config
-    return MissionResult(runs_by_method={method_name: runs})

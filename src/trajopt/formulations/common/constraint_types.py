@@ -502,87 +502,183 @@ class final_nonconvex_equality(nonconvex_equality):
         self.type = "final_nonconvex_equality"
 
 
-class full_continuity(Constraint):
-    """State, control, and time match at the phase boundary."""
-    def __init__(self, cnstr_config: dict, phase) -> None:
-        self.name = cnstr_config.name
-        self.type = "full_continuity"
-        self.phase_name = cnstr_config.phase
-        n = phase.index_map.n
-        self.dimension = n.state + n.control + n.time
-
-    def residual(self, other_scp_phase, this_scp_phase):
-        idx_state = this_scp_phase.index_map.indices.z.state
-        idx_time  = this_scp_phase.index_map.indices.z.time
-        idx_ctrl  = this_scp_phase.index_map.indices.nu.control
-
-        x_other = other_scp_phase.cp_params.z_ref[-1, idx_state] + other_scp_phase.dz[-1, idx_state]
-        x_this  = this_scp_phase.cp_params.z_ref[0, idx_state]  + this_scp_phase.dz[0, idx_state]
-
-        u_other = other_scp_phase.cp_params.nu_ref[-1, idx_ctrl] + other_scp_phase.dnu[-1, idx_ctrl]
-        u_this  = this_scp_phase.cp_params.nu_ref[0, idx_ctrl]  + this_scp_phase.dnu[0, idx_ctrl]
-
-        t_other = other_scp_phase.cp_params.z_ref[-1, idx_time] + other_scp_phase.dz[-1, idx_time]
-        t_this  = this_scp_phase.cp_params.z_ref[0, idx_time]  + this_scp_phase.dz[0, idx_time]
-
-        return cp.hstack([x_other - x_this, u_other - u_this, t_other - t_this])
-
-
-class state_continuity(Constraint):
-    """State matches at the phase boundary."""
-    def __init__(self, cnstr_config: dict, phase) -> None:
-        self.name = cnstr_config.name
-        self.type = "state_continuity"
-        self.phase_name = cnstr_config.phase
-        self.idx = cnstr_config.get("idx", None)
-        if self.idx is not None:
-            self.dimension = len(self.idx)
+def _continuity_indices(phase, kind, selection):
+    """Resolve numeric indices or channel group names in the physical layout."""
+    width = phase.index_map.n[kind]
+    if selection is None:
+        return np.arange(width, dtype=int)
+    groups = phase.index_map.components[kind]
+    if isinstance(selection, (str, int, np.integer)):
+        selection = [selection]
+    indices = []
+    for item in selection:
+        if isinstance(item, str):
+            if item not in groups:
+                raise ValueError(f"Unknown {kind} channel {item!r} in segment {phase.name!r}")
+            indices.extend(int(i) for i in groups[item])
+        elif isinstance(item, (int, np.integer)):
+            indices.append(int(item))
         else:
-            self.dimension = phase.index_map.n.state
-
-    def residual(self, other_scp_phase, this_scp_phase):
-        idx_state = this_scp_phase.index_map.indices.z.state
-        if self.idx is not None:
-            idx_state = [idx_state[i] for i in self.idx]
-        x_other = other_scp_phase.cp_params.z_ref[-1, idx_state] + other_scp_phase.dz[-1, idx_state]
-        x_this  = this_scp_phase.cp_params.z_ref[0, idx_state]  + this_scp_phase.dz[0, idx_state]
-        return x_other - x_this
+            raise ValueError("Continuity channel selections must contain indices or channel names")
+    if not indices or len(set(indices)) != len(indices) or any(i < 0 or i >= width for i in indices):
+        raise ValueError(f"Invalid {kind} continuity indices {indices} for segment {phase.name!r}")
+    return np.asarray(indices, dtype=int)
 
 
-class control_continuity(Constraint):
-    """Control matches at the phase boundary."""
-    def __init__(self, cnstr_config: dict, phase) -> None:
+def _continuity_channel_metadata(phase, kind):
+    metadata = [None] * phase.index_map.n[kind]
+    groups = phase.index_map.components[kind]
+    phase_config = getattr(phase, "config", {})
+    config = phase_config.get(kind, {})
+    default_frame = phase_config.get("reference_frame", phase_config.get("frame"))
+    for name, indices in groups.items():
+        group = config.get(name, {})
+        frame = group.get("reference_frame", group.get("frame", default_frame))
+        for local, index in enumerate(indices):
+            metadata[int(index)] = (name, local, group.get("units", group.get("unit")), frame)
+    return metadata
+
+
+class _continuity(Constraint):
+    """Segment endpoint differences in physical units, divided by residual scales."""
+    groups = ()
+
+    def __init__(self, cnstr_config, phase):
         self.name = cnstr_config.name
-        self.type = "control_continuity"
         self.phase_name = cnstr_config.phase
-        self.idx = cnstr_config.get("idx", None)
-        if self.idx is not None:
-            self.dimension = len(self.idx)
-        else:
-            self.dimension = phase.index_map.n.control
+        self.idx = cnstr_config.get("target_idx", cnstr_config.get("idx"))
+        self._config = cnstr_config
+        self.dimension = 0
+        for kind in self.groups:
+            if kind == "time":
+                self.dimension += phase.index_map.n.time
+            else:
+                _, selection, _ = self._selections(kind)
+                self.dimension += len(_continuity_indices(phase, kind, selection))
+        if len(self.groups) == 1 and self.groups[0] in {"state", "control"}:
+            _, selection, _ = self._selections(self.groups[0])
+            self.idx = (_continuity_indices(phase, self.groups[0], selection).tolist()
+                        if selection is not None else None)
+
+    def _selections(self, kind):
+        mapping = self._config.get(f"{kind}_map")
+        if mapping is not None:
+            if not hasattr(mapping, "get") or "source" not in mapping or "target" not in mapping:
+                raise ValueError(f"{kind}_map requires source and target channel selections")
+            return mapping["source"], mapping["target"], True
+        common = self._config.get("idx")
+        explicit = "source_idx" in self._config or "target_idx" in self._config
+        return (self._config.get("source_idx", common),
+                self._config.get("target_idx", common), explicit)
+
+    def _layout(self, source, target, kind):
+        if kind == "time":
+            left = source.problem.config.get("time", {})
+            right = target.problem.config.get("time", {})
+            self._validate_units(left.get("units", left.get("unit")),
+                                 right.get("units", right.get("unit")), kind)
+            return (source.index_map.indices.z.time, target.index_map.indices.z.time,
+                    np.atleast_1d(source.nondim.time_scale),
+                    np.atleast_1d(target.nondim.time_scale))
+        source_selection, target_selection, explicit = self._selections(kind)
+        si = _continuity_indices(source.problem, kind, source_selection)
+        ti = _continuity_indices(target.problem, kind, target_selection)
+        if len(si) != len(ti):
+            raise ValueError(f"Coupling '{self.name}' has different source and target {kind} dimensions; "
+                             "provide explicit source_idx and target_idx")
+        sm = _continuity_channel_metadata(source.problem, kind)
+        tm = _continuity_channel_metadata(target.problem, kind)
+        for a, b in zip(si, ti):
+            left, right = sm[a], tm[b]
+            if not explicit and (left is None or right is None or left[:2] != right[:2]):
+                raise ValueError(f"Coupling '{self.name}' connects different {kind} channels; "
+                                 "provide an explicit channel mapping")
+            if left is not None and right is not None:
+                self._validate_units(left[2], right[2], kind)
+                if left[3] and right[3] and left[3] != right[3]:
+                    raise ValueError(f"Coupling '{self.name}' has incompatible reference frames")
+        container = "z" if kind == "state" else "nu"
+        return (source.index_map.indices[container][kind][si],
+                target.index_map.indices[container][kind][ti],
+                np.asarray(getattr(source.nondim, f"{kind}_scales"))[si],
+                np.asarray(getattr(target.nondim, f"{kind}_scales"))[ti])
+
+    def _validate_units(self, left, right, kind):
+        conversion = self._config.get("conversion")
+        if hasattr(conversion, "get"):
+            conversion = conversion.get(kind)
+        if left and right and left != right and conversion is None:
+            raise ValueError(f"Coupling '{self.name}' has incompatible units {left!r}/{right!r}; "
+                             f"provide an explicit {kind} conversion")
+
+    def _conversion(self, kind):
+        conversion = self._config.get("conversion", 1.)
+        return conversion.get(kind, 1.) if hasattr(conversion, "get") else conversion
+
+    def _coefficients(self, source, target, kind):
+        si, ti, source_scale, target_scale = self._layout(source, target, kind)
+        scale = self._config.get("scale", target_scale)
+        conversion = self._conversion(kind)
+        if hasattr(scale, "get"):
+            scale = scale.get(kind, target_scale)
+        try:
+            scale = np.broadcast_to(np.asarray(scale, dtype=float), target_scale.shape)
+            conversion = np.broadcast_to(np.asarray(conversion, dtype=float), source_scale.shape)
+        except ValueError as exc:
+            raise ValueError(f"Coupling '{self.name}' scale/conversion must match its {kind} channel count") from exc
+        if not np.all(np.isfinite(scale)) or np.any(scale <= 0):
+            raise ValueError(f"Coupling '{self.name}' residual scales must be finite and positive")
+        if not np.all(np.isfinite(conversion)):
+            raise ValueError(f"Coupling '{self.name}' conversions must be finite")
+        return si, ti, source_scale * conversion / scale, target_scale / scale
 
     def residual(self, other_scp_phase, this_scp_phase):
-        idx_ctrl = this_scp_phase.index_map.indices.nu.control
-        if self.idx is not None:
-            idx_ctrl = [idx_ctrl[i] for i in self.idx]
-        u_other = other_scp_phase.cp_params.nu_ref[-1, idx_ctrl] + other_scp_phase.dnu[-1, idx_ctrl]
-        u_this  = this_scp_phase.cp_params.nu_ref[0, idx_ctrl]  + this_scp_phase.dnu[0, idx_ctrl]
-        return u_other - u_this
+        pieces = []
+        for kind in self.groups:
+            si, ti, a, b = self._coefficients(other_scp_phase, this_scp_phase, kind)
+            if kind == "control":
+                left = other_scp_phase.cp_params.nu_ref[-1, si] + other_scp_phase.dnu[-1, si]
+                right = this_scp_phase.cp_params.nu_ref[0, ti] + this_scp_phase.dnu[0, ti]
+            else:
+                left = other_scp_phase.cp_params.z_ref[-1, si] + other_scp_phase.dz[-1, si]
+                right = this_scp_phase.cp_params.z_ref[0, ti] + this_scp_phase.dz[0, ti]
+            # Preserve the existing expression for equal-scale configurations.
+            pieces.append((left if np.all(a == 1.) else cp.multiply(a, left)) -
+                          (right if np.all(b == 1.) else cp.multiply(b, right)))
+        return pieces[0] if len(pieces) == 1 else cp.hstack(pieces)
+
+    def accepted_residual(self, source, target):
+        pieces = []
+        for kind in self.groups:
+            si, ti, a, b = self._coefficients(source, target, kind)
+            field = "nu_opt" if kind == "control" else "z_opt"
+            pieces.append(a * source.current_iter_data[field][-1, si] -
+                          b * target.current_iter_data[field][0, ti])
+        return np.concatenate(pieces)
 
 
-class time_continuity(Constraint):
-    """Time matches at the phase boundary."""
-    def __init__(self, cnstr_config: dict, phase) -> None:
-        self.name = cnstr_config.name
-        self.type = "time_continuity"
-        self.phase_name = cnstr_config.phase
-        self.dimension = phase.index_map.n.time
+class full_continuity(_continuity):
+    """Mapped state, control, and time match in physical units."""
+    type = "full_continuity"
+    groups = ("state", "control", "time")
 
-    def residual(self, other_scp_phase, this_scp_phase):
-        idx_time = this_scp_phase.index_map.indices.z.time
-        t_other = other_scp_phase.cp_params.z_ref[-1, idx_time] + other_scp_phase.dz[-1, idx_time]
-        t_this  = this_scp_phase.cp_params.z_ref[0, idx_time]  + this_scp_phase.dz[0, idx_time]
-        return t_other - t_this
+
+class state_continuity(_continuity):
+    """Mapped physical state matches at the segment boundary."""
+    type = "state_continuity"
+    groups = ("state",)
+
+
+class control_continuity(_continuity):
+    """Mapped physical control matches at the segment boundary."""
+    type = "control_continuity"
+    groups = ("control",)
+
+
+class time_continuity(_continuity):
+    """Physical time matches at the segment boundary."""
+    type = "time_continuity"
+    groups = ("time",)
 
 
 class dynamics(Constraint):

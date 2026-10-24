@@ -1,5 +1,0 @@
-inherit:
-  - trajopt/methods/dev/configs/first_order/autoscvx-rev1.yaml
-  - trajopt/methods/common/configs/trust_region/second_order.yaml
-  - trajopt/methods/common/configs/convexify/second_order.yaml
-  - trajopt/methods/common/configs/discretize/second_order_ms.yaml

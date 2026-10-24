@@ -1,5 +1,4 @@
 fcns:
   initial_guess:
-    set: trajopt/methods/common/initial_guess.py:set_initial_guess
     default:
-      guess: trajopt/methods/common/initial_guess.py:straight_line_initial_guess
+      guess: trajopt/methods/initial_guess/providers.py:straight_line

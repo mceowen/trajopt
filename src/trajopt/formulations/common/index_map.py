@@ -1,5 +1,3 @@
-from collections.abc import Callable
-
 import numpy as np
 from jax import Array
 
@@ -143,13 +141,3 @@ class IndexMap:
         z  = self.pack_z(x, t, beta)
         nu = self.pack_nu(u, s)
         return z, nu
-
-    def evaluate_f_phys(self, f_phys: Callable, z: np.ndarray | Array, nu: np.ndarray | Array, params: AttrDict) -> Array:
-        """Evaluate f_phys(t, x, u, params) from augmented variables (z, nu)."""
-        x, t, beta, u, s = self.unpack_znu(z, nu)
-        return f_phys(t, x, u, params)
-
-    def call_fcn(self, subproblem, name: str, *args, **kwargs):
-        # method-side analog of pack_znu/unpack_znu: call a formulation fcn by name
-        phase = subproblem.phase
-        return phase.fcns[name](phase.params, *args, **kwargs)

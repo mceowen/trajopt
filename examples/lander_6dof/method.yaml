@@ -1,10 +1,10 @@
 # autoscvx2 leaves the terminal buffer open here
-inherit: trajopt/methods/stable/scp/configs/first_order/autoscvx.yaml
+inherit: trajopt/methods/configs/stable/scp/autoscvx.yaml
 
 fcns:
   initial_guess:
     default:
-      guess: trajopt/methods/common/initial_guess.py:straight_line_initial_guess
+      guess: trajopt/methods/initial_guess/providers.py:straight_line
 
 hyperparams:
   initial_guess:

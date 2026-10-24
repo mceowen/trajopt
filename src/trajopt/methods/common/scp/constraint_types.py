@@ -48,12 +48,22 @@ class scp_initial_state(SCPConstraint):
     def init_penalty(self, scp_subproblem):
         self._alloc_penalty(scp_subproblem, (1, self.constraint.dimension))
 
+    def create_cvxpy_parameters(self, scp_subproblem):
+        self.value_param = cp.Parameter(
+            self.constraint.dimension,
+            name=f"initial_state_{scp_subproblem.name}_{self.name}",
+            value=self.constraint.value,
+        )
+
     def create_cvxpy_constraints(self, scp_subproblem):
         idx  = self.constraint.idx
         expr = scp_subproblem.dz[0, idx] + scp_subproblem.cp_params.z_ref[0, idx]
         if self.penalties.vb_var is not None:
             expr = expr - self.penalties.vb_var[0, :]
-        scp_subproblem.cp_constraints.append(expr == self.constraint.value)
+        scp_subproblem.cp_constraints.append(expr == self.value_param)
+
+    def update_cvxpy_parameters(self, scp_subproblem):
+        self.value_param.value = self.constraint.value
 
 # ---------------------------------------------------------------------------
 # final state
@@ -214,7 +224,7 @@ class scp_full_continuity(SCPConstraint):
     def init_penalty(self, scp_subproblem):
         self._scp_subproblem = scp_subproblem
 
-    def build_cross_phase(self, scp_subproblems):
+    def attach_coupling(self, scp_subproblems):
         c = self.constraint
         other = scp_subproblems[c.phase_name]
         sub = self._scp_subproblem

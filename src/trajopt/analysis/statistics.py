@@ -1,10 +1,15 @@
 """Solution quality metrics for Monte Carlo SCP runs."""
 
+from __future__ import annotations
+
 import os
 import warnings
+from typing import TYPE_CHECKING
 
 import numpy as np
-import pandas as pd
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 # =============================================================================
 # Main function
@@ -69,6 +74,8 @@ def load_configuration() -> dict:
     config = {
         "variable_name": {
             "No. of Iteration": metrics[0:7],
+            "No. of Attempts": metrics[0:7],
+            "Rejected Attempts": metrics[0:7],
             "Solve Time/Iteration (ms/iter)": metrics[0:7],
             "Parse Time/Iteration (ms/iter)": metrics[0:7],
             "Discretization Time/Iteration (ms/iter)": metrics[0:7],
@@ -85,19 +92,34 @@ def load_configuration() -> dict:
     return config
 
 
-def extract_data(config: dict, data: dict) -> dict:
-    """Extract key variables from each Monte Carlo run.
+def extract_data(config: dict, data) -> dict:
+    """Extract metrics from an ExperimentResult or named sequences of SolveResult.
 
-    Each run carries ``solver_iters`` (per-iteration algorithm data, keyed by
-    phase) alongside the propagated ``iter_data_list``.
+    Shared solve timings include rejected attempts and are counted once. Dynamics
+    defect entries are segment stopping ratios, not physical rollout errors.
     """
+    from collections.abc import Mapping
+    from trajopt.analysis.experiments import ExperimentResult
+    from trajopt.outputs.results import SolveResult
+
+    if isinstance(data, ExperimentResult):
+        grouped = {variant.name: [run.solve_result for run in data.runs
+                                  if run.variant == variant.name] for variant in data.variants}
+    elif isinstance(data, Mapping):
+        grouped = dict(data)
+        if any(not isinstance(result, SolveResult) for runs in grouped.values() for result in runs):
+            raise TypeError("Statistics require named sequences of SolveResult")
+    else:
+        raise TypeError("Statistics require ExperimentResult or named sequences of SolveResult")
     print("Extracting data from runs...")
     extracted: dict = {}
 
-    for method, method_data in data.items():
+    for method, results in grouped.items():
         extracted[method] = {}
         all_vars: dict = {
             "No. of Iteration": [],
+            "No. of Attempts": [],
+            "Rejected Attempts": [],
             "Solve Time/Iteration (ms/iter)": [],
             "Parse Time/Iteration (ms/iter)": [],
             "Discretization Time/Iteration (ms/iter)": [],
@@ -109,41 +131,44 @@ def extract_data(config: dict, data: dict) -> dict:
             "Converged": [],
         }
 
-        for run_data in method_data["runs"]:
-            phases = list(run_data.get("solver_iters", {}).values())
-            # every phase records the same solve and parse time
-            timed = phases[0] if phases else []
-            num_iters = max(len(timed) - 1, 1)
+        for result in results:
+            if result is None:
+                num_iters = num_attempts = num_rejected = 0
+                time_solve = time_parse = time_disc = 0.
+                dyn_defect = np.array([np.nan])
+                cost, converged = np.nan, False
+            else:
+                num_iters = result.iterations
+                num_attempts = len(result.attempts)
+                num_rejected = result.rejected_attempts
+                time_solve = 1000. * result.timings.get("numerical_s", 0.)
+                time_parse = 1000. * result.timings.get("canonicalization_s", 0.)
+                time_disc = 1000. * result.timings.get("local_model_s", 0.)
+                diagnostics = [result.diagnostics[name] for name in result.segment_data
+                               if name in result.diagnostics]
+                dyn_defect = np.asarray([float(d.get("stopping_ratios", {}).get("dynamics", np.nan))
+                                         for d in diagnostics])
+                if not dyn_defect.size:
+                    dyn_defect = np.array([np.nan])
+                objectives = [d.get("objective") for d in diagnostics]
+                cost = (sum(float(value) for value in objectives)
+                        if result.usable and objectives and all(value is not None for value in objectives)
+                        else np.nan)
+                converged = result.converged
 
-            time_solve = 0.0
-            time_disc = 0.0
-            time_parse = 0.0
-            for it in timed:
-                if int(it.get("iter_num", 0)) == 0:
-                    continue
-                time_solve += float(it.get("solve_time", 0))
-                time_parse += float(it.get("parse_time", 0))
-            for iters in phases:
-                for it in iters:
-                    if int(it.get("iter_num", 0)) == 0:
-                        continue
-                    time_disc += float(it.get("discretization_time", it.get("prop_time", 0)))
-
-            last = timed[-1] if timed else {}
-
-            chk = last.get("chk", last.get("conv_data", {}))
-            dyn_defect = float(chk.get("dynamics", 0))
-
-            all_vars["Solve Time/Iteration (ms/iter)"].append(time_solve / num_iters)
-            all_vars["Parse Time/Iteration (ms/iter)"].append(time_parse / num_iters)
-            all_vars["Discretization Time/Iteration (ms/iter)"].append(time_disc / num_iters)
+            divisor = num_iters if num_iters else np.nan
+            all_vars["Solve Time/Iteration (ms/iter)"].append(time_solve / divisor)
+            all_vars["Parse Time/Iteration (ms/iter)"].append(time_parse / divisor)
+            all_vars["Discretization Time/Iteration (ms/iter)"].append(time_disc / divisor)
             all_vars["Total Solve Time (ms)"].append(time_solve)
             all_vars["Total Parse Time (ms)"].append(time_parse)
             all_vars["Total Discretization Time (ms)"].append(time_disc)
             all_vars["No. of Iteration"].append(num_iters)
-            all_vars["Cost"].append(float(last.get("cost", 0)))
+            all_vars["No. of Attempts"].append(num_attempts)
+            all_vars["Rejected Attempts"].append(num_rejected)
+            all_vars["Cost"].append(cost)
             all_vars["Dynamics Defect"].append(np.atleast_1d(dyn_defect))
-            all_vars["Converged"].append(bool(last.get("converged", False)))
+            all_vars["Converged"].append(converged)
 
         for var in config["variable_name"]:
             if var in all_vars:
@@ -183,6 +208,12 @@ def generate_statistics(config: dict, extracted: dict) -> dict:
 
 def generate_statistic_table(stats: dict) -> dict[str, pd.DataFrame]:
     """Convert nested stats dict into separate DataFrames for each metric or submetric."""
+    try:
+        import pandas as pd
+    except ImportError as exc:
+        raise ImportError("Statistics tables require the optional pandas dependency; "
+                          "numeric extraction and statistics do not") from exc
+
     print("Generating statistic tables...")
     tables: dict = {}
 
@@ -245,12 +276,3 @@ def calc_stat(data: list | np.ndarray, metric: str) -> float | np.ndarray:
         raise ValueError(msg)
 
     return metric_funcs[metric](data)
-
-
-# =============================================================================
-# main() testing function
-# =============================================================================
-
-if __name__ == "__main__":
-    # Run the full statistics generation
-    analyze_quality_metrics()

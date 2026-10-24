@@ -1,3 +1,0 @@
-inherit:
-  - trajopt/methods/stable/configs/first_order/autoscvx.yaml
-  - trajopt/methods/common/configs/trust_region/adaptive.yaml

@@ -4,9 +4,10 @@ import time
 import numpy as np
 import cvxpy as cp
 
-from trajopt.methods.common import initial_guess
 from trajopt.methods.common import penalties
+from trajopt.methods.initial_guess.preparation import prepare_initial_guess
 from trajopt.methods.common.mesh import make_mesh
+from trajopt.methods.state import SegmentState
 import trajopt.methods.common.scp.constraint_types as scp_constraint_type_module
 import trajopt.methods.common.scp.cost_types as scp_cost_type_module
 from trajopt.utils.tools import AttrDict, recursive_attrdict, resolve_function_from_string
@@ -22,30 +23,45 @@ def _resolve_fcns_tree(node):
 
 
 class Subproblem():
-    """The convex subproblem for one formulation object (a Phase or a whole flat Trajectory).
-
-    Holds everything formulation-agnostic: cvxpy variables/parameters/constraints/cost,
-    the trust region, the constraint penalties, and the SCP step. A formulation that splits
-    a trajectory into multiple phases (e.g. dev.phases) subclasses this to add whatever
-    links one subproblem to another -- see SCPPhase's boundary/continuity check.
-
-    ``constraint_type_module``/``cost_type_module`` resolve each constraint's/cost's
-    ``scp_<type>`` class.
-    """
+    """Numerical variables, constraints, and iteration state for one physical segment."""
 
     constraint_type_module = scp_constraint_type_module
     cost_type_module       = scp_cost_type_module
 
-    def __init__(self, formulation_obj, method_config: AttrDict, *, initial_guess=None, previous_guess=None) -> None:
+    @property
+    def current_iter_data(self):
+        return self.state.current
 
-        self.name           = formulation_obj.name
-        self.phase          = formulation_obj  # analysis.py reaches params/nondim/outputs through this
+    @current_iter_data.setter
+    def current_iter_data(self, value):
+        self.state.current = value
+
+    @property
+    def iter_data_list(self):
+        return self.state.history
+
+    @iter_data_list.setter
+    def iter_data_list(self, value):
+        self.state.history = value
+
+    @property
+    def s_mult(self):
+        return self.state.s_mult
+
+    @s_mult.setter
+    def s_mult(self, value):
+        self.state.s_mult = float(value)
+
+    def __init__(self, problem, method_config: AttrDict, *, initial_guess=None, previous_guess=None) -> None:
+        self.state = SegmentState()
+        self.name           = problem.name
+        self.problem        = problem
         self.method_config  = method_config
-        self.index_map      = formulation_obj.index_map
-        self.nondim         = formulation_obj.nondim
-        self.params         = formulation_obj.params
+        self.index_map      = problem.index_map
+        self.nondim         = problem.nondim
+        self.params         = problem.params
 
-        # hyperparams/fcns are {<module>: {<name>: <value>}}, mirroring a trajectory's fcns:/params:
+        # Numerical recipes pair module hyperparameters with their configured functions.
         method_hyperparams = method_config.get('hyperparams', AttrDict())
         method_fcns        = method_config.get('fcns', AttrDict())
 
@@ -58,32 +74,24 @@ class Subproblem():
         self._trust_region_penalty_fcn = self.fcns.trust_region.penalty
         self._convergence_check_fcn    = self.fcns.convergence.check
 
-        # troubleshooting is opt-in: unset unless a config wires fcns.troubleshoot.*
-        troubleshoot_fcns = self.fcns.get('troubleshoot', AttrDict())
-        self._troubleshoot_on_error_fcn = troubleshoot_fcns.get('on_error')
-        self._troubleshoot_on_step_fcn  = troubleshoot_fcns.get('on_step')
-
         # Dictionary of constraints for this subproblem
         self.constraints = AttrDict()
-        for cnstr_name, constraint in formulation_obj.constraints.items():
+        for cnstr_name, constraint in problem.constraints.items():
             scp_class_name = f"scp_{constraint.type}"
             constraintClass = getattr(self.constraint_type_module, scp_class_name)
             self.constraints[cnstr_name] = constraintClass(constraint, self)
 
         # Dictionary of cost types for this subproblem
         self.costs = AttrDict()
-        for cost_name, cost in formulation_obj.costs.items():
+        for cost_name, cost in problem.costs.items():
             scp_class_name = f"scp_{cost.type}"
             costClass = getattr(self.cost_type_module, scp_class_name)
             self.costs[cost_name] = costClass(cost, self)
 
         self.free_final_time = self.derive_free_final_time()
 
-        self.mesh = make_mesh(self.index_map.N.all, self.hyperparams.discretize, self.fcns.discretize, segments=formulation_obj.hp_segments)
-        self._supplied_guess = initial_guess
-        self._previous_guess = previous_guess
-        self.initialize()
-        del self._supplied_guess, self._previous_guess
+        self.mesh = make_mesh(self.index_map.N.all, self.hyperparams.discretize, self.fcns.discretize, segments=problem.hp_segments)
+        self.initialize(initial_guess, previous_guess)
 
         self.cp_params            = AttrDict()
         self.cp_vars              = AttrDict()
@@ -136,21 +144,26 @@ class Subproblem():
         return not (initial is not None and final is not None and final.is_fixed)
 
     def _validate_time_config(self, initial, final) -> None:
-        """Hook for a subclass to reject invalid combinations of time constraints."""
-        pass
+        """Reject an independently fixed epoch on an inherited-time segment."""
+        if initial is not None and self.inherits_start_epoch():
+            raise ValueError(
+                f"segment '{self.name}' declares both initial_time and time continuity; "
+                "its start epoch comes from the preceding segment, so drop the initial_time"
+            )
+
+    def inherits_start_epoch(self) -> bool:
+        return any(self.find_constraint(kind) is not None
+                   for kind in ("time_continuity", "full_continuity"))
 
     def _anchor_start_time(self) -> bool:
         """Whether this subproblem's own t=0 should be pinned via dt[0,0]==0.
 
-        A subclass whose start epoch is inherited from elsewhere (e.g. a
-        chained phase) overrides this to skip the anchor when its own
-        local epoch floats freely instead.
+        Explicit time couplings let the epoch float with the source segment.
         """
-        return True
+        return not self.inherits_start_epoch()
 
-    def initialize(self) -> None:
-        formulation_obj     = self.phase
-        self.initial_guess  = AttrDict()
+    def initialize(self, supplied=None, previous=None) -> None:
+        self.initial_guess = AttrDict()
 
         for constraint in self.constraints.values():
             constraint.compile(self)
@@ -162,12 +175,16 @@ class Subproblem():
 
         self.fcns.convergence.init_tolerances(self)
 
-        self.fcns.initial_guess.set(formulation_obj, self)
-
+        self.initial_guess = prepare_initial_guess(
+            self, supplied, previous)
+        self.Ts_init = self.initial_guess.t[-1] - self.initial_guess.t[0]
+        self.cost_init = self.cost_type_module.compute_nonconvex_terminal_costs(
+            self.initial_guess.z, self.initial_guess.nu, self.problem, self)
         self._reset_iter_data()
 
     def _reset_iter_data(self):
         self.iter_data_list = []
+        self.state.scalar_trace = []
 
         self.current_iter_data = recursive_attrdict({
             "iter_num": 0,
@@ -187,9 +204,12 @@ class Subproblem():
         self.initial_guess = prepared
         self.Ts_init = prepared.t[-1] - prepared.t[0]
         self.cost_init = self.cost_type_module.compute_nonconvex_terminal_costs(
-            prepared.z, prepared.nu, self.phase, self)
+            prepared.z, prepared.nu, self.problem, self)
         for constraint in self.constraints.values():
             penalties.reset_penalty_values(constraint.penalties)
+            if hasattr(constraint, 'lagrangian_dual'):
+                constraint.lagrangian_dual.fill(0.)
+            constraint.__dict__.pop('g_nl', None)
         reset = self.fcns.trust_region.get('reset')
         if reset is not None:
             reset(self)
@@ -199,11 +219,7 @@ class Subproblem():
         self._reset_iter_data()
 
     def prepare_guess(self, supplied=None, previous=None):
-        scratch = copy.copy(self)
-        scratch.initial_guess = AttrDict()
-        scratch._supplied_guess, scratch._previous_guess = supplied, previous
-        scratch.fcns.initial_guess.set(scratch.phase, scratch)
-        return scratch.initial_guess
+        return prepare_initial_guess(self, supplied, previous)
 
     def create_cvxpy_parameters(self) -> None:
         N       = self.index_map.N.all
@@ -313,10 +329,6 @@ class Subproblem():
         for constraint in self.constraints.values():
             constraint.update_penalty_parameters(self)
 
-    def read_solution(self) -> None:
-        self._dz_new  = self.dz.value
-        self._dnu_new = self.dnu.value
-
     def apply_step(self, alpha: float = 1.0) -> None:
         dz_new  = self._dz_new
         dnu_new = self._dnu_new
@@ -362,6 +374,18 @@ class Subproblem():
 
     def record_iter_data(self) -> None:
         self.iter_data_list.append(copy.deepcopy(self.current_iter_data))
+        retention = self.method_config.get('history', 'scalars')
+        if retention not in {'none', 'scalars', 'full'}:
+            raise ValueError('history must be none, scalars, or full')
+        if retention != 'none':
+            fields = ('iter_num', 'cost', 'penalty_cost', 'alpha', 'chk', 'converged',
+                      't_start', 't_final', 'discretization_time', 'parse_time', 'solve_time',
+                      'tr_ratio', 's_mult')
+            self.state.scalar_trace.append(copy.deepcopy({key: self.current_iter_data[key]
+                for key in fields if key in self.current_iter_data}))
+        if retention != 'full' and len(self.iter_data_list) > 3:
+            # The second-order proximal update needs two previous references.
+            self.iter_data_list[:] = [self.iter_data_list[0], *self.iter_data_list[-2:]]
 
     def update_hyperparams(self) -> None:
         """Post-step autotuning: trust region first (if configured), then constraint penalties."""
@@ -376,13 +400,3 @@ class Subproblem():
     def update_constraint_penalties(self) -> None:
         for constraint in self.constraints.values():
             constraint.update_constraint_penalties(self)
-
-    def troubleshoot_step(self) -> tuple[bool, str | None]:
-        if self._troubleshoot_on_step_fcn is None:
-            return True, None
-        return self._troubleshoot_on_step_fcn([self])
-
-    def troubleshoot(self, exc=None) -> str:
-        if self._troubleshoot_on_error_fcn is None:
-            raise (exc if exc is not None else RuntimeError("solve failed with no troubleshooting configured"))
-        return self._troubleshoot_on_error_fcn([self], exc)
