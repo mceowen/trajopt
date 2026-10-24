@@ -6,6 +6,7 @@ inherit:
   - trajopt/methods/common/configs/convergence/standard.yaml
   - trajopt/methods/common/configs/cost/standard.yaml
   - trajopt/methods/common/configs/penalties/proxlin.yaml
+  - trajopt/methods/common/configs/initial_guess/straight_line.yaml
   - trajopt/methods/common/configs/troubleshoot/adjust_trust_region.yaml
 
 hyperparams:

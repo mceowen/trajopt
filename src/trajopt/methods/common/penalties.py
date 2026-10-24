@@ -102,12 +102,11 @@ def _resolve_part_indices(index_map, indices_map, n_cols):
     return part_indices, vb_type_by_part
 
 
-def alloc_penalty_parts(scp_subproblem, shape, indices_map, norm, cfg, nonnegative_dual) -> AttrDict:
+def alloc_penalty_parts(scp_subproblem, shape, indices_map, norm, cfg, nonnegative_dual, *, eps) -> AttrDict:
     """Splits one constraint's buffer into named parts by z-component indices, each its own
     plain penalty dict with its own vb_type. vb_var recombines them column-wise."""
     N, n_cols = shape
     part_indices, vb_type_by_part = _resolve_part_indices(scp_subproblem.index_map, indices_map, n_cols)
-    eps_default = np.atleast_1d(getattr(cfg, 'eps', 1e-4)).astype(float)
 
     gp = AttrDict()
     gp.shape, gp.nonnegative_dual = shape, nonnegative_dual
@@ -116,14 +115,13 @@ def alloc_penalty_parts(scp_subproblem, shape, indices_map, norm, cfg, nonnegati
     gp.vb_p_var = None
     gp.parts = AttrDict()
     gp.part_indices = part_indices
-    gp.eps = np.full(n_cols, eps_default[0] if eps_default.size == 1 else 1e-4)
+    gp.eps = np.broadcast_to(eps, (n_cols,)).astype(float).copy()
     for name, idx in part_indices.items():
         p = alloc_penalty(shape=(N, len(idx)), vb_type=vb_type_by_part[name], norm=norm,
                            cfg=cfg, nonnegative_dual=nonnegative_dual)
-        p.eps = eps_default
+        p.eps = gp.eps[idx].copy()
         init_penalty_values(p)
         gp.parts[name] = p
-        gp.eps[idx] = eps_default
     return gp
 
 
@@ -424,7 +422,7 @@ def _create_sparse_aggregate(p, scp_subproblem, cname) -> None:
     N = p.vb_p_var.shape[0]
 
     v = alloc_penalty(shape=(N,), vb_type="sparse", norm=p.norm, cfg=p.cfg, nonnegative_dual=True)
-    v.eps = np.atleast_1d(getattr(p.cfg, 'eps', 1e-4)).astype(float) if p.cfg else np.atleast_1d(1e-4)
+    v.eps = np.atleast_1d(np.sum(np.broadcast_to(p.eps, (p.shape[1],))))
     init_penalty_values(v)
 
     v.vb_p_var = cp.Variable(N, nonneg=True, name=f"vb_p_{cname}_{scp_subproblem.name}")
@@ -454,7 +452,7 @@ def _create_sparse_aggregate_scalar(p, scp_subproblem, cname) -> None:
         return
 
     v = alloc_penalty(shape=(1,), vb_type="sparse", norm=p.norm, cfg=p.cfg, nonnegative_dual=True)
-    v.eps = np.atleast_1d(getattr(p.cfg, 'eps', 1e-4)).astype(float) if p.cfg else np.atleast_1d(1e-4)
+    v.eps = np.atleast_1d(p.shape[0] * np.sum(np.broadcast_to(p.eps, (p.shape[1],))))
     init_penalty_values(v)
 
     v.vb_p_var = cp.Variable(1, nonneg=True, name=f"vb_p_{cname}_{scp_subproblem.name}")

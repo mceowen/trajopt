@@ -37,6 +37,9 @@ fcns:
       nonconvex_running:   trajopt/methods/common/trust_region.py:merit_cost_scp_nonconvex_running
       nonconvex_terminal:  trajopt/methods/common/trust_region.py:merit_cost_scp_nonconvex_terminal
       nonconvex_minimax:   trajopt/methods/common/trust_region.py:merit_cost_scp_nonconvex_minimax
+      convex_terminal:    trajopt/methods/common/trust_region.py:merit_cost_scp_convex
+      convex_running:     trajopt/methods/common/trust_region.py:merit_cost_scp_convex
+      min_norm_terminal:  trajopt/methods/common/trust_region.py:merit_cost_scp_min_norm_terminal
       min_time:            trajopt/methods/common/trust_region.py:merit_cost_scp_min_time
       final_state:         trajopt/methods/common/trust_region.py:merit_cost_scp_final
       final_control:       trajopt/methods/common/trust_region.py:merit_cost_scp_final

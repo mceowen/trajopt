@@ -567,13 +567,49 @@ def compile_merit_penalty(constraint, scp_phase) -> None:
 def compile_merit_cost(self, scp_phase):
     build_fn = scp_phase.fcns.trust_region.merit_cost.get(self.type)
     if build_fn is None:
-        return
+        raise ValueError(f"Cost {self.name!r} ({self.type}) requires a trust_region.merit_cost builder")
     fn = build_fn(self, scp_phase)
     self._has_merit = True
+    if self.type in {'convex_terminal', 'convex_running'}:
+        _compile_cvxpy_merit_cost(self, scp_phase, fn)
+        return
     self._merit_eval = jax.jit(fn)
     def merit_line(alpha, z_ref, dz, nu_ref, dnu, params):
         return fn(z_ref + alpha * dz, nu_ref + alpha * dnu, params)
     self._merit_vg = jax.jit(jax.value_and_grad(merit_line, argnums=0))
+
+
+def _compile_cvxpy_merit_cost(self, scp_phase, fn):
+    """Evaluate CP-aware cost callbacks and their directional subgradients.
+
+    These variables are private to merit evaluation; backend trial/reference
+    variables are never assigned or read here. Convex callbacks can use CVXPY
+    atoms that cannot be traced by JAX.
+    """
+    z = cp.Variable(scp_phase.initial_guess.z.shape)
+    nu = cp.Variable(scp_phase.initial_guess.nu.shape)
+    expression = fn(z, nu, scp_phase.params)
+    if not isinstance(expression, cp.Expression):
+        expression = cp.Constant(expression)
+
+    def evaluate(z_value, nu_value, params):
+        z.value, nu.value = np.asarray(z_value), np.asarray(nu_value)
+        return float(expression.value)
+
+    def value_and_grad(alpha, z_ref, dz, nu_ref, dnu, params):
+        value = evaluate(z_ref + alpha * dz, nu_ref + alpha * dnu, params)
+        gradient = expression.grad
+        slope = 0.
+        for variable, direction in ((z, dz), (nu, dnu)):
+            if variable not in gradient:
+                continue
+            derivative = gradient[variable]
+            if derivative is None:
+                raise ValueError(f"Cost {self.name!r} has no subgradient at the reference trajectory")
+            slope += float(np.asarray(derivative.T @ np.asarray(direction).ravel(order='F')).item())
+        return value, slope
+
+    self._merit_eval, self._merit_vg = evaluate, value_and_grad
 
 
 def evaluate_merit_cost(self, z, nu, params):
@@ -590,6 +626,36 @@ def merit_cost_value_and_grad_alpha(self, alpha, z_ref, dz, nu_ref, dnu, params)
 
 
 # SCP_COST_TYPES
+
+def merit_cost_scp_convex(self, scp_phase):
+    """Match the normalized nodal callbacks and weights used by the CP recipe."""
+    idx = scp_phase.index_map.indices
+    cost = self.cost
+    nodes = np.atleast_1d(cost.nodes)
+    weights = np.ones(scp_phase.index_map.N.all)
+    if self.type == 'convex_running':
+        mesh_weights = scp_phase.mesh.weights
+        if mesh_weights is not None:
+            weights = np.concatenate(([0.], len(weights) * mesh_weights))
+        nodes = [k for k in range(len(weights)) if k in nodes]
+
+    def eval_fn(z, nu, params):
+        return sum(weights[k] * cost.w * cost.fcn_dim(
+            z[k, idx.z.state], nu[k, idx.nu.control], 0, params)
+            for k in nodes if weights[k] != 0)
+    return eval_fn
+
+
+def merit_cost_scp_min_norm_terminal(self, scp_phase):
+    idx = jnp.asarray(self.cost.idx)
+    target = jnp.asarray(self.cost.value if self.cost.value is not None else np.zeros(len(idx)))
+
+    def eval_fn(z, nu, params):
+        squared = jnp.sum((z[-1, idx] - target)**2)
+        # Select the zero subgradient at the norm's nondifferentiable origin.
+        return jnp.where(squared > 0, jnp.sqrt(jnp.where(squared > 0, squared, 1.)), 0.)
+    return eval_fn
+
 
 def first_nonconvex_terminal_cost(scp_phase):
     for scp_cost in scp_phase.costs.values():
@@ -656,10 +722,15 @@ def compute_nonconvex_terminal_cost_hessians(z, nu, phase, scp_phase):
 
 
 def merit_cost_scp_nonconvex_running(self, scp_phase):
+    """Match the objective on the augmented trajectory; dynamics integrate the cost."""
+    indices = scp_phase.index_map.indices.z.running_cost
+    gamma = self.cost.gamma_idx
+    if gamma is None or not len(indices):
+        return lambda z, nu, params: jnp.asarray(0.)
+    gamma_z_idx = int(indices[gamma])
     w = self.cost.w
-    fcn_batched = jax.jit(jax.vmap(jax.jit(self.cost.fcn_znu), in_axes=(0, 0, None)))
     def eval_fn(z, nu, params):
-        return w * jnp.sum(fcn_batched(z, nu, params))
+        return w * z[-1, gamma_z_idx]
     return eval_fn
 
 
@@ -681,9 +752,20 @@ def merit_cost_scp_nonconvex_minimax(self, scp_phase):
 
 
 def merit_cost_scp_min_time(self, scp_phase):
-    dil_idx = jnp.array(scp_phase.index_map.indices.nu.dilation_factor)
+    """Use the same normalized time coordinates as the configured convex recipe."""
+    if not scp_phase.free_final_time:
+        return lambda z, nu, params: jnp.asarray(0.)
+    from trajopt.methods.common.scp.cost_types import min_time_all_nodes, min_time_final_node
+    recipe = scp_phase.fcns.cost.min_time
+    if recipe is min_time_final_node:
+        nodes = slice(-1, None)
+    elif recipe is min_time_all_nodes:
+        nodes = slice(None)
+    else:
+        raise ValueError('Custom minimum-time recipes require a matching trust_region.merit_cost.min_time builder')
+    time_idx = scp_phase.index_map.indices.z.time[0]
     def eval_fn(z, nu, params):
-        return jnp.sum(nu[:, dil_idx[0]])
+        return jnp.sum(z[nodes, time_idx])
     return eval_fn
 
 

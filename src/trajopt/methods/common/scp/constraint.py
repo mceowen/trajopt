@@ -69,14 +69,13 @@ class SCPConstraint():
             return [position.get(i) for i in range(width)]
         return None
 
-    def _resolve_eps(self, scp_subproblem, shape):
+    def _resolve_eps(self, scp_subproblem, shape, cfg):
         """Feasibility tolerance: constraint eps, else penalty eps, else 1e-4.
 
         A mapping sets the components it names, the rest take its 'default' key.
         """
         raw = getattr(self.constraint, 'eps', None)
         if raw is None:
-            cfg = self.penalties.cfg
             raw = getattr(cfg, 'eps', None) if cfg else None
         if raw is None:
             raw = 1e-4
@@ -134,10 +133,12 @@ class SCPConstraint():
         norm       = getattr(cfg, 'norm', 'l2') if cfg else 'l2'
 
         indices_map = getattr(cfg, 'indices', None) if cfg else None
+        eps = self._resolve_eps(scp_subproblem, shape, cfg)
         if indices_map is not None:
             # indices: {state: {vb: sparse}, default: {vb: standard}, ...}
             self.penalties = penalties.alloc_penalty_parts(
                 scp_subproblem, shape, indices_map, norm, cfg, self.nonnegative_dual,
+                eps=eps,
             )
             return
 
@@ -145,7 +146,7 @@ class SCPConstraint():
             shape=shape, vb_type=vb_type, norm=norm,
             cfg=cfg, nonnegative_dual=self.nonnegative_dual,
         )
-        self.penalties.eps = self._resolve_eps(scp_subproblem, shape)
+        self.penalties.eps = eps
         penalties.init_penalty_values(self.penalties)
 
     def create_penalty_parameters(self, scp_subproblem):

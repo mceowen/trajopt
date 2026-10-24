@@ -3,4 +3,7 @@ inherit: ms.yaml
 trajectory:
   num_nodes: 9
 method:
-  inherit: trajopt/methods/common/configs/discretize/pseudospectral_p.yaml
+  # Keep coarse-mesh dynamics exact and buffer the terminal state.
+  inherit:
+    - trajopt/methods/stable/configs/first_order/autoscvx-term.yaml
+    - trajopt/methods/common/configs/discretize/pseudospectral_p.yaml
