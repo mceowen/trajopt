@@ -18,7 +18,7 @@ from trajopt.methods.reporting import SolveReporter
 from trajopt.methods.trajectory_conversion import export_set, export_trajectory
 from trajopt.methods.policies.steps import select_step
 from trajopt.methods.prepare import PreparedSolve, prepare, _without_display_flags
-from trajopt.methods.provenance import environment
+from trajopt.methods.environment import collect_environment
 from trajopt.methods.specs import MethodSpec
 from trajopt.methods.state import AlgorithmCheckpoint, SolverState
 from trajopt.outputs.results import AttemptRecord, SolveResult
@@ -455,7 +455,7 @@ class SCPDriver:
             attempts[-1].status if attempts else None,
             self.state.iterations, attempts, timings, diagnostics,
             dict(algorithm='SCPDriver', prepared_signature=self.prepared.signature,
-                 environment=environment(),
+                 environment=collect_environment(),
                  timing_scope='seconds since reset/resume; total_s excludes preparation; '
                               'last_call_s is the latest solve call; component timings overlap total_s'),
             tuple(history), self.problem, self.method_spec, data)

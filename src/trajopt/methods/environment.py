@@ -7,7 +7,7 @@ import platform
 
 
 @lru_cache(maxsize=1)
-def environment():
+def collect_environment():
     packages = {}
     for name in ('trajopt', 'numpy', 'scipy', 'jax', 'jaxlib', 'cvxpy', 'clarabel'):
         try:
