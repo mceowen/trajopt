@@ -5,12 +5,12 @@ import numpy as np
 import cvxpy as cp
 
 from trajopt.methods.common import penalties
-from trajopt.methods.initial_guess.preparation import prepare_initial_guess
-from trajopt.methods.common.mesh import make_mesh
-from trajopt.methods.state import SegmentState
+from trajopt.methods.common.initial_guess import prepare_initial_guess
+from trajopt.methods.common.discretize import make_mesh
+from trajopt.methods.common.utils.solverstate import SegmentState
 import trajopt.methods.common.scp.constraint_types as scp_constraint_type_module
 import trajopt.methods.common.scp.cost_types as scp_cost_type_module
-from trajopt.utils.tools import AttrDict, recursive_attrdict, resolve_function_from_string
+from trajopt.common.tools import AttrDict, recursive_attrdict, resolve_function_from_string
 
 
 def _resolve_fcns_tree(node):
@@ -330,6 +330,7 @@ class Subproblem():
             constraint.update_penalty_parameters(self)
 
     def apply_step(self, alpha: float = 1.0) -> None:
+        """Install the scaled primal step; evaluation and autotuning are explicit stages."""
         dz_new  = self._dz_new
         dnu_new = self._dnu_new
 
@@ -356,6 +357,8 @@ class Subproblem():
         self.current_iter_data.u_opt    = u_opt_new
         self.current_iter_data.s_opt    = s_opt_new
 
+    def evaluate_step(self) -> None:
+        """Read buffers and evaluate the accepted trajectory with the current weights."""
         for constraint in self.constraints.values():
             constraint.read_vb(self)
 
@@ -368,9 +371,9 @@ class Subproblem():
 
         self.current_iter_data.update(self.penalty_snapshot())
 
+    def check_convergence(self) -> None:
+        """Test segment stopping criteria before updating penalty weights."""
         self._convergence_check_fcn(self)
-
-        self.update_hyperparams()
 
     def record_iter_data(self) -> None:
         self.iter_data_list.append(copy.deepcopy(self.current_iter_data))
@@ -386,11 +389,6 @@ class Subproblem():
         if retention != 'full' and len(self.iter_data_list) > 3:
             # The second-order proximal update needs two previous references.
             self.iter_data_list[:] = [self.iter_data_list[0], *self.iter_data_list[-2:]]
-
-    def update_hyperparams(self) -> None:
-        """Post-step autotuning: trust region first (if configured), then constraint penalties."""
-        self.update_trust_region()
-        self.update_constraint_penalties()
 
     def update_trust_region(self) -> None:
         autotune = self.fcns.trust_region.get('autotune')

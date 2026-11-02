@@ -1,0 +1,24 @@
+fcns:
+  dynamics: trajopt/models/car/car.py:dynamics
+
+state:
+  x1:
+    idx: [0]
+    scale: 1
+  x2:
+    idx: [1]
+    scale: 1
+  theta:
+    idx: [2]
+    scale: 1
+
+control:
+  v:
+    idx: [0]
+    scale: 1
+  w:
+    idx: [1]
+    scale: 1
+
+time:
+  scale: 1

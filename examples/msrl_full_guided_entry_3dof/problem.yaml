@@ -1,17 +1,17 @@
 num_nodes: 199
-inherit: trajopt/models/configs/reentry_3dof.yaml
+inherit: trajopt/models/reentry_3dof/reentry_3dof.yaml
 
 fcns:
-  density_model: trajopt/missions/msrl.py:density_model
-  nonlinear_aero: trajopt/missions/msrl.py:nonlinear_aero
-  downrange_crossrange: trajopt/missions/msrl.py:downrange_crossrange
-  deploy_range_bias: trajopt/missions/msrl.py:deploy_range_bias
+  density_model: trajopt/models/msrl/msrl.py:density_model
+  nonlinear_aero: trajopt/models/msrl/msrl.py:nonlinear_aero
+  downrange_crossrange: ../common/msrl.py:downrange_crossrange
+  deploy_range_bias: ../common/msrl.py:deploy_range_bias
 
 params:
   planet:
-    inherit: trajopt/missions/configs/planets/mars.yaml
+    inherit: trajopt/models/planets/mars.yaml
   vehicle:
-    inherit: trajopt/missions/configs/vehicles/msrl.yaml
+    inherit: trajopt/models/msrl/msrl.yaml
 
   # touchdown target and deploy range bias (Mendeck & Craig Fig. 3):
   # guidance targets the touchdown site; chute deploy occurs on the arc

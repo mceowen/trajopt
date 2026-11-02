@@ -13,6 +13,7 @@ examples/local/
 .mpypy_cache/
 docs/_build/
 docs/examples/notebooks/
+/src/trajopt/**/flight
 
 # Build artifacts
 dist/

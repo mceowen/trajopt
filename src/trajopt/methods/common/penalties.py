@@ -4,7 +4,7 @@ import numpy as np
 import cvxpy as cp
 import jax.numpy as jnp
 
-from trajopt.utils.tools import AttrDict
+from trajopt.common.tools import AttrDict
 
 
 # =============================================================================

@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.ticker import MaxNLocator
 
-from trajopt.utils.tools import AttrDict, recursive_attrdict, resolve_function_from_string
+from trajopt.common.tools import AttrDict, recursive_attrdict, resolve_function_from_string
 
 plt.rcParams["text.usetex"] = False
 plt.rcParams.update({
@@ -19,7 +19,7 @@ plt.rcParams.update({
 })
 
 def _result_segments(result):
-    from trajopt.outputs.results import SolveResult
+    from trajopt.common.results import SolveResult
     if not isinstance(result, SolveResult):
         raise TypeError("Convergence plotting requires a SolveResult")
     return result.segment_data
@@ -90,7 +90,7 @@ def plot_result(result, evaluation=None, *, analysis_config=None, save=False,
                 show=False, save_dir=None, format="pdf"):
     """Plot the named segments and available diagnostics from a solve result."""
     from trajopt.analysis.validation import EvaluationResult, evaluate
-    from trajopt.outputs.results import SolveResult
+    from trajopt.common.results import SolveResult
 
     if not isinstance(result, SolveResult):
         raise TypeError("plot_result requires a SolveResult")

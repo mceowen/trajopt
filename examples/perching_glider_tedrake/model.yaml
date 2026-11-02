@@ -1,9 +1,9 @@
 # source: https://underactuated.mit.edu/trajopt.html#perching
 
 fcns:
-  dynamics:       perching_glider_tedrake.py:dynamics
-  x1x2:           perching_glider_tedrake.py:x1x2
-  body_dir:       perching_glider_tedrake.py:body_dir
+  dynamics:       trajopt/models/perching_glider_tedrake/perching_glider_tedrake.py:dynamics
+  x1x2:           trajopt/models/perching_glider_tedrake/perching_glider_tedrake.py:x1x2
+  body_dir:       trajopt/models/perching_glider_tedrake/perching_glider_tedrake.py:body_dir
   terminal_box:   perching_glider_tedrake.py:terminal_box
   u_squared_cost: perching_glider_tedrake.py:u_squared_cost
 

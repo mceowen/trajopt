@@ -1,13 +1,13 @@
 num_nodes: 50
-inherit: trajopt/models/configs/reentry_3dof.yaml
+inherit: trajopt/models/reentry_3dof/reentry_3dof.yaml
 
 fcns:
-  nonlinear_aero: trajopt/missions/ghame.py:nonlinear_aero
+  nonlinear_aero: trajopt/models/ghame/ghame.py:nonlinear_aero
 
 params:
-  planet.inherit: trajopt/missions/configs/planets/earth.yaml
+  planet.inherit: trajopt/models/planets/earth.yaml
   planet.omega: 0.0
-  vehicle.inherit: trajopt/missions/configs/vehicles/ghame.yaml
+  vehicle.inherit: trajopt/models/ghame/ghame.yaml
 
 constraints:
   dynamics:

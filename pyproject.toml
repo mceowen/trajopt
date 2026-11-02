@@ -2,6 +2,17 @@
 requires = ["hatchling>=1.10"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+only-include = ["src/trajopt", "examples"]
+exclude = ["**/__pycache__/**", "**/.ipynb_checkpoints/**", "**/plots/**"]
+
+[tool.hatch.build.targets.wheel.sources]
+"src" = ""
+"examples" = "trajopt/examples"
+
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/examples", "/README.md", "/LICENSE", "/pyproject.toml"]
+
 [project]
 name = "trajopt"
 version = "0.0.10"

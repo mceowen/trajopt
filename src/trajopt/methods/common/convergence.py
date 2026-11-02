@@ -1,5 +1,11 @@
 import numpy as np
-from trajopt.utils import tools
+from trajopt.common import tools
+
+
+def read_iteration_limit(config, overrides):
+    """Read the shared iteration budget from convergence settings."""
+    convergence = config.get("hyperparams", {}).get("convergence", {})
+    return int(overrides.get("iter_max", convergence.get("iter_max", 100)))
 
 
 def init_tolerances(self) -> None:

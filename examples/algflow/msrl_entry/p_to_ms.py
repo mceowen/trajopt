@@ -1,7 +1,7 @@
 """MSRL full guided entry: pseudospectral p-method to multiple shooting."""
 from pathlib import Path
 
-from trajopt.flows import AlgorithmFlow
+from trajopt.methods.stable.algflows import AlgorithmFlow
 
 
 def main():

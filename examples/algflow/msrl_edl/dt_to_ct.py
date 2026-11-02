@@ -1,7 +1,7 @@
 """MSRL entry, descent, and landing: discrete to CTCS aerodynamic-load enforcement."""
 from pathlib import Path
 
-from trajopt.flows import AlgorithmFlow
+from trajopt.methods.stable.algflows import AlgorithmFlow
 
 
 def main():

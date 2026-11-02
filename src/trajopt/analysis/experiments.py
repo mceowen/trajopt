@@ -5,8 +5,8 @@ import time
 
 import numpy as np
 
-from trajopt.utils._snapshot import freeze, thaw
-from trajopt.utils.tools import deep_merge, get_from_path, set_from_path
+from trajopt.common._snapshot import freeze, thaw
+from trajopt.common.tools import deep_merge, get_from_path, set_from_path
 
 
 @dataclass(frozen=True)
@@ -38,7 +38,7 @@ class ExperimentVariant:
     name: str
     method_overrides: Mapping = field(default_factory=dict)
     operation_factory: Callable | None = None
-    operation_id: str = "SCPDriver"
+    operation_id: str = "SCPMethod"
 
     def __post_init__(self):
         if not self.name:
@@ -88,18 +88,18 @@ class ExperimentResult:
 
 
 def _build_solver(config):
-    from trajopt.formulations.specs import normalize
-    from trajopt.methods.scp import SCPDriver
+    from trajopt.formulations.stable.specs import normalize
+    from trajopt.methods.stable.scp.scp_method import SCPMethod
 
     problem, method = normalize(config)
-    return SCPDriver(problem=problem, method=method)
+    return SCPMethod(problem=problem, method=method)
 
 
 def _solve_output(result):
     """Return the solve result or the final flow stage's result, including failures."""
-    from trajopt.flows.results import FlowResult
+    from trajopt.methods.stable.algflows.results import FlowResult
 
-    from trajopt.outputs.results import SolveResult
+    from trajopt.common.results import SolveResult
     if isinstance(result, FlowResult):
         result = result.final.output if result.final is not None else None
     if result is not None and not isinstance(result, SolveResult):

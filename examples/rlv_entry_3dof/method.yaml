@@ -1,11 +1,11 @@
-inherit: trajopt/methods/configs/dev/sqp/sqp.yaml
-#inherit: trajopt/methods/configs/stable/scp/autoscvx-term.yaml
+inherit: trajopt/methods/dev/configs/sqp/sqp.yaml
+#inherit: trajopt/methods/stable/configs/scp/autoscvx-term.yaml
 
 fcns:
   initial_guess:
     default:
-      guess: trajopt/methods/initial_guess/providers.py:straight_line
-      # guess: trajopt/methods/initial_guess/providers.py:propagation
+      guess: trajopt/methods/common/initial_guess.py:straight_line
+      # guess: trajopt/methods/common/initial_guess.py:propagation
 
 hyperparams:
   convergence:

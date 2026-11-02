@@ -1,7 +1,7 @@
 import numpy as np
 import cvxpy as cp
 
-from trajopt.utils.tools import deep_merge
+from trajopt.common.tools import deep_merge
 from trajopt.methods.common import penalties
 
 

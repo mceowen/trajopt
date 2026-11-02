@@ -1,0 +1,24 @@
+fcns:
+  dynamics:       trajopt/models/cartpole/cartpole.py:dynamics
+
+state:
+  x1:
+    idx: [0]
+    scale: 1
+  theta:
+    idx: [1]
+    scale: 1
+  x1dot:
+    idx: [2]
+    scale: 1
+  thetadot:
+    idx: [3]
+    scale: 1
+
+control:
+  fx1:
+    idx: [0]
+    scale: 1
+
+time:
+  scale: 1

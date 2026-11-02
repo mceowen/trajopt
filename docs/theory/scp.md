@@ -12,7 +12,7 @@ This page is a scaffold. Fill in the narrative explanation below.
 
 <!-- Convexification, discretization, solving the convex subproblem,
      convergence checking. Reference the relevant modules:
-     trajopt.methods.scp.convexify, .discretize, .scvx, .convergence. -->
+     trajopt.methods.stable.scp.scp_method.convexify, .discretize, .scvx, .convergence. -->
 
 ## Auto-tuning
 

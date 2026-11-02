@@ -1,10 +1,10 @@
 # source: https://github.com/UW-ACL/SCPToolbox.jl/tree/master/test/examples/starship_flip
 
 fcns:
-  dynamics: starship.py:dynamics
+  dynamics: trajopt/models/starship/starship.py:dynamics
   u_squared_cost: starship.py:u_squared_cost
-  ei: starship.py:ei
-  ej: starship.py:ej
+  ei: trajopt/models/starship/starship.py:ei
+  ej: trajopt/models/starship/starship.py:ej
   position: starship.py:position
   body_dir: starship.py:body_dir
   velocity: starship.py:velocity

@@ -28,7 +28,7 @@ trajectory:
 
 # solution method
 method:
-  inherit: trajopt/methods/configs/stable/scp/autoscvx-term.yaml
+  inherit: trajopt/methods/stable/configs/scp/autoscvx-term.yaml
 
   hyperparams:
     convergence:

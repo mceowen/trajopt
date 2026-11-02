@@ -5,5 +5,5 @@ trajectory:
 method:
   # Keep coarse-mesh dynamics exact and buffer the terminal state.
   inherit:
-    - trajopt/methods/configs/stable/scp/autoscvx-term.yaml
+    - trajopt/methods/stable/configs/scp/autoscvx-term.yaml
     - trajopt/methods/common/configs/discretize/pseudospectral_p.yaml

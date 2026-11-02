@@ -3,11 +3,11 @@ phases:
   # guided entry: guidance initiation to parachute deployment
   entry:
     num_nodes: 199
-    inherit: trajopt/missions/configs/msrl_common_phase.yaml
+    inherit: ../common/msrl_common_phase.yaml
 
     fcns:
-      nonlinear_aero: trajopt/missions/msrl.py:nonlinear_aero
-      deploy_position_error_sq: trajopt/missions/msrl.py:deploy_position_error_sq
+      nonlinear_aero: trajopt/models/msrl/msrl.py:nonlinear_aero
+      deploy_position_error_sq: ../common/msrl.py:deploy_position_error_sq
 
     params:
       deploy_target:
@@ -144,10 +144,10 @@ phases:
 
   descent:
     num_nodes: 40
-    inherit: trajopt/missions/configs/msrl_common_phase.yaml
+    inherit: ../common/msrl_common_phase.yaml
 
     fcns:
-      nonlinear_aero: trajopt/missions/msrl.py:parachute_aero
+      nonlinear_aero: trajopt/models/msrl/msrl.py:parachute_aero
 
     constraints:
       state_continuity:
@@ -183,14 +183,14 @@ phases:
   # powered descent: backshell separation to the terminal descent handoff
   pdg:
     num_nodes: 233
-    inherit: trajopt/missions/configs/msrl_common_phase.yaml
+    inherit: ../common/msrl_common_phase.yaml
 
     fcns:
-      nonlinear_aero: trajopt/missions/msrl.py:lander_aero
-      dynamics: trajopt/missions/msrl.py:powered_descent_dynamics
-      thrust_accel_mag: trajopt/missions/msrl.py:thrust_accel_mag
-      thrust_accel_sq: trajopt/missions/msrl.py:thrust_accel_sq
-      max_thrust_accel_cone: trajopt/missions/msrl.py:max_thrust_accel_cone
+      nonlinear_aero: trajopt/models/msrl/msrl.py:lander_aero
+      dynamics: trajopt/models/msrl/msrl.py:powered_descent_dynamics
+      thrust_accel_mag: ../common/msrl.py:thrust_accel_mag
+      thrust_accel_sq: ../common/msrl.py:thrust_accel_sq
+      max_thrust_accel_cone: ../common/msrl.py:max_thrust_accel_cone
 
     # thrust acceleration in the velocity frame, appended after bank and aoa
     control.aT_v:

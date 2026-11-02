@@ -3,7 +3,7 @@ from pathlib import Path
 
 import jax
 
-from trajopt.flows import AlgorithmFlow
+from trajopt.methods.stable.algflows import AlgorithmFlow
 
 
 def main():

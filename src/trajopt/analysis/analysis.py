@@ -2,7 +2,7 @@ import jax
 import numpy as np
 
 from collections.abc import Mapping
-from trajopt.utils.tools import AttrDict
+from trajopt.common.tools import AttrDict
 
 jax.config.update("jax_enable_x64", True)
 

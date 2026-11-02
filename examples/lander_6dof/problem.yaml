@@ -1,11 +1,11 @@
 num_nodes: 15
-inherit: trajopt/models/configs/lander_6dof.yaml
+inherit: trajopt/models/lander_6dof/lander_6dof.yaml
 
 params:
   planet:
-    inherit: trajopt/missions/configs/planets/nondim_planet.yaml
+    inherit: trajopt/models/planets/nondim_planet.yaml
   vehicle:
-    inherit: trajopt/missions/configs/vehicles/mikilander.yaml
+    inherit: trajopt/models/lander_6dof/mikilander.yaml
 
   min_thrust:   0.3
   max_thrust:   5
@@ -20,15 +20,15 @@ params:
   theta_tilt:          45
 
 fcns:
-  altitude:      trajopt/models/lander_6dof.py:altitude
-  speed:         trajopt/models/lander_6dof.py:speed
-  tilt:          trajopt/models/lander_6dof.py:tilt
-  angular_speed: trajopt/models/lander_6dof.py:angular_speed
-  glide_slope:   trajopt/models/lander_6dof.py:glide_slope
-  los:           trajopt/models/lander_6dof.py:los
-  u_squared_cost: trajopt/models/lander_6dof.py:u_squared_cost
-  one:            trajopt/models/lander_6dof.py:one
-  tilt2:          trajopt/models/lander_6dof.py:tilt2
+  altitude:      trajopt/models/lander_6dof/lander_6dof.py:altitude
+  speed:         trajopt/models/lander_6dof/lander_6dof.py:speed
+  tilt:          trajopt/models/lander_6dof/lander_6dof.py:tilt
+  angular_speed: trajopt/models/lander_6dof/lander_6dof.py:angular_speed
+  glide_slope:   trajopt/models/lander_6dof/lander_6dof.py:glide_slope
+  los:           trajopt/models/lander_6dof/lander_6dof.py:los
+  u_squared_cost: trajopt/models/lander_6dof/lander_6dof.py:u_squared_cost
+  one:            trajopt/models/lander_6dof/lander_6dof.py:one
+  tilt2:          trajopt/models/lander_6dof/lander_6dof.py:tilt2
 
 constraints:
   dynamics:

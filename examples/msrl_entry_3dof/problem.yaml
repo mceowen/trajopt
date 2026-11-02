@@ -1,15 +1,15 @@
 num_nodes: 101
-inherit: trajopt/models/configs/reentry_3dof.yaml
+inherit: trajopt/models/reentry_3dof/reentry_3dof.yaml
 
 fcns:
-  density_model: trajopt/missions/msrl.py:density_model
-  nonlinear_aero: trajopt/missions/msrl.py:nonlinear_aero
+  density_model: trajopt/models/msrl/msrl.py:density_model
+  nonlinear_aero: trajopt/models/msrl/msrl.py:nonlinear_aero
 
 params:
   planet:
-    inherit: trajopt/missions/configs/planets/mars.yaml
+    inherit: trajopt/models/planets/mars.yaml
   vehicle:
-    inherit: trajopt/missions/configs/vehicles/msrl.yaml
+    inherit: trajopt/models/msrl/msrl.yaml
 
   # density polynomial coefficients
   a: -4.418967

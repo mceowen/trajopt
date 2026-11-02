@@ -1,6 +1,6 @@
 import numpy as np
 
-from trajopt.utils.tools import AttrDict
+from trajopt.common.tools import AttrDict
 
 
 class ScalingMatrix:

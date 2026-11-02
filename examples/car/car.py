@@ -1,31 +1,11 @@
-# source: https://github.com/UW-ACL/SCPToolbox.jl/tree/master/test/examples/starship_flip
-
+"""Scenario costs, constraints, and output callbacks."""
 import numpy as np
 import jax.numpy as jnp
-import cvxpy as cp
+
 
 def u_squared_cost(x, u, t, params, fcns):
     return jnp.atleast_1d(jnp.sum(u**2))
 
-def dynamics(x, u, t, params, fcns):
-
-    # extract state
-    pos1  = x[0]
-    pos2  = x[1]
-    theta = x[2]
-
-    # translational and angular speeds as direct control
-    v     = u[0]
-    w     = u[1]
-
-    # dynamics
-    pos1_dot  = v * jnp.cos(theta)
-    pos2_dot  = v * jnp.sin(theta)
-    theta_dot = w 
-
-    x_dot = jnp.array([pos1_dot, pos2_dot, theta_dot]) 
-
-    return x_dot
 
 def obstacle(x, u, t, params, fcns):
     pos1  = x[0]
@@ -37,15 +17,18 @@ def obstacle(x, u, t, params, fcns):
 
     return jnp.array([d1, d2])
 
+
 def x1x2(x, u, t, params, fcns):
     pos1  = x[0]
     pos2  = x[1]
 
     return jnp.array([pos1, pos2])
 
+
 def body_dir(x, u, t, params, fcns):
     theta = x[2]
     return jnp.array([jnp.cos(theta), jnp.sin(theta)])
+
 
 def obstacle_circles(params, ax) -> np.ndarray:
     th  = np.linspace(0, 2 * np.pi, 200)

@@ -1,4 +1,4 @@
-inherit: trajopt/methods/configs/dev/sqp/autosqp.yaml
+inherit: trajopt/methods/dev/configs/sqp/autosqp.yaml
 
 hyperparams:
   convergence:
@@ -23,7 +23,7 @@ hyperparams:
 fcns:
   initial_guess:
     default:
-      guess: trajopt/methods/initial_guess/providers.py:straight_line
+      guess: trajopt/methods/common/initial_guess.py:straight_line
 
 solver_opts:
   solver: PIQP

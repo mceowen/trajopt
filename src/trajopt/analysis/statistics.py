@@ -100,7 +100,7 @@ def extract_data(config: dict, data) -> dict:
     """
     from collections.abc import Mapping
     from trajopt.analysis.experiments import ExperimentResult
-    from trajopt.outputs.results import SolveResult
+    from trajopt.common.results import SolveResult
 
     if isinstance(data, ExperimentResult):
         grouped = {variant.name: [run.solve_result for run in data.runs

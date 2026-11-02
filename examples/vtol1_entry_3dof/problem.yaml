@@ -1,14 +1,14 @@
 num_nodes: 150
-inherit: trajopt/models/configs/reentry_3dof.yaml
+inherit: trajopt/models/reentry_3dof/reentry_3dof.yaml
 
 fcns:
-  nonlinear_aero: trajopt/missions/vtol.py:nonlinear_aero_jax
+  nonlinear_aero: trajopt/models/vtol/vtol.py:nonlinear_aero_jax
 
 params:
   planet:
-    inherit: trajopt/missions/configs/planets/earth.yaml
+    inherit: trajopt/models/planets/earth.yaml
   vehicle:
-    inherit: trajopt/missions/configs/vehicles/vtol.yaml
+    inherit: trajopt/models/vtol/vtol.yaml
 
 constraints:
   dynamics:

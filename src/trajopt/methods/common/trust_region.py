@@ -1,9 +1,60 @@
-import numpy as np
+"""Select steps and construct, evaluate, and update trust-region terms."""
+import math
+from collections.abc import Mapping
+from numbers import Integral
+
 import cvxpy as cp
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from trajopt.methods.common import penalties
+
+
+def _adaptive_values(value):
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        raise TypeError("Adaptive trust-region settings must be a mapping")
+    value = dict(value)
+    limit = value.get('max_rejects')
+    if isinstance(limit, bool) or not isinstance(limit, Integral) or limit < 1:
+        raise ValueError("adaptive.max_rejects must be a positive integer")
+    lower, upper = float(value['s_mult_min']), float(value['s_mult_max'])
+    if not (math.isfinite(lower) and math.isfinite(upper) and 0 < lower <= upper):
+        raise ValueError("adaptive s_mult bounds must be finite, positive, and ordered")
+    if not (math.isfinite(float(value['on_solve_fail'])) and float(value['on_solve_fail']) > 0):
+        raise ValueError("adaptive.on_solve_fail must be finite and positive")
+    if not (math.isfinite(float(value['pred_tol'])) and float(value['pred_tol']) >= 0):
+        raise ValueError("adaptive.pred_tol must be finite and nonnegative")
+    previous = -math.inf
+    bands = value.get('bands', ())
+    for band in bands:
+        below, factor = float(band['below']), float(band['s_factor'])
+        if not below > previous or not (math.isfinite(factor) and factor > 0):
+            raise ValueError("adaptive bands must have increasing thresholds and finite positive s_factor")
+        if not isinstance(band['accept'], bool):
+            raise ValueError("adaptive band accept must be a boolean")
+        previous = below
+    if not bands or previous != math.inf:
+        raise ValueError("adaptive bands must end with below: .inf")
+    return value
+
+
+def read_step_settings(config, overrides):
+    """Read joint line-search and adaptive trust-region settings."""
+    trust = config.get("hyperparams", {}).get("trust_region", {})
+    return {
+        "line_search": bool(overrides.get("line_search", trust.get("line_search", True))),
+        "alpha_min_ls": float(overrides.get("alpha_min_ls", trust.get("alpha_min_ls", 1e-7))),
+        "adaptive": _adaptive_values(overrides.get("adaptive", trust.get("adaptive"))),
+    }
+
+
+def select_step(segments, method_spec):
+    if not method_spec.line_search:
+        return 1.0
+    return line_search(segments, alpha_min=method_spec.alpha_min_ls)
 
 
 # =============================================================================
@@ -745,7 +796,10 @@ def merit_cost_scp_min_time(self, scp_phase):
     """Build a minimum time cost evaluator using the recipe's normalized time coordinates."""
     if not scp_phase.free_final_time:
         return lambda z, nu, params: jnp.asarray(0.)
-    from trajopt.methods.common.scp.cost_types import min_time_all_nodes, min_time_final_node
+    from trajopt.methods.common.scp.cost_types import (
+        min_time_all_nodes,
+        min_time_final_node,
+    )
     recipe = scp_phase.fcns.cost.min_time
     if recipe is min_time_final_node:
         nodes = slice(-1, None)

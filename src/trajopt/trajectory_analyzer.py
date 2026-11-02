@@ -1,10 +1,10 @@
 import os
 import sys
 
-import trajopt.utils.config_loader as config_loader
+import trajopt.common.config_reader as config_reader
 import trajopt.analysis.plotting as plotting
-from trajopt.trajectories import TrajectorySet
-from trajopt.utils.tools import deep_merge, recursive_attrdict
+from trajopt.common.trajectory import TrajectorySet
+from trajopt.common.tools import deep_merge, recursive_attrdict
 
 
 class _Tee:
@@ -38,7 +38,7 @@ class TrajectoryAnalyzer():
 
         try:
             self.config_path = config_path
-            self.config = config_loader.load_trajopt_config(config_path)
+            self.config = config_reader.load_trajopt_config(config_path)
             if method_overrides:
                 self.config.method = deep_merge(self.config.method, recursive_attrdict(method_overrides))
             self._build_method(initial_guess=initial_guess)
@@ -54,15 +54,15 @@ class TrajectoryAnalyzer():
         return False
 
     def _build_method(self, *, initial_guess=None):
-        from trajopt.formulations.specs import normalize
+        from trajopt.formulations.stable.specs import normalize
 
         analysis_config = self.config.get("analysis", {})
         full_history = any(analysis_config.get(key, False)
                            for key in ("compute_iters", "show_iters", "show_weights", "show_vb"))
         config = deep_merge(self.config, {"method": {"history": "full"}}) if full_history else self.config
         problem, method = normalize(config)
-        from trajopt.methods.scp import SCPDriver
-        self.method = SCPDriver(problem=problem, method=method, initial_guess=initial_guess)
+        from trajopt.methods.stable.scp.scp_method import SCPMethod
+        self.method = SCPMethod(problem=problem, method=method, initial_guess=initial_guess)
         self.problem = self.method.problem
 
     def _start_console_log(self, path=None):
@@ -91,7 +91,7 @@ class TrajectoryAnalyzer():
         except Exception:
             self.result = getattr(self.method, "result", None)
             raise
-        from trajopt.outputs.results import SolveResult
+        from trajopt.common.results import SolveResult
         if not isinstance(self.result, SolveResult):
             raise TypeError("A trajectory solve must return a SolveResult")
         return self.result
@@ -163,7 +163,7 @@ class TrajectoryAnalyzer():
         """Plot canonical solve, evaluation, or experiment data."""
         from trajopt.analysis.validation import EvaluationResult
         from trajopt.analysis.experiments import ExperimentResult
-        from trajopt.outputs.results import SolveResult
+        from trajopt.common.results import SolveResult
 
         if data is None:
             data = getattr(self, "experiment", None)

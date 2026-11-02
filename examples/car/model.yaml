@@ -1,32 +1,11 @@
+inherit: trajopt/models/car/car.yaml
+
 fcns:
-  dynamics: car.py:dynamics
   obstacle: car.py:obstacle
   u_squared_cost: car.py:u_squared_cost
   x1x2: car.py:x1x2
   body_dir: car.py:body_dir
   obstacle_circles: car.py:obstacle_circles
-
-state:
-  x1:
-    idx: [0]
-    scale: 1
-  x2:
-    idx: [1]
-    scale: 1
-  theta:
-    idx: [2]
-    scale: 1
-
-control:
-  v:
-    idx: [0]
-    scale: 1
-  w:
-    idx: [1]
-    scale: 1
-
-time: 
-  scale: 1
 
 outputs:
   x1x2:

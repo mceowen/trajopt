@@ -1,20 +1,20 @@
 num_nodes: 20
-inherit: trajopt/models/configs/quadrotor_3dof.yaml
+inherit: trajopt/models/quadrotor_3dof/quadrotor_3dof.yaml
 
 fcns:
-  thrust_norm:      trajopt/models/quadrotor_3dof.py:thrust_norm
-  obstacle:         trajopt/models/quadrotor_3dof.py:obstacle
-  max_thrust_cone:  trajopt/models/quadrotor_3dof.py:max_thrust_cone
-  xz:               trajopt/models/quadrotor_3dof.py:xz
-  yz:               trajopt/models/quadrotor_3dof.py:yz
-  one:              trajopt/models/quadrotor_3dof.py:one
-  u_squared:        trajopt/models/quadrotor_3dof.py:u_squared
+  thrust_norm:      trajopt/models/quadrotor_3dof/quadrotor_3dof.py:thrust_norm
+  obstacle:         trajopt/models/quadrotor_3dof/quadrotor_3dof.py:obstacle
+  max_thrust_cone:  trajopt/models/quadrotor_3dof/quadrotor_3dof.py:max_thrust_cone
+  xz:               trajopt/models/quadrotor_3dof/quadrotor_3dof.py:xz
+  yz:               trajopt/models/quadrotor_3dof/quadrotor_3dof.py:yz
+  one:              trajopt/models/quadrotor_3dof/quadrotor_3dof.py:one
+  u_squared:        trajopt/models/quadrotor_3dof/quadrotor_3dof.py:u_squared
 
 params:
   planet:
-    inherit: trajopt/missions/configs/planets/earth.yaml
+    inherit: trajopt/models/planets/earth.yaml
   vehicle:
-    inherit: trajopt/missions/configs/vehicles/quadrotor.yaml
+    inherit: trajopt/models/quadrotor_3dof/quadrotor.yaml
   obstacle:
     radius: 4.0
 

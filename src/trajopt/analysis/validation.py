@@ -10,9 +10,9 @@ import time
 import jax
 import numpy as np
 
-from trajopt.utils._snapshot import fingerprint, freeze, thaw
-from trajopt.outputs.results import SolveResult
-from trajopt.utils.tools import AttrDict, resolve_function_from_string
+from trajopt.common._snapshot import fingerprint, freeze, thaw
+from trajopt.common.results import SolveResult
+from trajopt.common.tools import AttrDict, resolve_function_from_string
 
 
 @dataclass(frozen=True)
@@ -226,7 +226,7 @@ def _physical_diagnostics(phase, iterate):
 
 def _coupling_diagnostics(problem, phases, segments):
     """Evaluate the segment couplings in physical units from trajectory endpoints."""
-    from trajopt.formulations.common import constraint_types
+    from trajopt.formulations.stable import constraint_types
 
     residuals = {}
     for spec in problem.couplings:
