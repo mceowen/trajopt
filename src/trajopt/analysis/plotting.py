@@ -18,11 +18,11 @@ plt.rcParams.update({
     'path.simplify': True, 'path.simplify_threshold': 0.1,
 })
 
-def _result_segments(result):
+def _result_phases(result):
     from trajopt.common.results import SolveResult
     if not isinstance(result, SolveResult):
         raise TypeError("Convergence plotting requires a SolveResult")
-    return result.segment_data
+    return result.phase_data
 
 
 plot_options = AttrDict({
@@ -88,7 +88,7 @@ def show_figures(figs=None):
 
 def plot_result(result, evaluation=None, *, analysis_config=None, save=False,
                 show=False, save_dir=None, format="pdf"):
-    """Plot the named segments and available diagnostics from a solve result."""
+    """Plot the named phases and available diagnostics from a solve result."""
     from trajopt.analysis.validation import EvaluationResult, evaluate
     from trajopt.common.results import SolveResult
 
@@ -102,11 +102,11 @@ def plot_result(result, evaluation=None, *, analysis_config=None, save=False,
     if evaluation.solve_result is not result:
         raise ValueError("Evaluation must belong to the supplied solve result")
     figures = {}
-    multi = len(evaluation.segments) > 1
-    for name, segment in evaluation.segments.items():
-        spec = result.problem.segments[name]
-        for key, figure in _build_segment(
-                spec.build(), spec.config.get("outputs", {}), segment.iterates, analysis_config).items():
+    multi = len(evaluation.phases) > 1
+    for name, phase in evaluation.phases.items():
+        spec = result.problem.phases[name]
+        for key, figure in _build_phase(
+                spec.build(), spec.config.get("outputs", {}), phase.iterates, analysis_config).items():
             figures[f"{name}_{key}" if multi else key] = figure
     figures.update(_diagnostic_figures(result, analysis_config))
     return _finish_figures(figures, save, show, save_dir or os.path.join("plots", "standalone"), format)
@@ -144,20 +144,20 @@ def plot_experiment(experiment, *, case=None, analysis_config=None, save=False,
     evaluations = {name: (run.evaluation if run.evaluation is not None else
                          evaluate(run.solve_result, analysis_config))
                    for name, run in runs.items() if run.solve_result is not None}
-    names = dict.fromkeys(name for report in evaluations.values() for name in report.segments)
+    names = dict.fromkeys(name for report in evaluations.values() for name in report.phases)
     figures = {}
     for name in names:
-        selected = {variant: report.segments[name].iterates
-                    for variant, report in evaluations.items() if name in report.segments
-                    and report.segments[name].iterates}
+        selected = {variant: report.phases[name].iterates
+                    for variant, report in evaluations.items() if name in report.phases
+                    and report.phases[name].iterates}
         if not selected:
             continue
         result = evaluations[next(iter(selected))].solve_result
-        spec = result.problem.segments[name]
+        spec = result.problem.phases[name]
         problem, outputs = spec.build(), spec.config.get("outputs", {})
-        segment_figures = (_build_segment(problem, outputs, next(iter(selected.values())), analysis_config)
+        phase_figures = (_build_phase(problem, outputs, next(iter(selected.values())), analysis_config)
                            if len(selected) == 1 else _build_comparison(problem, outputs, selected))
-        for key, figure in segment_figures.items():
+        for key, figure in phase_figures.items():
             figures[f"{name}_{key}" if len(names)>1 else key] = figure
     for variant, run in runs.items():
         if run.solve_result is not None:
@@ -188,7 +188,7 @@ def _group_outputs(outputs, declared):
     return grouped
 
 
-def _build_segment(problem, traj_configs, iters_all, analysis_cfg):
+def _build_phase(problem, traj_configs, iters_all, analysis_cfg):
     """Construct the standalone trajectory figures."""
     show_iters = analysis_cfg.get("show_iters", False)
     if not iters_all:
@@ -658,17 +658,17 @@ def convergence_plots(result, save=True):
 
 
 def _convergence_figures(source, renderer, prefix, save):
-    segments = _result_segments(source)
+    phases = _result_phases(source)
     result = source
     if (renderer is not _convergence_plot and result.iterations > 1
             and result.method.config.get("history", "scalars") != "full"):
         warnings.warn("Only the final penalty snapshot was retained; use method.history='full' "
                       "for per-iteration penalty or buffer plots", stacklevel=2)
-    multi = len(segments) > 1
+    multi = len(phases) > 1
     figures = {}
-    for name, segment in segments.items():
+    for name, phase in phases.items():
         suffix = f"_{name}" if multi else ""
-        figure = renderer(segment, suffix, save)
+        figure = renderer(phase, suffix, save)
         if figure is not None:
             figures[prefix + suffix] = figure
     return figures if multi else next(iter(figures.values()), None)

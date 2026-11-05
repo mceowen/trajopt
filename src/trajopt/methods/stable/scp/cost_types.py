@@ -2,8 +2,17 @@ import cvxpy as cp
 import jax
 import jax.numpy as jnp
 import numpy as np
-from trajopt.methods.common.scp.cost import SCPCost
 from trajopt.methods.common.trust_region import first_nonconvex_terminal_cost
+
+
+class SCPCost:
+    def __init__(self, cost, scp_subproblem) -> None:
+        self.cost = cost
+        self.type = cost.type
+        self.name = cost.name
+
+    def create_cvxpy_cost(self, scp_subproblem): pass
+    def update_cvxpy_parameters(self, scp_subproblem): pass
 
 
 class scp_nonconvex_running(SCPCost):

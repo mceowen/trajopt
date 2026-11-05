@@ -96,7 +96,7 @@ def extract_data(config: dict, data) -> dict:
     """Extract metrics from an ExperimentResult or named sequences of SolveResult.
 
     Shared solve timings include rejected attempts and are counted once. Dynamics
-    defect entries are segment stopping ratios, not physical rollout errors.
+    defect entries are phase stopping ratios, not physical rollout errors.
     """
     from collections.abc import Mapping
     from trajopt.analysis.experiments import ExperimentResult
@@ -144,7 +144,7 @@ def extract_data(config: dict, data) -> dict:
                 time_solve = 1000. * result.timings.get("numerical_s", 0.)
                 time_parse = 1000. * result.timings.get("canonicalization_s", 0.)
                 time_disc = 1000. * result.timings.get("local_model_s", 0.)
-                diagnostics = [result.diagnostics[name] for name in result.segment_data
+                diagnostics = [result.diagnostics[name] for name in result.phase_data
                                if name in result.diagnostics]
                 dyn_defect = np.asarray([float(d.get("stopping_ratios", {}).get("dynamics", np.nan))
                                          for d in diagnostics])

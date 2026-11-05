@@ -1,5 +1,5 @@
-inherit: trajopt/methods/dev/configs/sqp/sqp.yaml
-#inherit: trajopt/methods/stable/configs/scp/autoscvx-term.yaml
+inherit: trajopt/methods/dev/configs/second_order/sqp.yaml
+#inherit: trajopt/methods/stable/configs/first_order/autoscvx-term.yaml
 
 fcns:
   initial_guess:

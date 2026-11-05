@@ -2,8 +2,8 @@
 # PARAMETERS AND FUNCTIONS
 # ===============================
 params:
-  planet.inherit: trajopt/models/planets/mars.yaml
-  vehicle.inherit: ../../local/vehicles/cobra.yaml
+  planet.inherit: trajopt/models/common/planets/mars.yaml
+  # Supply vehicle parameters in the scenario configuration.
 
 fcns:
   # aero angles
@@ -99,22 +99,6 @@ outputs:
     title: "Position vs Velocity"
     xlabel: "Position (m)"
     ylabel: "Velocity (m/s)"
-
-  lut_density:
-    type: time_series
-    fcn: ../../local/aero/cobra_aero_6dof.py:lut_density_jax
-    group: density_comparison
-    title: "LUT Density vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Density (kg/m³)"
-  
-  exp_density:
-    type: time_series
-    fcn: ../../local/aero/cobra_aero_6dof.py:exp_density
-    group: density_comparison
-    title: "Exponential Density vs Time"
-    xlabel: "Time (s)"
-    ylabel: "Density (kg/m³)"
 
   heat_rate:
     type: time_series

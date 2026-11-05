@@ -2,14 +2,14 @@ num_nodes: 150
 inherit: trajopt/models/reentry_3dof/reentry_3dof.yaml
 
 fcns:
-  nonlinear_aero: trajopt/models/rlv_entry/rlv_entry.py:nonlinear_aero
+  nonlinear_aero: trajopt/models/reentry_3dof/rlv_entry/rlv_entry.py:nonlinear_aero
 
 params:
   planet:
-    inherit: trajopt/models/planets/earth.yaml
+    inherit: trajopt/models/common/planets/earth.yaml
     omega: 0.0
   vehicle:
-    inherit: trajopt/models/rlv_entry/rlv.yaml
+    inherit: trajopt/models/reentry_3dof/rlv_entry/rlv.yaml
 
 constraints:
   dynamics:

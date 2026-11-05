@@ -13,7 +13,7 @@ fcns:
   convergence:
     init_tolerances: trajopt/methods/common/convergence.py:init_tolerances_from_dynamics
   cost:
-    min_time: trajopt/methods/common/scp/cost_types.py:min_time_all_nodes
+    min_time: trajopt/methods/stable/scp/cost_types.py:min_time_all_nodes
   penalties:
     default:
       autotune: trajopt/methods/common/penalties.py:sqp_autotune

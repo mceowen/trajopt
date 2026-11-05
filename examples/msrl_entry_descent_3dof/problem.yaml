@@ -6,7 +6,7 @@ phases:
     inherit: ../common/msrl_common_phase.yaml
 
     fcns:
-      nonlinear_aero: trajopt/models/msrl/msrl.py:nonlinear_aero
+      nonlinear_aero: trajopt/models/reentry_3dof/msrl/msrl.py:nonlinear_aero
       deploy_position_error_sq: ../common/msrl.py:deploy_position_error_sq
 
     params:
@@ -148,7 +148,7 @@ phases:
     inherit: ../common/msrl_common_phase.yaml
 
     fcns:
-      nonlinear_aero: trajopt/models/msrl/msrl.py:parachute_aero
+      nonlinear_aero: trajopt/models/reentry_3dof/msrl/msrl.py:parachute_aero
 
     constraints:
       state_continuity:

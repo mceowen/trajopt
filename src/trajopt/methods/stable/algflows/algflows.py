@@ -8,7 +8,7 @@ import numpy as np
 
 from trajopt.methods.stable.algflows.results import FlowResult, StageResult
 from trajopt.methods.stable.algflows.transfer import transfer_guesses
-from trajopt.methods.common.utils.trajectory_conversion import segment_layout
+from trajopt.methods.common.utils.trajectory_conversion import phase_layout
 from trajopt.methods.stable.scp.scp_method import SCPMethod
 from trajopt.formulations.stable.specs import normalize
 from trajopt.common import config_reader
@@ -89,8 +89,8 @@ class AlgorithmFlow:
         try:
             before = perf_counter()
             problem, method_plan = normalize(config)
-            stage.layouts = {name: segment_layout(physical)
-                             for name, physical in problem.build_segments().items()}
+            stage.layouts = {name: phase_layout(physical)
+                             for name, physical in problem.build_phases().items()}
             stage.timings['preparation_s'] = perf_counter() - before
 
             before = perf_counter()

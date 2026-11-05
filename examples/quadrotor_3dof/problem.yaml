@@ -12,7 +12,7 @@ fcns:
 
 params:
   planet:
-    inherit: trajopt/models/planets/earth.yaml
+    inherit: trajopt/models/common/planets/earth.yaml
   vehicle:
     inherit: trajopt/models/quadrotor_3dof/quadrotor.yaml
   obstacle:

@@ -7,9 +7,9 @@ import cvxpy as cp
 from trajopt.methods.common import penalties
 from trajopt.methods.common.initial_guess import prepare_initial_guess
 from trajopt.methods.common.discretize import make_mesh
-from trajopt.methods.common.utils.solverstate import SegmentState
-import trajopt.methods.common.scp.constraint_types as scp_constraint_type_module
-import trajopt.methods.common.scp.cost_types as scp_cost_type_module
+from trajopt.methods.common.utils.solverstate import PhaseState
+import trajopt.methods.stable.scp.constraint_types as scp_constraint_type_module
+import trajopt.methods.stable.scp.cost_types as scp_cost_type_module
 from trajopt.common.tools import AttrDict, recursive_attrdict, resolve_function_from_string
 
 
@@ -23,7 +23,7 @@ def _resolve_fcns_tree(node):
 
 
 class Subproblem():
-    """Numerical variables, constraints, and iteration state for one physical segment."""
+    """Numerical variables, constraints, and iteration state for one physical phase."""
 
     constraint_type_module = scp_constraint_type_module
     cost_type_module       = scp_cost_type_module
@@ -53,7 +53,7 @@ class Subproblem():
         self.state.s_mult = float(value)
 
     def __init__(self, problem, method_config: AttrDict, *, initial_guess=None, previous_guess=None) -> None:
-        self.state = SegmentState()
+        self.state = PhaseState()
         self.name           = problem.name
         self.problem        = problem
         self.method_config  = method_config
@@ -144,11 +144,11 @@ class Subproblem():
         return not (initial is not None and final is not None and final.is_fixed)
 
     def _validate_time_config(self, initial, final) -> None:
-        """Reject an independently fixed epoch on an inherited-time segment."""
+        """Reject an independently fixed epoch on an inherited-time phase."""
         if initial is not None and self.inherits_start_epoch():
             raise ValueError(
-                f"segment '{self.name}' declares both initial_time and time continuity; "
-                "its start epoch comes from the preceding segment, so drop the initial_time"
+                f"phase '{self.name}' declares both initial_time and time continuity; "
+                "its start epoch comes from the preceding phase, so drop the initial_time"
             )
 
     def inherits_start_epoch(self) -> bool:
@@ -158,7 +158,7 @@ class Subproblem():
     def _anchor_start_time(self) -> bool:
         """Whether this subproblem's own t=0 should be pinned via dt[0,0]==0.
 
-        Explicit time couplings let the epoch float with the source segment.
+        Explicit time couplings let the epoch float with the source phase.
         """
         return not self.inherits_start_epoch()
 
@@ -372,7 +372,7 @@ class Subproblem():
         self.current_iter_data.update(self.penalty_snapshot())
 
     def check_convergence(self) -> None:
-        """Test segment stopping criteria before updating penalty weights."""
+        """Test phase stopping criteria before updating penalty weights."""
         self._convergence_check_fcn(self)
 
     def record_iter_data(self) -> None:

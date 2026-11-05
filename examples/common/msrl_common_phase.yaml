@@ -3,15 +3,15 @@
 inherit: trajopt/models/reentry_3dof/reentry_3dof.yaml
 
 fcns:
-  density_model: trajopt/models/msrl/msrl.py:density_model
+  density_model: trajopt/models/reentry_3dof/msrl/msrl.py:density_model
   downrange_crossrange: ./msrl.py:downrange_crossrange
   target_miss_distance_sq: ./msrl.py:target_miss_distance_sq
 
 params:
   planet:
-    inherit: trajopt/models/planets/mars.yaml
+    inherit: trajopt/models/common/planets/mars.yaml
   vehicle:
-    inherit: trajopt/models/msrl/msrl.yaml
+    inherit: trajopt/models/reentry_3dof/msrl/msrl.yaml
 
   # no range bias here, the descent phase makes it fall out of the solution
   target:

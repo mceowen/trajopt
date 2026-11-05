@@ -20,7 +20,7 @@ from trajopt.methods.common import discretize
 
 @dataclass(frozen=True)
 class InitialGuessContext:
-    """Physical segment, target mesh, provider options, and preceding samples."""
+    """Physical phase, target mesh, provider options, and preceding samples."""
     problem: object
     mesh: object
     options: object
@@ -151,7 +151,7 @@ def _configured_guess(method_phase, context):
     fcns = method_phase.fcns.initial_guess
     provider = fcns.get(context.problem.name, fcns.get('default', AttrDict())).get('guess')
     if not callable(provider):
-        raise ValueError(f"segment '{context.problem.name}': initial guess provider must be callable")
+        raise ValueError(f"phase '{context.problem.name}': initial guess provider must be callable")
     return provider(context)
 
 
@@ -195,9 +195,9 @@ def prepare_initial_guess(method_phase, supplied=None, previous=None):
     if isinstance(supplied, TrajectoryData):
         from trajopt.methods.common.utils.trajectory_conversion import (
             auxiliary_metadata,
-            segment_layout,
+            phase_layout,
         )
-        if supplied.layout and supplied.layout != segment_layout(phase):
+        if supplied.layout and supplied.layout != phase_layout(phase):
             raise ValueError(f"phase '{phase.name}': incompatible channel identities, ordering, or units")
         if supplied.aux_metadata and supplied.aux_metadata != auxiliary_metadata(phase):
             raise ValueError(f"phase '{phase.name}': incompatible auxiliary definitions; transfer physical values")
@@ -255,17 +255,17 @@ def prepare_initial_guess(method_phase, supplied=None, previous=None):
                     z_dense=z, nu_dense=nu)
 
 
-def segment_guesses(supplied, names):
+def phase_guesses(supplied, names):
     names = list(names)
     if supplied is None:
         return {}
     if not isinstance(supplied, Mapping) and isinstance(supplied, TrajectorySource) and len(names) == 1:
         return {names[0]: supplied}
     if not isinstance(supplied, Mapping):
-        raise TypeError('A multiphase initial_guess must map segment names to trajectory sources')
+        raise TypeError('A multiphase initial_guess must map phase names to trajectory sources')
     unknown = set(supplied)-set(names)
     if unknown:
-        raise ValueError(f'Unknown initial-guess segments: {sorted(unknown)}')
+        raise ValueError(f'Unknown initial-guess phases: {sorted(unknown)}')
     if any(not isinstance(value, TrajectorySource) for value in supplied.values()):
-        raise TypeError('Each supplied segment initial_guess must implement sample(tau)')
+        raise TypeError('Each supplied phase initial_guess must implement sample(tau)')
     return supplied

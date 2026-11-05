@@ -42,11 +42,11 @@ class MethodSpec:
         object.__setattr__(self, "inputs", freeze(self.inputs))
         object.__setattr__(self, "policies", freeze(_policy_values(self.inputs)))
         base = self.config
-        base.pop("segments", None)
-        for name, override in self.inputs.get("segments", {}).items():
+        base.pop("phases", None)
+        for name, override in self.inputs.get("phases", {}).items():
             effective = deep_merge(base, recursive_attrdict(thaw(override)))
             if freeze(_policy_values(effective)) != self.policies:
-                raise ValueError(f"Segment {name!r} overrides a global policy; put it in method.policies")
+                raise ValueError(f"Phase {name!r} overrides a global policy; put it in method.policies")
 
     @classmethod
     def from_config(cls, config):
@@ -56,9 +56,9 @@ class MethodSpec:
     def config(self):
         return recursive_attrdict(thaw(self.inputs))
 
-    def segment_config(self, name):
+    def phase_config(self, name):
         config = self.config
-        overrides = config.pop("segments", {})
+        overrides = config.pop("phases", {})
         config = deep_merge(config, overrides.get(name, AttrDict()))
         if 'adaptive' in config.get('policies', {}):
             config.setdefault('hyperparams', AttrDict()).setdefault('trust_region', AttrDict())['adaptive'] = (
@@ -121,6 +121,6 @@ def prepare_solve(solver, *, verbose=None, initial_guess=None, budget=None):
     check_reference_inputs(solver)
     if verbose is not None:
         solver.reporter.quiet = not verbose
-    for segment in solver.segments.values():
-        segment.method_config.history = retention
+    for phase in solver.phases.values():
+        phase.method_config.history = retention
     return SolveLimits(int(limit), deadline)

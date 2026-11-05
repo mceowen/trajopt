@@ -1,7 +1,7 @@
 """Physical problem definitions with immutable copies of the resolved inputs.
 
 These definitions accept the existing mission and model configurations.
-:mod:`trajopt.methods.common.scp.transcribe` constructs the numerical problem.
+:mod:`trajopt.methods.stable.scp.transcribe` constructs the numerical problem.
 """
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -16,8 +16,8 @@ CONTINUITY_TYPES = frozenset({
 
 
 @dataclass(frozen=True)
-class SegmentSpec:
-    """A named physical segment with an immutable copy of its resolved inputs."""
+class PhaseSpec:
+    """A named physical phase with an immutable copy of its resolved inputs."""
 
     name: str
     inputs: Mapping
@@ -25,7 +25,7 @@ class SegmentSpec:
 
     def __post_init__(self):
         if not self.name or not isinstance(self.name, str):
-            raise ValueError("A segment requires a nonempty string name")
+            raise ValueError("A phase requires a nonempty string name")
         object.__setattr__(self, "inputs", freeze(self.inputs))
 
     @property
@@ -40,14 +40,14 @@ class SegmentSpec:
 
 @dataclass(frozen=True)
 class CouplingSpec:
-    """A physical relationship between two named segments.
+    """A physical relationship between two named phases.
 
-    Continuity uses the target segment's channel indices by default. For
+    Continuity uses the target phase's channel indices by default. For
     different channel orders, set ``source_idx`` and ``target_idx``. For full
     continuity, set ``state_map`` and ``control_map`` instead.
 
     ``scale`` sets the residual scale in physical units. If omitted, the
-    target segment's scales determine the normalized tolerances.
+    target phase's scales determine the normalized tolerances.
     """
 
     name: str
@@ -60,7 +60,7 @@ class CouplingSpec:
         if self.kind not in CONTINUITY_TYPES:
             raise ValueError(f"Unsupported coupling kind {self.kind!r}")
         if self.source == self.target:
-            raise ValueError(f"Coupling {self.name!r} must connect distinct segments")
+            raise ValueError(f"Coupling {self.name!r} must connect distinct phases")
         object.__setattr__(self, "inputs", freeze(self.inputs))
 
     @property
@@ -72,30 +72,30 @@ class CouplingSpec:
 
 @dataclass(frozen=True)
 class ProblemSpec:
-    """Physical segments and couplings with an immutable copy of their inputs."""
+    """Physical phases and couplings with an immutable copy of their inputs."""
 
-    segments: Mapping[str, SegmentSpec]
+    phases: Mapping[str, PhaseSpec]
     couplings: tuple[CouplingSpec, ...] = ()
     metadata: Mapping = field(default_factory=dict)
     flat: bool = False
 
     def __post_init__(self):
-        segments = dict(self.segments)
-        if not segments:
-            raise ValueError("A problem requires at least one segment")
-        for name, segment in segments.items():
-            if name != segment.name:
-                raise ValueError(f"Segment key {name!r} differs from its name {segment.name!r}")
+        phases = dict(self.phases)
+        if not phases:
+            raise ValueError("A problem requires at least one phase")
+        for name, phase in phases.items():
+            if name != phase.name:
+                raise ValueError(f"Phase key {name!r} differs from its name {phase.name!r}")
         couplings = tuple(self.couplings)
         seen = set()
         for coupling in couplings:
-            if coupling.source not in segments or coupling.target not in segments:
-                raise ValueError(f"Coupling {coupling.name!r} references an unknown segment")
+            if coupling.source not in phases or coupling.target not in phases:
+                raise ValueError(f"Coupling {coupling.name!r} references an unknown phase")
             key = (coupling.target, coupling.name)
             if key in seen:
                 raise ValueError(f"Duplicate coupling {coupling.target}/{coupling.name}")
             seen.add(key)
-        object.__setattr__(self, "segments", MappingProxyType(segments))
+        object.__setattr__(self, "phases", MappingProxyType(phases))
         object.__setattr__(self, "couplings", couplings)
         object.__setattr__(self, "metadata", freeze(self.metadata))
         self.validate_time_constraints()
@@ -110,7 +110,7 @@ class ProblemSpec:
         config = config.get("trajectory", config)
         flat = "phases" not in config
         configured = {config.get("name", "main"): config} if flat else config["phases"]
-        segments, couplings = {}, []
+        phases, couplings = {}, []
         for name, source in configured.items():
             cfg = recursive_attrdict(thaw(freeze(source)))
             constraints = cfg.setdefault("constraints", AttrDict())
@@ -121,31 +121,31 @@ class ProblemSpec:
                         raise ValueError(f"Coupling {name}/{key} requires a source phase")
                     couplings.append(CouplingSpec(key, kind, constraint["phase"], name, constraint))
                     del constraints[key]
-            segments[name] = SegmentSpec(name, cfg, agent=source.get("agent"))
+            phases[name] = PhaseSpec(name, cfg, agent=source.get("agent"))
         metadata = {} if flat else {key: value for key, value in config.items() if key != "phases"}
-        return cls(segments, tuple(couplings), metadata, flat=flat)
+        return cls(phases, tuple(couplings), metadata, flat=flat)
 
     def validate_time_constraints(self):
         time_links = [c for c in self.couplings
                       if c.kind in {"time_continuity", "full_continuity"}]
         inherited = {c.target for c in time_links}
         for name in inherited:
-            constraints = self.segments[name].inputs.get("constraints", {})
+            constraints = self.phases[name].inputs.get("constraints", {})
             if any(c.get("type") == "initial_time" for c in constraints.values()):
                 raise ValueError(
-                    f"segment '{name}' declares both initial_time and time continuity; "
-                    "its start epoch comes from the preceding segment, so drop the initial_time"
+                    f"phase '{name}' declares both initial_time and time continuity; "
+                    "its start epoch comes from the preceding phase, so drop the initial_time"
                 )
         # A state-only cycle can be a periodic boundary condition. A cycle of
-        # inherited epochs cannot contain positive-duration trajectory segments.
-        graph = {name: [] for name in self.segments}
+        # inherited epochs cannot contain positive-duration trajectory phases.
+        graph = {name: [] for name in self.phases}
         for coupling in time_links:
             graph[coupling.source].append(coupling.target)
         visiting, finished = set(), set()
 
         def visit(name):
             if name in visiting:
-                raise ValueError(f"Cyclic time continuity at segment {name!r} is incompatible with positive durations")
+                raise ValueError(f"Cyclic time continuity at phase {name!r} is incompatible with positive durations")
             if name in finished:
                 return
             visiting.add(name)
@@ -159,8 +159,8 @@ class ProblemSpec:
 
     @property
     def config(self):
-        """Return a mutable configuration copy, including the segment couplings."""
-        phases = AttrDict({name: segment.config for name, segment in self.segments.items()})
+        """Return a mutable configuration copy, including the phase couplings."""
+        phases = AttrDict({name: phase.config for name, phase in self.phases.items()})
         for coupling in self.couplings:
             phases[coupling.target].setdefault("constraints", AttrDict())[coupling.name] = coupling.config
         if self.flat and len(phases) == 1:
@@ -169,10 +169,10 @@ class ProblemSpec:
         config.phases = phases
         return config
 
-    def build_segments(self):
-        """Build one physical model per segment, including its declared couplings."""
+    def build_phases(self):
+        """Build one physical model per phase, including its declared couplings."""
         from trajopt.formulations.stable.problem import Problem
-        configs = {name: segment.config for name, segment in self.segments.items()}
+        configs = {name: phase.config for name, phase in self.phases.items()}
         for coupling in self.couplings:
             configs[coupling.target].setdefault('constraints', AttrDict())[coupling.name] = coupling.config
         return AttrDict({name: Problem(config, name=name) for name, config in configs.items()})

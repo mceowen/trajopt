@@ -51,10 +51,10 @@ def read_step_settings(config, overrides):
     }
 
 
-def select_step(segments, method_spec):
+def select_step(phases, method_spec):
     if not method_spec.line_search:
         return 1.0
-    return line_search(segments, alpha_min=method_spec.alpha_min_ls)
+    return line_search(phases, alpha_min=method_spec.alpha_min_ls)
 
 
 # =============================================================================
@@ -201,7 +201,7 @@ def scale_s(subproblems, factor: float) -> None:
 
 
 def predicted_and_actual_decrease(subproblems) -> tuple[float, float]:
-    """Return actual and predicted merit decreases, summed over segments."""
+    """Return actual and predicted merit decreases, summed over phases."""
     subproblems = list(subproblems)
     dJ = dL = 0.0
     for sp in subproblems:
@@ -796,7 +796,7 @@ def merit_cost_scp_min_time(self, scp_phase):
     """Build a minimum time cost evaluator using the recipe's normalized time coordinates."""
     if not scp_phase.free_final_time:
         return lambda z, nu, params: jnp.asarray(0.)
-    from trajopt.methods.common.scp.cost_types import (
+    from trajopt.methods.stable.scp.cost_types import (
         min_time_all_nodes,
         min_time_final_node,
     )

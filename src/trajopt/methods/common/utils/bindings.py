@@ -10,7 +10,7 @@ from collections.abc import Mapping
 
 import numpy as np
 
-from trajopt.formulations.stable.specs import ProblemSpec, SegmentSpec
+from trajopt.formulations.stable.specs import ProblemSpec, PhaseSpec
 
 
 class RebuildRequired(ValueError):
@@ -109,21 +109,21 @@ def _check_param_consumers(block):
 def update_inputs(prepared, updates):
     """Update numeric inputs and the saved problem specification.
 
-    ``updates`` maps segment names to ``params``, ``initial_state``, or both.
+    ``updates`` maps phase names to ``params``, ``initial_state``, or both.
     ``params`` contains nested updates to existing numeric parameters.
     ``initial_state`` contains dimensional values with the same constrained
-    indices as before. All segments pass validation before any input changes.
+    indices as before. All phases pass validation before any input changes.
 
     Return the same ``PreparedSolve`` instance. Preserve its backend problem,
     variables, compiled functions, and current reference trajectory.
     """
     if not isinstance(updates, Mapping):
-        raise TypeError("Runtime updates must map segment names to input updates")
-    unknown = set(updates) - set(prepared.segments)
+        raise TypeError("Runtime updates must map phase names to input updates")
+    unknown = set(updates) - set(prepared.phases)
     if unknown:
-        raise RebuildRequired(f"Unknown segments {sorted(unknown)}; prepare a new problem")
+        raise RebuildRequired(f"Unknown phases {sorted(unknown)}; prepare a new problem")
     staged = {}
-    specs = dict(prepared.problem.segments)
+    specs = dict(prepared.problem.phases)
     for name, patch in updates.items():
         if not isinstance(patch, Mapping):
             raise TypeError(f"Runtime inputs for {name!r} must be a mapping")
@@ -132,7 +132,7 @@ def update_inputs(prepared, updates):
             raise RebuildRequired(f"{name}: unbound inputs {sorted(unsupported)} require preparation again")
         if not patch:
             continue
-        block = prepared.segments[name]
+        block = prepared.phases[name]
         config = specs[name].config
         params = None
         boundary = None
@@ -146,7 +146,7 @@ def update_inputs(prepared, updates):
             boundary = _initial_state_update(block, patch["initial_state"])
             config.constraints[boundary[0]]["value"] = boundary[-1]
         staged[name] = (params, boundary)
-        specs[name] = SegmentSpec(name, config, specs[name].agent)
+        specs[name] = PhaseSpec(name, config, specs[name].agent)
     if not staged:
         return prepared
 
@@ -162,7 +162,7 @@ def update_inputs(prepared, updates):
     rollback = {}
     try:
         for name, (params, boundary) in staged.items():
-            block = prepared.segments[name]
+            block = prepared.phases[name]
             rollback[name] = (copy.deepcopy(block.params), block.problem.config,
                               None if boundary is None else boundary[1].constraint._value_dim.copy(),
                               None if boundary is None else boundary[1].value_param.value.copy())
@@ -174,11 +174,11 @@ def update_inputs(prepared, updates):
                 constraint.value_param.value = scaled
             block.problem.config = copy.deepcopy(physical_configs[name])
         prepared.problem = new_problem
-        from trajopt.methods.common.scp.transcribe import _signature
-        prepared.signature = _signature(new_problem, prepared.method, prepared.segments)
+        from trajopt.methods.stable.scp.transcribe import _signature
+        prepared.signature = _signature(new_problem, prepared.method, prepared.phases)
     except Exception:
         for name, (params, config, physical_value, bound_value) in rollback.items():
-            block = prepared.segments[name]
+            block = prepared.phases[name]
             _replace_mapping(block.params, params)
             block.problem.config = config
             boundary = staged[name][1]
@@ -201,9 +201,9 @@ def update_solver_inputs(solver, updates, *, initial_guess=None):
     previous = solver.problem
     reverse = {}
     for name, values in updates.items():
-        if name not in previous.segments:
-            raise ValueError(f'Unknown segment {name!r}')
-        config = previous.segments[name].config
+        if name not in previous.phases:
+            raise ValueError(f'Unknown phase {name!r}')
+        config = previous.phases[name].config
         reverse[name] = {}
         if 'params' in values:
             reverse[name]['params'] = config.params

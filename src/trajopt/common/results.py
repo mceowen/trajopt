@@ -50,14 +50,14 @@ class SolveResult:
     history: tuple[TrajectorySet, ...] = ()
     problem: ProblemSpec | None = None
     method: MethodSpec | None = None
-    segment_data: Mapping = field(default_factory=dict)
+    phase_data: Mapping = field(default_factory=dict)
 
     def __post_init__(self):
         if self.status not in {'converged', 'not_converged', 'failed'}:
             raise ValueError(f'Unknown solve status {self.status!r}')
         if self.iterations == 0 and self.trajectory is not None:
             raise ValueError('No accepted iteration: keep the trajectory in initial_trajectory')
-        for name in ('timings', 'diagnostics', 'provenance', 'segment_data'):
+        for name in ('timings', 'diagnostics', 'provenance', 'phase_data'):
             object.__setattr__(self, name, freeze(getattr(self, name)))
         object.__setattr__(self, 'attempts', tuple(self.attempts))
         object.__setattr__(self, 'history', tuple(self.history))

@@ -17,15 +17,15 @@ import numpy as np
 from trajopt.common.trajectory import TrajectoryData, TrajectoryField, TrajectorySet
 
 FORMAT = 'trajopt-data'
-VERSION = 3
+VERSION = 4
 
 
 def _classes():
     from trajopt.common.results import SolveResult, AttemptRecord
-    from trajopt.formulations.stable.specs import ProblemSpec, SegmentSpec, CouplingSpec
+    from trajopt.formulations.stable.specs import ProblemSpec, PhaseSpec, CouplingSpec
     from trajopt.methods.common.utils.specs import MethodSpec
     return {kind.__name__: kind for kind in (
-        SolveResult, AttemptRecord, ProblemSpec, SegmentSpec, CouplingSpec,
+        SolveResult, AttemptRecord, ProblemSpec, PhaseSpec, CouplingSpec,
         MethodSpec, TrajectoryData, TrajectoryField)}
 
 
@@ -48,7 +48,7 @@ class _Encoder:
             self.arrays[key] = value
             return {'type': 'array', 'key': key}
         if isinstance(value, TrajectorySet):
-            return {'type': 'TrajectorySet', 'segments': self.encode(dict(value), location+'.segments')}
+            return {'type': 'TrajectorySet', 'phases': self.encode(dict(value), location+'.phases')}
         kind = type(value).__name__
         if kind in self.classes and type(value) is self.classes[kind]:
             return {'type': kind, 'fields': {
@@ -93,7 +93,7 @@ class _Decoder:
         if kind == 'path':
             return Path(value['value'])
         if kind == 'TrajectorySet':
-            return TrajectorySet(self.decode(value['segments']))
+            return TrajectorySet(self.decode(value['phases']))
         if kind in self.classes:
             expected = {item.name for item in fields(self.classes[kind]) if item.init}
             if set(value['fields']) != expected:

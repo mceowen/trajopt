@@ -2,11 +2,197 @@ import cvxpy as cp
 import jax
 import numpy as np
 
-from trajopt.methods.common.scp.constraint import SCPConstraint
+from trajopt.common.tools import deep_merge
+from trajopt.methods.common import penalties
 
-#jax.config.update("jax_compilation_cache_dir", "/absolute/path/to/jax_cache")
-#jax.config.update("jax_persistent_cache_min_compile_time_secs", 0.0)
-#jax.config.update("jax_persistent_cache_min_entry_size_bytes", -1)
+
+class SCPConstraint():
+    nonnegative_dual = False
+
+    STATE_INDEXED   = ("dynamics", "initial_state", "final_state", "state_continuity")
+    CONTROL_INDEXED = ("initial_control", "final_control", "control_continuity")
+
+    def __init__(self, constraint, scp_subproblem) -> None:
+        self.constraint    = constraint
+        self.type          = constraint.type
+        self.name          = constraint.name
+        self.shape         = None
+        self.penalties = penalties.alloc_penalty(shape=(0,), nonnegative_dual=self.nonnegative_dual)
+        # a fcns.penalties.<type> block only names the slots it overrides from 'default'
+        self.fcns = scp_subproblem.fcns.penalties.get('default')
+        # likewise for fcns.trust_region.merit.<type> -- stays None for methods that never set
+        # it (e.g. scvx, which never calls into merit)
+        merit = scp_subproblem.fcns.trust_region.get('merit')
+        self.merit_fcns = merit.get('default') if merit is not None else None
+
+    def compile(self, scp_subproblem): pass
+
+    def create_cvxpy_parameters(self, scp_subproblem): pass
+    def create_cvxpy_variables(self, scp_subproblem): pass
+    def create_cvxpy_constraints(self, scp_subproblem): pass
+    def update_cvxpy_parameters(self, scp_subproblem): pass
+    def update_current_iter_data(self, scp_subproblem): pass
+
+    def init_penalty(self, scp_subproblem): pass
+
+    def _component_labels(self, scp_subproblem, width):
+        """Component name for each buffer slot, or None if the slots are unnamed."""
+        index_map = scp_subproblem.index_map
+
+        if self.type in self.STATE_INDEXED:
+            group = index_map.components.state
+        elif self.type in self.CONTROL_INDEXED:
+            group = index_map.components.control
+        else:
+            return None
+
+        position = {}
+        for name, idx in group.items():
+            for i in np.atleast_1d(idx):
+                position[int(i)] = name
+
+        # the dynamics buffer covers z = [x, t, beta, gamma]
+        if self.type == "dynamics":
+            labels  = [position.get(i) for i in range(index_map.n.state)]
+            labels += ["t"] * index_map.n.time
+            return labels + [None] * (width - len(labels))
+
+        idx = getattr(self.constraint, "idx", None)
+        if idx is not None:
+            idx = np.atleast_1d(idx)
+            if len(idx) == width:
+                return [position.get(int(i)) for i in idx]
+            return None
+
+        if width == len(position):
+            return [position.get(i) for i in range(width)]
+        return None
+
+    def _resolve_eps(self, scp_subproblem, shape, cfg):
+        """Feasibility tolerance: constraint eps, else penalty eps, else 1e-4.
+
+        A mapping sets the components it names, the rest take its 'default' key.
+        """
+        raw = getattr(self.constraint, 'eps', None)
+        if raw is None:
+            raw = getattr(cfg, 'eps', None) if cfg else None
+        if raw is None:
+            raw = 1e-4
+
+        if not hasattr(raw, 'items'):
+            return np.broadcast_to(np.atleast_1d(raw), (shape[-1],)).copy()
+
+        entries = dict(raw)
+        default = entries.pop('default', 1e-4)
+        eps     = np.broadcast_to(np.atleast_1d(default), (shape[-1],)).astype(float).copy()
+
+        labels = self._component_labels(scp_subproblem, shape[-1])
+        if labels is None:
+            raise ValueError(
+                f"constraint '{self.name}' ({self.type}): eps names components "
+                f"{sorted(entries)}, but this constraint's buffer has no named "
+                "components. Give a single value or a full-length list instead."
+            )
+
+        for name, value in entries.items():
+            slots = [i for i, label in enumerate(labels) if label == name]
+            if not slots:
+                known = sorted(x for x in set(labels) if x is not None)
+                raise ValueError(
+                    f"constraint '{self.name}' ({self.type}): eps names "
+                    f"'{name}', which is not one of its components {known}"
+                )
+            eps[slots] = float(value)
+        return eps
+
+    def _alloc_penalty(self, scp_subproblem, shape):
+        # a penalty.<type> block only names the keys it changes
+        default  = scp_subproblem.hyperparams.penalties.get('default')
+        override = scp_subproblem.hyperparams.penalties.get(self.type)
+        if override is None:
+            cfg = default
+        elif default is None:
+            cfg = override
+        else:
+            cfg = deep_merge(default, override)
+
+        # likewise, fcns.penalties.<type> only names the functions it overrides from 'default'
+        fcns_override = scp_subproblem.fcns.penalties.get(self.type)
+        if fcns_override is not None:
+            self.fcns = deep_merge(self.fcns, fcns_override) if self.fcns is not None else fcns_override
+
+        merit = scp_subproblem.fcns.trust_region.get('merit')
+        merit_override = merit.get(self.type) if merit is not None else None
+        if merit_override is not None:
+            self.merit_fcns = deep_merge(self.merit_fcns, merit_override) if self.merit_fcns is not None else merit_override
+
+        self.shape = shape
+        vb_type    = getattr(cfg, 'vb', 'standard') if cfg else 'standard'
+        # under l1 the parameters named W_sqrt carry W itself
+        norm       = getattr(cfg, 'norm', 'l2') if cfg else 'l2'
+
+        indices_map = getattr(cfg, 'indices', None) if cfg else None
+        eps = self._resolve_eps(scp_subproblem, shape, cfg)
+        if indices_map is not None:
+            # indices: {state: {vb: sparse}, default: {vb: standard}, ...}
+            self.penalties = penalties.alloc_penalty_parts(
+                scp_subproblem, shape, indices_map, norm, cfg, self.nonnegative_dual,
+                eps=eps,
+            )
+            return
+
+        self.penalties = penalties.alloc_penalty(
+            shape=shape, vb_type=vb_type, norm=norm,
+            cfg=cfg, nonnegative_dual=self.nonnegative_dual,
+        )
+        self.penalties.eps = eps
+        penalties.init_penalty_values(self.penalties)
+
+    def create_penalty_parameters(self, scp_subproblem):
+        self.fcns.create_params(self, scp_subproblem)
+
+    def create_penalty_variables(self, scp_subproblem):
+        p = self.penalties
+        if self.shape is None:
+            return
+        if p.get('parts') is not None:
+            penalties.create_penalty_part_variables(p, scp_subproblem, self.name)
+            return
+        if p.vb_type == "none":
+            return
+        if p.vb_type in ("split", "sparse"):
+            p.vb_p_var = cp.Variable(self.shape, nonneg=True, name=f"vb_p_{self.name}_{scp_subproblem.name}")
+            p.vb_m_var = cp.Variable(self.shape, nonneg=True, name=f"vb_m_{self.name}_{scp_subproblem.name}")
+            p.vb_var   = p.vb_p_var - p.vb_m_var
+        else:
+            p.vb_var = cp.Variable(self.shape, name=f"vb_{self.name}_{scp_subproblem.name}")
+
+    def add_penalty_cost(self, scp_subproblem):
+        self.fcns.penalty(self, scp_subproblem)
+
+    def update_penalty_parameters(self, scp_subproblem):
+        self.fcns.update_params(self, scp_subproblem)
+
+    def read_vb(self, scp_subproblem):
+        penalties.pull_vb(self.penalties)
+
+    def update_constraint_penalties(self, scp_subproblem):
+        autotune = self.fcns.get('autotune')
+        if autotune is not None:
+            autotune(self, scp_subproblem)
+
+    @property
+    def vb_ratio(self):
+        if self.penalties.vb.size == 0:
+            return 0.0
+        return float(np.max(np.abs(self.penalties.vb) / self.penalties.eps))
+
+    @property
+    def is_feasible(self):
+        if self.penalties.vb.size == 0:
+            return True
+        return bool(np.all(np.abs(self.penalties.vb) <= self.penalties.eps))
+
 
 # ---------------------------------------------------------------------------
 # dynamics

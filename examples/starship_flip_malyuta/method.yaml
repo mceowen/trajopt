@@ -1,4 +1,4 @@
-inherit: trajopt/methods/dev/configs/sqp/autosqp.yaml
+inherit: trajopt/methods/dev/configs/second_order/autosqp.yaml
 
 hyperparams:
   convergence:

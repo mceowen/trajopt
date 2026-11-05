@@ -9,7 +9,7 @@ from trajopt.formulations.common.nondim import Nondim
 
 
 class Problem:
-    """A physical trajectory segment with its variables, constraints, costs, and outputs."""
+    """A physical trajectory phase with its variables, constraints, costs, and outputs."""
 
     #: console label used when announcing this problem's configuration; subclasses override
     _KIND = "problem"

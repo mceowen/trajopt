@@ -100,15 +100,15 @@ def _join_interval_arrays(arrays):
 
 @dataclass(frozen=True)
 class TrajectoryData:
-    """Immutable physical trajectory fields for one named segment."""
+    """Immutable physical trajectory fields for one named phase."""
     fields: Mapping
-    segment_id: str = 'main'
+    phase_id: str = 'main'
     layout: Mapping = field(default_factory=dict)
     aux_metadata: Mapping = field(default_factory=dict)
 
     def __post_init__(self):
-        if not isinstance(self.segment_id, str) or not self.segment_id:
-            raise ValueError('segment_id must be a nonempty string')
+        if not isinstance(self.phase_id, str) or not self.phase_id:
+            raise ValueError('phase_id must be a nonempty string')
         if not {'t', 'x', 'u'}.issubset(self.fields):
             raise ValueError('Trajectory fields require t, x and u')
         unknown = set(self.fields)-{'t', 'x', 'u', 's', 'aux'}
@@ -137,7 +137,7 @@ class TrajectoryData:
 
     @classmethod
     def from_samples(cls, *, t, x, u, tau=None, s=None, aux=None,
-                     interpolation='linear', segments=1, segment_id='main',
+                     interpolation='linear', segments=1, phase_id='main',
                      layout=None, aux_metadata=None, state_tau=None,
                      control_tau=None, dilation_tau=None, aux_tau=None):
         """Copy samples, retaining native interpolation and each field's grid.
@@ -145,7 +145,7 @@ class TrajectoryData:
         Polynomial ``segments`` is an interval count (equal order), a
         sequence of local degrees, or a mapping from field name to either.
         ``interpolation`` may also map each field to its own interpolation
-        kind. Constant fields use one value per segment and closing-knot sides.
+        kind. Constant fields use one value per interval and closing-knot sides.
         More general discontinuous data uses ``TrajectoryField.from_intervals``
         and the ordinary ``TrajectoryData(fields=...)`` constructor.
         """
@@ -175,7 +175,7 @@ class TrajectoryData:
                 raise ValueError('Trajectory time dilation must be positive and finite')
             result[name] = TrajectoryField.from_samples(nodes, a, interpolation=kind,
                                                         segments=local_segments)
-        return cls(result, segment_id, layout or {}, aux_metadata or {})
+        return cls(result, phase_id, layout or {}, aux_metadata or {})
 
     @classmethod
     def from_file(cls, path, *, state_columns, control_columns, time_column=0,
@@ -220,7 +220,7 @@ class TrajectoryData:
 
     @classmethod
     def materialize(cls, source, *, tau, interpolation='linear', segments=1,
-                    segment_id='main', layout=None, aux_metadata=None):
+                    phase_id='main', layout=None, aux_metadata=None):
         """Sample a trajectory source on the supplied grid and store the arrays.
 
         Choose the grid and interpolation to meet the required approximation
@@ -229,7 +229,7 @@ class TrajectoryData:
         values = source.sample(_nodes(tau))
         return cls.from_samples(t=values.t, x=values.x, u=values.u, s=values.s,
                                 aux=values.aux, tau=tau, interpolation=interpolation,
-                                segments=segments, segment_id=segment_id,
+                                segments=segments, phase_id=phase_id,
                                 layout=layout, aux_metadata=aux_metadata)
 
     @property
@@ -357,41 +357,41 @@ class TrajectoryData:
 
     def without_aux(self):
         return TrajectoryData({name: value for name, value in self.fields.items() if name != 'aux'},
-                              self.segment_id, self.layout)
+                              self.phase_id, self.layout)
 
 
 class TrajectorySet(Mapping):
-    """An ordered, immutable mapping of segments with separate channel dimensions."""
-    __slots__ = ('_segments',)
+    """An ordered, immutable mapping of phases with separate channel dimensions."""
+    __slots__ = ('_phases',)
 
-    def __init__(self, segments):
-        if isinstance(segments, TrajectoryData):
-            segments = {segments.segment_id: segments}
-        if not isinstance(segments, Mapping) or not segments:
-            raise ValueError('TrajectorySet requires a nonempty mapping of named segments')
-        for name, segment in segments.items():
-            if not isinstance(segment, TrajectoryData):
+    def __init__(self, phases):
+        if isinstance(phases, TrajectoryData):
+            phases = {phases.phase_id: phases}
+        if not isinstance(phases, Mapping) or not phases:
+            raise ValueError('TrajectorySet requires a nonempty mapping of named phases')
+        for name, phase in phases.items():
+            if not isinstance(phase, TrajectoryData):
                 raise TypeError('TrajectorySet values must be owned TrajectoryData')
-            if name != segment.segment_id:
-                raise ValueError(f'Segment key {name!r} differs from its identity {segment.segment_id!r}')
-        object.__setattr__(self, '_segments', freeze(segments))
+            if name != phase.phase_id:
+                raise ValueError(f'Phase key {name!r} differs from its identity {phase.phase_id!r}')
+        object.__setattr__(self, '_phases', freeze(phases))
 
     def __setattr__(self, name, value):
         raise TypeError('TrajectorySet is immutable')
 
     def __getitem__(self, key):
-        return self._segments[key]
+        return self._phases[key]
 
     def __iter__(self):
-        return iter(self._segments)
+        return iter(self._phases)
 
     def __len__(self):
-        return len(self._segments)
+        return len(self._phases)
 
     @property
     def single(self):
         if len(self) != 1:
-            raise ValueError('Select a named segment from a multisegment trajectory')
+            raise ValueError('Select a named phase from a multiphase trajectory')
         return next(iter(self.values()))
 
     @property
@@ -400,59 +400,59 @@ class TrajectorySet(Mapping):
 
     @property
     def t(self):
-        """Return the only segment's stored physical times at ``t_tau``."""
+        """Return the only phase's stored physical times at ``t_tau``."""
         return self.single.t
 
     @property
     def t_tau(self):
-        """Return normalized times for the only segment's stored time rows."""
+        """Return normalized times for the only phase's stored time rows."""
         return self.single.t_tau
 
     @property
     def x(self):
-        """Return stored states for the only segment.
+        """Return stored states for the only phase.
 
-        For multiple segments, select a segment by name.
+        For multiple phases, select a phase by name.
         """
         return self.single.x
 
     @property
     def u(self):
-        """Return stored controls for the only segment.
+        """Return stored controls for the only phase.
 
-        For multiple segments, select a segment by name.
+        For multiple phases, select a phase by name.
         """
         return self.single.u
 
     @property
     def x_tau(self):
-        """Return normalized times for the only segment's stored state rows."""
+        """Return normalized times for the only phase's stored state rows."""
         return self.single.x_tau
 
     @property
     def u_tau(self):
-        """Return normalized times for the only segment's stored control rows."""
+        """Return normalized times for the only phase's stored control rows."""
         return self.single.u_tau
 
     @property
     def x_t(self):
-        """Return physical times for the only segment's stored state rows."""
+        """Return physical times for the only phase's stored state rows."""
         return self.single.x_t
 
     @property
     def u_t(self):
-        """Return physical times for the only segment's stored control rows."""
+        """Return physical times for the only phase's stored control rows."""
         return self.single.u_t
 
     def sample(self, tau=None, *, num=None, spacing='tau', side=None):
-        """Sample the only segment at explicit tau or uniformly in tau/physical time."""
+        """Sample the only phase at explicit tau or uniformly in tau/physical time."""
         return self.single.sample(tau, num=num, spacing=spacing, side=side)
 
     def without_aux(self):
         return TrajectorySet({name: value.without_aux() for name, value in self.items()})
 
-    def concatenate(self, names=None, *, segment_id='combined'):
-        """Join contiguous physical segments and preserve both sides of each endpoint.
+    def concatenate(self, names=None, *, phase_id='combined'):
+        """Join contiguous physical phases and preserve both sides of each endpoint.
 
         Channel names, order, units, and frames must match. The result excludes
         auxiliary fields. This operation does not apply reset maps or convert
@@ -460,7 +460,7 @@ class TrajectorySet(Mapping):
         """
         names = list(self if names is None else names)
         if not names or len(set(names)) != len(names):
-            raise ValueError('Concatenation needs a nonempty sequence of distinct segment names')
+            raise ValueError('Concatenation needs a nonempty sequence of distinct phase names')
         selected = [self[name].without_aux() for name in names]
         layout = selected[0].layout
         if not layout.get('state') or 'control' not in layout:
@@ -471,7 +471,7 @@ class TrajectorySet(Mapping):
         starts = np.array([value.sample([0.]).t[0] for value in selected])
         stops = np.array([value.sample([1.]).t[0] for value in selected])
         if np.any(np.diff(starts) <= 0) or not np.allclose(stops[:-1], starts[1:], rtol=0, atol=1e-10):
-            raise ValueError('Concatenation requires contiguous, strictly time-ordered segments')
+            raise ValueError('Concatenation requires contiguous, strictly time-ordered phases')
         duration = stops[-1]-starts[0]
         widths = (stops-starts)/duration
         edges = np.r_[0., np.cumsum(widths)]
@@ -498,4 +498,4 @@ class TrajectorySet(Mapping):
                     intervals.append((mapped_nodes, mapped_values))
             fields[name] = TrajectoryField.from_intervals(
                 intervals, interpolation=kinds.pop(), boundary_side=sides.pop())
-        return TrajectoryData(fields, segment_id, layout)
+        return TrajectoryData(fields, phase_id, layout)

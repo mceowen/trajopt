@@ -3,7 +3,7 @@ inherit: trajopt/models/lander_6dof/lander_6dof.yaml
 
 params:
   planet:
-    inherit: trajopt/models/planets/nondim_planet.yaml
+    inherit: trajopt/models/common/planets/nondim_planet.yaml
   vehicle:
     inherit: trajopt/models/lander_6dof/mikilander.yaml
 

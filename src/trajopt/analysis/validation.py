@@ -42,8 +42,8 @@ class EvaluatedIterate:
 
 
 @dataclass(frozen=True)
-class SegmentEvaluation:
-    """Propagated trajectories and outputs in one segment's channel layout."""
+class PhaseEvaluation:
+    """Propagated trajectories and outputs in one phase's channel layout."""
 
     name: str
     iterates: tuple[EvaluatedIterate, ...]
@@ -51,23 +51,23 @@ class SegmentEvaluation:
 
     def __post_init__(self):
         if any(not isinstance(it, EvaluatedIterate) for it in self.iterates):
-            raise TypeError("Segment evaluations require EvaluatedIterate values")
+            raise TypeError("Phase evaluations require EvaluatedIterate values")
         object.__setattr__(self, "iterates", tuple(freeze(it) for it in self.iterates))
         object.__setattr__(self, "diagnostics", freeze(self.diagnostics))
 
     @property
     def final(self):
         if not self.iterates:
-            raise ValueError(f"Segment {self.name!r} has no evaluated accepted iterate")
+            raise ValueError(f"Phase {self.name!r} has no evaluated accepted iterate")
         return self.iterates[-1]
 
 
 @dataclass(frozen=True)
 class EvaluationResult:
-    """Propagated physical trajectories with a separate layout for each segment."""
+    """Propagated physical trajectories with a separate layout for each phase."""
 
     solve_result: SolveResult
-    segments: Mapping[str, SegmentEvaluation]
+    phases: Mapping[str, PhaseEvaluation]
     protocol: Mapping = field(default_factory=dict)
     diagnostics: Mapping = field(default_factory=dict)
     timings: Mapping = field(default_factory=dict)
@@ -75,33 +75,33 @@ class EvaluationResult:
     def __post_init__(self):
         if not isinstance(self.solve_result, SolveResult):
             raise TypeError("EvaluationResult requires a SolveResult")
-        for name in ("segments", "protocol", "diagnostics", "timings"):
+        for name in ("phases", "protocol", "diagnostics", "timings"):
             object.__setattr__(self, name, freeze(getattr(self, name)))
 
     def concatenate(self, names):
-        """Join compatible sequential segments in physical time order."""
+        """Join compatible sequential phases in physical time order."""
         from trajopt.analysis.analysis import concat
 
         names = tuple(names)
         if not names or len(set(names)) != len(names):
-            raise ValueError("Select distinct named segments to concatenate")
+            raise ValueError("Select distinct named phases to concatenate")
         source = self.solve_result
-        if len({source.problem.segments[name].agent for name in names}) > 1:
+        if len({source.problem.phases[name].agent for name in names}) > 1:
             raise ValueError("Cannot concatenate trajectories belonging to different agents")
         source.trajectory.concatenate(names)
-        histories = [self.segments[name].iterates for name in names]
+        histories = [self.phases[name].iterates for name in names]
         identities = [[it.iter_num for it in history] for history in histories]
         if any(ids != identities[0] for ids in identities[1:]):
-            raise ValueError("Segment evaluation histories have different iteration identities")
+            raise ValueError("Phase evaluation histories have different iteration identities")
         joined = []
         for per_iteration in zip(*histories):
             outputs = [it.outputs for it in per_iteration]
             if any(out.keys() != outputs[0].keys() for out in outputs[1:]):
-                raise ValueError("Segment evaluations have different output identities")
+                raise ValueError("Phase evaluations have different output identities")
             for name in outputs[0]:
                 reference = outputs[0][name]
                 if any(fingerprint(out[name].meta) != fingerprint(reference.meta) for out in outputs[1:]):
-                    raise ValueError(f"Output {name!r} has different metadata across segments")
+                    raise ValueError(f"Output {name!r} has different metadata across phases")
             values = {item.name: concat([getattr(it, item.name) for it in per_iteration])
                       for item in fields(EvaluatedIterate) if item.name != "outputs"}
             values["outputs"] = {
@@ -111,7 +111,7 @@ class EvaluationResult:
                 for name, output in outputs[0].items()
             }
             joined.append(EvaluatedIterate(**values))
-        return SegmentEvaluation("/".join(names), tuple(joined))
+        return PhaseEvaluation("/".join(names), tuple(joined))
 
 
 def _discretization_functions(config):
@@ -128,13 +128,13 @@ def _discretization_functions(config):
     return functions
 
 
-def detached_segments(result):
+def detached_phases(result):
     """Build the physical models and copy the saved arrays for evaluation."""
     adapters = {}
-    for name, snapshot in result.segment_data.items():
-        phase = result.problem.segments[name].build()
+    for name, snapshot in result.phase_data.items():
+        phase = result.problem.phases[name].build()
         data = thaw(snapshot)
-        method_config = data.get("method_config", result.method.segment_config(name))
+        method_config = data.get("method_config", result.method.phase_config(name))
         mesh = data.mesh
         adapters[name] = AttrDict(
             problem=phase, mesh=mesh, initial_guess=data.initial_guess,
@@ -224,18 +224,18 @@ def _physical_diagnostics(phase, iterate):
     )
 
 
-def _coupling_diagnostics(problem, phases, segments):
-    """Evaluate the segment couplings in physical units from trajectory endpoints."""
+def _coupling_diagnostics(problem, physical_phases, phases):
+    """Evaluate the phase couplings in physical units from trajectory endpoints."""
     from trajopt.formulations.stable import constraint_types
 
     residuals = {}
     for spec in problem.couplings:
-        source, target = phases[spec.source], phases[spec.target]
+        source, target = physical_phases[spec.source], physical_phases[spec.target]
         coupling = getattr(constraint_types, spec.kind)(spec.config, target)
         values = {}
         for representation, suffix in (("optimized", "opt"), ("rollout", "nl")):
             groups = {}
-            left, right = segments[spec.source].final, segments[spec.target].final
+            left, right = phases[spec.source].final, phases[spec.target].final
             for kind in coupling.groups:
                 conversion = np.asarray(coupling._conversion(kind), dtype=float)
                 if kind == "time":
@@ -260,7 +260,7 @@ def evaluate(result, analysis_config=None):
     The result records the evaluation settings, physical residuals, and
     unevaluated constraints. It does not certify feasibility or optimality.
     """
-    from trajopt.analysis.analysis import analyze_segment
+    from trajopt.analysis.analysis import analyze_phase
     if not isinstance(result, SolveResult):
         raise TypeError("evaluate requires a SolveResult")
 
@@ -279,16 +279,16 @@ def evaluate(result, analysis_config=None):
         return EvaluationResult(result, {}, protocol,
                                 {"unavailable": "No accepted trajectory", "solve_status": result.status},
                                 {"evaluation_s": time.perf_counter() - start})
-    segments, phases = {}, {}
-    for name, adapter in detached_segments(result).items():
-        phases[name] = adapter.problem
-        mappings = analyze_segment(adapter, AttrDict(analysis=protocol))
+    phases, physical_phases = {}, {}
+    for name, adapter in detached_phases(result).items():
+        physical_phases[name] = adapter.problem
+        mappings = analyze_phase(adapter, AttrDict(analysis=protocol))
         iterates = tuple(EvaluatedIterate(**mapping) for mapping in mappings)
         diagnostics = _physical_diagnostics(adapter.problem, iterates[-1]) if iterates else {}
-        segments[name] = SegmentEvaluation(name, iterates, diagnostics)
+        phases[name] = PhaseEvaluation(name, iterates, diagnostics)
     return EvaluationResult(
-        result, segments, protocol,
+        result, phases, protocol,
         {"solve_status": result.status,
-         "coupling_residuals": _coupling_diagnostics(result.problem, phases, segments)},
+         "coupling_residuals": _coupling_diagnostics(result.problem, physical_phases, phases)},
         {"evaluation_s": time.perf_counter() - start},
     )

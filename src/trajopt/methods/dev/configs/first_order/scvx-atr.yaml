@@ -1,5 +1,5 @@
 inherit:
-  - trajopt/methods/stable/configs/scp/scvx.yaml
+  - trajopt/methods/stable/configs/first_order/scvx.yaml
   - trajopt/methods/common/configs/initial_guess/straight_line.yaml
   - trajopt/methods/common/configs/trust_region/adaptive.yaml
 

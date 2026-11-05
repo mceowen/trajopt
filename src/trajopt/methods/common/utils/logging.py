@@ -184,10 +184,10 @@ def _number(value):
     return float(np.sum(array))
 
 
-def _evaluate_cost(segment, cost, z, nu, params):
+def _evaluate_cost(phase, cost, z, nu, params):
     """Evaluate the configured SCP cost from the supplied trajectory arrays."""
     kind = cost.type
-    idx = segment.index_map.indices
+    idx = phase.index_map.indices
     if kind == 'nonconvex_running':
         gamma = getattr(cost, 'gamma_idx', None)
         if gamma is None or not len(idx.z.running_cost):
@@ -211,8 +211,8 @@ def _evaluate_cost(segment, cost, z, nu, params):
         nodes = np.atleast_1d(cost.nodes)
         node_weights = np.ones(len(z))
         if kind == 'convex_running':
-            if segment.mesh.weights is not None:
-                node_weights = np.concatenate(([0.], len(z)*segment.mesh.weights))
+            if phase.mesh.weights is not None:
+                node_weights = np.concatenate(([0.], len(z)*phase.mesh.weights))
             nodes = [k for k in range(len(z)) if k in nodes]
         value = 0.
         for k in nodes:
@@ -223,13 +223,13 @@ def _evaluate_cost(segment, cost, z, nu, params):
             value += _number(node_weights[k]*cost.w*cost.fcn_dim(x, u, 0, params))
         return value, 'Configured nodal convex callback on normalized x/u with time zero, matching recipe'
     if kind == 'min_time':
-        if not segment.free_final_time:
+        if not phase.free_final_time:
             return 0., 'Fixed-time recipe adds no minimum-time objective'
-        from trajopt.methods.common.scp.cost_types import (
+        from trajopt.methods.stable.scp.cost_types import (
             min_time_all_nodes,
             min_time_final_node,
         )
-        recipe = segment.fcns.cost.min_time
+        recipe = phase.fcns.cost.min_time
         if recipe is min_time_final_node:
             return _number(z[-1, idx.z.time]), 'Final normalized time, matching min_time_final_node'
         if recipe is min_time_all_nodes:
@@ -264,7 +264,7 @@ def _evaluate_cost(segment, cost, z, nu, params):
     raise ValueError(f'Unsupported objective type {kind!r}')
 
 
-def objective_terms(segment):
+def objective_terms(phase):
     """Evaluate the configured objective on the accepted reference trajectory.
 
     Terms use the configured scales and weights. Their physical units can
@@ -274,18 +274,18 @@ def objective_terms(segment):
     If any term cannot be evaluated, the total objective is unavailable.
     This function does not change the solver state.
     """
-    z = readonly_array(segment.current_iter_data.z_opt)
-    nu = readonly_array(segment.current_iter_data.nu_opt)
-    params = copy.deepcopy(segment.params)
+    z = readonly_array(phase.current_iter_data.z_opt)
+    nu = readonly_array(phase.current_iter_data.nu_opt)
+    params = copy.deepcopy(phase.params)
     terms, unsupported = {}, []
-    for name, wrapper in segment.costs.items():
+    for name, wrapper in phase.costs.items():
         cost = wrapper.cost
         term = {'type': cost.type, 'value': None,
                 'units': 'configured normalized objective contribution'}
         if hasattr(cost, 'scale'):
             term['configured_scale'] = cost.scale
         try:
-            term['value'], term['source'] = _evaluate_cost(segment, cost, z, nu, params)
+            term['value'], term['source'] = _evaluate_cost(phase, cost, z, nu, params)
         except Exception as exc:
             unsupported.append(name)
             term['source'] = 'unavailable'
@@ -319,22 +319,22 @@ def make_result(solver, reason, *, failed=False):
     if history_option not in {'none', 'scalars', 'full'}:
         raise ValueError('history must be none, scalars, or full')
     data, diagnostics = {}, {}
-    for name, segment in solver.segments.items():
-        iterations = segment.iter_data_list
+    for name, phase in solver.phases.items():
+        iterations = phase.iter_data_list
         if history_option != 'full':
             iterations = [iterations[0], iterations[-1]] if len(iterations) > 1 else iterations
-        data[name] = dict(initial_guess=segment.initial_guess, iter_data_list=iterations,
-            scalar_history=segment.state.scalar_trace if history_option != 'none' else [],
-            mesh=dict(tau=segment.mesh.tau, discretize=segment.mesh.discretize, segments=segment.mesh.segments),
-            hyperparams=segment.hyperparams,
+        data[name] = dict(initial_guess=phase.initial_guess, iter_data_list=iterations,
+            scalar_history=phase.state.scalar_trace if history_option != 'none' else [],
+            mesh=dict(tau=phase.mesh.tau, discretize=phase.mesh.discretize, segments=phase.mesh.segments),
+            hyperparams=phase.hyperparams,
             constraints={key: dict(name=c.name, type=c.type, shape=c.shape,
                 penalties=penalty_descriptor(c.penalties))
-                for key, c in segment.constraints.items()})
-        it = segment.current_iter_data
-        diagnostics[name] = dict(**objective_terms(segment), reported_cost=float(it.get('cost', 0.)),
+                for key, c in phase.constraints.items()})
+        it = phase.current_iter_data
+        diagnostics[name] = dict(**objective_terms(phase), reported_cost=float(it.get('cost', 0.)),
             penalty_cost=float(it.get('penalty_cost', 0.)), stopping_ratios=it.get('chk', {}),
             dynamics_defect_nd=it.get('defect'),
-            constraint_residuals_nd={key: c.g_nl for key, c in segment.constraints.items()
+            constraint_residuals_nd={key: c.g_nl for key, c in phase.constraints.items()
                                      if getattr(c, 'g_nl', None) is not None})
     diagnostics['couplings'] = {f'{c.spec.target}.{c.spec.name}': c.residual()
                                 for c in solver.prepared.couplings}
@@ -345,16 +345,16 @@ def make_result(solver, reason, *, failed=False):
         local_model_s=sum(sum(a.timings.get('local_model_s', {}).values()) for a in attempts))
     initial = solver.initial_trajectory
     try:
-        trajectory = export_set(solver.segments) if solver.state.iterations else None
+        trajectory = export_set(solver.phases) if solver.state.iterations else None
     except ValueError as exc:
         trajectory, failed = None, True
         reason = f'Unusable accepted trajectory (nonfinite values or invalid time map): {exc}'
     history = []
     if history_option == 'full':
-        for index in range(1, min(len(s.iter_data_list) for s in solver.segments.values())):
+        for index in range(1, min(len(s.iter_data_list) for s in solver.phases.values())):
             try:
                 history.append(TrajectorySet({name: export_trajectory(s, data=s.iter_data_list[index])
-                                              for name, s in solver.segments.items()}))
+                                              for name, s in solver.phases.items()}))
             except ValueError:
                 diagnostics.setdefault('unavailable_history', []).append(index)
     status = ('failed' if failed or trajectory is None else
@@ -407,8 +407,8 @@ def record_solve(solver, wall_time_s):
             disc_ms=solver.result.timings['local_model_s'] * 1000.,
             solve_ms=solver.result.timings['numerical_s'] * 1000.)
         solver.reporter.trajectory_summary([
-            (name, segment.current_iter_data.t_start, segment.current_iter_data.t_final)
-            for name, segment in solver.segments.items()])
+            (name, phase.current_iter_data.t_start, phase.current_iter_data.t_final)
+            for name, phase in solver.phases.items()])
 
 
 @contextmanager
@@ -432,8 +432,8 @@ def record_iteration(solver):
         diagnostics = {}
         if trial is not None and not failed:
             timings['local_model_s'] = {
-                name: float(segment.current_iter_data.discretization_time) / 1000.
-                for name, segment in solver.segments.items()}
+                name: float(phase.current_iter_data.discretization_time) / 1000.
+                for name, phase in solver.phases.items()}
             diagnostics['candidate_step_norms'] = {
                 name: {key: None if value is None else float(np.max(np.abs(value)))
                        for key, value in delta.items()}

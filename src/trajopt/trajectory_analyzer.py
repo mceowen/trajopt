@@ -101,7 +101,7 @@ class TrajectoryAnalyzer():
         return self.method.export_guess(include_aux=include_aux)
 
     def reset(self, *, initial_guess=None):
-        """Restart SCP from a trajectory source or named-segment mapping, resetting penalties and history.
+        """Restart SCP from a trajectory source or named-phase mapping, resetting penalties and history.
 
         Omitted phases use configured providers. Mesh or model changes require
         reconfigure(); reset retains the compiled problem.

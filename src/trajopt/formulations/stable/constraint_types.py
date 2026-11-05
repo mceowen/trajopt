@@ -517,14 +517,14 @@ def _continuity_indices(phase, kind, selection):
     for item in selection:
         if isinstance(item, str):
             if item not in groups:
-                raise ValueError(f"Unknown {kind} channel {item!r} in segment {phase.name!r}")
+                raise ValueError(f"Unknown {kind} channel {item!r} in phase {phase.name!r}")
             indices.extend(int(i) for i in groups[item])
         elif isinstance(item, (int, np.integer)):
             indices.append(int(item))
         else:
             raise ValueError("Continuity channel selections must contain indices or channel names")
     if not indices or len(set(indices)) != len(indices) or any(i < 0 or i >= width for i in indices):
-        raise ValueError(f"Invalid {kind} continuity indices {indices} for segment {phase.name!r}")
+        raise ValueError(f"Invalid {kind} continuity indices {indices} for phase {phase.name!r}")
     return np.asarray(indices, dtype=int)
 
 
@@ -543,7 +543,7 @@ def _continuity_channel_metadata(phase, kind):
 
 
 class _continuity(Constraint):
-    """Segment endpoint differences in physical units, divided by residual scales."""
+    """Phase endpoint differences in physical units, divided by residual scales."""
     groups = ()
 
     def __init__(self, cnstr_config, phase):
@@ -667,19 +667,19 @@ class full_continuity(_continuity):
 
 
 class state_continuity(_continuity):
-    """Mapped physical state matches at the segment boundary."""
+    """Mapped physical state matches at the phase boundary."""
     type = "state_continuity"
     groups = ("state",)
 
 
 class control_continuity(_continuity):
-    """Mapped physical control matches at the segment boundary."""
+    """Mapped physical control matches at the phase boundary."""
     type = "control_continuity"
     groups = ("control",)
 
 
 class time_continuity(_continuity):
-    """Physical time matches at the segment boundary."""
+    """Physical time matches at the phase boundary."""
     type = "time_continuity"
     groups = ("time",)
 

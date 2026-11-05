@@ -6,7 +6,7 @@ from trajopt.common.tools import AttrDict
 
 jax.config.update("jax_enable_x64", True)
 
-def analyze_segment(subprob, config):
+def analyze_phase(subprob, config):
     """Propagate each iterate and evaluate the phase's outputs."""
     phase    = subprob.problem
     params     = phase.params
@@ -157,26 +157,26 @@ def auto_outputs(phase, **representations):
 
 
 def concat(items):
-    """Join compatible sequential segment values without discarding arrays."""
+    """Join compatible sequential phase values without discarding arrays."""
     if not items:
-        raise ValueError("Select at least one segment value to concatenate")
+        raise ValueError("Select at least one phase value to concatenate")
     head = items[0]
 
     if isinstance(head, np.ndarray):
         if all(isinstance(x, np.ndarray) and x.shape[1:] == head.shape[1:] for x in items):
             return np.concatenate(items, axis=0)
-        raise ValueError("Cannot merge segment arrays with different channel dimensions")
+        raise ValueError("Cannot merge phase arrays with different channel dimensions")
 
     if isinstance(head, Mapping):
         if any(not isinstance(x, Mapping) or x.keys() != head.keys() for x in items):
-            raise ValueError("Segment values have different field identities")
+            raise ValueError("Phase values have different field identities")
         return AttrDict({k: concat([x[k] for x in items]) for k in head})
 
     if isinstance(head, (list, tuple)):
         if all(isinstance(x, (list, tuple)) and len(x) == len(head) for x in items):
             return [concat([x[i] for x in items]) for i in range(len(head))]
-        raise ValueError("Segment values have different sequence lengths")
+        raise ValueError("Phase values have different sequence lengths")
 
     if any(x != head for x in items):
-        raise ValueError("Segment values have different non-array metadata")
+        raise ValueError("Phase values have different non-array metadata")
     return head

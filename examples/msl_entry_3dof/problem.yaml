@@ -2,11 +2,11 @@ num_nodes: 20
 inherit: trajopt/models/reentry_3dof/reentry_3dof.yaml
 
 fcns:
-  coeffs: trajopt/models/msl/msl.py:coeffs_entry
+  coeffs: trajopt/models/reentry_3dof/msl/msl.py:coeffs_entry
 
 params:
-  planet.inherit: trajopt/models/planets/mars.yaml
-  vehicle.inherit: trajopt/models/msl/msl.yaml
+  planet.inherit: trajopt/models/common/planets/mars.yaml
+  vehicle.inherit: trajopt/models/reentry_3dof/msl/msl.yaml
 
 constraints:
   dynamics:

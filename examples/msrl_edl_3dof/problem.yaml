@@ -6,7 +6,7 @@ phases:
     inherit: ../common/msrl_common_phase.yaml
 
     fcns:
-      nonlinear_aero: trajopt/models/msrl/msrl.py:nonlinear_aero
+      nonlinear_aero: trajopt/models/reentry_3dof/msrl/msrl.py:nonlinear_aero
       deploy_position_error_sq: ../common/msrl.py:deploy_position_error_sq
 
     params:
@@ -147,7 +147,7 @@ phases:
     inherit: ../common/msrl_common_phase.yaml
 
     fcns:
-      nonlinear_aero: trajopt/models/msrl/msrl.py:parachute_aero
+      nonlinear_aero: trajopt/models/reentry_3dof/msrl/msrl.py:parachute_aero
 
     constraints:
       state_continuity:
@@ -186,8 +186,8 @@ phases:
     inherit: ../common/msrl_common_phase.yaml
 
     fcns:
-      nonlinear_aero: trajopt/models/msrl/msrl.py:lander_aero
-      dynamics: trajopt/models/msrl/msrl.py:powered_descent_dynamics
+      nonlinear_aero: trajopt/models/reentry_3dof/msrl/msrl.py:lander_aero
+      dynamics: trajopt/models/reentry_3dof/msrl/msrl.py:powered_descent_dynamics
       thrust_accel_mag: ../common/msrl.py:thrust_accel_mag
       thrust_accel_sq: ../common/msrl.py:thrust_accel_sq
       max_thrust_accel_cone: ../common/msrl.py:max_thrust_accel_cone
