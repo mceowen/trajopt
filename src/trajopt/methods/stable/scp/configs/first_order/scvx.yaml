@@ -1,0 +1,6 @@
+method_class: stable.scp
+formulation_class: dev.simple
+
+inherit:
+  - trajopt/methods/stable/configs/first_order/scvx.yaml
+  - trajopt/methods/common/configs/initial_guess/straight_line.yaml

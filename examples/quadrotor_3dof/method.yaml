@@ -1,7 +1,7 @@
 # OPTION A: autoscvx-term (pair with propagation guess)
-inherit: trajopt/methods/dev/scp/configs/scvx/autoscvx-term.yaml
+inherit: trajopt/methods/stable/scp/configs/first_order/autoscvx-term.yaml
 # OPTION B: autoscvx, standard (pair with straight_line guess)
-#inherit: trajopt/methods/dev/scp_phases/configs/scvx/autoscvx.yaml
+#inherit: trajopt/methods/stable/scp_phases/configs/first_order/autoscvx.yaml
 
 hyperparams:
   convergence:

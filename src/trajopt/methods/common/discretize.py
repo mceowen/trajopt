@@ -46,6 +46,13 @@ def make_trajectory_solver(dynamics, params, n_steps, discretize="ms",
             taus    = jnp.concatenate([taus.reshape(-1), tau_f[None]])
             z_traj  = jnp.concatenate([z_traj.reshape(-1, z0.shape[0]), z_f[None]])
             nu_traj = jnp.concatenate([nu_traj.reshape(-1, nu_ref.shape[1]), nu_interp(tau_f, segments - 1)[None]])
+            # Stored knot samples belong to the closing segment. Integration above
+            # still evaluates every RK stage with its own explicit segment index.
+            if dilation_idx is not None:
+                p = (tau_ref.shape[0] - 1) // segments
+                for h in range(1, segments):
+                    nu_traj = nu_traj.at[h * n_seg_steps, dilation_idx].set(
+                        nu_ref[(h - 1) * p + 1, dilation_idx])
             return taus, z_traj, nu_traj
 
     else:
@@ -151,6 +158,10 @@ def make_node_propagation_solver(dynamics, params, n_steps, discretize="ms",
         z_f, (z_traj, nu_traj) = jax.lax.scan(step, z0, taus[:-1])
         z_traj  = jnp.concatenate([z_traj,  z_f[None]])
         nu_traj = jnp.concatenate([nu_traj, nu_interp(z_f, taus[-1])[None]])
+        if use_ps and dilation_idx is not None:
+            p = (N_nodes - 1) // segments
+            closing_h = jnp.maximum(h - 1, 0)
+            nu_traj = nu_traj.at[0, dilation_idx].set(nu_ref[closing_h * p + 1, dilation_idx])
         return taus, z_traj, nu_traj
 
     return solve
@@ -654,6 +665,8 @@ def dynamics_update_cvxpy_parameters_second_order_ps(constraint, subproblem):
 def interpolate_control_ps(tau_nodes, nu_nodes, segments, dilation_idx, kind="lagrange"):
     """Returns a nu(tau, h) interpolator on hp segment h: controls are Lagrange on the segment's
     collocation nodes ("lagrange") or linear between nodes ("foh"), while dilation is constant per segment."""
+    if kind not in ('lagrange', 'foh'):
+        raise ValueError(f"Unknown pseudospectral control interpolation {kind!r}")
     tau_ref = jnp.asarray(tau_nodes)
     nu_ref  = jnp.asarray(nu_nodes)
     N_nodes = tau_ref.shape[0]
@@ -664,7 +677,10 @@ def interpolate_control_ps(tau_nodes, nu_nodes, segments, dilation_idx, kind="la
     diffs   = tau_loc[:, None] - tau_loc[None, :] + jnp.eye(p)
     bary_weights = 1.0 / jnp.prod(diffs, axis=1)
 
-    def nu_interp(tau, h):
+    def nu_interp(tau, h=None):
+        if h is None:
+            h = jnp.clip(jnp.searchsorted(tau_ref[p::p], tau, side='left'), 0, segments - 1)
+        h = jnp.asarray(h, dtype=jnp.int32)
         if kind == "foh":
             k  = jnp.clip(jnp.searchsorted(tau_ref, tau, side='right') - 1, 0, N_nodes - 2)
             a  = (tau - tau_ref[k]) / (tau_ref[k + 1] - tau_ref[k])
@@ -672,7 +688,7 @@ def interpolate_control_ps(tau_nodes, nu_nodes, segments, dilation_idx, kind="la
         else:
             # controls only the segment's collocation nodes, start node belongs to the previous segment
             nodes = jax.lax.dynamic_slice(tau_ref, (h * p + 1,), (p,))
-            vals  = jax.lax.dynamic_slice(nu_ref, (h * p + 1, 0), (p, nu_ref.shape[1]))
+            vals  = jax.lax.dynamic_slice(nu_ref, (h * p + 1, jnp.int32(0)), (p, nu_ref.shape[1]))
             d     = tau - nodes
             exact = jnp.argmin(jnp.abs(d))
             w_over_d = bary_weights / (d + 1e-300)
@@ -680,7 +696,9 @@ def interpolate_control_ps(tau_nodes, nu_nodes, segments, dilation_idx, kind="la
             nu = jnp.where(jnp.abs(d[exact]) < 1e-14, vals[exact], interp_val)
 
         # the transcription holds the dilation constant on each segment's collocation nodes
-        return nu.at[dilation_idx].set(nu_ref[h * p + 1, dilation_idx])
+        if dilation_idx is not None:
+            nu = nu.at[dilation_idx].set(nu_ref[h * p + 1, dilation_idx])
+        return nu
 
     return nu_interp
 

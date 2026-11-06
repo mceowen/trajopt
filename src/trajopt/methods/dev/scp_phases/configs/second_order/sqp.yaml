@@ -1,0 +1,5 @@
+method_class: dev.scp_phases
+formulation_class: dev.phases
+
+inherit:
+  - trajopt/methods/dev/configs/second_order/sqp.yaml

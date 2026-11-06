@@ -1,5 +1,5 @@
 method:
-  inherit: trajopt/methods/dev/sqp_phases/configs/autoscvx2.yaml
+  inherit: trajopt/methods/dev/scp_phases/configs/second_order/autosqp.yaml
   
   solver_opts:
     solver: CLARABEL

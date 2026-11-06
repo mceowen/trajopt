@@ -1,0 +1,11 @@
+# Same as aug_lagr.yaml, but the dual steps by the fixed weight W each iteration instead of a
+# fixed tr_step.
+
+inherit:
+  - trajopt/methods/common/configs/penalties/aug_lagr.yaml
+
+hyperparams:
+  penalties:
+    default:
+      dual:
+        tr_step: al

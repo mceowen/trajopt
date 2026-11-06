@@ -55,12 +55,14 @@ _BASE_COLUMNS = [
     _Column("vb_dyn",  "vb_dyn/eps",  12, "sci"),
     _Column("status",  "Status",      12, "str"),
     _Column("alpha",   "alpha",       8,  "f4"),
+    _Column("ratio",   "ratio",       8,  "f4"),
+    _Column("s_mult",  "s_mult",      10, "sci"),
     _Column("duration", "Duration [s]", 12, "f3"),
     _Column("cost",    "Cost",        14, "g"),
     _Column("penalty", "Penalty",     14, "g"),
 ]
 
-_SEG_COLUMN = _Column("seg", "Phase", 12, "str")
+_PHASE_COLUMN = _Column("phase", "Phase", 12, "str")
 
 
 class SolveReporter:
@@ -68,7 +70,7 @@ class SolveReporter:
 
     def __init__(self, *, multi=False, quiet=False):
         self.quiet = quiet
-        self.columns = ([_SEG_COLUMN] + _BASE_COLUMNS) if multi else list(_BASE_COLUMNS)
+        self.columns = ([_PHASE_COLUMN] + _BASE_COLUMNS) if multi else list(_BASE_COLUMNS)
 
     def _header_line(self):
         return _SEP.join(col.format_header() for col in self.columns)
@@ -127,7 +129,7 @@ class SolveReporter:
     def _extract(iter_data, phase_name):
         chk = iter_data.chk
         return {
-            "seg":     phase_name,
+            "phase":   phase_name,
             "iter":    int(getattr(iter_data, "iter_num")),
             "disc":    float(getattr(iter_data, "discretization_time")),
             "solve":   float(getattr(iter_data, "solve_time")),
@@ -139,6 +141,8 @@ class SolveReporter:
             "vb_dyn":  float(getattr(chk, "dynamics")),
             "status":  str(getattr(iter_data, "status")),
             "alpha":   float(getattr(iter_data, "alpha", 1.0)),
+            "ratio":   float(getattr(iter_data, "tr_ratio", 1.0)),
+            "s_mult":  float(getattr(iter_data, "s_mult", 1.0)),
             "duration": float(getattr(iter_data, "t_final")) - float(getattr(iter_data, "t_start")),
             "cost":    float(getattr(iter_data, "cost")),
             "penalty": float(getattr(iter_data, "penalty_cost", 0.0)),

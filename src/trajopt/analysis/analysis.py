@@ -20,10 +20,10 @@ def perform_analysis(traj) -> RunResult:
     if len(phases) == 1:
         iter_mappings = phases[0]
     else:
-        n_iters       = min(len(seg) for seg in phases)
+        n_iters       = min(len(phase) for phase in phases)
         iter_mappings = []
         for i in range(n_iters):
-            per_phase = [seg[i] for seg in phases]
+            per_phase = [phase[i] for phase in phases]
             pad_missing_outputs(per_phase)
             iter_mappings.append(concat(per_phase))
 

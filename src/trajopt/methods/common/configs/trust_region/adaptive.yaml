@@ -1,0 +1,29 @@
+inherit:
+  - trajopt/methods/common/configs/trust_region/scalar.yaml     # for merit / merit_cost only
+
+fcns:
+  trust_region:
+    penalty:       trajopt/methods/common/trust_region.py:create_cost_trust_region_adaptive
+    create_params: trajopt/methods/common/trust_region.py:create_tr_params_adaptive
+    update_params: trajopt/methods/common/trust_region.py:update_tr_params_component
+    evaluate_step: trajopt/methods/common/trust_region.py:evaluate_step_merit
+    reset:         null
+  troubleshoot:
+    on_error: trajopt/methods/common/troubleshoot.py:tighten_on_error
+    on_step:  trajopt/methods/common/troubleshoot.py:adapt_trust_region_on_step
+
+hyperparams:
+  trust_region:
+    line_search: 0
+    tr_step: {z: 1.0, nu: 1.0}      # initial s, same format as today
+    adaptive:
+      bands:                        # first band with ratio < below wins
+        - {below: 0.01, accept: false, s_factor: 0.1}
+        - {below: 0.1,  accept: true,  s_factor: 0.5}
+        - {below: 0.9,  accept: true,  s_factor: 1.0}
+        - {below: .inf, accept: true,  s_factor: 2.0}
+      s_mult_min:    1.0e-6         # s_mult bounds, s = s_mult * tr_step
+      s_mult_max:    1.0e+3
+      pred_tol:      1.0e-10
+      on_solve_fail: 0.1            # s_mult factor on failed/unusable solve
+      max_rejects:   20             # consecutive rejects before stopping

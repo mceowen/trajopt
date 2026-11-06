@@ -632,7 +632,7 @@ def _include_quiver_extents(all_vals, traj):
 def convergence_plots(traj_analyzer, save=True):
     scp_phases = _scp_subproblems(traj_analyzer.method)
     multi        = len(scp_phases) > 1
-    figs         = [_convergence_plot(seg, f"_{name}" if multi else "", save) for name, seg in scp_phases.items()]
+    figs         = [_convergence_plot(phase, f"_{name}" if multi else "", save) for name, phase in scp_phases.items()]
     return figs[0] if figs else None
 
 
@@ -692,7 +692,7 @@ def _convergence_plot(subprob, suffix, save=True):
 def convergence_weight_plots(traj_analyzer, save=True):
     scp_phases = _scp_subproblems(traj_analyzer.method)
     multi        = len(scp_phases) > 1
-    figs         = [_convergence_weight_plot(seg, f"_{name}" if multi else "", save) for name, seg in scp_phases.items()]
+    figs         = [_convergence_weight_plot(phase, f"_{name}" if multi else "", save) for name, phase in scp_phases.items()]
     return figs[0] if figs else None
 
 
@@ -774,7 +774,7 @@ def _convergence_weight_plot(subprob, suffix, save=True):
 def convergence_weight_mean_plots(traj_analyzer, save=True):
     scp_phases = _scp_subproblems(traj_analyzer.method)
     multi        = len(scp_phases) > 1
-    figs         = [_convergence_weight_mean_plot(seg, f"_{name}" if multi else "", save) for name, seg in scp_phases.items()]
+    figs         = [_convergence_weight_mean_plot(phase, f"_{name}" if multi else "", save) for name, phase in scp_phases.items()]
     return figs[0] if figs else None
 
 
@@ -856,7 +856,7 @@ def _convergence_weight_mean_plot(subprob, suffix, save=True):
 def convergence_vb_plots(traj_analyzer, save=True):
     scp_phases = _scp_subproblems(traj_analyzer.method)
     multi        = len(scp_phases) > 1
-    figs         = [_convergence_vb_plot(seg, f"_{name}" if multi else "", save) for name, seg in scp_phases.items()]
+    figs         = [_convergence_vb_plot(phase, f"_{name}" if multi else "", save) for name, phase in scp_phases.items()]
     return figs[0] if figs else None
 
 

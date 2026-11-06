@@ -1,0 +1,24 @@
+# Like autoscvx_sparse_dyn.yaml, but one scalar penalty/weight for the whole dynamics state
+# buffer instead of one per node.
+
+inherit:
+  - trajopt/methods/common/configs/penalties/autoscvx_std.yaml
+
+hyperparams:
+  penalties:
+    dynamics:
+      indices:
+        state:
+          vb: sparse
+        default:
+          vb: standard
+
+fcns:
+  penalties:
+    # only dynamics gets the sparse treatment; everything else keeps 'default'
+    dynamics:
+      penalty:       trajopt/methods/common/penalties.py:penalty_cost_sparse
+      autotune:      trajopt/methods/common/penalties.py:autotune_sparse
+      create_params: trajopt/methods/common/penalties.py:create_params_sparse
+      update_params: trajopt/methods/common/penalties.py:update_params_sparse
+      constraints:   trajopt/methods/common/penalties.py:constraints_sparse_scalar

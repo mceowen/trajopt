@@ -21,8 +21,8 @@ class SCPTrajectory():
             previous = initial_guess.dimensional_samples(phase, prepared.z, prepared.nu)
 
         # build inter-phase constraints
-        for seg in self.scp_phases.values():
-            for cnstr in seg.constraints.values():
+        for phase in self.scp_phases.values():
+            for cnstr in phase.constraints.values():
                 cnstr.build_cross_phase(self.scp_phases)
 
     def troubleshoot_step(self) -> tuple[bool, str | None]:

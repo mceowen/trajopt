@@ -1,0 +1,5 @@
+method_class: dev.scp
+formulation_class: dev.simple
+
+inherit:
+  - trajopt/methods/dev/configs/first_order/autoscvx-atr.yaml
