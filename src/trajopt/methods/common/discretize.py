@@ -7,6 +7,10 @@ import jax.numpy as jnp
 import numpy as np
 import scipy as sp
 
+from trajopt.methods.dev.ps.mesh import (
+    segment_ranges, make_explicit_mesh, interpolate_controls,
+)
+
 
 @dataclass(frozen=True)
 class Mesh:
@@ -14,23 +18,21 @@ class Mesh:
     discretize: str
     differentiation: np.ndarray | None = None
     weights: np.ndarray | None = None  # quadrature weights on [0, 1] at the collocation nodes tau[1:]
-    segments: int = 1  # hp segments of equal order; knots at node indices h * (N-1) / segments
+    segments: int | tuple[int, ...] = 1  # count for uniform meshes, local degrees otherwise
 
 
-def segment_ranges(num_nodes, segments):
-    from trajopt.common.interpolation import _degrees
-    ends = np.cumsum([0] + _degrees(segments, num_nodes))
-    return tuple(zip(ends[:-1].tolist(), ends[1:].tolist()))
-
-
-def make_mesh(num_nodes, options, fcns=None, segments=1):
+def make_mesh(num_nodes, options, fcns=None, segments=1, hp_mesh=None):
     if num_nodes < 2:
         raise ValueError('A trajectory mesh needs at least two nodes')
     kind = getattr(options, 'mode', 'ms')
     if kind == 'ms':
+        if hp_mesh is not None:
+            raise ValueError('hp_mesh requires pseudospectral discretization')
         return Mesh(np.linspace(0, 1, num_nodes), kind)
     if kind != 'ps':
         raise ValueError(f'Unknown discretization {kind!r}')
+    if hp_mesh is not None:
+        return make_explicit_mesh(num_nodes, hp_mesh)
     if int(segments) != segments or segments < 1 or (num_nodes-1) % segments:
         raise ValueError(f"hp_segments={segments} must be a positive integer "
                          f"dividing num_nodes - 1 = {num_nodes - 1}")
@@ -54,12 +56,16 @@ def make_trajectory_solver(dynamics, params, n_steps, discretize="ms",
 
     if use_ps:
         # number of time steps for each hp segment
-        n_seg_steps = max(n_steps // segments, 1)
+        count = segments if isinstance(segments, int) else len(segments)
+        n_seg_steps = max(n_steps // count, 1)
 
         @jax.jit
         def solve(z0, tau0, tau_f, tau_ref, nu_ref):
             nu_interp = interpolate_control_ps(tau_ref, nu_ref, segments, dilation_idx, control_interpolation)
-            knots = jnp.linspace(tau0, tau_f, segments + 1)
+            ranges = segment_ranges(tau_ref.shape[0], segments)
+            knots = tau_ref[jnp.array([a for a, b in ranges] + [ranges[-1][1]])]
+            if isinstance(segments, int):
+                knots = jnp.linspace(tau0, tau_f, count + 1)
 
             def segment(z_h, h):
                 dt   = (knots[h + 1] - knots[h]) / n_seg_steps
@@ -78,17 +84,16 @@ def make_trajectory_solver(dynamics, params, n_steps, discretize="ms",
                 z_next_h, (z_traj, nu_traj) = jax.lax.scan(step, z_h, taus)
                 return z_next_h, (taus, z_traj, nu_traj)
 
-            z_f, (taus, z_traj, nu_traj) = jax.lax.scan(segment, z0, jnp.arange(segments))
+            z_f, (taus, z_traj, nu_traj) = jax.lax.scan(segment, z0, jnp.arange(count))
             taus    = jnp.concatenate([taus.reshape(-1), tau_f[None]])
             z_traj  = jnp.concatenate([z_traj.reshape(-1, z0.shape[0]), z_f[None]])
-            nu_traj = jnp.concatenate([nu_traj.reshape(-1, nu_ref.shape[1]), nu_interp(tau_f, segments - 1)[None]])
+            nu_traj = jnp.concatenate([nu_traj.reshape(-1, nu_ref.shape[1]), nu_interp(tau_f, count - 1)[None]])
             # Stored knot samples belong to the closing segment. Integration above
             # still evaluates every RK stage with its own explicit segment index.
             if dilation_idx is not None:
-                p = (tau_ref.shape[0] - 1) // segments
-                for h in range(1, segments):
+                for h in range(1, count):
                     nu_traj = nu_traj.at[h * n_seg_steps, dilation_idx].set(
-                        nu_ref[(h - 1) * p + 1, dilation_idx])
+                        nu_ref[ranges[h - 1][0] + 1, dilation_idx])
             return taus, z_traj, nu_traj
 
     else:
@@ -195,9 +200,9 @@ def make_node_propagation_solver(dynamics, params, n_steps, discretize="ms",
         z_traj  = jnp.concatenate([z_traj,  z_f[None]])
         nu_traj = jnp.concatenate([nu_traj, nu_interp(z_f, taus[-1])[None]])
         if use_ps and dilation_idx is not None:
-            p = (N_nodes - 1) // segments
+            starts = jnp.array([a for a, b in segment_ranges(N_nodes, segments)])
             closing_h = jnp.maximum(h - 1, 0)
-            nu_traj = nu_traj.at[0, dilation_idx].set(nu_ref[closing_h * p + 1, dilation_idx])
+            nu_traj = nu_traj.at[0, dilation_idx].set(nu_ref[starts[closing_h] + 1, dilation_idx])
         return taus, z_traj, nu_traj
 
     return solve
@@ -228,17 +233,17 @@ def propagate_from_nodes(z_nodes, tau_nodes, nu_nodes, dynamics, params,
     nu_ref  = jnp.asarray(nu_nodes)
 
     # restart stride: every node for ms, every segment for ps (collocation nodes are not shooting nodes)
-    stride = (N - 1) // segments if discretize == "ps" else 1
+    ranges = segment_ranges(N, segments) if discretize == "ps" else tuple((k, k+1) for k in range(N-1))
 
     phases = []
-    for k in range(0, N - 1, stride):
+    for h, (k, end) in enumerate(ranges):
         taus_k, z_k, nu_k = _solver(
             jnp.asarray(z_nodes[k]),
             jnp.asarray(float(tau_nodes[k])),
-            jnp.asarray(float(tau_nodes[k + stride])),
+            jnp.asarray(float(tau_nodes[end])),
             tau_ref,
             nu_ref,
-            k // stride,
+            h,
         )
         phases.append((np.asarray(taus_k), np.asarray(z_k), np.asarray(nu_k)))
 
@@ -517,26 +522,25 @@ def update_time_params_ps(subproblem):
 
 def create_time_constraints_ps(subproblem):
     N = subproblem.index_map.N.all
-    H = subproblem.mesh.segments
-    p = (N - 1) // H
-
+    ranges = segment_ranges(N, subproblem.mesh.segments)
+    openings = {a for a, b in ranges[1:]}
+    constant_dilation = bool(getattr(subproblem.hyperparams.flags, "zoh_dilation", False))
     for k in range(N - 1):
-        s_k  = subproblem.s_ref[k, 0] + subproblem.ds[k, 0]
-        s_kp = subproblem.s_ref[k + 1, 0] + subproblem.ds[k + 1, 0]
-
+        s_k = subproblem.s_ref[k, 0] + subproblem.ds[k, 0]
+        s_next = subproblem.s_ref[k + 1, 0] + subproblem.ds[k + 1, 0]
         subproblem.cp_constraints.append(0.0 <= s_k)
+        # Dilation is constant within each segment.
+        if k not in openings or constant_dilation:
+            subproblem.cp_constraints.append(s_k == s_next)
 
-        # apply consecutive dilations equality when: p method (H=1), inside the h segments, zoh_dilation = 1
-        if k == 0 or k % p or (hasattr(subproblem.hyperparams.flags, "zoh_dilation") and bool(subproblem.hyperparams.flags.zoh_dilation)):
-            subproblem.cp_constraints.append(s_k == s_kp)
-
-    if hasattr(subproblem.hyperparams.discretize, "equal_dt") and bool(subproblem.hyperparams.discretize.equal_dt):
-        # equal H segments widths
-        width_0 = (subproblem.t_ref[p, 0] + subproblem.dt[p, 0]) - (subproblem.t_ref[0, 0] + subproblem.dt[0, 0])
-        for h in range(1, H):
-            t_h  = subproblem.t_ref[h * p, 0] + subproblem.dt[h * p, 0]
-            t_hp = subproblem.t_ref[(h + 1) * p, 0] + subproblem.dt[(h + 1) * p, 0]
-            subproblem.cp_constraints.append(t_hp - t_h == width_0)
+    if bool(getattr(subproblem.hyperparams.discretize, "equal_dt", False)):
+        # Keep time intervals proportional to their mesh widths.
+        time = subproblem.t_ref[:, 0] + subproblem.dt[:, 0]
+        first_end = ranges[0][1]
+        first_width = time[first_end] - time[0]
+        for a, b in ranges[1:]:
+            fraction = (subproblem.mesh.tau[b] - subproblem.mesh.tau[a]) / subproblem.mesh.tau[first_end]
+            subproblem.cp_constraints.append(time[b] - time[a] == first_width * fraction)
 
     subproblem.cp_constraints.append(subproblem.t_ref[N - 1, 0] + subproblem.dt[N - 1, 0] >= 0.0)
     subproblem.cp_constraints.append(0.0 <= subproblem.s_ref[N - 1, 0] + subproblem.ds[N - 1, 0])
@@ -545,25 +549,29 @@ def create_time_constraints_ps(subproblem):
 def final_time_interval_constraints_ps(constraint, subproblem):
     # segment widths treated like the ms node intervals
     N = subproblem.index_map.N.all
-    H = subproblem.mesh.segments
-    p = (N - 1) // H
-    for h in range(H):
-        t_h  = subproblem.t_ref[h * p, 0] + subproblem.dt[h * p, 0]
-        t_hp = subproblem.t_ref[(h + 1) * p, 0] + subproblem.dt[(h + 1) * p, 0]
-        subproblem.cp_constraints.append(t_hp - t_h <= subproblem.cp_params.T_max / H)
-        subproblem.cp_constraints.append(t_hp - t_h >= subproblem.cp_params.T_min / H)
+    ranges = segment_ranges(N, subproblem.mesh.segments)
+    H = len(ranges)
+    for a, b in ranges:
+        fraction = (1. / H if isinstance(subproblem.mesh.segments, int) else
+                    subproblem.mesh.tau[b] - subproblem.mesh.tau[a])
+        t_h  = subproblem.t_ref[a, 0] + subproblem.dt[a, 0]
+        t_hp = subproblem.t_ref[b, 0] + subproblem.dt[b, 0]
+        subproblem.cp_constraints.append(t_hp - t_h <= subproblem.cp_params.T_max * fraction)
+        subproblem.cp_constraints.append(t_hp - t_h >= subproblem.cp_params.T_min * fraction)
 
 
 # ---------------------------------------------------------------------------
 # dynamics constraint lifecycle (first-order)
 # ---------------------------------------------------------------------------
 
+
 def dynamics_compile_ps(constraint, subproblem):
     mesh = subproblem.mesh
     constraint.ps_D = mesh.differentiation
-    # map the ps defects from derivatives to states (now comparable with ms)
-    p = (len(mesh.tau) - 1) // mesh.segments
-    constraint.ps_Dinv = sp.linalg.block_diag(*[np.linalg.inv(2.0 * mesh.differentiation[:p, 1:p + 1])] * mesh.segments)
+    # Convert derivative residuals to state errors on each segment.
+    constraint.ps_Dinv = sp.linalg.block_diag(*[
+        np.linalg.inv(2.0 * mesh.differentiation[a:b, a + 1:b + 1])
+        for a, b in segment_ranges(len(mesh.tau), mesh.segments)])
     constraint.dyn_fcn_batched = jax.jit(jax.vmap(constraint.dyn_fcn, in_axes=(0, 0, None)))
 
     # only ps's per-node constraint linearization needs the dynamics Jacobians
@@ -694,6 +702,8 @@ def interpolate_control_ps(tau_nodes, nu_nodes, segments, dilation_idx, kind="la
     collocation nodes ("lagrange") or linear between nodes ("foh"), while dilation is constant per segment."""
     if kind not in ('lagrange', 'foh'):
         raise ValueError(f"Unknown pseudospectral control interpolation {kind!r}")
+    if not isinstance(segments, (int, np.integer)):
+        return interpolate_controls(tau_nodes, nu_nodes, segments, dilation_idx, kind)
     tau_ref = jnp.asarray(tau_nodes)
     nu_ref  = jnp.asarray(nu_nodes)
     N_nodes = tau_ref.shape[0]

@@ -27,6 +27,8 @@ class StageResult(Generic[T]):
     invocation_id: str = field(default_factory=lambda: uuid4().hex)
     execution_status: str = 'failed'
     endpoint_weights: dict = field(default_factory=dict)
+    mesh_history: list = field(default_factory=list)
+    mesh_outputs: list = field(default_factory=list)
 
     @property
     def converged(self) -> bool:

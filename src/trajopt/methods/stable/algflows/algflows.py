@@ -38,8 +38,11 @@ class AlgorithmFlow:
         self._stages = []
         names = set()
         for stage in stages:
-            if not isinstance(stage, Mapping) or set(stage) - {'name', 'config', 'initial_guess', 'allow_nonconverged'}:
-                raise ValueError('Stage fields are name, config, initial_guess, allow_nonconverged')
+            if not isinstance(stage, Mapping) or set(stage) - {'name', 'config', 'initial_guess', 'allow_nonconverged', 'refinement'}:
+                raise ValueError('Stage fields are name, config, initial_guess, allow_nonconverged, and refinement')
+            if 'refinement' in stage:
+                from .config import refinement_options
+                refinement_options(stage['refinement'])
             name = stage.get('name')
             if not isinstance(name, str) or not name.strip() or name in names:
                 raise ValueError(f'Expected a unique stage name, got {name!r}')
@@ -138,6 +141,9 @@ class AlgorithmFlow:
             stage.status = 'failed'
             stage.reason = f'{type(exc).__name__}: {exc}'
         stage.timings['total_s'] = perf_counter() - started
+        if stage.converged and 'refinement' in spec:
+            from .refinement import refine_stage
+            return refine_stage(self, spec, path, stage, verbose)
         return stage
 
     @staticmethod

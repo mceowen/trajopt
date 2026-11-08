@@ -23,6 +23,7 @@ class Problem:
         self.num_nodes = problem_config.num_nodes
         # default number of hp segments to 1
         self.hp_segments = problem_config.get("hp_segments", 1)
+        self.hp_mesh = problem_config.get("hp_mesh")
 
         # set index map for augmentation and nondim object for ocp
         self.index_map = IndexMap(problem_config)

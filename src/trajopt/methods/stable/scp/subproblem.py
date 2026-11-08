@@ -91,7 +91,7 @@ class Subproblem():
 
         self.free_final_time = self.derive_free_final_time()
 
-        self.mesh = make_mesh(self.index_map.N.all, self.hyperparams.discretize, self.fcns.discretize, segments=problem.hp_segments)
+        self.mesh = make_mesh(self.index_map.N.all, self.hyperparams.discretize, self.fcns.discretize, segments=problem.hp_segments, hp_mesh=problem.hp_mesh)
         self.path_sample_maps = path_sample_maps(self.mesh)
         self.initialize(initial_guess, previous_guess)
 
