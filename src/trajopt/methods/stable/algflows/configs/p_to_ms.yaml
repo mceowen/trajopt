@@ -1,4 +1,4 @@
-# Stage paths are relative to the example that imports this flow.
+# Stage files come from the current example directory when loaded by library path.
 flow:
   stages:
     - name: p_method

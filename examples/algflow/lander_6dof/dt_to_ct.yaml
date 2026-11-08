@@ -1,1 +1,0 @@
-inherit: trajopt/methods/stable/algflows/configs/dt_to_ct.yaml

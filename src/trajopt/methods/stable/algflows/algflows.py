@@ -17,7 +17,13 @@ from trajopt.common.results import SolveResult
 
 class AlgorithmFlow:
     def __init__(self, config_path):
-        self.config_path = Path(config_path).expanduser().resolve()
+        if str(config_path).startswith('trajopt/'):
+            self.config_path = Path(config_reader._resolve_inherit_path(str(config_path), 'unknown'))
+            # Library flows use stage files from the current example directory.
+            stage_directory = Path.cwd()
+        else:
+            self.config_path = Path(config_path).expanduser().resolve()
+            stage_directory = self.config_path.parent
         config = config_reader.load_trajopt_config(self.config_path)
         if not isinstance(config, Mapping):
             raise ValueError('Expected a flow configuration mapping')
@@ -51,7 +57,7 @@ class AlgorithmFlow:
                         or any(not isinstance(p, str) or not p for p in phases)
                         or len(set(phases)) != len(phases)):
                     raise ValueError(f"Stage '{name}': phases must be a nonempty list of unique names")
-            path = (self.config_path.parent / Path(path).expanduser()).resolve()
+            path = (stage_directory / Path(path).expanduser()).resolve()
             resolved = config_reader.load_trajopt_config(path)
             if (not isinstance(resolved, Mapping) or not {'trajectory', 'method'} <= resolved.keys()
                     or not isinstance(resolved['trajectory'], Mapping)
