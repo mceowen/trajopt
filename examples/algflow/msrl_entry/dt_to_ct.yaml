@@ -1,8 +1,1 @@
-flow:
-  stages:
-    - name: nodal
-      config: stages/ms.yaml
-    - name: ctcs
-      config: stages/ctcs.yaml
-      initial_guess:
-        from: nodal
+inherit: trajopt/methods/stable/algflows/configs/dt_to_ct.yaml

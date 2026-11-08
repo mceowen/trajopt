@@ -1,0 +1,4 @@
+trajectory:
+  constraints:
+    min_thrust:
+      type: ctcs_nonconvex_inequality

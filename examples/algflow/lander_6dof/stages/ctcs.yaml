@@ -1,6 +1,3 @@
-inherit: ms.yaml
-
-trajectory:
-  constraints:
-    min_thrust:
-      type: ctcs_nonconvex_inequality
+inherit:
+  - ms.yaml
+  - trajopt/methods/stable/algflows/configs/lander_6dof/ctcs.yaml

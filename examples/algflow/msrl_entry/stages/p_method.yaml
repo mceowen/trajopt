@@ -1,10 +1,3 @@
-inherit: ms.yaml
-
-trajectory:
-  num_nodes: 49
-method:
-  inherit: trajopt/methods/common/configs/discretize/pseudospectral_p.yaml
-  hyperparams:
-    convergence:
-      # Coarse seed, shooting stage uses full MSRL tolerance
-      eps_state: [1.0e-3, 1.0e-3, 1.0e-3, 1.0e-3, 1.0e-2, 1.0e-2]
+inherit:
+  - ms.yaml
+  - trajopt/methods/stable/algflows/configs/msrl_entry/p_method.yaml

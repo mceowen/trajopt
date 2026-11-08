@@ -1,9 +1,3 @@
-inherit: ms.yaml
-
-trajectory:
-  num_nodes: 9
-method:
-  # Keep coarse-mesh dynamics exact and buffer the terminal state.
-  inherit:
-    - trajopt/methods/stable/configs/first_order/autoscvx-term.yaml
-    - trajopt/methods/common/configs/discretize/pseudospectral_p.yaml
+inherit:
+  - ms.yaml
+  - trajopt/methods/stable/algflows/configs/lander_6dof/p_method.yaml

@@ -1,0 +1,4 @@
+trajectory:
+  constraints:
+    max_load:
+      type: ctcs_nonconvex_inequality

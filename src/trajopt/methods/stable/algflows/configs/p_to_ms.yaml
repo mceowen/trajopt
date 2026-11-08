@@ -1,0 +1,9 @@
+# Stage paths are relative to the example that imports this flow.
+flow:
+  stages:
+    - name: p_method
+      config: stages/p_method.yaml
+    - name: shooting
+      config: stages/ms.yaml
+      initial_guess:
+        from: p_method

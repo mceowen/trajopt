@@ -1,12 +1,1 @@
-flow:
-  stages:
-    - name: p_method
-      config: stages/p_method.yaml
-    - name: shooting
-      config: stages/ms.yaml
-      initial_guess:
-        from: p_method
-    - name: hp_method
-      config: stages/hp_method.yaml
-      initial_guess:
-        from: shooting
+inherit: trajopt/methods/stable/algflows/configs/p_to_ms_to_hp.yaml
