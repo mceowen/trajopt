@@ -118,7 +118,8 @@ def los(x: Array, u: Array, t: float, params: AttrDict, fcns: AttrDict) -> Array
 def cvx_gimbal_limit(x, u, params):
     """Gimbal angle limit: thrust vector within theta_gimbal of body x-axis."""
     cos_theta = np.cos(np.deg2rad(float(params.theta_gimbal)))
-    return cos_theta * cp.norm(u[:, :3], axis=1) - u[:, 0]
+    scale = max(abs(float(getattr(params, 'max_thrust', 1.))), 1.)
+    return scale * (cos_theta * cp.norm(u[:, :3] / scale, axis=1) - u[:, 0] / scale)
 
 
 def cvx_glide_slope(x, u, params):
@@ -128,8 +129,10 @@ def cvx_glide_slope(x, u, params):
 
 
 def cvx_max_thrust(x, u, params):
-    """Maximum thrust magnitude."""
-    return cp.norm(u[:, :3], axis=1) - float(params.max_thrust)
+    """Maximum thrust magnitude, with a unit-scale cone auxiliary variable."""
+    limit = float(params.max_thrust)
+    scale = max(abs(limit), 1.)
+    return scale * (cp.norm(u[:, :3] / scale, axis=1) - limit / scale)
 
 
 def cvx_max_angular_velocity(x, u, params):

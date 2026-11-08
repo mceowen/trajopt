@@ -1,0 +1,10 @@
+trajectory:
+  inherit: mission/problem.yaml
+method:
+  inherit: method.yaml
+analysis:
+  type: standalone
+  show_convergence: true
+  propagate_from_nodes: false
+  trajectory_steps: 4000
+  control_interpolation: lagrange

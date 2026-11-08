@@ -3,6 +3,8 @@ import jax.numpy as jnp
 import numpy as np
 import cvxpy as cp
 
+from trajopt.methods.dev.ps.path_constraints import constraint_samples
+
 
 # Taylor-expand g(z, nu) once per iteration: g ~= g0 + dg/dz @ dz + dg/dnu @ dnu.
 # The convex subproblem constrains that affine form, not g itself.
@@ -54,10 +56,11 @@ def create_cvxpy_constraints_affine_inequality(constraint, subproblem):
         return
     vb = constraint.penalties.vb_var
     constraint.cp_ineq_constraints = []
-    for i, k in enumerate(constraint.nodes):
+    dz, dnu = constraint_samples(constraint, subproblem, subproblem.dz, subproblem.dnu)
+    for i in range(len(constraint.nodes)):
         g_lin = (
-            constraint.dgdz_param[i] @ subproblem.dz[k, :]
-            + constraint.dgdnu_param[i] @ subproblem.dnu[k, :]
+            constraint.dgdz_param[i] @ dz[i, :]
+            + constraint.dgdnu_param[i] @ dnu[i, :]
             + constraint.g0_param[i]
         )
         cnst = (g_lin - vb[i] <= 0) if vb is not None else (g_lin <= 0)
@@ -72,10 +75,11 @@ def create_cvxpy_constraints_affine_equality(constraint, subproblem):
         return
     vb = constraint.penalties.vb_var
     constraint.cp_eq_constraints = []
-    for i, k in enumerate(constraint.nodes):
+    dz, dnu = constraint_samples(constraint, subproblem, subproblem.dz, subproblem.dnu)
+    for i in range(len(constraint.nodes)):
         g_lin = (
-            constraint.dgdz_param[i] @ subproblem.dz[k, :]
-            + constraint.dgdnu_param[i] @ subproblem.dnu[k, :]
+            constraint.dgdz_param[i] @ dz[i, :]
+            + constraint.dgdnu_param[i] @ dnu[i, :]
             + constraint.g0_param[i]
         )
         cnst = (g_lin - vb[i] == 0) if vb is not None else (g_lin == 0)
@@ -89,7 +93,8 @@ def update_cvxpy_parameters_affine(constraint, subproblem):
     z      = jnp.asarray(subproblem.current_iter_data.z_opt)
     nu     = jnp.asarray(subproblem.current_iter_data.nu_opt)
     params = subproblem.params
-    g, dgdz, dgdnu = constraint.g_aff_batched(z[constraint.nodes], nu[constraint.nodes], params)
+    z, nu = constraint_samples(constraint, subproblem, z, nu)
+    g, dgdz, dgdnu = constraint.g_aff_batched(z, nu, params)
     constraint.g0_param.value    = np.asarray(g)
     constraint.dgdz_param.value  = np.asarray(dgdz)
     constraint.dgdnu_param.value = np.asarray(dgdnu)
@@ -99,7 +104,8 @@ def _update_current_iter_data_affine(constraint, subproblem):
     z      = jnp.asarray(subproblem.current_iter_data.z_opt)
     nu     = jnp.asarray(subproblem.current_iter_data.nu_opt)
     params = subproblem.params
-    constraint.g_nl = np.asarray(constraint.fcn_batched(z[constraint.nodes], nu[constraint.nodes], params))
+    z, nu = constraint_samples(constraint, subproblem, z, nu)
+    constraint.g_nl = np.asarray(constraint.fcn_batched(z, nu, params))
 
 
 def update_current_iter_data_affine_inequality(constraint, subproblem):

@@ -4,6 +4,7 @@ import numpy as np
 
 from trajopt.common.tools import deep_merge
 from trajopt.methods.common import penalties
+from trajopt.methods.dev.ps.path_constraints import path_samples
 
 
 class SCPConstraint():
@@ -310,7 +311,8 @@ class scp_nonconvex_inequality(SCPConstraint):
         scp_subproblem.fcns.convexify.compile_affine(self, scp_subproblem)
 
     def init_penalty(self, scp_subproblem):
-        self.nodes = np.arange(scp_subproblem.index_map.N.all)
+        self.nodes = scp_subproblem.path_sample_maps[0]
+        self.hp_path_samples = scp_subproblem.path_sample_maps[1] is not None
         dim = self.constraint.dimension
         self._alloc_penalty(scp_subproblem, (len(self.nodes), dim))
         self.lagrangian_dual = np.zeros((len(self.nodes), dim))
@@ -367,7 +369,8 @@ class scp_nonconvex_equality(SCPConstraint):
         scp_subproblem.fcns.convexify.compile_affine(self, scp_subproblem)
 
     def init_penalty(self, scp_subproblem):
-        self.nodes = np.arange(scp_subproblem.index_map.N.all)
+        self.nodes = scp_subproblem.path_sample_maps[0]
+        self.hp_path_samples = scp_subproblem.path_sample_maps[1] is not None
         dim = self.constraint.dimension
         self._alloc_penalty(scp_subproblem, (len(self.nodes), dim))
         self.lagrangian_dual = np.zeros((len(self.nodes), dim))
@@ -448,8 +451,8 @@ class scp_convex_inequality(SCPConstraint):
         params = scp_subproblem.params
         z_all  = scp_subproblem.cp_params.z_ref + scp_subproblem.dz
         nu_all = scp_subproblem.cp_params.nu_ref + scp_subproblem.dnu
-        N      = scp_subproblem.index_map.N.all
-        expr   = self.constraint.fcn_znu(z_all[:N], nu_all[:N], params)
+        z_all, nu_all = path_samples(scp_subproblem, z_all, nu_all)
+        expr   = self.constraint.fcn_znu(z_all, nu_all, params)
         scp_subproblem.cp_constraints.append(expr <= 0)
 
 
@@ -513,8 +516,11 @@ class scp_final_state_limits(SCPConstraint):
 class scp_control_limits(SCPConstraint):
     def create_cvxpy_constraints(self, scp_subproblem):
         idx_ctrl = scp_subproblem.index_map.indices.nu.control
-        for k in range(scp_subproblem.index_map.N.all):
-            u_k = scp_subproblem.cp_params.nu_ref[k, idx_ctrl] + scp_subproblem.dnu[k, idx_ctrl]
+        _, nu = path_samples(scp_subproblem,
+                            scp_subproblem.cp_params.z_ref + scp_subproblem.dz,
+                            scp_subproblem.cp_params.nu_ref + scp_subproblem.dnu)
+        for k in range(nu.shape[0]):
+            u_k = nu[k, idx_ctrl]
             if self.constraint.lower_idx:
                 scp_subproblem.cp_constraints.append(u_k[self.constraint.lower_idx] >= self.constraint.lower_value)
             if self.constraint.upper_idx:

@@ -7,7 +7,9 @@ from time import perf_counter
 import numpy as np
 
 from trajopt.methods.stable.algflows.results import FlowResult, StageResult
-from trajopt.methods.stable.algflows.transfer import transfer_guesses
+from trajopt.methods.stable.algflows.transfer import (
+    capture_endpoint_weights, transfer_endpoint_weights, transfer_guesses,
+)
 from trajopt.methods.common.utils.trajectory_conversion import phase_layout
 from trajopt.methods.stable.scp.scp_method import SCPMethod
 from trajopt.formulations.stable.specs import normalize
@@ -37,7 +39,7 @@ class AlgorithmFlow:
         names = set()
         for stage in stages:
             if not isinstance(stage, Mapping) or set(stage) - {'name', 'config', 'initial_guess', 'allow_nonconverged'}:
-                raise ValueError('Stage fields are name, config, initial_guess, and allow_nonconverged')
+                raise ValueError('Stage fields are name, config, initial_guess, allow_nonconverged')
             name = stage.get('name')
             if not isinstance(name, str) or not name.strip() or name in names:
                 raise ValueError(f'Expected a unique stage name, got {name!r}')
@@ -48,8 +50,10 @@ class AlgorithmFlow:
                 raise ValueError(f"Stage '{name}': allow_nonconverged must be a boolean")
             seed = stage.get('initial_guess')
             if seed is not None:
-                if not isinstance(seed, Mapping) or set(seed) - {'from', 'phases'} or 'from' not in seed:
-                    raise ValueError(f"Stage '{name}': initial_guess needs from and optional phases")
+                if not isinstance(seed, Mapping) or set(seed) - {'from', 'phases', 'endpoint_weights'} or 'from' not in seed:
+                    raise ValueError(f"Stage '{name}': initial_guess needs from and optional phases/endpoint_weights")
+                if type(seed.get('endpoint_weights', False)) is not bool:
+                    raise ValueError(f"Stage '{name}': endpoint_weights must be a boolean")
                 if not isinstance(seed['from'], str) or seed['from'] not in names:
                     raise ValueError(f"Stage '{name}': initial_guess.from must name an earlier stage")
                 phases = seed.get('phases')
@@ -108,6 +112,10 @@ class AlgorithmFlow:
             before = perf_counter()
             method = SCPMethod(problem=problem, method=method_plan, initial_guess=guess)
             stage.timings['preparation_s'] += perf_counter() - before
+            if seed is not None and seed.get('endpoint_weights', False):
+                before = perf_counter()
+                transfer_endpoint_weights(previous[seed['from']], method, stage.transferred_phases)
+                stage.timings['transfer_s'] += perf_counter() - before
             before = perf_counter()
             try:
                 output = method.solve(verbose=verbose)
@@ -115,6 +123,7 @@ class AlgorithmFlow:
                 stage.timings['solve_s'] = perf_counter() - before
             if not isinstance(output, SolveResult):
                 raise TypeError('A solve stage must return SolveResult')
+            stage.endpoint_weights = capture_endpoint_weights(method)
             self._record_output(stage, output)
             for name, guess in stage.trajectory.items():
                 samples = guess.sample(guess.native_tau)

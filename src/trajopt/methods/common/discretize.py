@@ -17,6 +17,12 @@ class Mesh:
     segments: int = 1  # hp segments of equal order; knots at node indices h * (N-1) / segments
 
 
+def segment_ranges(num_nodes, segments):
+    from trajopt.common.interpolation import _degrees
+    ends = np.cumsum([0] + _degrees(segments, num_nodes))
+    return tuple(zip(ends[:-1].tolist(), ends[1:].tolist()))
+
+
 def make_mesh(num_nodes, options, fcns=None, segments=1):
     if num_nodes < 2:
         raise ValueError('A trajectory mesh needs at least two nodes')
@@ -581,6 +587,15 @@ def dynamics_create_cvxpy_constraints_ps(constraint, subproblem):
     D = constraint.ps_D
 
     subproblem.cp_dyn_constraints = []
+
+    mesh = subproblem.mesh
+    controls = subproblem.index_map.indices.nu.control
+    if len(controls):
+        # Initial-control constraints must use the propagated control polynomial.
+        interpolate = interpolate_control_ps(mesh.tau, np.eye(N_col + 1), mesh.segments, None)
+        opening = np.asarray(interpolate(0.0))
+        U = (subproblem.cp_params.nu_ref + subproblem.dnu)[:, controls]
+        subproblem.cp_constraints.append(U[0] == opening @ U)
 
     Z = subproblem.cp_params.z_ref + subproblem.dz
     lhs = 2.0 * (D @ Z)

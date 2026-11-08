@@ -1,0 +1,82 @@
+params:
+  planet:
+    g: 3.711
+  powered_mass: 1905.0
+  vehicle:
+    alpha: "${1 / (191.0 * 9.80665)}"
+    # Constant inertia and thrust lever arm.
+    Jb11: 1200.0
+    Jb22: 1800.0
+    Jb33: 1800.0
+    Jbinv11: 0.0008333333333333334
+    Jbinv22: 0.0005555555555555556
+    Jbinv33: 0.0005555555555555556
+    rt1: -1.0
+    rt2: 0.0
+    rt3: 0.0
+  # Near-surface atmosphere.
+  rho_surface: 0.020
+  scale_height: 11100.0
+  drag_area: 0.0
+  # Total thrust limits (N).
+  min_thrust: 3200.0
+  max_thrust: 23984.0
+  theta_gimbal: 10.0
+  theta_tilt: 60.0
+  angular_speed_limit: 0.3490658503988659
+state:
+  mass: {idx: [0], scale: 2000.0}
+  pos: {idx: [1, 2, 3], scale: 2000.0}
+  vel: {idx: [4, 5, 6], scale: 100.0}
+  quat: {idx: [7, 8, 9, 10], scale: 1.0}
+  angv: {idx: [11, 12, 13], scale: 0.1}
+control:
+  thrust: {idx: [0, 1, 2], scale: 10000.0}
+time: {scale: 30.0}
+outputs:
+  position:
+    type: time_series
+    component: pos
+    group: translation
+    xlabel: "Local phase time (s)"
+    ylabel: "Position (m)"
+  velocity:
+    type: time_series
+    component: vel
+    group: translation
+    xlabel: "Local phase time (s)"
+    ylabel: "Velocity (m/s)"
+  mass:
+    type: time_series
+    component: mass
+    group: translation
+    xlabel: "Local phase time (s)"
+    ylabel: "Mass (kg)"
+  quaternion:
+    type: time_series
+    component: quat
+    group: attitude
+    xlabel: "Local phase time (s)"
+    ylabel: "Quaternion"
+  angular_velocity:
+    type: time_series
+    component: angv
+    group: attitude
+    xlabel: "Local phase time (s)"
+    ylabel: "Angular velocity (rad/s)"
+  thrust:
+    type: time_series
+    component: thrust
+    group: control
+    xlabel: "Local phase time (s)"
+    ylabel: "Body thrust (N)"
+fcns:
+  dynamics: model.py:passive
+constraints:
+  dynamics: {type: dynamics, fcn: fcns.dynamics}
+  # Each phase starts its clock at zero.
+  initial_time: {type: initial_time, value: 0.0}
+  state_limits:
+    type: state_limits
+    lower: [1505.0, 18.6]
+    upper: [2300.0, null, null, null, 0.0]

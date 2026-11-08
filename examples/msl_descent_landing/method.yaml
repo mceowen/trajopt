@@ -1,0 +1,24 @@
+inherit: trajopt/methods/stable/configs/first_order/autoscvx-term.yaml
+hyperparams:
+  flags: {quiet: false}
+  convergence:
+    iter_max: 2000
+    flag_conv: 2
+    eps_cost: 2.0e-06
+    eps_state: [0.00001]
+  trust_region:
+    tr_step: {z: 1000.0, nu: 200.0}
+  penalties:
+    default:
+      eps: [0.000001]
+      eps_floor: 1.0e-06
+      fac_target: 0.1
+  discretize:
+    nsub: 10
+solver_opts:
+  solver: QOCO
+  abstol: 1.0e-10
+  reltol: 1.0e-10
+  ir_tol: 1.0e-10
+  max_ir_iters: 10
+  kkt_static_reg_A: 1.0e-10

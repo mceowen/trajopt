@@ -6,6 +6,24 @@ import numpy as np
 
 from trajopt.common._snapshot import freeze
 from trajopt.common.trajectory import TrajectoryData, TrajectorySet
+from trajopt.common.interpolation import TrajectoryField, _polynomial_interpolator
+
+
+def collocation_control_field(tau, controls, segments):
+    """Reconstruct Radau controls, preserving one-sided values at hp knots."""
+    from trajopt.methods.common.discretize import segment_ranges
+    intervals = []
+    for start, end in segment_ranges(len(tau), segments):
+        degree = end - start
+        nodes = tau[start + 1:start + degree + 1]
+        values = controls[start + 1:start + degree + 1]
+        if degree == 1:
+            opening = values[0]
+        else:
+            opening = _polynomial_interpolator(nodes, values)(tau[start])
+        intervals.append((tau[start:start + degree + 1],
+                          np.concatenate((opening[None, :], values), axis=0)))
+    return TrajectoryField.from_intervals(intervals, boundary_side='left')
 
 
 def phase_layout(phase):
@@ -62,7 +80,7 @@ def export_trajectory(phase, *, data=None, include_aux=False):
     nu = data.get('nu_opt', data.get('nu'))
     values = dimensional_samples(phase.problem, z, nu)
     mesh = phase.mesh
-    return TrajectoryData.from_samples(
+    trajectory = TrajectoryData.from_samples(
         t=values.t, x=values.x, u=values.u, s=values.s,
         aux=values.aux if include_aux else None, tau=mesh.tau,
         interpolation=({'t': 'polynomial', 'x': 'polynomial', 'u': 'linear',
@@ -72,6 +90,12 @@ def export_trajectory(phase, *, data=None, include_aux=False):
         layout=phase_layout(phase.problem),
         aux_metadata=auxiliary_metadata(phase.problem) if include_aux else {},
     )
+    if mesh.discretize == 'ps':
+        fields = dict(trajectory.fields)
+        fields['u'] = collocation_control_field(mesh.tau, values.u, mesh.segments)
+        trajectory = TrajectoryData(fields, trajectory.phase_id, trajectory.layout,
+                                    trajectory.aux_metadata)
+    return trajectory
 
 
 def export_set(phases, *, initial=False, include_aux=False):

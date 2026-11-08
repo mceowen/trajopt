@@ -1,0 +1,10 @@
+inherit: ../config.yaml
+method:
+  hyperparams:
+    convergence:
+      eps_cost: 2.0e-05
+    penalties:
+      default:
+        eps:
+        - 1.0e-05
+        eps_floor: 1.0e-05

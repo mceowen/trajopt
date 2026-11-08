@@ -9,6 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from trajopt.methods.common import penalties
+from trajopt.methods.dev.ps.path_constraints import constraint_samples, accumulate_path_hessian
 
 
 def _adaptive_values(value):
@@ -526,7 +527,11 @@ def accumulate_hessian_nonconvex(self, scp_phase, H, constraints_attr):
     params = scp_phase.params
     lam    = jnp.asarray(self.lagrangian_dual)
 
-    H_z, H_nu = self.lagrangian_hessians(lam, z[self.nodes], nu[self.nodes], params)
+    zz, nn = constraint_samples(self, scp_phase, z, nu)
+    H_z, H_nu = self.lagrangian_hessians(lam, zz, nn, params)
+    if getattr(self, 'hp_path_samples', False):
+        accumulate_path_hessian(scp_phase, H, H_z, H_nu)
+        return
     for i, k in enumerate(self.nodes):
         H[k, :n_z, :n_z] += np.asarray(H_z[0][i])
         H[k, :n_z, n_z:] += np.asarray(H_z[1][i])
@@ -572,11 +577,11 @@ def merit_violation_nonconvex(self, scp_phase):
     retain the signed residuals.
     """
     fcn_b = self.fcn_batched
-    nodes = jnp.asarray(self.nodes)
     dim   = self.constraint.dimension
     clamp = self.type in _INEQUALITY_TYPES
     def violation(z, nu, params):
-        raw = fcn_b(z[nodes], nu[nodes], params)
+        zz, nn = constraint_samples(self, scp_phase, z, nu)
+        raw = fcn_b(zz, nn, params)
         return (jnp.maximum(0.0, raw) if clamp else raw).reshape(-1, dim)
     return violation
 

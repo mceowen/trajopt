@@ -285,6 +285,13 @@ def evaluate(result, analysis_config=None):
         mappings = analyze_phase(adapter, AttrDict(analysis=protocol))
         iterates = tuple(EvaluatedIterate(**mapping) for mapping in mappings)
         diagnostics = _physical_diagnostics(adapter.problem, iterates[-1]) if iterates else {}
+        if iterates and adapter.mesh.discretize == 'ps' and protocol.control_interpolation == 'lagrange':
+            from trajopt.methods.dev.ps.mesh_error import estimate_mesh_error
+            final = adapter.iter_data_list[-1]
+            dynamics = next(c.fcn_znu for c in adapter.problem.constraints.values() if c.type == 'dynamics')
+            diagnostics['mesh_error'] = estimate_mesh_error(
+                adapter.mesh, final.z_opt, final.nu_opt, jax.jit(dynamics), adapter.problem.params,
+                adapter.problem.index_map.indices.nu.dilation_factor)
         phases[name] = PhaseEvaluation(name, iterates, diagnostics)
     return EvaluationResult(
         result, phases, protocol,
