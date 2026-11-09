@@ -62,7 +62,7 @@ problem:
 method:
   # second-order sqp as in ms.yaml, discretised with Radau collocation
   inherit:
-    - trajopt/methods/dev/scp_phases/configs/sqp/autoscvx2.yaml
+    - trajopt/methods/dev/scp_phases/configs/second_order/autosqp.yaml
     - trajopt/methods/common/configs/discretize/second_order_p.yaml
     - method_common.yaml
 

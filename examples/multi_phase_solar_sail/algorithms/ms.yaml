@@ -50,7 +50,7 @@ method:
   # iterations where first-order needs thousands.  autoscvx2 is multiple
   # shooting with the second-order dynamics kernels.
   inherit:
-    - trajopt/methods/dev/scp_phases/configs/sqp/autoscvx2.yaml
+    - trajopt/methods/dev/scp_phases/configs/second_order/autosqp.yaml
     - method_common.yaml
 
   hyperparams:

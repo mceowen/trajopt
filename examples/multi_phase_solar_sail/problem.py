@@ -531,14 +531,41 @@ def build_trajectory_config(settings: AttrDict) -> AttrDict:
             # Graveyard orbit per the IADC guidelines: near-circular, safely
             # above the geostationary belt.  Both are exact second-order cone
             # constraints, so they enter the CVXPY subproblem directly.
-            segment.constraints.final_eccentricity = recursive_attrdict(
-                {"type": "final_convex_inequality",
-                 "fcn": "fcns.terminal_eccentricity_cone"}
-            )
-            segment.constraints.final_perigee = recursive_attrdict(
-                {"type": "final_convex_inequality",
-                 "fcn": "fcns.terminal_perigee_cone"}
-            )
+            if settings.graveyard.get("buffer_terminal", False):
+                # Buffered form for autoscvx-term, which enforces the dynamics
+                # without buffers and relaxes the terminal conditions instead.
+                params = {
+                    "eccentricity": float(
+                        settings.graveyard.eccentricity_max
+                        - float(settings.graveyard.get("eccentricity_margin", 0.0))
+                    ),
+                    "perigee": float(
+                        settings.constants.geo_radius_km
+                        + settings.graveyard.perigee_altitude_km
+                        + float(settings.graveyard.get("perigee_margin_km", 0.0))
+                    ),
+                }
+                segment.constraints.final_eccentricity = recursive_attrdict(
+                    {"type": "final_nonconvex_inequality",
+                     "fcn": "fcns.terminal_eccentricity",
+                     "upper": np.array([params["eccentricity"]]),
+                     "scale": [0.02]}
+                )
+                segment.constraints.final_perigee = recursive_attrdict(
+                    {"type": "final_nonconvex_inequality",
+                     "fcn": "fcns.terminal_perigee_radius",
+                     "lower": np.array([params["perigee"]]),
+                     "scale": [1000.0]}
+                )
+            else:
+                segment.constraints.final_eccentricity = recursive_attrdict(
+                    {"type": "final_convex_inequality",
+                     "fcn": "fcns.terminal_eccentricity_cone"}
+                )
+                segment.constraints.final_perigee = recursive_attrdict(
+                    {"type": "final_convex_inequality",
+                     "fcn": "fcns.terminal_perigee_cone"}
+                )
             _add_minimum_time_cost(segment, settings)
 
         segments[name] = segment

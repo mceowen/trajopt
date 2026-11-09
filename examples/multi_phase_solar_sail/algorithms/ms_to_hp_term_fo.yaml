@@ -1,0 +1,12 @@
+# Flow: multiple shooting -> Radau hp method, both with autoscvx-term and
+# buffered terminal conditions.
+flow:
+  stages:
+    - name: ms
+      config: ms_term_fo.yaml
+
+    - name: hp
+      config: hp_term_fo.yaml
+      initial_guess:
+        from: ms
+      method: {inherit: warm_start.yaml}

@@ -1,0 +1,12 @@
+# p_term_fo.yaml with a higher starting penalty on the buffered terminal
+# conditions, to test whether the minimum-time cost was buying terminal violation.
+inherit: p_term_fo.yaml
+
+method:
+  hyperparams:
+    penalties:
+      final_nonconvex_inequality:
+        W:
+          penalty: True
+          autotune: True
+          init: 100.0

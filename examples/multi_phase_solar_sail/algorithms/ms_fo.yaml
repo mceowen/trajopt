@@ -1,0 +1,71 @@
+# RK4 multiple shooting, second-order SQP.
+#
+#     python main.py algorithms/ms.yaml
+#
+# An algorithm file is the problem (inherited) plus two things that belong to
+# the discretisation: a mesh, given as problem.* overrides, and a method.
+
+inherit: ../problem.yaml
+
+problem:
+  # Nodes per arc, both endpoints included.  Eclipse arcs are short (about
+  # 17.4 deg) and carry no control authority, so they need far fewer nodes.
+  # Sunlit arcs span ~5.997 rad, eclipse arcs ~0.304 -- a 19.7:1 ratio -- so
+  # equal node counts would over-resolve the eclipse by an order of magnitude.
+  # The eclipse arcs are also the easy ones: illumination is zero there, so the
+  # motion is Keplerian and carries no control.
+  #
+  # A mesh study at 23 revolutions over 12/3, 16/3 and 20/3 gave accumulated
+  # defects of -0.004, -0.108 and -0.048 km in 622, 702 and 695 s.  Runtime is
+  # flat in the mesh and the defect does not improve monotonically, so there is
+  # nothing to buy by refining: 12/3 is the cheapest mesh that validates.
+  sunlit_nodes: 12
+  eclipse_nodes: 3
+
+  graveyard:
+    # Extra perigee the *nodal* terminal cone is asked for, in km.  It is not
+    # part of the requirement: solution.validation_report judges the
+    # independently propagated orbit against perigee_altitude_km, so this
+    # buys no credit in the verdict.
+    #
+    # It is needed because minimum time drives the nodal perigee exactly onto
+    # whatever the cone asks for, and the propagated trajectory then lands short
+    # by the discretisation error.  Aiming exactly at the requirement therefore
+    # produces a solution that misses it: at 23 revolutions multiple shooting
+    # came out 75 m low and passed only on the validator's 100 m slack, and at
+    # the 20/3 mesh it failed outright.  With this margin the same case lands
+    # 515 m above the requirement on the propagated orbit.
+    perigee_margin_km: 0.3
+
+    # The same idea for the eccentricity cap: the *nodal* cone is asked for
+    # eccentricity_max minus this, and the validator still judges the
+    # propagated orbit against eccentricity_max.  The gap it has to cover is the
+    # re-propagation error times the f, g scale (0.02): shooting re-propagates
+    # to ~1e-6, i.e. ~2e-8 in eccentricity, so it needs none.  See p.yaml for
+    # the discretisation that does.
+    eccentricity_margin: 0.0
+
+method:
+  # sqp with the second-order trust region: reaches its final accuracy in ~100
+  # iterations where first-order needs thousands.  autoscvx2 is multiple
+  # shooting with the second-order dynamics kernels.
+  inherit:
+    - trajopt/methods/stable/scp_phases/configs/first_order/autoscvx.yaml
+    - method_common.yaml
+
+  hyperparams:
+    discretize:
+      equal_dt: 1
+      nsub:     6       # RK4 substeps per multiple-shooting interval
+
+    penalties:
+      # trajopt's min_time cost sums the longitude over every node of the final
+      # segment, so its magnitude grows with the node count and it can outweigh
+      # the dynamics penalty: the optimiser then buys a shorter trajectory by
+      # leaving a dynamics defect.  Starting the dynamics penalty high restores
+      # the balance for shooting.  Collocation wants the opposite (p.yaml).
+      dynamics:
+        W:
+          penalty: True
+          autotune: True
+          init: 100.0

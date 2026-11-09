@@ -1,0 +1,9 @@
+# Radau hp method with autoscvx-term and buffered terminal conditions.
+# Same mesh as hp_fo.yaml.
+inherit: p_term_fo.yaml
+
+problem:
+  sunlit_nodes: 25
+  eclipse_nodes: 4
+  sunlit_hp_segments: 4
+  eclipse_hp_segments: 1

@@ -1,0 +1,88 @@
+# Flipped Legendre-Radau collocation, p method (one polynomial per arc),
+# second-order SQP.
+#
+#     python main.py algorithms/p.yaml
+#
+# Same problem as every other algorithm -- inherited from problem.yaml -- with
+# the mesh and method that belong to collocation.
+#
+# Notes on the method
+# -------------------
+# * `nsub` (RK4 substeps per shooting interval) has no meaning here: Radau
+#   collocation enforces the dynamics at the collocation nodes through the
+#   differentiation matrix rather than by integrating between them.
+# * `equal_dt` is off (pseudospectral_p.yaml).  Under collocation it would only
+#   equalise the hp segment widths of an arc, never the Radau nodes, which are
+#   deliberately unequal.
+# * `sunlit_hp_segments` / `eclipse_hp_segments` split each arc into that many
+#   Radau sub-intervals.  They are set per arc type, and each must divide
+#   (num_nodes - 1) of its own arcs; 1 means one global polynomial per arc (the
+#   p method) and so places no constraint on the node counts.  See hp.yaml.
+
+inherit: ../problem.yaml
+
+problem:
+  # Collocation needs more points per arc than shooting does.  The Radau
+  # residual at 12 nodes is already tiny (1.1e-06) while the re-propagated
+  # trajectory accumulates 6.4 km of defect, because the polynomial satisfies
+  # the dynamics *at* the nodes and the interpolation error between them is
+  # what a propagator sees.  Judge the mesh by `max_propagation_error_nd`, not
+  # by the collocation residual.
+  #
+  # A mesh study over 12/3, 16/3, 20/4 and 24/4 gave re-propagation errors of
+  # 2.61e-03, 7.98e-04, 7.66e-04 and 4.61e-04.  Only 24/4 comes under the 1e-03
+  # limit and reaches the graveyard, and it is also the fastest of the fine
+  # meshes.  Refining collocation costs nothing here.
+  sunlit_nodes: 24
+  eclipse_nodes: 4
+  sunlit_hp_segments: 1
+  eclipse_hp_segments: 1
+
+  # Terminal margins sized for this mesh.  They compensate the gap between the
+  # nodal terminal state and the independently propagated one, and that gap
+  # belongs to the discretisation, so they are listed with the node counts.
+  #
+  # Collocation's gap is the interpolation error between the Radau nodes: the
+  # re-propagation error is ~2e-4 here against ~1e-6 for shooting.  Measured on
+  # the p-hp-pseudospectral solver at 21 revolutions:
+  #
+  #   margins (perigee km / ecc)   propagated r_p - r_GEO   propagated e
+  #   0    / 0                     +249.99 km (14 m short)  0.003000
+  #   0.1  / 0                     +250.11 km               0.003001 (over cap)
+  #
+  # With no margin the perigee passes only on the validator's 100 m slack, and
+  # the eccentricity sits ~1e-6 over the cap, on the edge of its 1e-6 slack:
+  # two runs differing only in a convergence tolerance landed on opposite sides
+  # of it.  2e-4 times the f, g scale (0.02) is 4e-6, so 5e-6 covers the
+  # eccentricity gap.  The perigee needs far less than shooting's 0.3 km.
+  graveyard:
+    perigee_margin_km: 0.1
+    eccentricity_margin: 5.0e-6
+
+method:
+  # second-order sqp as in ms.yaml, discretised with Radau collocation
+  inherit:
+    - trajopt/methods/stable/scp_phases/configs/first_order/autoscvx-ps.yaml
+    - method_common.yaml
+
+  hyperparams:
+    penalties:
+      # THE setting that decides whether collocation can solve this problem.
+      #
+      # ms.yaml starts the dynamics penalty at 100 because trajopt's min_time
+      # cost sums the longitude over every node of the final segment, so its
+      # magnitude grows with the node count and can outweigh the dynamics penalty.
+      # That reasoning is right for shooting and wrong here, because this mesh has
+      # roughly twice as many nodes: the same weight sits very differently against
+      # the objective, and starting that high over-constrains the iteration.
+      #
+      # The cost is two revolutions.  At 100 collocation cannot solve 22
+      # revolutions at all -- it runs to the iteration cap 4 km short, and no mesh,
+      # hp_segments value, solver or initial guess rescues it.  At the trajopt
+      # default of 1.0 it solves 21 revolutions.  Shooting wants the opposite: at
+      # 1.0 it fails at 20 revolutions where at 100 it converges.
+      dynamics:
+        W:
+          penalty: True
+          autotune: True
+          init: 1.0

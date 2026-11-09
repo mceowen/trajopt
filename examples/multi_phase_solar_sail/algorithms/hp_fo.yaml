@@ -1,0 +1,30 @@
+# Flipped Legendre-Radau collocation, hp method: each sunlit arc split into
+# several Radau segments of equal order.  Everything else as p.yaml.
+#
+#     python main.py algorithms/hp.yaml
+#
+# hp_segments must divide (num_nodes - 1) for its own arcs.  p.yaml's 24 nodes
+# give 23 intervals, a prime, so the hp mesh moves to 25 nodes: 4 segments of
+# order 6.  The eclipse arcs stay one polynomial each (4 nodes, 3 intervals):
+# they are short and carry no control.
+#
+# The terminal margins are inherited from p.yaml.  They were sized for the p
+# mesh's re-propagation error (~2e-4); re-check max_propagation_error_nd in the
+# validation report before trusting them for a different hp mesh.
+
+inherit: p_fo.yaml
+
+problem:
+  sunlit_nodes: 25
+  eclipse_nodes: 4
+  sunlit_hp_segments: 4
+  eclipse_hp_segments: 1
+
+# zoh_dilation: 1 (method_common.yaml) gives every segment of a phase the same
+# time dilation, so the segments are equal in longitude.  Setting it to 0 lets
+# each segment carry its own dilation, i.e. adapt its width:
+#
+# method:
+#   hyperparams:
+#     flags:
+#       zoh_dilation: 0

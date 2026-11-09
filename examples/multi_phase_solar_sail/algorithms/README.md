@@ -42,7 +42,7 @@ problem:                       # the mesh, and anything else discretisation-depe
 
 method:
   inherit:
-    - trajopt/methods/dev/scp_phases/configs/sqp/autoscvx2.yaml   # SCP flavour
+    - trajopt/methods/dev/scp_phases/configs/second_order/autosqp.yaml   # SCP flavour
     - trajopt/methods/common/configs/discretize/second_order_p.yaml  # omit for shooting
     - method_common.yaml                                          # always, last
   hyperparams:

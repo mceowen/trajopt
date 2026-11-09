@@ -1,0 +1,15 @@
+# Flow: Radau p method seeding multiple shooting, both with autoscvx-term and
+# buffered terminal conditions.  The p stage is a coarse seed, so it is capped
+# and may hand over before it converges.
+flow:
+  stages:
+    - name: p
+      config: p_term_w100_fo.yaml
+      method: {hyperparams.convergence.iter_max: 30}
+      allow_nonconverged: true
+
+    - name: ms
+      config: ms_term_fo.yaml
+      initial_guess:
+        from: p
+      method: {inherit: warm_start.yaml}

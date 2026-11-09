@@ -1,0 +1,22 @@
+# Flow: Radau p method -> multiple shooting -> Radau hp method, each stage
+# warm-started from the one before.  The same chain as
+# examples/algflow/lander_6dof/p_to_ms_to_hp.yaml, on this problem.
+#
+#     python main.py algorithms/p_to_ms_to_hp.yaml
+
+flow:
+  stages:
+    - name: p
+      config: p_fo.yaml
+
+    - name: ms
+      config: ms_fo.yaml
+      initial_guess:
+        from: p
+      method: {inherit: warm_start.yaml}   # see warm_start.yaml
+
+    - name: hp
+      config: hp_fo.yaml
+      initial_guess:
+        from: ms
+      method: {inherit: warm_start.yaml}   # see warm_start.yaml
