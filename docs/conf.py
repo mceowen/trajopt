@@ -25,7 +25,7 @@ for _nb in sorted(_EXAMPLES_SRC.glob("*/*.ipynb")):
 
 project = "trajopt"
 author = "Skye Mceowen"
-release = "0.0.1"
+release = "0.0.11"
 copyright = "2026, Skye Mceowen"
 
 # -- General configuration ---------------------------------------------------

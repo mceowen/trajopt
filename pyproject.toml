@@ -15,7 +15,7 @@ include = ["/src", "/examples", "/README.md", "/LICENSE", "/pyproject.toml"]
 
 [project]
 name = "trajopt"
-version = "0.0.10"
+version = "0.0.11"
 description = "Trajectory optimization research and development framework"
 readme = "README.md"
 requires-python = ">=3.11"
