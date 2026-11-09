@@ -9,7 +9,7 @@ from trajopt.methods.common import initial_guess as guesses
 from trajopt.methods.stable.scp.subproblem import Subproblem
 from trajopt.methods.common.utils.specs import MethodSpec
 from trajopt.formulations.stable.specs import ProblemSpec
-from trajopt.common.tools import AttrDict
+from trajopt.common.tools import AttrDict, function_import_scope
 
 
 @dataclass
@@ -67,9 +67,11 @@ def _prepare_phases(physical, method, initial_guess=None):
     supplied = guesses.phase_guesses(initial_guess, physical)
     phases = AttrDict()
     previous = None
+    kernels = {}
     for name, phase in physical.items():
         block = Subproblem(phase, method.phase_config(name),
-                           initial_guess=supplied.get(name), previous_guess=previous)
+                           initial_guess=supplied.get(name), previous_guess=previous,
+                           kernels=kernels)
         phases[name] = block
         initialized = block.initial_guess
         previous = guesses.dimensional_samples(phase, initialized.z, initialized.nu)
@@ -140,8 +142,9 @@ def transcribe(problem, method, initial_guess=None):
     started = time.perf_counter()
     method_spec = MethodSpec.from_config(method)
     spec = ProblemSpec.from_config(problem)
-    physical = spec.build_phases()
-    phases = _prepare_phases(physical, method_spec, initial_guess)
+    with function_import_scope():
+        physical = spec.build_phases()
+        phases = _prepare_phases(physical, method_spec, initial_guess)
     couplings = _prepare_couplings(spec, phases)
     cost = sum(phase.cp_cost for phase in phases.values())
     constraints = [c for phase in phases.values() for c in phase.cp_constraints]

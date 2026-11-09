@@ -26,6 +26,7 @@ class InitialGuessContext:
     options: object
     previous: TrajectorySamples | None = None
     integrate: Callable = discretize.propagate_rk4
+    kernels: dict | None = None
 
 
 def _constraint_of_type(phase, type_name):
@@ -98,16 +99,29 @@ def propagation(context):
     ctrl, dilation = jnp.array(idx.nu.control), jnp.array(idx.nu.dilation_factor)
     sigma = jnp.asarray((stop-start) / phase.nondim.time_scale)
 
-    def nu_fn(z, tau):
+    def nu_fn(z, tau, controls=u_ref, duration=sigma):
         k = jnp.clip(jnp.searchsorted(tau_ref, tau, side='right') - 1, 0, N-2)
         a = (tau-tau_ref[k]) / (tau_ref[k+1]-tau_ref[k])
-        return jnp.zeros(index.n.nu).at[ctrl].set((1-a)*u_ref[k]+a*u_ref[k+1]).at[dilation].set(sigma)
+        return jnp.zeros(index.n.nu).at[ctrl].set((1-a)*controls[k]+a*controls[k+1]).at[dilation].set(duration)
 
     dynamics = _constraint_of_type(phase, 'dynamics')
     if dynamics is None:
         raise ValueError(f"phase '{phase.name}': propagation needs dynamics")
-    tau, z, nu = context.integrate(
-        z0, 0., 1., nu_fn, dynamics.fcn_znu, phase.params, n_steps=10*(N-1))
+    from trajopt.methods.common.utils.kernels import constraint_key
+    identity = constraint_key(dynamics)
+    if (context.kernels is not None and context.integrate is discretize.propagate_rk4
+            and identity is not None):
+        from trajopt.common._snapshot import fingerprint
+        # Keep model parameters constant to preserve the compiled RK4 arithmetic.
+        key = ('guess', identity, N, fingerprint(phase.params))
+        if key not in context.kernels:
+            context.kernels[key] = discretize._make_rk4_solver(
+                nu_fn, dynamics.fcn_znu, copy.deepcopy(phase.params), 10*(N-1))
+        tau, z, nu = map(np.asarray, context.kernels[key](
+            jnp.asarray(z0), jnp.asarray(0.), jnp.asarray(1.), u_ref, sigma))
+    else:
+        tau, z, nu = context.integrate(
+            z0, 0., 1., nu_fn, dynamics.fcn_znu, phase.params, n_steps=10*(N-1))
     values = dimensional_samples(phase, z, nu)
     # Restore exact affine time after integration.
     return TrajectoryData.from_samples(
@@ -144,7 +158,8 @@ def _context(method_phase, previous):
                 raise ValueError(f"phase '{phase.name}': guess.{field}='previous' needs a preceding phase")
             options[field] = previous.x[-1].copy() if field == 'x_start' else float(previous.t[-1])
     return InitialGuessContext(phase, method_phase.mesh, options, previous,
-                               method_phase.fcns.discretize.propagate_rk4)
+                               method_phase.fcns.discretize.propagate_rk4,
+                               getattr(method_phase, 'kernels', None))
 
 
 def _configured_guess(method_phase, context):

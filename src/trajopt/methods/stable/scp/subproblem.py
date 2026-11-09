@@ -53,7 +53,9 @@ class Subproblem():
     def s_mult(self, value):
         self.state.s_mult = float(value)
 
-    def __init__(self, problem, method_config: AttrDict, *, initial_guess=None, previous_guess=None) -> None:
+    def __init__(self, problem, method_config: AttrDict, *, initial_guess=None, previous_guess=None,
+                 kernels=None) -> None:
+        self.kernels = {} if kernels is None else kernels
         self.state = PhaseState()
         self.name           = problem.name
         self.problem        = problem

@@ -11,6 +11,13 @@ from trajopt.methods.dev.ps.path_constraints import constraint_samples
 
 def compile_affine(constraint, subproblem):
     """JIT + batch the fcn and its z/nu Jacobians for first-order Taylor linearization."""
+    from trajopt.methods.common.utils.kernels import constraint_key
+    identity = constraint_key(constraint.constraint)
+    cache = getattr(subproblem, 'kernels', {})
+    key = ('affine', identity)
+    if identity is not None and key in cache:
+        constraint.fcn_batched, constraint.g_aff_batched = cache[key]
+        return
     fcn = constraint.constraint.fcn_znu
     g      = jax.jit(fcn)
     dg_dz  = jax.jit(jax.jacfwd(fcn, argnums=0))
@@ -24,6 +31,8 @@ def compile_affine(constraint, subproblem):
     def g_aff_batched(z, nu, params, g=g_batched, dz=dg_dz_batched, dnu=dg_dnu_batched):
         return g(z, nu, params), dz(z, nu, params), dnu(z, nu, params)
     constraint.g_aff_batched = g_aff_batched
+    if identity is not None:
+        cache[key] = (constraint.fcn_batched, constraint.g_aff_batched)
 
 
 def compile_affine_second_order(constraint, subproblem):

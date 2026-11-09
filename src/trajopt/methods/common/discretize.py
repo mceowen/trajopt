@@ -141,23 +141,26 @@ def propagate_trajectory(z_nodes, tau_nodes, nu_nodes, dynamics, params,
 def _make_rk4_solver(nu_fn, dynamics, params, n_steps):
 
     @jax.jit
-    def solve(z0, tau0, tau_f):
+    def solve(z0, tau0, tau_f, *inputs):
+        def control(z, tau):
+            return nu_fn(z, tau, *inputs)
+
         dt   = (tau_f - tau0) / n_steps
         taus = jnp.linspace(tau0, tau_f, n_steps + 1)
 
         def step(z, tau):
-            nu = nu_fn(z, tau)
-            k1 = dynamics(z,                nu,                                     params)
-            k2 = dynamics(z + (dt/2) * k1,  nu_fn(z + (dt/2) * k1, tau + dt / 2),   params)
-            k3 = dynamics(z + (dt/2) * k2,  nu_fn(z + (dt/2) * k2, tau + dt / 2),   params)
-            k4 = dynamics(z + dt * k3,      nu_fn(z + dt * k3,     tau + dt),       params)
+            nu = control(z, tau)
+            k1 = dynamics(z,                nu,                                      params)
+            k2 = dynamics(z + (dt/2) * k1,  control(z + (dt/2) * k1, tau + dt / 2),   params)
+            k3 = dynamics(z + (dt/2) * k2,  control(z + (dt/2) * k2, tau + dt / 2),   params)
+            k4 = dynamics(z + dt * k3,      control(z + dt * k3,     tau + dt),       params)
             z_next = z + (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
             return z_next, (z, nu)
 
         z_f, (z_traj, nu_traj) = jax.lax.scan(step, z0, taus[:-1])
 
         z_traj  = jnp.concatenate([z_traj,  z_f[None]])
-        nu_traj = jnp.concatenate([nu_traj, nu_fn(z_f, taus[-1])[None]])
+        nu_traj = jnp.concatenate([nu_traj, control(z_f, taus[-1])[None]])
         return taus, z_traj, nu_traj
 
     return solve
@@ -318,6 +321,14 @@ def final_time_interval_constraints_ms(constraint, subproblem):
 # ---------------------------------------------------------------------------
 
 def dynamics_compile_ms(constraint, subproblem):
+    from trajopt.methods.common.utils.kernels import constraint_key
+    identity = constraint_key(constraint.constraint)
+    cache = getattr(subproblem, 'kernels', {})
+    key = ('ms', identity, subproblem.index_map.N.all,
+           int(getattr(subproblem.hyperparams.discretize, 'nsub', 10)))
+    if identity is not None and key in cache:
+        constraint.propagate, constraint.propagate_jacobians = cache[key]
+        return
     dyn_fcn = constraint.dyn_fcn
     N_grid  = subproblem.index_map.N.all
     nsub    = int(getattr(subproblem.hyperparams.discretize, 'nsub', 10))
@@ -327,6 +338,8 @@ def dynamics_compile_ms(constraint, subproblem):
 
     constraint.propagate           = jax.jit(jax.vmap(propagate_k,      in_axes=(0, 0, 0, 0, None)))
     constraint.propagate_jacobians = jax.jit(jax.vmap(prop_jacobians_k, in_axes=(0, 0, 0, 0, None)))
+    if identity is not None:
+        cache[key] = (constraint.propagate, constraint.propagate_jacobians)
 
 
 def dynamics_create_cvxpy_parameters_ms(constraint, subproblem):
