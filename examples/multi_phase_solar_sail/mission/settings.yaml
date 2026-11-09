@@ -1,0 +1,42 @@
+revolutions: 21
+final_longitude_freedom_rad: 3.141592653589793
+terminator_window_rad: 0.05
+enforce_shadow_terminator: true
+initial_longitude_rad: 3.141592653589793
+max_accumulated_defect_km: 3.0
+constants:
+  earth_mu_km3_s2: 398600.436233
+  earth_radius_km: 6378.1366
+  geo_radius_km: 42164.1696
+  day_s: 86400.0
+sail:
+  area_to_mass_m2_kg: 10.0
+  solar_pressure_n_m2: 4.5391e-06
+  reflectivity: 1.0
+minimum_time_objective: elapsed_time
+elapsed_time_cost_weight: 0.1
+max_steering_rate_rad_per_rad: 2.0
+sun_direction_eci:
+- -1.0
+- 0.0
+- 0.0
+sun_angular_rate_deg_per_day: 0.9856
+graveyard:
+  perigee_altitude_km: 250.0
+  eccentricity_max: 0.003
+  perigee_margin_km: 0.1
+  eccentricity_margin: 5.0e-06
+state_bounds:
+  semi_latus_offset_km:
+  - 0.0
+  - 1000.0
+  eccentricity_component:
+  - -0.01
+  - 0.01
+  inclination_component:
+  - -0.1
+  - 0.1
+  days_per_revolution_bound: 1.2
+guess:
+  steering_angle_start_rad: 1.5707963267948966
+  steering_angle_stop_rad: 1.5707963267948966

@@ -1,0 +1,15 @@
+inherit: config.yaml
+problem:
+  sunlit_nodes: 24
+  eclipse_nodes: 4
+  sunlit_hp_segments: 1
+  eclipse_hp_segments: 1
+method:
+  inherit: trajopt/methods/common/configs/discretize/pseudospectral_p.yaml
+  hyperparams:
+    discretize:
+      nsub: 10
+    penalties:
+      dynamics:
+        W:
+          init: 1.0

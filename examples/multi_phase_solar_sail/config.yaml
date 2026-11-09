@@ -1,0 +1,6 @@
+problem:
+  inherit: mission/settings.yaml
+  sunlit_nodes: 12
+  eclipse_nodes: 3
+method:
+  inherit: method.yaml
