@@ -4,7 +4,7 @@ hyperparams:
   convergence:
     iter_max: 2000
     flag_conv: 2
-    eps_cost: 2.0e-06
+    eps_cost: 1.0e-06
     eps_state: [0.00001]
   trust_region:
     tr_step: {z: 1000.0, nu: 200.0}
