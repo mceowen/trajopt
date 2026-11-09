@@ -1,0 +1,9 @@
+inherit: ms.yaml
+trajectory:
+  num_nodes: 49
+method:
+  inherit: trajopt/methods/common/configs/discretize/pseudospectral_p.yaml
+  hyperparams:
+    convergence:
+      # The shooting stage uses the full MSRL tolerance.
+      eps_state: [1.0e-3, 1.0e-3, 1.0e-3, 1.0e-3, 1.0e-2, 1.0e-2]

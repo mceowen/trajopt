@@ -1,0 +1,7 @@
+trajectory:
+  inherit: ../mission/problem.yaml
+method:
+  inherit: ../method.yaml
+  hyperparams:
+    flags:
+      quiet: true

@@ -1,5 +1,0 @@
-from trajopt.methods.stable.algflows import AlgorithmFlow
-
-flow = AlgorithmFlow("trajopt/methods/stable/algflows/configs/p_to_ms.yaml")
-
-result = flow.solve()

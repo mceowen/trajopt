@@ -1,7 +1,7 @@
 # source: https://github.com/UW-ACL/SCPToolbox.jl/tree/master/test/examples/starship_flip
 
 trajectory:
-  inherit: problem.yaml
+  inherit: mission/problem.yaml
 method:
   inherit: method.yaml
 analysis:

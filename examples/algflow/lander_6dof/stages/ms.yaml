@@ -1,7 +1,0 @@
-trajectory:
-  inherit: ../../../lander_6dof/problem.yaml
-method:
-  inherit: ../../../lander_6dof/method.yaml
-  hyperparams:
-    flags:
-      quiet: true

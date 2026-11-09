@@ -1,7 +1,7 @@
 method:
   inherit: method.yaml
 trajectory:
-  inherit: problem.yaml
+  inherit: mission/problem.yaml
 analysis:
   type: standalone
   compute_iters: true

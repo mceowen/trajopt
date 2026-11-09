@@ -1,3 +1,0 @@
-inherit:
-  - ms.yaml
-  - trajopt/methods/stable/algflows/configs/lander_6dof/p_method.yaml

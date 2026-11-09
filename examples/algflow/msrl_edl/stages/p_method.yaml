@@ -1,3 +1,0 @@
-inherit:
-  - ms.yaml
-  - trajopt/methods/stable/algflows/configs/msrl_edl/p_method.yaml

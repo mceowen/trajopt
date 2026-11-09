@@ -1,7 +1,0 @@
-trajectory:
-  inherit: ../../../msrl_edl_3dof/problem.yaml
-method:
-  inherit: ../../../msrl_edl_3dof/method.yaml
-  hyperparams:
-    flags:
-      quiet: true

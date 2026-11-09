@@ -1,6 +1,6 @@
 # problem
 trajectory:
-  inherit: problem.yaml
+  inherit: mission/problem.yaml
 method:
   inherit: method.yaml
 analysis:

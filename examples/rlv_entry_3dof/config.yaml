@@ -1,6 +1,6 @@
 # problem
 trajectory:
-  inherit: problem.yaml
+  inherit: mission/problem.yaml
 
   # Diagonal preconditioning for the first-order proximal cost.
   # Keep physical tolerances fixed below when changing these scales.

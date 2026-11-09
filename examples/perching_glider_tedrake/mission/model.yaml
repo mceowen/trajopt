@@ -1,0 +1,5 @@
+inherit: trajopt/models/perching_glider_tedrake/perching_glider_tedrake.yaml
+
+fcns:
+  terminal_box: perching_glider_tedrake.py:terminal_box
+  u_squared_cost: perching_glider_tedrake.py:u_squared_cost

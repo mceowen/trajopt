@@ -1,0 +1,5 @@
+inherit: ms.yaml
+trajectory:
+  constraints:
+    min_thrust:
+      type: ctcs_nonconvex_inequality

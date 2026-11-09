@@ -1,7 +1,7 @@
 # MSRL multiphase EDL: guided entry, parachute descent, powered descent
 
 trajectory:
-  inherit: problem.yaml
+  inherit: mission/problem.yaml
 method:
   inherit: method.yaml
 analysis:
