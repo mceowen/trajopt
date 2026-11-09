@@ -1,24 +1,11 @@
-# Sequential Convex Programming & Auto-Tuning
+# Sequential convex programming
 
-```{note}
-This page is a scaffold. Fill in the narrative explanation below.
-```
+Sequential convex programming (SCP) solves a sequence of convex approximations to a nonlinear trajectory problem. The current reference trajectory defines each approximation. JAX supplies derivatives, and CVXPY assembles the convex subproblem.
 
-## Overview
+`SCPMethod.solve()` in `trajopt.methods.stable.scp.scp_method` owns the iteration loop. The configured method selects discretization, convexification, trust-region, penalty-update, recovery, and convergence operations. These operations are shared in `trajopt.methods.common`; subproblem assembly lives in `trajopt.methods.stable.scp`.
 
-<!-- High-level description of what SCP is and why trajopt uses it. -->
+Virtual buffers relax selected constraints. Penalty terms discourage these buffers, and AutoSCvx updates penalty weights and dual coefficients according to the selected preset. Hard constraints can still make a subproblem infeasible. Step handling and recovery depend on the preset; a line search is not universal.
 
-## The SCP loop
+Multiple shooting measures dynamics defects against numerical integration over each interval. Pseudospectral collocation measures consistency of the discretized collocation equations. A converged solve meets its configured discrete stopping criteria. Independent trajectory evaluation is needed to assess propagation error and between-node path-constraint violations.
 
-<!-- Convexification, discretization, solving the convex subproblem,
-     convergence checking. Reference the relevant modules:
-     trajopt.methods.stable.scp.scp_method.convexify, .discretize, .scvx, .convergence. -->
-
-## Auto-tuning
-
-<!-- Explanation of the auto-tuning behavior: what parameters are tuned,
-     how, and when. -->
-
-## References
-
-<!-- Papers / external resources. -->
+See the research references in the repository README for the underlying methods.
