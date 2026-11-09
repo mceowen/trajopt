@@ -5,7 +5,7 @@ hyperparams:
     iter_max: 2000
     flag_conv: 2
     eps_cost: 1.0e-06
-    eps_state: [0.00001]
+    eps_state: [1.0e-06]
   trust_region:
     tr_step: {z: 1000.0, nu: 200.0}
   penalties:
