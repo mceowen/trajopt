@@ -22,13 +22,16 @@ def analyze_phase(subprob, config):
 
     discretize = subprob.mesh.discretize
     propagate_from_nodes_flag = analysis_config.get("propagate_from_nodes", False)
+    interpolation = analysis_config.get('control_interpolation', 'native')
+    if interpolation == 'native':
+        interpolation = getattr(subprob.mesh, 'control_interpolation', 'lagrange')
 
     # ps only: controls between collocation nodes are reconstructed with "lagrange" or "foh"
     # ms always uses foh either way
     mesh_opts = AttrDict({
         "discretize":            discretize,
         "segments":              subprob.mesh.segments,
-        "control_interpolation": analysis_config.get("control_interpolation", "lagrange"),
+        "control_interpolation": interpolation,
         "dilation_idx":          idx.nu.dilation_factor,
     })
 

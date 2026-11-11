@@ -15,6 +15,19 @@ class Mesh:
     differentiation: np.ndarray | None = None
     weights: np.ndarray | None = None  # quadrature weights on [0, 1] at the collocation nodes tau[1:]
     segments: int = 1  # hp segments of equal order; knots at node indices h * (N-1) / segments
+    control_interpolation: str = 'lagrange'
+    control_stride: int = 1
+
+
+def control_interpolation_matrix(mesh):
+    """Map controls at selected mesh knots to all state collocation nodes."""
+    stride = getattr(mesh, 'control_stride', 1)
+    knots = np.arange(0, len(mesh.tau), stride)
+    basis = np.eye(len(knots))
+    weights = np.column_stack([np.interp(mesh.tau, mesh.tau[knots], col) for col in basis])
+    matrix = np.zeros((len(mesh.tau), len(mesh.tau)))
+    matrix[:, knots] = weights
+    return matrix
 
 
 def segment_ranges(num_nodes, segments):
@@ -35,11 +48,19 @@ def make_mesh(num_nodes, options, fcns=None, segments=1):
         raise ValueError(f"hp_segments={segments} must be a positive integer "
                          f"dividing num_nodes - 1 = {num_nodes - 1}")
     segments = int(segments)
+    control_interpolation = getattr(options, 'control_interpolation', 'lagrange')
+    if control_interpolation not in ('lagrange', 'foh'):
+        raise ValueError(f'Unknown pseudospectral control interpolation {control_interpolation!r}')
+    stride = getattr(options, 'control_stride', 1)
+    if int(stride) != stride or stride < 1 or ((num_nodes - 1) // segments) % stride:
+        raise ValueError('control_stride must be a positive integer dividing each segment degree')
+    if stride != 1 and control_interpolation != 'foh':
+        raise ValueError('A separate control grid requires foh interpolation')
     operator = fcns.differential_operator if fcns is not None else flipped_radau_hp_operator
     _, nodes, w, D = operator(num_nodes-1, segments)
     tau = (nodes + 1) / 2
     tau[0], tau[-1] = 0., 1.
-    return Mesh(tau, kind, D, w / 2, segments)
+    return Mesh(tau, kind, D, w / 2, segments, control_interpolation, int(stride))
 
 
 # =============================================================================
@@ -603,12 +624,26 @@ def dynamics_create_cvxpy_constraints_ps(constraint, subproblem):
 
     mesh = subproblem.mesh
     controls = subproblem.index_map.indices.nu.control
-    if len(controls):
+    delta_nu = subproblem.dnu
+    if len(controls) and mesh.control_stride > 1:
+        M = control_interpolation_matrix(mesh)
+        U = (subproblem.cp_params.nu_ref + subproblem.dnu)[:, controls]
+        interior = np.flatnonzero(np.arange(N_col + 1) % mesh.control_stride)
+        subproblem.cp_constraints.append(U[interior] == M[interior] @ U)
+        selector = np.eye(subproblem.dnu.shape[1])[controls]
+        delta_nu = subproblem.dnu + (M @ subproblem.dnu[:, controls]
+                                    - subproblem.dnu[:, controls]) @ selector
+    elif len(controls) and mesh.control_interpolation == 'lagrange':
         # Initial-control constraints must use the propagated control polynomial.
         interpolate = interpolate_control_ps(mesh.tau, np.eye(N_col + 1), mesh.segments, None)
         opening = np.asarray(interpolate(0.0))
         U = (subproblem.cp_params.nu_ref + subproblem.dnu)[:, controls]
         subproblem.cp_constraints.append(U[0] == opening @ U)
+    elif len(controls):
+        # Radau has no dynamics row at the opening node. Avoid a free control
+        # there by holding the first collocation control over the first interval.
+        U = (subproblem.cp_params.nu_ref + subproblem.dnu)[:, controls]
+        subproblem.cp_constraints.append(U[0] == U[1])
 
     Z = subproblem.cp_params.z_ref + subproblem.dz
     lhs = 2.0 * (D @ Z)
@@ -616,7 +651,7 @@ def dynamics_create_cvxpy_constraints_ps(constraint, subproblem):
     for k in range(N_col):
         rhs_k = (subproblem.cp_params.ps_f_ref[k]
                  + subproblem.cp_params.ps_Ac[k] @ subproblem.dz[k + 1]
-                 + subproblem.cp_params.ps_Bc[k] @ subproblem.dnu[k + 1]
+                 + subproblem.cp_params.ps_Bc[k] @ delta_nu[k + 1]
                  + (vb_dyn[k] if vb_dyn is not None else 0))
         cnst = (lhs[k] == rhs_k)
         subproblem.cp_dyn_constraints.append(cnst)

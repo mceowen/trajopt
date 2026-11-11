@@ -267,7 +267,7 @@ def evaluate(result, analysis_config=None):
     start = time.perf_counter()
     protocol = AttrDict(compute_iters=False, propagate_from_nodes=False,
                         trajectory_steps=500, node_steps=50,
-                        control_interpolation='lagrange')
+                        control_interpolation='native')
     protocol.update(thaw(analysis_config or {}))
     for key in ("trajectory_steps", "node_steps"):
         if int(protocol[key]) < 1:
@@ -285,7 +285,11 @@ def evaluate(result, analysis_config=None):
         mappings = analyze_phase(adapter, AttrDict(analysis=protocol))
         iterates = tuple(EvaluatedIterate(**mapping) for mapping in mappings)
         diagnostics = _physical_diagnostics(adapter.problem, iterates[-1]) if iterates else {}
-        if iterates and adapter.mesh.discretize == 'ps' and protocol.control_interpolation == 'lagrange':
+        interpolation = protocol.control_interpolation
+        if interpolation == 'native':
+            interpolation = adapter.mesh.get('control_interpolation', 'lagrange')
+        diagnostics['control_interpolation'] = interpolation
+        if iterates and adapter.mesh.discretize == 'ps' and interpolation == 'lagrange':
             from trajopt.methods.dev.ps.mesh_error import estimate_mesh_error
             final = adapter.iter_data_list[-1]
             dynamics = next(c.fcn_znu for c in adapter.problem.constraints.values() if c.type == 'dynamics')

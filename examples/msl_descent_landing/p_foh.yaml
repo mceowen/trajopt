@@ -1,0 +1,12 @@
+inherit: config.yaml
+trajectory:
+  phases:
+    approach: {num_nodes: 17}
+method:
+  inherit: trajopt/methods/common/configs/discretize/pseudospectral_p.yaml
+  hyperparams:
+    discretize: {control_interpolation: foh}
+    trust_region:
+      tr_step: {z: 600.0, nu: 120.0}
+analysis:
+  control_interpolation: native

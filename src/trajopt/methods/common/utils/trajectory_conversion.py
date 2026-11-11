@@ -90,7 +90,7 @@ def export_trajectory(phase, *, data=None, include_aux=False):
         layout=phase_layout(phase.problem),
         aux_metadata=auxiliary_metadata(phase.problem) if include_aux else {},
     )
-    if mesh.discretize == 'ps':
+    if mesh.discretize == 'ps' and getattr(mesh, 'control_interpolation', 'lagrange') == 'lagrange':
         fields = dict(trajectory.fields)
         fields['u'] = collocation_control_field(mesh.tau, values.u, mesh.segments)
         trajectory = TrajectoryData(fields, trajectory.phase_id, trajectory.layout,

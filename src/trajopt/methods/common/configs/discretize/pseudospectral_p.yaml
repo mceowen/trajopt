@@ -22,4 +22,8 @@ hyperparams:
   discretize:
     mode: ps
     equal_dt: 0
+    # lagrange or foh; FOH holds the first collocation control on the opening interval.
+    control_interpolation: lagrange
+    # For FOH, optimize one control knot every control_stride state nodes.
+    control_stride: 1
     # hp segments are set per phase with hp_segments next to num_nodes (default 1, the p method)

@@ -325,7 +325,9 @@ def make_result(solver, reason, *, failed=False):
             iterations = [iterations[0], iterations[-1]] if len(iterations) > 1 else iterations
         data[name] = dict(initial_guess=phase.initial_guess, iter_data_list=iterations,
             scalar_history=phase.state.scalar_trace if history_option != 'none' else [],
-            mesh=dict(tau=phase.mesh.tau, discretize=phase.mesh.discretize, segments=phase.mesh.segments),
+            mesh=dict(tau=phase.mesh.tau, discretize=phase.mesh.discretize, segments=phase.mesh.segments,
+                      control_interpolation=phase.mesh.control_interpolation,
+                      control_stride=phase.mesh.control_stride),
             hyperparams=phase.hyperparams,
             constraints={key: dict(name=c.name, type=c.type, shape=c.shape,
                 penalties=penalty_descriptor(c.penalties))

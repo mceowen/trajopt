@@ -258,6 +258,12 @@ def prepare_initial_guess(method_phase, supplied=None, previous=None):
         raise ValueError(f"phase '{phase.name}': expected {n.state} states and {n.control} controls")
     t, s = _import_time_map(method_phase, values, dense_tau)
     n_aux = len(phase.index_map.indices.z.augmented)
+    controls = values.u
+    stride = getattr(method_phase.mesh, 'control_stride', 1)
+    if stride > 1 and n.control:
+        knots = target[::stride]
+        knot_controls = supplied.sample(_source_coordinates(knots, supplied.native_tau)).u
+        controls = np.column_stack([np.interp(dense_tau, knots, col) for col in knot_controls.T])
     aux = values.aux
     if aux is None:
         aux = np.zeros((len(dense_tau), n_aux))
@@ -265,7 +271,7 @@ def prepare_initial_guess(method_phase, supplied=None, previous=None):
         raise ValueError(f"phase '{phase.name}': expected {n_aux} auxiliary accumulator columns")
     z, nu = phase.index_map.pack_znu(values.x @ phase.nondim.M.state.d2nd.T,
                                     t[:, None], aux,
-                                    values.u @ phase.nondim.M.control.d2nd.T,
+                                    controls @ phase.nondim.M.control.d2nd.T,
                                     s[:, None])
     if values.aux is None and n_aux:
         dynamics = next(c for c in phase.constraints.values() if c.type == 'dynamics')

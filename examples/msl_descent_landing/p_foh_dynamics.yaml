@@ -1,0 +1,4 @@
+inherit: p_foh.yaml
+method:
+  hyperparams:
+    discretize: {control_stride: 2}
