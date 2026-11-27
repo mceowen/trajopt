@@ -1,0 +1,26 @@
+inherit: ../config.yaml
+trajectory:
+  phases:
+    parachute:
+      num_nodes: 5
+    transition:
+      num_nodes: 3
+    approach:
+      num_nodes: 7
+    terminal:
+      num_nodes: 5
+method:
+  inherit: trajopt/methods/common/configs/discretize/pseudospectral_p.yaml
+  hyperparams:
+    convergence:
+      iter_max: 9
+      eps_cost: 0.001
+    trust_region:
+      tr_step:
+        z: 300.0
+        nu: 60.0
+    penalties:
+      default:
+        eps:
+        - 0.001
+        eps_floor: 0.001

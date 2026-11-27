@@ -1,0 +1,11 @@
+flow:
+  stages:
+    - name: p
+      allow_nonconverged: true
+      config: stages/p.yaml
+    - name: ms
+      config: stages/ms.yaml
+      initial_guess: {from: p, endpoint_weights: true}
+    - name: hp
+      config: stages/hp.yaml
+      initial_guess: {from: ms, endpoint_weights: true}

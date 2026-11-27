@@ -1,0 +1,14 @@
+inherit: common.yaml
+fcns:
+  dynamics: model.py:powered
+  thrust: trajopt/models/lander_6dof/lander_6dof.py:thrust
+  max_thrust: trajopt/models/lander_6dof/lander_6dof.py:cvx_max_thrust
+  gimbal: trajopt/models/lander_6dof/lander_6dof.py:cvx_gimbal_limit
+  tilt: trajopt/models/lander_6dof/lander_6dof.py:cvx_tilt_limit
+  rates: trajopt/models/lander_6dof/lander_6dof.py:cvx_max_angular_velocity
+constraints:
+  max_thrust: {type: convex_inequality, fcn: fcns.max_thrust, scale: 10000.0}
+  min_thrust: {type: nonconvex_inequality, fcn: fcns.thrust, lower: "${params.min_thrust}", scale: 10000.0}
+  gimbal: {type: convex_inequality, fcn: fcns.gimbal, scale: 10000.0}
+  tilt: {type: convex_inequality, fcn: fcns.tilt}
+  rates: {type: convex_inequality, fcn: fcns.rates, scale: 0.1}

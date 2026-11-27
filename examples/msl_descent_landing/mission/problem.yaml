@@ -1,0 +1,73 @@
+phases:
+  parachute:
+    inherit: common.yaml
+    num_nodes: 17
+    params:
+      drag_area: "${0.615 * np.pi * 21.5**2 / 4}"
+    constraints:
+      initial_state:
+        type: initial_state
+        value: [2200, 2500, 0, 0, -120, 20, 0, 1, 0, 0, 0, 0, 0, 0]
+      separation:
+        type: final_state_limits
+        lower: [null, 250.0]
+        upper: [null, 2000.0]
+      control_limits: {type: control_limits, lower: [0, 0, 0], upper: [0, 0, 0]}
+      final_time: {type: final_time, lower: 0.1, upper: 30.0}
+    guess:
+      duration: 7.0
+      u_start: [0, 0, 0]
+      u_stop: [0, 0, 0]
+  transition:
+    inherit: powered.yaml
+    num_nodes: 9
+    constraints:
+      continuity:
+        type: state_continuity
+        phase: parachute
+        idx: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+      initial_mass: {type: initial_state, idx: [0], value: [1905.0]}
+      control_limits:
+        type: control_limits
+        lower: [4796.8, null, null]
+        upper: [4796.8, null, null]
+      final_state: {type: final_state, idx: [8, 9, 10, 11, 12, 13], value: [0, 0, 0, 0, 0, 0]}
+      final_time: {type: final_time, value: 3.4}
+    guess:
+      duration: 3.4
+      x_start: [1905, 1750, 100, 0, -90, 12, 0, 1, 0, 0, 0, 0, 0, 0]
+      u_start: [4796.8, 0, 0]
+      u_stop: [4796.8, 0, 0]
+  approach:
+    inherit: powered.yaml
+    num_nodes: 41
+    constraints:
+      continuity: {type: state_continuity, phase: transition}
+      final_state:
+        type: final_state
+        value: [null, 100, null, 300, -20, 0, 0, null, 0, 0, 0, 0, 0, 0]
+      final_time: {type: final_time, lower: 5.0, upper: 80.0}
+    guess:
+      duration: 28.0
+      x_start: previous
+      u_start: [9000, 0, 0]
+      u_stop: [14000, 0, 0]
+  terminal:
+    inherit: powered.yaml
+    num_nodes: 21
+    constraints:
+      continuity: {type: state_continuity, phase: approach}
+      final_state: {type: final_state, idx: [1, 4], value: [18.6, -0.75]}
+      vertical_profile:
+        type: state_limits
+        lower: [null, null, null, null, null, 0, 0, null, 0, 0, 0, 0, 0, 0]
+        upper: [null, null, null, null, null, 0, 0, null, 0, 0, 0, 0, 0, 0]
+      axial_thrust: {type: control_limits, lower: [null, 0, 0], upper: [null, 0, 0]}
+      final_time: {type: final_time, lower: 1.0, upper: 30.0}
+    costs:
+      fuel: {type: final_state, idx: [0], w: -20.0}
+    guess:
+      duration: 7.845783132530121
+      x_start: [1700, 100, 250, 300, -20, 0, 0, 1, 0, 0, 0, 0, 0, 0]
+      u_start: [10480, 0, 0]
+      u_stop: [10210, 0, 0]

@@ -1,0 +1,15 @@
+inherit: ../config.yaml
+trajectory:
+  phases:
+    parachute:
+      hp_segments: 4
+    transition:
+      hp_segments: 2
+    approach:
+      num_nodes: 81
+      hp_segments: 20
+    terminal:
+      num_nodes: 41
+      hp_segments: 10
+method:
+  inherit: trajopt/methods/common/configs/discretize/pseudospectral_p.yaml
