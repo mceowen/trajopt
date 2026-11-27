@@ -23,6 +23,8 @@ class Problem:
         self.num_nodes = problem_config.num_nodes
         # default number of hp segments to 1
         self.hp_segments = problem_config.get("hp_segments", 1)
+        # optional knot fractions in [0, 1] of the hp intervals (len hp_segments + 1); None means equal intervals
+        self.hp_knots = problem_config.get("hp_knots", None)
 
         # set index map for augmentation and nondim object for ocp
         self.index_map = IndexMap(problem_config)

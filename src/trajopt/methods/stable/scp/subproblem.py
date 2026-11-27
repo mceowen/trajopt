@@ -7,6 +7,7 @@ import cvxpy as cp
 from trajopt.methods.common import penalties
 from trajopt.methods.common.initial_guess import prepare_initial_guess
 from trajopt.methods.common.discretize import make_mesh
+from trajopt.methods.dev.ps.path_constraints import path_sample_maps
 from trajopt.methods.common.utils.solverstate import PhaseState
 import trajopt.methods.stable.scp.constraint_types as scp_constraint_type_module
 import trajopt.methods.stable.scp.cost_types as scp_cost_type_module
@@ -52,7 +53,9 @@ class Subproblem():
     def s_mult(self, value):
         self.state.s_mult = float(value)
 
-    def __init__(self, problem, method_config: AttrDict, *, initial_guess=None, previous_guess=None) -> None:
+    def __init__(self, problem, method_config: AttrDict, *, initial_guess=None, previous_guess=None,
+                 kernels=None) -> None:
+        self.kernels = {} if kernels is None else kernels
         self.state = PhaseState()
         self.name           = problem.name
         self.problem        = problem
@@ -90,7 +93,8 @@ class Subproblem():
 
         self.free_final_time = self.derive_free_final_time()
 
-        self.mesh = make_mesh(self.index_map.N.all, self.hyperparams.discretize, self.fcns.discretize, segments=problem.hp_segments)
+        self.mesh = make_mesh(self.index_map.N.all, self.hyperparams.discretize, self.fcns.discretize, segments=problem.hp_segments, knots=getattr(problem, "hp_knots", None))
+        self.path_sample_maps = path_sample_maps(self.mesh)
         self.initialize(initial_guess, previous_guess)
 
         self.cp_params            = AttrDict()

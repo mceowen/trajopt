@@ -1,6 +1,8 @@
 import importlib.util
 import inspect
 import sys
+from contextlib import contextmanager
+from contextvars import ContextVar
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
@@ -8,6 +10,19 @@ from typing import Any
 
 import jax
 import numpy as np
+
+_function_modules = ContextVar('function_modules', default=None)
+
+
+@contextmanager
+def function_import_scope():
+    """Load each external callback module once during a preparation."""
+    token = _function_modules.set({})
+    try:
+        yield
+    finally:
+        _function_modules.reset(token)
+
 
 class AttrDict(dict):
     """Dictionary that allows attribute access to keys.
@@ -172,6 +187,7 @@ def resolve_function_from_string(fcn_string: str, fcns: "AttrDict | None" = None
     parent_dir = file_path.parent
     pkg_init = parent_dir / "__init__.py"
     package_root = Path(__file__).resolve().parents[1]
+    modules = _function_modules.get()
 
     try:
         if file_path.is_relative_to(package_root):
@@ -181,6 +197,8 @@ def resolve_function_from_string(fcn_string: str, fcns: "AttrDict | None" = None
             if parts[-1] == "__init__":
                 parts = parts[:-1]
             module = importlib.import_module(".".join(("trajopt", *parts)))
+        elif modules is not None and file_path in modules:
+            module = modules[file_path]
         elif pkg_init.exists():
             pkg_name = parent_dir.name
             mod_name = f"{pkg_name}.{file_path.stem}"
@@ -204,6 +222,9 @@ def resolve_function_from_string(fcn_string: str, fcns: "AttrDict | None" = None
             spec.loader.exec_module(module)
     except Exception as e:
         raise type(e)(f"could not load file '{file_path}' (from '{fcn_string}'): {e}") from None
+
+    if modules is not None:
+        modules[file_path] = module
 
     try:
         fn = getattr(module, func_name)

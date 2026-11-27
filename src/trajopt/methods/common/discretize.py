@@ -15,9 +15,29 @@ class Mesh:
     differentiation: np.ndarray | None = None
     weights: np.ndarray | None = None  # quadrature weights on [0, 1] at the collocation nodes tau[1:]
     segments: int = 1  # hp segments of equal order; knots at node indices h * (N-1) / segments
+    control_interpolation: str = 'lagrange'
+    control_stride: int = 1
+    knots: np.ndarray | None = None  # hp interval knots as fractions of [0, 1]; None for equal intervals
 
 
-def make_mesh(num_nodes, options, fcns=None, segments=1):
+def control_interpolation_matrix(mesh):
+    """Map controls at selected mesh knots to all state collocation nodes."""
+    stride = getattr(mesh, 'control_stride', 1)
+    knots = np.arange(0, len(mesh.tau), stride)
+    basis = np.eye(len(knots))
+    weights = np.column_stack([np.interp(mesh.tau, mesh.tau[knots], col) for col in basis])
+    matrix = np.zeros((len(mesh.tau), len(mesh.tau)))
+    matrix[:, knots] = weights
+    return matrix
+
+
+def segment_ranges(num_nodes, segments):
+    from trajopt.common.interpolation import _degrees
+    ends = np.cumsum([0] + _degrees(segments, num_nodes))
+    return tuple(zip(ends[:-1].tolist(), ends[1:].tolist()))
+
+
+def make_mesh(num_nodes, options, fcns=None, segments=1, knots=None):
     if num_nodes < 2:
         raise ValueError('A trajectory mesh needs at least two nodes')
     kind = getattr(options, 'mode', 'ms')
@@ -29,11 +49,25 @@ def make_mesh(num_nodes, options, fcns=None, segments=1):
         raise ValueError(f"hp_segments={segments} must be a positive integer "
                          f"dividing num_nodes - 1 = {num_nodes - 1}")
     segments = int(segments)
-    operator = fcns.differential_operator if fcns is not None else flipped_radau_hp_operator
-    _, nodes, w, D = operator(num_nodes-1, segments)
+    control_interpolation = getattr(options, 'control_interpolation', 'lagrange')
+    if control_interpolation not in ('lagrange', 'foh'):
+        raise ValueError(f'Unknown pseudospectral control interpolation {control_interpolation!r}')
+    stride = getattr(options, 'control_stride', 1)
+    if int(stride) != stride or stride < 1 or ((num_nodes - 1) // segments) % stride:
+        raise ValueError('control_stride must be a positive integer dividing each segment degree')
+    if stride != 1 and control_interpolation != 'foh':
+        raise ValueError('A separate control grid requires foh interpolation')
+    if knots is not None:
+        knots = np.asarray(knots, dtype=float)
+        if knots.shape != (segments + 1,) or abs(knots[0]) > 1e-12 or abs(knots[-1] - 1.0) > 1e-12 or np.any(np.diff(knots) <= 0):
+            raise ValueError('hp_knots must be increasing fractions from 0 to 1 with hp_segments + 1 entries')
+        _, nodes, w, D = flipped_radau_hp_operator(num_nodes-1, segments, knots=2.0 * knots - 1.0)
+    else:
+        operator = fcns.differential_operator if fcns is not None else flipped_radau_hp_operator
+        _, nodes, w, D = operator(num_nodes-1, segments)
     tau = (nodes + 1) / 2
     tau[0], tau[-1] = 0., 1.
-    return Mesh(tau, kind, D, w / 2, segments)
+    return Mesh(tau, kind, D, w / 2, segments, control_interpolation, int(stride), None if knots is None else np.asarray(knots, dtype=float))
 
 
 # =============================================================================
@@ -41,10 +75,11 @@ def make_mesh(num_nodes, options, fcns=None, segments=1):
 # =============================================================================
 
 def make_trajectory_solver(dynamics, params, n_steps, discretize="ms",
-                           segments=1, control_interpolation="lagrange", dilation_idx=None):
+                           segments=1, control_interpolation="lagrange", dilation_idx=None, knots=None):
     """JIT-compiled RK4 solver for the full trajectory; "ms" uses FOH controls,
     "ps" uses interpolate_control_ps (lagrange or FOH) on each hp segment."""
     use_ps = (discretize == "ps")
+    knots01 = None if knots is None else jnp.asarray(np.asarray(knots, dtype=float))
 
     if use_ps:
         # number of time steps for each hp segment
@@ -53,7 +88,7 @@ def make_trajectory_solver(dynamics, params, n_steps, discretize="ms",
         @jax.jit
         def solve(z0, tau0, tau_f, tau_ref, nu_ref):
             nu_interp = interpolate_control_ps(tau_ref, nu_ref, segments, dilation_idx, control_interpolation)
-            knots = jnp.linspace(tau0, tau_f, segments + 1)
+            knots = (jnp.linspace(tau0, tau_f, segments + 1) if knots01 is None else tau0 + (tau_f - tau0) * knots01)
 
             def segment(z_h, h):
                 dt   = (knots[h + 1] - knots[h]) / n_seg_steps
@@ -116,11 +151,11 @@ def make_trajectory_solver(dynamics, params, n_steps, discretize="ms",
 
 def propagate_trajectory(z_nodes, tau_nodes, nu_nodes, dynamics, params,
                          discretize="ms", n_steps=500, _solver=None,
-                         segments=1, control_interpolation="lagrange", dilation_idx=None):
+                         segments=1, control_interpolation="lagrange", dilation_idx=None, knots=None):
     """Propagate the full trajectory from its initial condition using interpolated controls."""
     if _solver is None:
         _solver = make_trajectory_solver(dynamics, params, n_steps, discretize=discretize, segments=segments,
-                                         control_interpolation=control_interpolation, dilation_idx=dilation_idx)
+                                         control_interpolation=control_interpolation, dilation_idx=dilation_idx, knots=knots)
 
     taus, z_traj, nu_traj = _solver(
         jnp.asarray(z_nodes[0]),
@@ -135,23 +170,26 @@ def propagate_trajectory(z_nodes, tau_nodes, nu_nodes, dynamics, params,
 def _make_rk4_solver(nu_fn, dynamics, params, n_steps):
 
     @jax.jit
-    def solve(z0, tau0, tau_f):
+    def solve(z0, tau0, tau_f, *inputs):
+        def control(z, tau):
+            return nu_fn(z, tau, *inputs)
+
         dt   = (tau_f - tau0) / n_steps
         taus = jnp.linspace(tau0, tau_f, n_steps + 1)
 
         def step(z, tau):
-            nu = nu_fn(z, tau)
-            k1 = dynamics(z,                nu,                                     params)
-            k2 = dynamics(z + (dt/2) * k1,  nu_fn(z + (dt/2) * k1, tau + dt / 2),   params)
-            k3 = dynamics(z + (dt/2) * k2,  nu_fn(z + (dt/2) * k2, tau + dt / 2),   params)
-            k4 = dynamics(z + dt * k3,      nu_fn(z + dt * k3,     tau + dt),       params)
+            nu = control(z, tau)
+            k1 = dynamics(z,                nu,                                      params)
+            k2 = dynamics(z + (dt/2) * k1,  control(z + (dt/2) * k1, tau + dt / 2),   params)
+            k3 = dynamics(z + (dt/2) * k2,  control(z + (dt/2) * k2, tau + dt / 2),   params)
+            k4 = dynamics(z + dt * k3,      control(z + dt * k3,     tau + dt),       params)
             z_next = z + (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
             return z_next, (z, nu)
 
         z_f, (z_traj, nu_traj) = jax.lax.scan(step, z0, taus[:-1])
 
         z_traj  = jnp.concatenate([z_traj,  z_f[None]])
-        nu_traj = jnp.concatenate([nu_traj, nu_fn(z_f, taus[-1])[None]])
+        nu_traj = jnp.concatenate([nu_traj, control(z_f, taus[-1])[None]])
         return taus, z_traj, nu_traj
 
     return solve
@@ -312,6 +350,14 @@ def final_time_interval_constraints_ms(constraint, subproblem):
 # ---------------------------------------------------------------------------
 
 def dynamics_compile_ms(constraint, subproblem):
+    from trajopt.methods.common.utils.kernels import constraint_key
+    identity = constraint_key(constraint.constraint)
+    cache = getattr(subproblem, 'kernels', {})
+    key = ('ms', identity, subproblem.index_map.N.all,
+           int(getattr(subproblem.hyperparams.discretize, 'nsub', 10)))
+    if identity is not None and key in cache:
+        constraint.propagate, constraint.propagate_jacobians = cache[key]
+        return
     dyn_fcn = constraint.dyn_fcn
     N_grid  = subproblem.index_map.N.all
     nsub    = int(getattr(subproblem.hyperparams.discretize, 'nsub', 10))
@@ -321,6 +367,8 @@ def dynamics_compile_ms(constraint, subproblem):
 
     constraint.propagate           = jax.jit(jax.vmap(propagate_k,      in_axes=(0, 0, 0, 0, None)))
     constraint.propagate_jacobians = jax.jit(jax.vmap(prop_jacobians_k, in_axes=(0, 0, 0, 0, None)))
+    if identity is not None:
+        cache[key] = (constraint.propagate, constraint.propagate_jacobians)
 
 
 def dynamics_create_cvxpy_parameters_ms(constraint, subproblem):
@@ -557,7 +605,7 @@ def dynamics_compile_ps(constraint, subproblem):
     constraint.ps_D = mesh.differentiation
     # map the ps defects from derivatives to states (now comparable with ms)
     p = (len(mesh.tau) - 1) // mesh.segments
-    constraint.ps_Dinv = sp.linalg.block_diag(*[np.linalg.inv(2.0 * mesh.differentiation[:p, 1:p + 1])] * mesh.segments)
+    constraint.ps_Dinv = sp.linalg.block_diag(*[np.linalg.inv(2.0 * mesh.differentiation[h * p:(h + 1) * p, h * p + 1:(h + 1) * p + 1]) for h in range(mesh.segments)])
     constraint.dyn_fcn_batched = jax.jit(jax.vmap(constraint.dyn_fcn, in_axes=(0, 0, None)))
 
     # only ps's per-node constraint linearization needs the dynamics Jacobians
@@ -582,13 +630,36 @@ def dynamics_create_cvxpy_constraints_ps(constraint, subproblem):
 
     subproblem.cp_dyn_constraints = []
 
+    mesh = subproblem.mesh
+    controls = subproblem.index_map.indices.nu.control
+    delta_nu = subproblem.dnu
+    if len(controls) and mesh.control_stride > 1:
+        M = control_interpolation_matrix(mesh)
+        U = (subproblem.cp_params.nu_ref + subproblem.dnu)[:, controls]
+        interior = np.flatnonzero(np.arange(N_col + 1) % mesh.control_stride)
+        subproblem.cp_constraints.append(U[interior] == M[interior] @ U)
+        selector = np.eye(subproblem.dnu.shape[1])[controls]
+        delta_nu = subproblem.dnu + (M @ subproblem.dnu[:, controls]
+                                    - subproblem.dnu[:, controls]) @ selector
+    elif len(controls) and mesh.control_interpolation == 'lagrange':
+        # Initial-control constraints must use the propagated control polynomial.
+        interpolate = interpolate_control_ps(mesh.tau, np.eye(N_col + 1), mesh.segments, None)
+        opening = np.asarray(interpolate(0.0))
+        U = (subproblem.cp_params.nu_ref + subproblem.dnu)[:, controls]
+        subproblem.cp_constraints.append(U[0] == opening @ U)
+    elif len(controls):
+        # Radau has no dynamics row at the opening node. Avoid a free control
+        # there by holding the first collocation control over the first interval.
+        U = (subproblem.cp_params.nu_ref + subproblem.dnu)[:, controls]
+        subproblem.cp_constraints.append(U[0] == U[1])
+
     Z = subproblem.cp_params.z_ref + subproblem.dz
     lhs = 2.0 * (D @ Z)
 
     for k in range(N_col):
         rhs_k = (subproblem.cp_params.ps_f_ref[k]
                  + subproblem.cp_params.ps_Ac[k] @ subproblem.dz[k + 1]
-                 + subproblem.cp_params.ps_Bc[k] @ subproblem.dnu[k + 1]
+                 + subproblem.cp_params.ps_Bc[k] @ delta_nu[k + 1]
                  + (vb_dyn[k] if vb_dyn is not None else 0))
         cnst = (lhs[k] == rhs_k)
         subproblem.cp_dyn_constraints.append(cnst)
@@ -922,22 +993,25 @@ def flipped_radau_differential_operator(N: int) -> tuple[np.ndarray, np.ndarray,
 # hp composite differential operator
 # ---------------------------------------------------------------------
 
-def flipped_radau_hp_operator(N_col: int, H: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """hp-composite fLGR on H segments of equal order; output D is the global (N_col, N_col+1) staircase of local blocks."""
+def flipped_radau_hp_operator(N_col: int, H: int, knots=None) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """hp-composite fLGR on H segments of equal order; output D is the global (N_col, N_col+1) staircase of local blocks.
+    knots: optional segment boundaries in [-1, 1] (length H + 1); equal segments when None."""
     if N_col % H != 0:
         raise ValueError(f"N_col={N_col} must be divisible by H={H}")
-    if H == 1:
+    if H == 1 and knots is None:
         return flipped_radau_differential_operator(N_col)
 
     p = N_col // H
     _, etau_local, w_local, D_local = flipped_radau_differential_operator(p)
 
     # segment h spans [-1 + 2h/H, -1 + 2(h+1)/H], consecutive segments share their final-to-initial node
-    etau = np.concatenate([[-1.0]] + [-1.0 + (2.0 * h + etau_local[1:] + 1.0) / H for h in range(H)])
-    w    = np.tile(w_local, H) / H
+    kn = np.linspace(-1.0, 1.0, H + 1) if knots is None else np.asarray(knots, dtype=float)
+    width = np.diff(kn)
+    etau = np.concatenate([[-1.0]] + [kn[h] + (etau_local[1:] + 1.0) * width[h] / 2.0 for h in range(H)])
+    w    = np.concatenate([w_local * width[h] / 2.0 for h in range(H)])
 
     D = np.zeros((N_col, N_col + 1))
     for h in range(H):
-        D[h * p:(h + 1) * p, h * p:(h + 1) * p + 1] = H * D_local
+        D[h * p:(h + 1) * p, h * p:(h + 1) * p + 1] = (2.0 / width[h]) * D_local
 
     return etau[1:], etau, w, D

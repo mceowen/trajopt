@@ -69,6 +69,7 @@ class rate_regularization:
         self.norm_type = cost_config.get("norm_type", "l2")
         self.w = cost_config["w"]
         self.idx = cost_config.get("idx", np.arange(0, phase.index_map.n.control))
+        self.mesh_weighted = bool(cost_config.get("mesh_weighted", False))
 
 
 class nonconvex_terminal:

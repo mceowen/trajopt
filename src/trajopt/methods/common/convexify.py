@@ -3,12 +3,21 @@ import jax.numpy as jnp
 import numpy as np
 import cvxpy as cp
 
+from trajopt.methods.dev.ps.path_constraints import constraint_samples
+
 
 # Taylor-expand g(z, nu) once per iteration: g ~= g0 + dg/dz @ dz + dg/dnu @ dnu.
 # The convex subproblem constrains that affine form, not g itself.
 
 def compile_affine(constraint, subproblem):
     """JIT + batch the fcn and its z/nu Jacobians for first-order Taylor linearization."""
+    from trajopt.methods.common.utils.kernels import constraint_key
+    identity = constraint_key(constraint.constraint)
+    cache = getattr(subproblem, 'kernels', {})
+    key = ('affine', identity)
+    if identity is not None and key in cache:
+        constraint.fcn_batched, constraint.g_aff_batched = cache[key]
+        return
     fcn = constraint.constraint.fcn_znu
     g      = jax.jit(fcn)
     dg_dz  = jax.jit(jax.jacfwd(fcn, argnums=0))
@@ -22,6 +31,8 @@ def compile_affine(constraint, subproblem):
     def g_aff_batched(z, nu, params, g=g_batched, dz=dg_dz_batched, dnu=dg_dnu_batched):
         return g(z, nu, params), dz(z, nu, params), dnu(z, nu, params)
     constraint.g_aff_batched = g_aff_batched
+    if identity is not None:
+        cache[key] = (constraint.fcn_batched, constraint.g_aff_batched)
 
 
 def compile_affine_second_order(constraint, subproblem):
@@ -54,10 +65,11 @@ def create_cvxpy_constraints_affine_inequality(constraint, subproblem):
         return
     vb = constraint.penalties.vb_var
     constraint.cp_ineq_constraints = []
-    for i, k in enumerate(constraint.nodes):
+    dz, dnu = constraint_samples(constraint, subproblem, subproblem.dz, subproblem.dnu)
+    for i in range(len(constraint.nodes)):
         g_lin = (
-            constraint.dgdz_param[i] @ subproblem.dz[k, :]
-            + constraint.dgdnu_param[i] @ subproblem.dnu[k, :]
+            constraint.dgdz_param[i] @ dz[i, :]
+            + constraint.dgdnu_param[i] @ dnu[i, :]
             + constraint.g0_param[i]
         )
         cnst = (g_lin - vb[i] <= 0) if vb is not None else (g_lin <= 0)
@@ -72,10 +84,11 @@ def create_cvxpy_constraints_affine_equality(constraint, subproblem):
         return
     vb = constraint.penalties.vb_var
     constraint.cp_eq_constraints = []
-    for i, k in enumerate(constraint.nodes):
+    dz, dnu = constraint_samples(constraint, subproblem, subproblem.dz, subproblem.dnu)
+    for i in range(len(constraint.nodes)):
         g_lin = (
-            constraint.dgdz_param[i] @ subproblem.dz[k, :]
-            + constraint.dgdnu_param[i] @ subproblem.dnu[k, :]
+            constraint.dgdz_param[i] @ dz[i, :]
+            + constraint.dgdnu_param[i] @ dnu[i, :]
             + constraint.g0_param[i]
         )
         cnst = (g_lin - vb[i] == 0) if vb is not None else (g_lin == 0)
@@ -89,7 +102,8 @@ def update_cvxpy_parameters_affine(constraint, subproblem):
     z      = jnp.asarray(subproblem.current_iter_data.z_opt)
     nu     = jnp.asarray(subproblem.current_iter_data.nu_opt)
     params = subproblem.params
-    g, dgdz, dgdnu = constraint.g_aff_batched(z[constraint.nodes], nu[constraint.nodes], params)
+    z, nu = constraint_samples(constraint, subproblem, z, nu)
+    g, dgdz, dgdnu = constraint.g_aff_batched(z, nu, params)
     constraint.g0_param.value    = np.asarray(g)
     constraint.dgdz_param.value  = np.asarray(dgdz)
     constraint.dgdnu_param.value = np.asarray(dgdnu)
@@ -99,7 +113,8 @@ def _update_current_iter_data_affine(constraint, subproblem):
     z      = jnp.asarray(subproblem.current_iter_data.z_opt)
     nu     = jnp.asarray(subproblem.current_iter_data.nu_opt)
     params = subproblem.params
-    constraint.g_nl = np.asarray(constraint.fcn_batched(z[constraint.nodes], nu[constraint.nodes], params))
+    z, nu = constraint_samples(constraint, subproblem, z, nu)
+    constraint.g_nl = np.asarray(constraint.fcn_batched(z, nu, params))
 
 
 def update_current_iter_data_affine_inequality(constraint, subproblem):

@@ -27,9 +27,10 @@ def _result_phases(result):
 
 plot_options = AttrDict({
     'figsize':     (12, 3.5),
+    'row_height':  2.6,          # inches per grid row; multi-row figures grow instead of squeezing titles into labels
     'save_dpi':    300,
     'grid_gap_x':  0.06,
-    'grid_gap_y':  0.12,
+    'grid_gap_y':  0.14,
     'margins':     [0.08, 0.02, 0.08, 0.14],
     'title_fontsize': 10,
     'title_pad':   4,
@@ -200,7 +201,7 @@ def _build_phase(problem, traj_configs, iters_all, analysis_cfg):
 
     figs, axs = {}, {}
     for group_name, group_data in traj_data.items():
-        figsize = plot_options.figsize
+        figsize = _figsize_for(len(group_data))
         pad_3d  = 0.08
         grid    = _create_grid(len(group_data))
         is_3d   = {i: (d.meta.type == "spatial" and d.opt.shape[1] == 3)
@@ -303,7 +304,7 @@ def _build_comparison(problem, traj_configs, iterates):
         is_3d = {i: (d.meta.type == "spatial" and d.opt.shape[1] == 3)
                  for i, d in enumerate(group_data.values())}
 
-        fig = plt.figure(figsize=plot_options.figsize)
+        fig = plt.figure(figsize=_figsize_for(len(group_data)))
         axs[group_name] = {}
         pad_3d = 0.08
         for idx, rect in grid.items():
@@ -557,6 +558,14 @@ def _legend_handle(pen_name, label):
                   ls=p.ls or 'None', marker=p.msty or None, markersize=p.msz, label=label)
 
 
+def _figsize_for(n):
+    """Figure size for an n-panel grid: the default width, and a height that scales with the number of rows."""
+    num_cols = 3 if n == 3 else int(np.ceil(np.sqrt(n)))
+    num_rows = int(np.ceil(n / num_cols))
+    width, base_height = plot_options.figsize
+    return (width, max(base_height, plot_options.row_height * num_rows + 0.6))
+
+
 def _create_grid(n, cfg=None):
     cfg      = cfg or {}
     num_cols = 3 if n == 3 else int(np.ceil(np.sqrt(n)))
@@ -577,7 +586,8 @@ def _create_grid(n, cfg=None):
             x = margin_l
             for col in range(num_cols):
                 y = (1.0 - margin_t) - (row + 1) * cell_h - row * gap_y
-                grid[row * num_cols + col] = [x, y, col_widths[col], cell_h]
+                if row * num_cols + col < n:
+                    grid[row * num_cols + col] = [x, y, col_widths[col], cell_h]
                 x += col_widths[col] + gap_x
     else:
         cell_w = (1.0 - margin_l - margin_r - (num_cols - 1) * gap_x) / num_cols
@@ -585,7 +595,8 @@ def _create_grid(n, cfg=None):
             for col in range(num_cols):
                 x = margin_l + col * (cell_w + gap_x)
                 y = (1.0 - margin_t) - (row + 1) * cell_h - row * gap_y
-                grid[row * num_cols + col] = [x, y, cell_w, cell_h]
+                if row * num_cols + col < n:
+                    grid[row * num_cols + col] = [x, y, cell_w, cell_h]
 
     return grid
 
@@ -724,7 +735,8 @@ def _convergence_plot(subprob, suffix, save=True):
     ax.semilogy(k, dcost, 's-', ms=3, label=r'$|\delta J|/\epsilon_J$')
     for i, ct in enumerate(vb_types):
         m = markers[(i + 2) % len(markers)]
-        ax.semilogy(k, vb_series[ct], f'{m}-', ms=3, label=f'$\\|vb_{{\\mathrm{{{ct}}}}}\\|/\\epsilon$')
+        name = ct.replace('_', r'\_')   # underscores would otherwise nest as subscripts in mathtext
+        ax.semilogy(k, vb_series[ct], f'{m}-', ms=3, label=f'$\\|\\mathrm{{vb}}_{{\\mathrm{{{name}}}}}\\|/\\epsilon$')
     ax.axhline(1.0, color='k', ls='--', lw=0.8)
     ax.set_xlabel('Iteration'); ax.set_ylabel('Normalized metric')
     ax.set_title('Convergence History', fontsize=plot_options.title_fontsize, pad=plot_options.title_pad)

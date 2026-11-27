@@ -2,6 +2,9 @@
 requires = ["hatchling>=1.10"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build]
+dev-mode-dirs = ["src"]
+
 [tool.hatch.build.targets.wheel]
 only-include = ["src/trajopt", "examples"]
 exclude = ["**/__pycache__/**", "**/.ipynb_checkpoints/**", "**/plots/**"]
@@ -77,3 +80,7 @@ dev = [
     "pytest>=9.0.3",
     "ruff>=0.15.10",
 ]
+
+[tool.uv.sources]
+# CVXPY #3525 removes the cone-formatting bottleneck; not yet released.
+cvxpy = { git = "https://github.com/cvxpy/cvxpy.git", rev = "773163ebdee08d7910cee518d15e8161865e0857" }

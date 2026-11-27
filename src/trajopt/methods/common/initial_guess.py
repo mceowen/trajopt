@@ -26,6 +26,7 @@ class InitialGuessContext:
     options: object
     previous: TrajectorySamples | None = None
     integrate: Callable = discretize.propagate_rk4
+    kernels: dict | None = None
 
 
 def _constraint_of_type(phase, type_name):
@@ -82,6 +83,20 @@ def straight_line(context):
         aux=np.zeros((2, len(phase.index_map.indices.z.augmented))))
 
 
+def waypoint(context):
+    """Two-segment straight line through an intermediate waypoint state (options: waypoint, optional t_mid)."""
+    phase, cfg = context.problem, context.options
+    start, stop = _times(context)
+    x0, xf = _endpoint_states(context)
+    w = phase.nondim.M.state.d2nd @ np.atleast_1d(cfg.waypoint)
+    t_mid = float(cfg.get('t_mid', 0.5 * (start + stop)))
+    u0, uf = np.atleast_1d(cfg.u_start), np.atleast_1d(cfg.u_stop)
+    return TrajectoryData.from_samples(
+        t=[start, t_mid, stop], x=np.array([x0, w, xf]) @ phase.nondim.M.state.nd2d.T,
+        u=np.array([u0, 0.5 * (u0 + uf), uf]),
+        aux=np.zeros((3, len(phase.index_map.indices.z.augmented))))
+
+
 def propagation(context):
     """RK4 with ramped controls and constant dt/dtau."""
     phase, cfg = context.problem, context.options
@@ -98,16 +113,29 @@ def propagation(context):
     ctrl, dilation = jnp.array(idx.nu.control), jnp.array(idx.nu.dilation_factor)
     sigma = jnp.asarray((stop-start) / phase.nondim.time_scale)
 
-    def nu_fn(z, tau):
+    def nu_fn(z, tau, controls=u_ref, duration=sigma):
         k = jnp.clip(jnp.searchsorted(tau_ref, tau, side='right') - 1, 0, N-2)
         a = (tau-tau_ref[k]) / (tau_ref[k+1]-tau_ref[k])
-        return jnp.zeros(index.n.nu).at[ctrl].set((1-a)*u_ref[k]+a*u_ref[k+1]).at[dilation].set(sigma)
+        return jnp.zeros(index.n.nu).at[ctrl].set((1-a)*controls[k]+a*controls[k+1]).at[dilation].set(duration)
 
     dynamics = _constraint_of_type(phase, 'dynamics')
     if dynamics is None:
         raise ValueError(f"phase '{phase.name}': propagation needs dynamics")
-    tau, z, nu = context.integrate(
-        z0, 0., 1., nu_fn, dynamics.fcn_znu, phase.params, n_steps=10*(N-1))
+    from trajopt.methods.common.utils.kernels import constraint_key
+    identity = constraint_key(dynamics)
+    if (context.kernels is not None and context.integrate is discretize.propagate_rk4
+            and identity is not None):
+        from trajopt.common._snapshot import fingerprint
+        # Keep model parameters constant to preserve the compiled RK4 arithmetic.
+        key = ('guess', identity, N, fingerprint(phase.params))
+        if key not in context.kernels:
+            context.kernels[key] = discretize._make_rk4_solver(
+                nu_fn, dynamics.fcn_znu, copy.deepcopy(phase.params), 10*(N-1))
+        tau, z, nu = map(np.asarray, context.kernels[key](
+            jnp.asarray(z0), jnp.asarray(0.), jnp.asarray(1.), u_ref, sigma))
+    else:
+        tau, z, nu = context.integrate(
+            z0, 0., 1., nu_fn, dynamics.fcn_znu, phase.params, n_steps=10*(N-1))
     values = dimensional_samples(phase, z, nu)
     # Restore exact affine time after integration.
     return TrajectoryData.from_samples(
@@ -144,7 +172,8 @@ def _context(method_phase, previous):
                 raise ValueError(f"phase '{phase.name}': guess.{field}='previous' needs a preceding phase")
             options[field] = previous.x[-1].copy() if field == 'x_start' else float(previous.t[-1])
     return InitialGuessContext(phase, method_phase.mesh, options, previous,
-                               method_phase.fcns.discretize.propagate_rk4)
+                               method_phase.fcns.discretize.propagate_rk4,
+                               getattr(method_phase, 'kernels', None))
 
 
 def _configured_guess(method_phase, context):
@@ -184,6 +213,37 @@ def _source_coordinates(tau, native):
     return np.where(np.abs(tau-native[closest]) <= 1e-12, native[closest], tau)
 
 
+def _import_time_map(method_phase, values, tau):
+    """Check nondimensional times and use the prescribed start and end times."""
+    phase = method_phase.problem
+    t = values.t / phase.nondim.time_scale
+    s = None if values.s is None else values.s / phase.nondim.time_scale
+    if not np.isfinite(t).all() or np.any(np.diff(t) <= 0):
+        raise ValueError(f"phase '{phase.name}': guess times must be finite and strictly increase")
+    duration = t[-1] - t[0]
+    tolerance = 1e-8 * max(1., duration)
+    if s is None:
+        if not np.allclose(t-t[0], tau*duration, rtol=0., atol=tolerance):
+            raise ValueError(f"phase '{phase.name}': a non-affine time map requires explicit s=dt/dtau")
+        s = np.full(len(tau), duration)
+    if not np.isfinite(s).all() or np.any(s <= 0):
+        raise ValueError(f"phase '{phase.name}': guess time dilation must be finite and positive")
+    initial = method_phase.find_constraint('initial_time')
+    if initial is not None:
+        start = float(initial.value)
+        if abs(t[0]-start) > tolerance:
+            raise ValueError(f"phase '{phase.name}': guess start time must match the initial_time constraint")
+        t = start + (t-t[0])
+    if not method_phase.free_final_time:
+        stop = float(method_phase.find_constraint('final_time').fixed_value)
+        prescribed = start + tau*(stop-start)
+        if not (np.allclose(t, prescribed, rtol=0., atol=tolerance)
+                and np.allclose(s, stop-start, rtol=0., atol=tolerance)):
+            raise ValueError(f"phase '{phase.name}': a fixed-time problem requires its prescribed affine time map")
+        t, s = prescribed, np.full(len(tau), stop-start)
+    return t, s
+
+
 def prepare_initial_guess(method_phase, supplied=None, previous=None):
     """Prepare a guess without modifying the current iterate."""
     phase = method_phase.problem
@@ -210,37 +270,23 @@ def prepare_initial_guess(method_phase, supplied=None, previous=None):
     n = phase.index_map.n
     if values.x.shape[1] != n.state or values.u.shape[1] != n.control:
         raise ValueError(f"phase '{phase.name}': expected {n.state} states and {n.control} controls")
-    if np.any(np.diff(values.t) <= 0):
-        raise ValueError(f"phase '{phase.name}': guess times must strictly increase")
-    duration = values.t[-1]-values.t[0]
-    s = values.s
-    if s is None:
-        if not np.allclose(values.t, values.t[0]+dense_tau*duration, rtol=1e-8, atol=1e-9):
-            raise ValueError("A non-affine time map requires explicit s=dt/dtau")
-        s = np.full(len(dense_tau), duration)
-    if np.any(s <= 0):
-        raise ValueError("Guess time dilation must be positive")
-    initial_time = method_phase.find_constraint('initial_time')
-    if initial_time is not None:
-        start = float(initial_time.value) * phase.nondim.time_scale
-        # The anchored dt[0] prevents correcting a mismatched start epoch.
-        if not np.isclose(values.t[0], start, rtol=1e-10, atol=1e-10):
-            raise ValueError("Guess start time must match the initial_time constraint")
-    if not method_phase.free_final_time:
-        start = float(method_phase.find_constraint('initial_time').value) * phase.nondim.time_scale
-        stop = float(method_phase.find_constraint('final_time').fixed_value) * phase.nondim.time_scale
-        if not (np.allclose(values.t, start+dense_tau*(stop-start)) and np.allclose(s, stop-start)):
-            raise ValueError("A fixed-time problem requires its prescribed affine time map")
+    t, s = _import_time_map(method_phase, values, dense_tau)
     n_aux = len(phase.index_map.indices.z.augmented)
+    controls = values.u
+    stride = getattr(method_phase.mesh, 'control_stride', 1)
+    if stride > 1 and n.control:
+        knots = target[::stride]
+        knot_controls = supplied.sample(_source_coordinates(knots, supplied.native_tau)).u
+        controls = np.column_stack([np.interp(dense_tau, knots, col) for col in knot_controls.T])
     aux = values.aux
     if aux is None:
         aux = np.zeros((len(dense_tau), n_aux))
     if aux.shape != (len(dense_tau), n_aux):
         raise ValueError(f"phase '{phase.name}': expected {n_aux} auxiliary accumulator columns")
     z, nu = phase.index_map.pack_znu(values.x @ phase.nondim.M.state.d2nd.T,
-                                    values.t[:, None]/phase.nondim.time_scale, aux,
-                                    values.u @ phase.nondim.M.control.d2nd.T,
-                                    s[:, None]/phase.nondim.time_scale)
+                                    t[:, None], aux,
+                                    controls @ phase.nondim.M.control.d2nd.T,
+                                    s[:, None])
     if values.aux is None and n_aux:
         dynamics = next(c for c in phase.constraints.values() if c.type == 'dynamics')
         derivatives = np.asarray(jax.jit(jax.vmap(dynamics.fcn_znu, in_axes=(0, 0, None)))(z, nu, phase.params))

@@ -188,6 +188,9 @@ class scp_rate_regularization(SCPCost):
             return
 
         delta = traj[1:, self.cost.idx] - traj[:-1, self.cost.idx]
+        if getattr(self.cost, "mesh_weighted", False):
+            dtau = np.diff(np.asarray(scp_subproblem.mesh.tau)).reshape(-1, 1)
+            delta = cp.multiply(1.0 / np.sqrt(dtau), delta) if self.cost.norm_type == "l2" else cp.multiply(1.0 / dtau, delta)
 
         if self.cost.norm_type == "l2":
             scp_subproblem.cp_cost += self.cost.w * cp.sum_squares(delta)
