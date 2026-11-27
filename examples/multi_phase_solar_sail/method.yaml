@@ -1,0 +1,65 @@
+inherit:
+- trajopt/methods/stable/configs/first_order/autoscvx.yaml
+- trajopt/methods/common/configs/initial_guess/propagation.yaml
+hyperparams:
+  flags:
+    zoh_dilation: 1
+    ignore_dpp: 0
+    quiet: 0
+  discretize:
+    equal_dt: 1
+    mode: ms
+    nsub: 6
+  trust_region:
+    second_order: 0
+    line_search: 0
+    alpha_min_ls: 0
+    tr_step:
+      z: 0.5
+      nu: 0.1
+  convergence:
+    iter_max: 250
+    flag_conv: 1
+    eps_state:
+    - 0.0001
+  penalties:
+    default:
+      W:
+        penalty: true
+        autotune: true
+        init: 1.0
+      dual:
+        penalty: true
+        autotune: true
+        init: 0.0
+        tr_step: 1.0
+      vb: none
+      eps:
+      - 0.0001
+      eps_floor: 1.0e-06
+      fac_eps: 0.3
+      fac_target: 0.01
+    dynamics:
+      vb: standard
+      W:
+        penalty: true
+        autotune: true
+        init: 100.0
+    nonconvex_equality:
+      vb: standard
+    nonconvex_inequality:
+      vb: standard
+    final_nonconvex_inequality:
+      vb: none
+    initial_state:
+      vb: none
+    state_continuity:
+      vb: none
+    time_continuity:
+      vb: none
+    control_continuity:
+      vb: none
+    final_nonconvex_equality:
+      vb: standard
+solver_opts:
+  solver: CLARABEL
