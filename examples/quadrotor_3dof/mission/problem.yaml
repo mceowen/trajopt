@@ -1,3 +1,5 @@
+# Fixed-time minimum-control-effort transfer of a 3-DoF quadrotor around a cylindrical no-fly zone: the benchmark of the
+# AutoSCvx chapter of the dissertation (minimum thrust and the no-fly zone are the nonconvex path constraints).
 num_nodes: 20
 inherit: trajopt/models/quadrotor_3dof/quadrotor_3dof.yaml
 
@@ -7,8 +9,6 @@ fcns:
   max_thrust_cone:  trajopt/models/quadrotor_3dof/quadrotor_3dof.py:max_thrust_cone
   xz:               trajopt/models/quadrotor_3dof/quadrotor_3dof.py:xz
   yz:               trajopt/models/quadrotor_3dof/quadrotor_3dof.py:yz
-  one:              trajopt/models/quadrotor_3dof/quadrotor_3dof.py:one
-  u_squared:        trajopt/models/quadrotor_3dof/quadrotor_3dof.py:u_squared
 
 params:
   planet:
@@ -24,12 +24,6 @@ constraints:
     fcn: fcns.dynamics
     eps:
       default: 0.001
-      #x:  0.01
-      #y:  0.01
-      #z:  0.01
-      #vx: 0.01
-      #vy: 0.01
-      #vz: 0.01
 
   initial_state:
     type: initial_state
@@ -59,17 +53,12 @@ constraints:
 
   final_time:
     type: final_time
-    lower: 1.0
-    upper: 20.0
+    value: 7.0
 
 costs:
-  min_time:
-    type: min_time
-
-  # min_control_effort:
-  #   type: nonconvex_running
-  #   fcn: fcns.u_squared
-
-  # u_start: [0, 0, 1]
-  # u_stop: [0, 0, 1]
-
+  control_effort:
+    type: regularization
+    set: control
+    idx: [0, 1, 2]
+    norm_type: l2
+    w: 1.0

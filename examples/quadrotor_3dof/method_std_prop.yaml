@@ -1,0 +1,40 @@
+inherit:
+- trajopt/methods/stable/configs/first_order/autoscvx.yaml
+- trajopt/methods/common/configs/initial_guess/propagation.yaml
+hyperparams:
+  convergence:
+    iter_max: 2000
+    flag_conv: 1
+  penalties:
+    default:
+      fac_target: 0.001
+      dual:
+        tr_step: 10.0
+  trust_region:
+    tr_step:
+      z:
+        default: 0.5
+        t: 10.0
+      nu:
+        default: 0.5
+  initial_guess:
+    default:
+      t_start: 0.0
+      t_stop: 7.0
+      x_start:
+      - 0.0
+      - 0.0
+      - 5.0
+      - 0.0
+      - 0.5
+      - 0.0
+      u_start:
+      - 0.0
+      - 0.0
+      - ${params.planet.g * params.vehicle.mass}
+      u_stop:
+      - 0.0
+      - 0.0
+      - ${params.planet.g * params.vehicle.mass}
+solver_opts:
+  solver: CLARABEL

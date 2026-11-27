@@ -1,0 +1,7 @@
+"Variant 3a":
+  hyperparams: {penalties: {default: {fac_target: 1.0, fac_eps: 0.0}}}
+"Variant 2b":
+  fcns: {penalties: {default: {autotune: trajopt/methods/common/penalties.py:autotune_quad_only}}}
+  hyperparams: {penalties: {default: {dual: {autotune: false, init: 0.0}, fac_target: 0.001, fac_eps: 0.3}}}
+"Variant 3b":
+  hyperparams: {penalties: {default: {fac_target: 0.001, fac_eps: 0.3}}}

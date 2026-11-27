@@ -1,0 +1,2 @@
+"Variant 3a":
+  hyperparams: {penalties: {default: {fac_target: 1.0, fac_eps: 0.0}}, trust_region: {tr_step: {z: {default: 0.2}}}}

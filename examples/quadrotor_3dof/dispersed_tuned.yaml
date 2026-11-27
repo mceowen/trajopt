@@ -1,0 +1,13 @@
+trajectory:
+  inherit: mission/problem.yaml
+method:
+  inherit: method.yaml
+analysis:
+  type: mc
+  compute_iters: false
+  show_iters: false
+  show_convergence: false
+  show_weights: false
+  show_vb: false
+  methods:
+    inherit: variants_tuned.yaml
