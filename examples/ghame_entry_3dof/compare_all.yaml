@@ -1,0 +1,17 @@
+trajectory:
+  inherit: mission_all.yaml
+method:
+  inherit: method.yaml
+analysis:
+  type: method_variation
+  compute_iters: true
+  show_iters: false
+  show_convergence: true
+  show_weights: true
+  show_vb: true
+  methods:
+    "Multiple shooting": {}
+    "p-method":
+      inherit: trajopt/methods/common/configs/discretize/pseudospectral_p.yaml
+    "hp-method":
+      inherit: trajopt/methods/common/configs/discretize/pseudospectral_p.yaml

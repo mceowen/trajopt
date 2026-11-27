@@ -1,0 +1,32 @@
+# standard setting: straight-line initial guess, linearized dynamics buffered (Chapter 1 standard setting); otherwise the settings of method.yaml
+inherit: trajopt/methods/stable/configs/first_order/autoscvx.yaml
+
+hyperparams:
+  convergence:
+    iter_max: 600
+    eps_state: [1.0e-3, 1.0e-3, 1.0e-3, 1.0e-4, 9.0e-3, 1.0e-3]
+  trust_region:
+    tr_step:
+      z:
+        default: 2.0
+      nu:
+        default: 0.1
+        u: 0.1
+        s: 1.0
+  penalties:
+    final_state:
+      eps:
+        default: 1.0e-4
+        r: 1.0e-5
+        gamma: 1.0e-3
+    nonconvex_inequality:
+      eps: [0.05]
+  initial_guess:
+    default:
+      t_start: 0.0
+      t_stop: 1000.0
+      u_start: [0.0, 15.0]
+      u_stop:  [0.0, 15.0]
+
+solver_opts:
+  solver: PIQP

@@ -1,0 +1,7 @@
+# terminal-buffered setting of method.yaml, started from a straight-line initial guess instead of the propagated one
+inherit: method.yaml
+
+fcns:
+  initial_guess:
+    default:
+      guess: trajopt/methods/common/initial_guess.py:straight_line

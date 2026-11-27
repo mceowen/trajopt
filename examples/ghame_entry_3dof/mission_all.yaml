@@ -1,0 +1,20 @@
+inherit: mission.yaml
+
+constraints:
+  max_heat_rate:
+    upper: [6.0]
+  max_dynamic_pressure:
+    type: nonconvex_inequality
+    fcn: fcns.dynamic_pressure
+    upper: [15.0]
+    scale: 1.0
+  max_aero_load:
+    type: nonconvex_inequality
+    fcn: fcns.aero_load
+    upper: [2.5]
+    scale: 1.0
+
+costs:
+  control_smoothness:
+    mesh_weighted: true
+    w: 0.04

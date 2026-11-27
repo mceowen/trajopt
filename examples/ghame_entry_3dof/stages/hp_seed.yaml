@@ -1,0 +1,13 @@
+trajectory:
+  inherit: ../mission_all.yaml
+  num_nodes: 49
+  hp_segments: 8
+method:
+  inherit:
+    - ../method.yaml
+    - trajopt/methods/common/configs/discretize/pseudospectral_p.yaml
+  hyperparams:
+    discretize: {control_interpolation: foh, control_stride: 2}
+    trust_region: {tr_step: {z: {default: 2.0}, nu: {default: 0.1, u: 0.1, s: 1.0}}}
+analysis:
+  type: standalone
