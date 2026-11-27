@@ -1,0 +1,25 @@
+trajectory:
+  inherit: mission_nostc.yaml
+method:
+  inherit: method.yaml
+analysis:
+  type: method_variation
+  compute_iters: true
+  show_iters: false
+  show_convergence: false
+  show_weights: false
+  show_vb: false
+  methods:
+    "MS": {}
+    "p":
+      inherit: trajopt/methods/stable/configs/first_order/autoscvx-term-ps.yaml
+    "hp":
+      inherit: trajopt/methods/common/configs/discretize/pseudospectral_p.yaml
+      hyperparams:
+        flags:
+          zoh_dilation: 1
+    "hp-term":
+      inherit: trajopt/methods/stable/configs/first_order/autoscvx-term-ps.yaml
+      hyperparams:
+        flags:
+          zoh_dilation: 1

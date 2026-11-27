@@ -1,0 +1,13 @@
+trajectory:
+  inherit: mission.yaml
+method:
+  inherit:
+    - method.yaml
+    - trajopt/methods/common/configs/penalties/autoscvx_sparse_dyn.yaml
+analysis:
+  type: standalone
+  compute_iters: true
+  show_iters: false
+  show_convergence: true
+  show_weights: true
+  show_vb: true

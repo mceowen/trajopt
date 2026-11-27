@@ -1,0 +1,16 @@
+trajectory:
+  inherit: mission.yaml
+method:
+  inherit: method.yaml
+analysis:
+  type: mc
+  compute_iters: false
+  show_iters: false
+  show_convergence: false
+  show_weights: false
+  methods:
+    "AutoSCvx": {}
+    "Sparse-AutoSCvx":
+      inherit: trajopt/methods/common/configs/penalties/autoscvx_sparse_dyn.yaml
+    "Sparse-AutoSCvx (scalar)":
+      inherit: trajopt/methods/common/configs/penalties/autoscvx_sparse_scalar_dyn.yaml

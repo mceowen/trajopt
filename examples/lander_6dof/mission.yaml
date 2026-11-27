@@ -1,0 +1,32 @@
+inherit: mission/problem.yaml
+
+params:
+  angular_speed_max: 1.05
+
+fcns:
+  cvx_max_angular_velocity_max: trajopt/models/lander_6dof/lander_6dof.py:cvx_max_angular_velocity_max
+
+constraints:
+  state_limits:
+    type: state_limits
+    lower: ["${params.vehicle.md}", null, null, null, null, null, null, null, null, null, null, null, null, null]
+
+  glide_slope:
+    type: convex_inequality
+    fcn: fcns.cvx_glide_slope
+
+  tilt_limit:
+    type: convex_inequality
+    fcn: fcns.cvx_tilt_limit
+
+  angular_velocity_max:
+    type: convex_inequality
+    fcn: fcns.cvx_max_angular_velocity_max
+
+  altitude_triggered_speed:
+    type: nonconvex_inequality
+    fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.speed <= ${params.speed_limit})"
+
+  altitude_triggered_angular_speed:
+    type: nonconvex_inequality
+    fcn: "(fcns.altitude <= ${params.alt_trigger}) implies (fcns.angular_speed <= ${params.angular_speed_limit})"
