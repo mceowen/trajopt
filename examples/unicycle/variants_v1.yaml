@@ -1,0 +1,3 @@
+"Variant 1":
+  fcns: {penalties: {default: {autotune: trajopt/methods/common/penalties.py:autotune_dual_only}}}
+  hyperparams: {penalties: {default: {W: {autotune: false, init: 0.0}}}}

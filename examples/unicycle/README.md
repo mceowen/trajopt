@@ -1,0 +1,12 @@
+# Unicycle (Chapter 1)
+
+Double-integrator unicycle with two no-fly zones, the second benchmark of the AutoSCvx chapter. `config.yaml` is the shipped case: Algorithm Variant 3b in the standard setting (dynamics buffered) from the waypoint guess on 30 nodes; `python main.py` solves and plots it.
+
+Chapter drivers (outputs go to `plots/<study>/`):
+
+- `run_compare.py <yaml>`: nominal comparison of the algorithm variants (`compare.yaml` standard setting, `compare_term.yaml` terminal-buffered setting, `compare_std_prop.yaml` and `compare_term_wp.yaml` the two remaining buffering/guess cells).
+- `run_dispersed.py <yaml>`: the same variants from 20 dispersed guesses plus the nominal one (`dispersed.yaml`, `dispersed_term.yaml`, `dispersed_std_prop.yaml`, `dispersed_term_wp.yaml`, `dispersed_tuned.yaml`).
+- `run_sweep.py` (`sweep_std.yaml`, `sweep_term.yaml`): dual-step sweep of Variant 1; `screen_v1.py`: Variant 1 over dual and primal steps.
+- `plot_nominal.py`, `plot_convergence.py`, `plot_dispersed.py`, `plot_sweep.py`: the chapter figures; `plot_nodes.py`: discrete nodes against the nonlinear re-propagation at two dynamics tolerances, from a guess through the gap between the zones.
+
+The result tables of the chapter are written by `../quadrotor_3dof/make_tables.py` from the saved runs of both examples. The `variants*.yaml` files define the five configurations (Variants 1, 2a, 2b, 3a, 3b) that the `compare*` and `dispersed*` files select, and `method*.yaml` hold the method settings of each setting.

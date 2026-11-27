@@ -1,0 +1,3 @@
+"Variant 2b":
+  fcns: {penalties: {default: {autotune: trajopt/methods/common/penalties.py:autotune_quad_only}}}
+  hyperparams: {penalties: {default: {dual: {autotune: false, init: 0.0}, fac_target: 0.1, fac_eps: 0.3}}, trust_region: {tr_step: {z: {default: 1.0}}}}

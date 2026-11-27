@@ -1,0 +1,30 @@
+inherit:
+  - trajopt/methods/stable/configs/first_order/autoscvx.yaml
+  - trajopt/methods/common/configs/initial_guess/waypoint.yaml
+
+hyperparams:
+  convergence:
+    iter_max: 2000
+    flag_conv: 1
+  penalties:
+    default:
+      dual:
+        tr_step: 10.0
+  trust_region:
+    tr_step:
+      z:
+        default: 2.0
+      nu:
+        default: 1.0
+  initial_guess:
+    default:
+      t_start: 0.0
+      t_stop: 10.0
+      x_start: [0.0, 0.0, 0.0, 0.7853981633974483, 0.0]
+      x_stop: [10.0, 10.0, 0.0, 0.7853981633974483, 0.0]
+      waypoint: [5.0, 5.0, 1.4142, 0.7853981633974483, 0.0]
+      u_start: [0.0, 0.0]
+      u_stop: [0.0, 0.0]
+
+solver_opts:
+  solver: CLARABEL

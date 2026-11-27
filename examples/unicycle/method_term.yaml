@@ -1,0 +1,25 @@
+inherit: trajopt/methods/stable/configs/first_order/autoscvx-term.yaml
+
+hyperparams:
+  convergence:
+    iter_max: 2000
+  penalties:
+    default:
+      dual:
+        tr_step: 10.0
+  trust_region:
+    tr_step:
+      z:
+        default: 1.0
+      nu:
+        default: 1.0
+  initial_guess:
+    default:
+      t_start: 0.0
+      t_stop: 10.0
+      x_start: [0.0, 0.0, 0.0, 0.7853981633974483, 0.0]
+      u_start: [0.2, 0.0]
+      u_stop: [0.2, 0.0]
+
+solver_opts:
+  solver: CLARABEL

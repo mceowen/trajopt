@@ -1,0 +1,68 @@
+fcns:
+  dynamics: unicycle.py:dynamics
+  obstacle: unicycle.py:obstacle
+  xy: unicycle.py:xy
+  heading: unicycle.py:heading
+  obstacle_circles: unicycle.py:obstacle_circles
+
+state:
+  x:         {idx: [0], scale: 10.0}
+  y:         {idx: [1], scale: 10.0}
+  v:         {idx: [2], scale: 1.0}
+  theta:     {idx: [3], scale: 1.0}
+  theta_dot: {idx: [4], scale: 1.0}
+
+control:
+  a:     {idx: [0], scale: 1.0}
+  Omega: {idx: [1], scale: 0.1}
+
+time:
+  scale: 10.0
+
+outputs:
+  xy:
+    type: spatial
+    fcn: fcns.xy
+    equal_aspect: true
+    title: "Planar trajectory"
+    xlabel: "x (m)"
+    ylabel: "y (m)"
+    quivers:
+      heading: {fcn: fcns.heading, scale: 0.6, color: [0, 0, 0], alpha: 0.7, linewidth: 1.5, centered: true}
+    overlays:
+      obstacle: {fcn: fcns.obstacle_circles, color: [0.8, 0.0, 0.0], ls: "-", lw: 1.5, alpha: 0.7}
+  speed:
+    type: time_series
+    component: v
+    group: state
+    title: "Speed vs Time"
+    xlabel: "Time (s)"
+    ylabel: "v (m/s)"
+  heading_angle:
+    type: time_series
+    component: theta
+    group: state
+    title: "Heading vs Time"
+    xlabel: "Time (s)"
+    ylabel: "theta (rad)"
+  turn_rate:
+    type: time_series
+    component: theta_dot
+    group: state
+    title: "Turn Rate vs Time"
+    xlabel: "Time (s)"
+    ylabel: "theta_dot (rad/s)"
+  accel:
+    type: time_series
+    component: a
+    group: control
+    title: "Acceleration vs Time"
+    xlabel: "Time (s)"
+    ylabel: "a (m/s^2)"
+  angular_accel:
+    type: time_series
+    component: Omega
+    group: control
+    title: "Angular Acceleration vs Time"
+    xlabel: "Time (s)"
+    ylabel: "Omega (rad/s^2)"
